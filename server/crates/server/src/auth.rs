@@ -4,6 +4,8 @@
 //! |--------------------------------|-----------------------------------------------|
 //! | `GET /auth/strava`             | Start the OAuth flow (redirect to Strava)     |
 //! | `GET /auth/strava/callback`    | Back from Strava: create the session cookie   |
+//! | `POST /auth/strava/app`        | The app starts a login (see [`AppLogins`])    |
+//! | `POST /auth/strava/app/claim`  | The app's web view takes the new session      |
 //! | `POST /auth/logout`            | Forget the session                            |
 //! | `GET /api/me`                  | The connected account, or 401                 |
 //! | `POST /api/strava/upload`      | Upload a TCX ride (body), `?name=` optional   |
@@ -13,8 +15,8 @@ use crate::guard::Slots;
 use crate::http::AppState;
 use crate::session_store::SessionStore;
 use crate::strava::{
-    authorize_url, cookie, cookie_value, scope_allows_upload, Account, Accounts, StravaConfig, SESSION_COOKIE,
-    SESSION_SECONDS, STATE_COOKIE, STATE_SECONDS,
+    authorize_url, cookie, cookie_value, login_result_url, scope_allows_upload, Account, Accounts, AppLogins,
+    StravaConfig, APP_ID_COOKIE, APP_LOGIN_COOKIE, SESSION_COOKIE, SESSION_SECONDS, STATE_COOKIE, STATE_SECONDS,
 };
 use crate::strava_api;
 use axum::extract::{Path, Query, State};
@@ -34,6 +36,8 @@ pub struct Strava {
     pub secure_cookies: bool,
     /// One live connection per Strava athlete.
     pub riders: Slots<u64>,
+    /// Logins from the app's system sign-in sheet.
+    pub app_logins: AppLogins,
 }
 
 impl Strava {
@@ -54,6 +58,7 @@ impl Strava {
             required,
             secure_cookies,
             riders: Slots::new(1),
+            app_logins: AppLogins::default(),
         })
     }
 
@@ -94,20 +99,34 @@ fn not_configured() -> Response {
     )
 }
 
-pub async fn login(State(state): State<AppState>) -> Response {
+#[derive(Debug, Deserialize)]
+pub struct LoginQuery {
+    /// An app login's id: the login ends in the app (see [`AppLogins`]).
+    pub app: Option<String>,
+}
+
+pub async fn login(State(state): State<AppState>, Query(query): Query<LoginQuery>) -> Response {
     let Some(strava) = state.strava.as_deref() else {
         return not_configured();
     };
     let oauth_state = strava.accounts.new_state(now_s());
-    let set_cookie = cookie(
-        STATE_COOKIE,
-        &oauth_state,
-        "/auth/strava",
-        STATE_SECONDS,
-        strava.secure_cookies,
-    );
+    let secure = strava.secure_cookies;
+    let app_id = query.app.filter(|id| strava.app_logins.is_pending(id, now_s()));
     (
-        [(header::SET_COOKIE, set_cookie)],
+        AppendHeaders([
+            (
+                header::SET_COOKIE,
+                cookie(STATE_COOKIE, &oauth_state, "/auth/strava", STATE_SECONDS, secure),
+            ),
+            // Always written, so a browser login after an app login ends in the browser.
+            (
+                header::SET_COOKIE,
+                match &app_id {
+                    Some(id) => cookie(APP_ID_COOKIE, id, "/auth/strava", STATE_SECONDS, secure),
+                    None => cookie(APP_ID_COOKIE, "", "/auth/strava", 0, secure),
+                },
+            ),
+        ]),
         Redirect::to(&authorize_url(&strava.config, &oauth_state)),
     )
         .into_response()
@@ -129,33 +148,56 @@ pub async fn callback(
     let Some(strava) = state.strava.as_deref() else {
         return not_configured();
     };
+    let cookie_of = |name| {
+        let cookies = headers.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok());
+        cookie_value(cookies, name).map(str::to_owned)
+    };
+    let app_id = cookie_of(APP_ID_COOKIE).filter(|id| !id.is_empty());
+    let back = |result: &str| Redirect::to(&login_result_url(app_id.is_some(), result, None)).into_response();
     // The rider pressed "Cancel" on Strava.
     if query.error.is_some() {
-        return Redirect::to("/?strava=denied").into_response();
+        return back("denied");
     }
     let (Some(code), Some(oauth_state)) = (query.code, query.state) else {
         return error(StatusCode::BAD_REQUEST, "bad_callback", "missing code or state");
     };
-    let cookies = headers.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok());
-    let same_browser = cookie_value(cookies, STATE_COOKIE) == Some(oauth_state.as_str());
+    let same_browser = cookie_of(STATE_COOKIE).as_deref() == Some(oauth_state.as_str());
     if !same_browser || !strava.accounts.take_state(&oauth_state, now_s()) {
-        return Redirect::to("/?strava=expired").into_response();
+        return back("expired");
     }
 
     let token = match strava_api::exchange_code(&strava.http, &strava.config, &code).await {
         Ok(token) => token,
         Err(e) => {
             tracing::warn!(error = %e, "strava token exchange failed");
-            return Redirect::to("/?strava=failed").into_response();
+            return back("failed");
         }
     };
     let Some(account) = Account::from_token(token, scope_allows_upload(query.scope.as_deref())) else {
         tracing::warn!("strava token response without athlete");
-        return Redirect::to("/?strava=failed").into_response();
+        return back("failed");
     };
-    tracing::info!(athlete_id = account.athlete_id, "strava account connected");
+    tracing::info!(
+        athlete_id = account.athlete_id,
+        app = app_id.is_some(),
+        "strava account connected"
+    );
     let session = strava.accounts.insert(account, now_s());
     let secure = strava.secure_cookies;
+    let clear_state = cookie(STATE_COOKIE, "", "/auth/strava", 0, secure);
+    if let Some(id) = &app_id {
+        // The sign-in sheet has its own cookies: the app's web view claims the session.
+        let Some(ticket) = strava.app_logins.complete(id, session.clone(), now_s()) else {
+            strava.accounts.remove(&session);
+            return back("expired");
+        };
+        let clear_app = cookie(APP_ID_COOKIE, "", "/auth/strava", 0, secure);
+        return (
+            AppendHeaders([(header::SET_COOKIE, clear_state), (header::SET_COOKIE, clear_app)]),
+            Redirect::to(&login_result_url(true, "connected", Some(&ticket))),
+        )
+            .into_response();
+    }
     // Two Set-Cookie headers: a plain header array would keep only the last one.
     (
         AppendHeaders([
@@ -163,9 +205,73 @@ pub async fn callback(
                 header::SET_COOKIE,
                 cookie(SESSION_COOKIE, &session, "/", SESSION_SECONDS, secure),
             ),
-            (header::SET_COOKIE, cookie(STATE_COOKIE, "", "/auth/strava", 0, secure)),
+            (header::SET_COOKIE, clear_state),
         ]),
-        Redirect::to("/"),
+        back("connected"),
+    )
+        .into_response()
+}
+
+#[derive(Debug, Serialize)]
+pub struct AppLoginResponse {
+    /// Open this in the system sign-in sheet.
+    pub url: String,
+}
+
+/// The app starts a login: the secret stays in its web view, the id goes to the sign-in sheet.
+pub async fn app_login(State(state): State<AppState>) -> Response {
+    let Some(strava) = state.strava.as_deref() else {
+        return not_configured();
+    };
+    let (id, secret) = strava.app_logins.start(now_s());
+    (
+        [(
+            header::SET_COOKIE,
+            cookie(
+                APP_LOGIN_COOKIE,
+                &secret,
+                "/auth/strava/app",
+                STATE_SECONDS,
+                strava.secure_cookies,
+            ),
+        )],
+        Json(AppLoginResponse {
+            url: format!("/auth/strava?app={id}"),
+        }),
+    )
+        .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClaimRequest {
+    /// From the `openradlr://` URL the sign-in sheet ended on.
+    pub ticket: String,
+}
+
+/// Back in the app: the web view trades its secret and the ticket for the session cookie.
+pub async fn app_claim(State(state): State<AppState>, headers: HeaderMap, Json(claim): Json<ClaimRequest>) -> Response {
+    let Some(strava) = state.strava.as_deref() else {
+        return not_configured();
+    };
+    let cookies = headers.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok());
+    let session = cookie_value(cookies, APP_LOGIN_COOKIE)
+        .and_then(|secret| strava.app_logins.claim(secret, &claim.ticket, now_s()));
+    let Some(session) = session else {
+        return error(StatusCode::NOT_FOUND, "no_login", "no finished Strava login to claim");
+    };
+    let secure = strava.secure_cookies;
+    (
+        StatusCode::NO_CONTENT,
+        AppendHeaders([
+            (
+                header::SET_COOKIE,
+                cookie(SESSION_COOKIE, &session, "/", SESSION_SECONDS, secure),
+            ),
+            (
+                header::SET_COOKIE,
+                cookie(APP_LOGIN_COOKIE, "", "/auth/strava/app", 0, secure),
+            ),
+        ]),
     )
         .into_response()
 }

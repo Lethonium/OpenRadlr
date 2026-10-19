@@ -281,6 +281,8 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
         .route("/ws", get(websocket))
         .route("/auth/strava", get(auth::login))
         .route("/auth/strava/callback", get(auth::callback))
+        .route("/auth/strava/app", post(auth::app_login))
+        .route("/auth/strava/app/claim", post(auth::app_claim))
         .route("/auth/logout", post(auth::logout))
         .route("/api/me", get(auth::me))
         .route(

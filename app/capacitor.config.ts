@@ -19,9 +19,8 @@ const config: CapacitorConfig = {
   // The splash screen's colour, so there is no white flash before the page has loaded.
   backgroundColor: "#080a0e",
   server: {
+    // Other sites (Strava links) open outside; Strava's login uses the system sign-in sheet.
     url,
-    // "Connect with Strava" signs in inside the app, so the session cookie lands there.
-    allowNavigation: ["www.strava.com"],
     errorPath: "index.html",
     cleartext: url.startsWith("http://"),
   },

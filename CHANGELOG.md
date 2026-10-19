@@ -12,5 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and Zwift controllers. That is impossible in any iOS browser. A polyfill
   (`ble/nativeBluetooth.js`) gives the existing device code the Web
   Bluetooth it expects, backed by native Bluetooth. Inside the app the screen
-  stays on and ride files open the share sheet. Browsers are unaffected
+  stays on and ride files open the share sheet. *Connect with Strava* uses the
+  system sign-in sheet, so Google and Apple sign-in work too. On iOS, devices
+  stay connected while the app is in the background. Browsers are unaffected
   ([docs/app.md](docs/app.md), ADR 0015).
