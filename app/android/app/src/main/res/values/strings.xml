@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OpenRadlr</string>
+    <string name="title_activity_main">OpenRadlr</string>
+    <string name="package_name">com.openradlr.app</string>
+    <string name="custom_url_scheme">com.openradlr.app</string>
+</resources>
