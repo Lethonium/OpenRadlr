@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>OpenRadlr</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f6f4ec; --fg: #1d1d1b; --accent: #e8c547; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #151514; --fg: #f1efe6; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+        font: 17px/1.5 -apple-system, system-ui, sans-serif; text-align: center; padding: 16px; box-sizing: border-box; }
+      button { font: inherit; font-weight: 600; padding: 12px 28px; border: 0; border-radius: 999px; background: var(--accent); color: #1d1d1b; }
+      p { max-width: 28em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>🍋 OpenRadlr</h1>
+      <p>The OpenRadlr server can't be reached right now. Check your internet connection, or whether your own server is running.</p>
+      <button id="retry" type="button">Try again</button>
+    </main>
+    <script type="module">
+      import { SERVER_URL } from "./server.js";
+      document.getElementById("retry").addEventListener("click", () => location.replace(SERVER_URL));
+    </script>
+  </body>
+</html>
