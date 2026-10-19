@@ -23,9 +23,37 @@ Bluetooth. Why we chose this approach: [ADR 0015](adr/0015-native-app-shell.md).
     Files*, Strava, AirDrop…) through `@capacitor/filesystem` and
     `@capacitor/share`, since a phone has no downloads folder.
     `navigator.share` uses the same path.
+  - **Connect with Strava**: through the system sign-in sheet, see
+    [below](#strava-sign-in).
 - In a browser `window.Capacitor` does not exist, and nothing changes.
 - If the server can't be reached, the app shows `app/www/index.html` with a
   *Try again* button.
+
+## Strava sign-in
+
+Google and Apple don't allow sign-in inside an embedded web view. So in the
+app, *Connect with Strava* opens the system sign-in sheet instead:
+`ASWebAuthenticationSession` on iOS (the app's own `WebAuth` plugin,
+`app/ios/App/App/WebAuthPlugin.swift`), and a Custom Tab on Android
+(`@capacitor/browser`). The sheet has its own cookies, so the session is
+handed over to the web view in steps:
+
+1. The page calls `POST /auth/strava/app`. The server answers with the URL to
+   open, `/auth/strava?app=<id>`, and keeps a secret as a cookie in the web
+   view.
+2. The sheet signs in with Strava as usual. The callback sends it to
+   `openradlr://strava?result=connected&ticket=<ticket>`, which closes the
+   sheet. Android routes that link back to the app with an intent filter.
+3. The page sends the ticket to `POST /auth/strava/app/claim`. The server
+   checks it against the secret in the web view's cookie and sets the
+   session cookie. The page then shows the account without reloading, so
+   connected devices stay connected.
+
+The ticket only reaches the phone that signed in. Someone who sends a victim
+their own login link holds the secret but never sees the ticket, and another
+app that grabs the `openradlr://` link has no secret. The server code is
+`AppLogins` in `server/crates/server/src/strava.rs`. In a browser nothing
+changes.
 
 ## Build and run
 
@@ -93,17 +121,20 @@ npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets 
 7. The screen stays on during a ride.
 8. *Finish ride* → *Download FIT* opens the share sheet → *Save to Files*
    works. Photos too.
-9. *Connect with Strava* signs in and comes back logged in (email/password;
-   see below).
+9. *Connect with Strava* opens the sign-in sheet. Signing in with email,
+   Google and Apple each comes back connected, with devices still connected.
+   Closing the sheet changes nothing.
+10. Lock the phone or switch apps for a minute mid-ride, then come back: the
+    trainer is still connected (iOS) and the ride goes on.
 
 ## Known limitations
 
-- **Strava sign-in with Google/Apple** inside the web view may be blocked by
-  those providers. Email and password work. Fix later:
-  `ASWebAuthenticationSession`.
-- **Background:** if the app goes to the background, iOS pauses the page; the
-  trainer reconnects when you come back. The app does not declare the
-  `bluetooth-central` background mode.
+- **Background:** on iOS the app declares the `bluetooth-central` background
+  mode, so the trainer, strap and controllers stay connected while the app is
+  in the background. The page and its server connection are still paused
+  there, so your rider stops and the ride picks up again when you come back. App Review asks why an app uses this mode; the answer is "keeps the
+  rider's fitness devices connected". Android has no equivalent yet (it would
+  need a foreground service); there the devices reconnect when you return.
 - **Picker filters:** the native picker takes one filter (see ADR 0015).
   Zwift controllers are found by their name prefix "Zwift".
 - **App Store review:** an app that wraps a website must offer more than the

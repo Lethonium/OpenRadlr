@@ -13,23 +13,73 @@ export function nativePlugins(win = globalThis) {
   return capacitor?.isNativePlatform?.() ? (capacitor.Plugins ?? {}) : null;
 }
 
+/** The app's own URL scheme: the system sign-in sheet hands back with `openradlr://…`. */
+export const APP_SCHEME = "openradlr";
+
 /**
  * Puts the native stand-ins in place: `navigator.bluetooth`,
- * `navigator.wakeLock` and `navigator.share`. Returns what the page uses to
- * save files there, or null in a browser.
- * @returns {{saveFiles: (files: {blob: Blob, name: string}[]) => Promise<void>} | null}
+ * `navigator.wakeLock` and `navigator.share`. Returns what the page uses
+ * only in the app, or null in a browser.
+ * @returns {{
+ *   saveFiles: ((files: {blob: Blob, name: string}[]) => Promise<void>) | null,
+ *   signIn: ((url: string) => Promise<string>) | null,
+ * } | null}
  */
 export function installNativeApp({ plugins = nativePlugins(), navigator: nav = globalThis.navigator, storage } = {}) {
   if (!plugins) return null;
   if (plugins.BluetoothLe && !nav.bluetooth) define(nav, "bluetooth", new NativeBluetooth({ plugin: plugins.BluetoothLe, ...(storage !== undefined && { storage }) }));
   // The web view's own wake lock may exist and still let the screen dim.
   if (plugins.KeepAwake) define(nav, "wakeLock", nativeWakeLock(plugins.KeepAwake));
-  if (!plugins.Filesystem || !plugins.Share) return null;
-  const share = (files, title) => shareFiles(plugins, files, title);
-  define(nav, "canShare", (data) => Array.isArray(data?.files) && data.files.length > 0);
-  define(nav, "share", ({ files = [], title } = {}) => share(files.map((file) => ({ blob: file, name: file.name })), title));
-  // No downloads folder on a phone: the share sheet offers "Save to Files" and other apps.
-  return { saveFiles: (files) => share(files) };
+  const canShare = Boolean(plugins.Filesystem && plugins.Share);
+  if (canShare) {
+    const share = (files, title) => shareFiles(plugins, files, title);
+    define(nav, "canShare", (data) => Array.isArray(data?.files) && data.files.length > 0);
+    define(nav, "share", ({ files = [], title } = {}) => share(files.map((file) => ({ blob: file, name: file.name })), title));
+  }
+  const canSignIn = Boolean(plugins.WebAuth || (plugins.Browser && plugins.App));
+  return {
+    // No downloads folder on a phone: the share sheet offers "Save to Files" and other apps.
+    saveFiles: canShare ? (files) => shareFiles(plugins, files) : null,
+    signIn: canSignIn ? (url) => systemSignIn(plugins, url) : null,
+  };
+}
+
+const aborted = () => Object.assign(new Error("Sign-in canceled."), { name: "AbortError" });
+
+/**
+ * Opens `url` in the system sign-in sheet, where Google and Apple sign-in
+ * work (they block embedded web views), and resolves with the
+ * `openradlr://` URL the sheet ends on. Closing the sheet is an AbortError.
+ * iOS: ASWebAuthenticationSession (the app's WebAuth plugin). Android: a
+ * Custom Tab, whose `openradlr://` link comes back through the App plugin.
+ */
+export function systemSignIn({ WebAuth, Browser, App }, url, { setTimeout = globalThis.setTimeout } = {}) {
+  if (WebAuth) {
+    return WebAuth.start({ url, callbackScheme: APP_SCHEME }).then(
+      (result) => result.url,
+      (error) => {
+        throw error?.code === "CANCELED" ? aborted() : error;
+      },
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const handles = [];
+    let settled = false;
+    const settle = (finish) => {
+      if (settled) return;
+      settled = true;
+      for (const handle of handles) Promise.resolve(handle).then((listener) => listener?.remove?.());
+      finish();
+    };
+    handles.push(
+      App.addListener("appUrlOpen", ({ url: back } = {}) => {
+        if (back?.startsWith(`${APP_SCHEME}:`)) settle(() => resolve(back));
+      }),
+    );
+    // The tab also closes on the way back to the app: give the link a moment to arrive first.
+    handles.push(Browser.addListener("browserFinished", () => setTimeout(() => settle(() => reject(aborted())), 1500)));
+    Promise.resolve(Browser.open({ url })).catch((error) => settle(() => reject(error)));
+  });
 }
 
 function define(target, name, value) {

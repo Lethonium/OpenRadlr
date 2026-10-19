@@ -22,7 +22,7 @@ import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
-import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
+import { StravaClient, activityUrl, appLoginResult, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -762,6 +762,12 @@ function initStartMenu() {
     $("strava-message").hidden = false;
     history.replaceState(null, "", location.pathname);
   }
+  if (nativeApp?.signIn) {
+    $("strava-connect").addEventListener("click", (event) => {
+      event.preventDefault();
+      connectStravaInApp();
+    });
+  }
   $("strava-logout").addEventListener("click", async () => {
     await app.strava.logout().catch(() => {});
     app.stravaAccount = null;
@@ -895,6 +901,28 @@ function closeMenuStage(routeId, map = null) {
   const canvas = $("world3d");
   const { parent, next } = app.menuCanvasHome;
   if (canvas.parentElement !== parent) parent.insertBefore(canvas, next);
+}
+
+/**
+ * In the app, Strava signs in through the system sign-in sheet (Google and
+ * Apple sign-in don't work in the web view), and this page then claims the
+ * session (docs/app.md#strava-sign-in). No reload: connected devices stay.
+ */
+async function connectStravaInApp() {
+  const showMessage = (text) => {
+    $("strava-message").textContent = text;
+    $("strava-message").hidden = !text;
+  };
+  showMessage("");
+  try {
+    const start = await app.strava.startAppLogin();
+    const { result, ticket } = appLoginResult(await nativeApp.signIn(new URL(start, location.href).href));
+    if (result !== "connected" || !ticket) return showMessage(stravaMessage(result) ?? stravaMessage("failed"));
+    await app.strava.claimAppLogin(ticket);
+    await loadStravaAccount();
+  } catch (error) {
+    if (error.name !== "AbortError") showMessage(`Connecting Strava failed: ${error.message}`);
+  }
 }
 
 async function loadStravaAccount() {
@@ -3204,7 +3232,7 @@ async function summaryImage() {
 
 /** Ride files and photos: downloads in a browser, the share sheet in the app. */
 async function saveFiles(files) {
-  if (!nativeApp) return files.forEach(({ blob, name }, i) => setTimeout(() => downloadBlob(blob, name), i * 250));
+  if (!nativeApp?.saveFiles) return files.forEach(({ blob, name }, i) => setTimeout(() => downloadBlob(blob, name), i * 250));
   try {
     await nativeApp.saveFiles(files);
   } catch (error) {

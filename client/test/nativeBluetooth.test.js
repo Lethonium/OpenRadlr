@@ -5,7 +5,7 @@ import { grantedDevices } from "../public/js/ble/knownDevices.js";
 import { encodeRequestControl, encodeSimulationParameters, encodeStartOrResume } from "../public/js/ble/ftms.js";
 import { NativeBluetooth, dataViewOf, hexOf, scanOptions, uuidString } from "../public/js/ble/nativeBluetooth.js";
 import { ZWIFT_COMPANY_ID } from "../public/js/ble/zwiftProtocol.js";
-import { base64Of, installNativeApp, nativePlugins, nativeWakeLock, shareFiles } from "../public/js/native/app.js";
+import { base64Of, installNativeApp, nativePlugins, nativeWakeLock, shareFiles, systemSignIn } from "../public/js/native/app.js";
 import { fakeBlePlugin, memoryStorage, strapDevice, trainerDevice } from "./fakeBlePlugin.js";
 
 const FTMS = "00001826-0000-1000-8000-00805f9b34fb";
@@ -230,4 +230,69 @@ test("closing the share sheet is an AbortError, as with navigator.share", async 
 test("large files are encoded in chunks", async () => {
   const bytes = new Uint8Array(100_000).map((_, i) => i & 0xff);
   assert.equal(await base64Of(new Blob([bytes])), Buffer.from(bytes).toString("base64"));
+});
+
+test("only the features with native plugins are offered", () => {
+  const share = { Filesystem: {}, Share: {} };
+  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn"]);
+  assert.equal(installNativeApp({ plugins: {}, navigator: {} }).saveFiles, null);
+  assert.equal(typeof installNativeApp({ plugins: share, navigator: {} }).saveFiles, "function");
+  assert.equal(typeof installNativeApp({ plugins: { WebAuth: {} }, navigator: {} }).signIn, "function");
+  assert.equal(typeof installNativeApp({ plugins: { Browser: {}, App: {} }, navigator: {} }).signIn, "function");
+});
+
+test("iOS signs in through the system sheet and hands back its URL", async () => {
+  const starts = [];
+  const WebAuth = { start: async (options) => (starts.push(options), { url: "openradlr://strava?result=connected&ticket=t" }) };
+  assert.equal(await systemSignIn({ WebAuth }, "https://openradlr.com/auth/strava?app=1"), "openradlr://strava?result=connected&ticket=t");
+  assert.deepEqual(starts, [{ url: "https://openradlr.com/auth/strava?app=1", callbackScheme: "openradlr" }]);
+});
+
+test("closing the iOS sign-in sheet is an AbortError", async () => {
+  const WebAuth = {
+    start: async () => {
+      throw Object.assign(new Error("Sign-in canceled"), { code: "CANCELED" });
+    },
+  };
+  await assert.rejects(systemSignIn({ WebAuth }, "https://x"), { name: "AbortError" });
+});
+
+/** Capacitor's Browser and App plugins: a Custom Tab, and links coming back to the app. */
+function androidPlugins() {
+  const listeners = {};
+  const removed = [];
+  const add = (event, callback) => {
+    listeners[event] = callback;
+    return { remove: async () => removed.push(event) };
+  };
+  const timers = [];
+  return {
+    plugins: { Browser: { opened: [], open: async function ({ url }) { this.opened.push(url); }, addListener: add }, App: { addListener: add } },
+    fire: (event, data) => listeners[event](data),
+    timers,
+    setTimeout: (fn) => timers.push(fn),
+    removed,
+  };
+}
+
+test("Android signs in in a Custom Tab and gets the link back through the app", async () => {
+  const android = androidPlugins();
+  const signedIn = systemSignIn(android.plugins, "https://x/auth/strava?app=1", android);
+  assert.deepEqual(android.plugins.Browser.opened, ["https://x/auth/strava?app=1"]);
+  android.fire("appUrlOpen", { url: "https://elsewhere" });
+  // The tab closes as the app comes back, just before the link arrives.
+  android.fire("browserFinished");
+  android.fire("appUrlOpen", { url: "openradlr://strava?result=connected&ticket=t" });
+  android.timers.forEach((fn) => fn());
+  assert.equal(await signedIn, "openradlr://strava?result=connected&ticket=t");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(android.removed.sort(), ["appUrlOpen", "browserFinished"]);
+});
+
+test("closing the Android sign-in tab is an AbortError", async () => {
+  const android = androidPlugins();
+  const signedIn = systemSignIn(android.plugins, "https://x", android);
+  android.fire("browserFinished");
+  android.timers.forEach((fn) => fn());
+  await assert.rejects(signedIn, { name: "AbortError" });
 });

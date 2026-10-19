@@ -74,6 +74,11 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<!-- Trainer, strap and controllers stay connected while the app is in the background. -->
+		<string>bluetooth-central</string>
+	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

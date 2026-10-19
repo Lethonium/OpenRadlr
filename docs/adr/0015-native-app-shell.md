@@ -54,6 +54,9 @@ CoreBluetooth.
   functionality"). The native Bluetooth integration is the argument against
   that. A bundled client with a server picker in the app is a possible next
   step, but it needs CORS and token auth on the server.
-- Strava sign-in happens inside the web view. Providers that block embedded
-  web views (Google, for example) will not work there. `ASWebAuthenticationSession`
-  would fix that and is left for later.
+- Strava signs in through the system sign-in sheet (`ASWebAuthenticationSession`
+  on iOS, a Custom Tab on Android), because Google and Apple block sign-in in
+  embedded web views. The sheet has its own cookies, so the server hands the
+  session over: the web view holds a secret, the `openradlr://` callback
+  brings a one-time ticket, and claiming the session needs both
+  ([app](../app.md#strava-sign-in)). The browser login is unchanged.
