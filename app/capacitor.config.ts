@@ -16,6 +16,8 @@ const config: CapacitorConfig = {
   appName: "OpenRadlr",
   // Only shown when the server can't be reached.
   webDir: "www",
+  // The splash screen's colour, so there is no white flash before the page has loaded.
+  backgroundColor: "#080a0e",
   server: {
     url,
     // "Connect with Strava" signs in inside the app, so the session cookie lands there.

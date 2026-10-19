@@ -59,6 +59,18 @@ Plain `http://` is allowed for addresses in the local network (iOS:
 URLs). iOS asks for local network access the first time. For a dev server on
 your Mac, use the Mac's LAN address, not `localhost`.
 
+### App icon and splash screen
+
+The app icon comes from the client's maskable icon
+(`client/public/icons/icon-maskable-512.png`). The splash screen is the README
+emblem (`docs/assets/openradlr-emblem.png`), centred on the icon's dark
+background `#080a0e`. To regenerate every size for iOS and Android after one
+of them changes:
+
+```bash
+npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets generate
+```
+
 ### Debugging
 
 - iOS: Safari → *Develop* → your iPhone → the OpenRadlr page shows the
@@ -96,4 +108,5 @@ your Mac, use the Mac's LAN address, not `localhost`.
   Zwift controllers are found by their name prefix "Zwift".
 - **App Store review:** an app that wraps a website must offer more than the
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
-- The app icon and splash screen are still the Capacitor defaults.
+- The app icon is scaled up from the 512 px maskable icon, the largest master
+  in the repo. A 1024 px original would look sharper on the App Store.
