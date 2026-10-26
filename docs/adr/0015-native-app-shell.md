@@ -27,7 +27,7 @@ CoreBluetooth.
   whole UI is web. Flutter only becomes worth it if the UI is rewritten
   natively.
 - The app **loads the client from a server** (`server.url`, by default
-  https://openradlr.com) and does not bundle it. The page keeps its origin,
+  https://app.openradlr.com) and does not bundle it. The page keeps its origin,
   so these work unchanged: the WebSocket URL, the same-origin `/api` calls,
   the Strava session cookie and the OAuth redirect. The client in the app is
   always the version its server speaks. A self-hosted server is set at build

@@ -9,7 +9,7 @@ Bluetooth. Why we chose this approach: [ADR 0015](adr/0015-native-app-shell.md).
 
 - The app does not bundle the client. It opens the page of an OpenRadlr server
   (`server.url` in `app/capacitor.config.ts`, by default
-  https://openradlr.com), so the app always runs the client that server
+  https://app.openradlr.com), so the app always runs the client that server
   serves. Shipping a new client to the server updates the app too, without an
   App Store release.
 - The page sees `window.Capacitor`, which the native shell injects.
