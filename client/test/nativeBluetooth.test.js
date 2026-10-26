@@ -244,8 +244,8 @@ test("only the features with native plugins are offered", () => {
 test("iOS signs in through the system sheet and hands back its URL", async () => {
   const starts = [];
   const WebAuth = { start: async (options) => (starts.push(options), { url: "openradlr://strava?result=connected&ticket=t" }) };
-  assert.equal(await systemSignIn({ WebAuth }, "https://openradlr.com/auth/strava?app=1"), "openradlr://strava?result=connected&ticket=t");
-  assert.deepEqual(starts, [{ url: "https://openradlr.com/auth/strava?app=1", callbackScheme: "openradlr" }]);
+  assert.equal(await systemSignIn({ WebAuth }, "https://app.openradlr.com/auth/strava?app=1"), "openradlr://strava?result=connected&ticket=t");
+  assert.deepEqual(starts, [{ url: "https://app.openradlr.com/auth/strava?app=1", callbackScheme: "openradlr" }]);
 });
 
 test("closing the iOS sign-in sheet is an AbortError", async () => {
