@@ -1,0 +1,33 @@
+{
+  "name": "openradlr-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenRadlr for iOS and Android: the browser client in a native shell with Bluetooth (Capacitor).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "sync": "cap sync",
+    "ios": "cap sync ios && cap open ios",
+    "android": "cap sync android && cap open android",
+    "assets": "node scripts/make-assets.mjs && capacitor-assets generate --ios --android --iconBackgroundColor \"#080a0e\" --iconBackgroundColorDark \"#080a0e\" --splashBackgroundColor \"#080a0e\" --splashBackgroundColorDark \"#080a0e\""
+  },
+  "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.3.0",
+    "@capacitor-community/keep-awake": "^8.0.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
+    "typescript": "^5.9.3"
+  }
+}

@@ -15,7 +15,7 @@ import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
 import { defaultServerUrl } from "./net/protocol.js";
-import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
+import { StravaClient, activityUrl, appLoginResult, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
 import { ProfileStore, validateProfile } from "./profile/profileStore.js";
@@ -83,10 +83,13 @@ import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, STUDIO_CAMERAS, STUDIO_CAMERA_LABELS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
+import { installNativeApp } from "./native/app.js";
 import { PaddleView } from "./view/paddleView.js";
 import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 
+// Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
+const nativeApp = installNativeApp();
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
 /** How often a ride is written to the browser while it goes on (#73). */
@@ -468,6 +471,12 @@ function initStartMenu() {
     $("strava-message").hidden = false;
     history.replaceState(null, "", location.pathname);
   }
+  if (nativeApp?.signIn) {
+    $("strava-connect").addEventListener("click", (event) => {
+      event.preventDefault();
+      connectStravaInApp();
+    });
+  }
   $("strava-logout").addEventListener("click", async () => {
     await app.strava.logout().catch(() => {});
     app.stravaAccount = null;
@@ -571,6 +580,28 @@ function closeMenuStage(routeId) {
   const canvas = $("world3d");
   const { parent, next } = app.menuCanvasHome;
   if (canvas.parentElement !== parent) parent.insertBefore(canvas, next);
+}
+
+/**
+ * In the app, Strava signs in through the system sign-in sheet (Google and
+ * Apple sign-in don't work in the web view), and this page then claims the
+ * session (docs/app.md#strava-sign-in). No reload: connected devices stay.
+ */
+async function connectStravaInApp() {
+  const showMessage = (text) => {
+    $("strava-message").textContent = text;
+    $("strava-message").hidden = !text;
+  };
+  showMessage("");
+  try {
+    const start = await app.strava.startAppLogin();
+    const { result, ticket } = appLoginResult(await nativeApp.signIn(new URL(start, location.href).href));
+    if (result !== "connected" || !ticket) return showMessage(stravaMessage(result) ?? stravaMessage("failed"));
+    await app.strava.claimAppLogin(ticket);
+    await loadStravaAccount();
+  } catch (error) {
+    if (error.name !== "AbortError") showMessage(`Connecting Strava failed: ${error.message}`);
+  }
 }
 
 async function loadStravaAccount() {
@@ -1858,18 +1889,18 @@ function initFinish() {
   $("download-tcx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
     const tcx = app.recorder.toTcx({ name: rideName(), splits: app.finishSplits });
-    downloadBlob(new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id));
+    saveFiles([{ blob: new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id) }]);
     rideKept();
   });
   $("download-fit").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
-    downloadBlob(new Blob([app.recorder.toFit({ indoor: Boolean(app.studio), splits: app.finishSplits })], { type: "application/vnd.ant.fit" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "fit"));
+    saveFiles([{ blob: new Blob([app.recorder.toFit({ indoor: Boolean(app.studio), splits: app.finishSplits })], { type: "application/vnd.ant.fit" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "fit") }]);
     rideKept();
   });
   $("download-gpx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
     const gpx = app.recorder.toGpx({ name: rideName() });
-    downloadBlob(new Blob([gpx], { type: "application/gpx+xml" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "gpx"));
+    saveFiles([{ blob: new Blob([gpx], { type: "application/gpx+xml" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "gpx") }]);
     rideKept();
   });
   $("upload-strava").addEventListener("click", () => uploadToStrava());
@@ -2228,12 +2259,12 @@ function initRecovery() {
     const snapshot = app.unfinished;
     if (!snapshot) return;
     const recorder = recorderOf(snapshot);
-    downloadBlob(new Blob([recorder.toFit({ indoor: snapshot.studio })], { type: "application/vnd.ant.fit" }), rideFileName(recorder.samples[0].t, snapshot.routeId, "fit"));
+    saveFiles([{ blob: new Blob([recorder.toFit({ indoor: snapshot.studio })], { type: "application/vnd.ant.fit" }), name: rideFileName(recorder.samples[0].t, snapshot.routeId, "fit") }]);
     kept();
   });
   $("unfinished-photos").addEventListener("click", async () => {
     const photos = await app.autosave.photos();
-    photos.forEach((photo, i) => setTimeout(() => downloadBlob(photo.blob, photo.name), i * 250));
+    saveFiles(photos);
   });
   $("unfinished-strava").addEventListener("click", () => {
     const snapshot = app.unfinished;
@@ -2261,7 +2292,7 @@ function initPhotos() {
     requestAnimationFrame(() => takePhoto());
   });
   $("download-photos").addEventListener("click", () => {
-    app.album.images.forEach((image, i) => setTimeout(() => downloadBlob(image.blob, image.name), i * 250));
+    saveFiles(app.album.images);
   });
   $("share-photos").addEventListener("click", () => sharePhotos());
 }
@@ -2317,7 +2348,7 @@ function renderPhotos() {
       const open = Object.assign(document.createElement("button"), { type: "button", className: "photo-thumb", title: `Download ${photo.name}` });
       const alt = photo.summary ? "Ride summary card" : `Photo taken at ${new Date(photo.takenAt).toLocaleTimeString()}`;
       open.append(Object.assign(document.createElement("img"), { src: photo.url, alt }));
-      open.addEventListener("click", () => downloadBlob(photo.blob, photo.name));
+      open.addEventListener("click", () => saveFiles([photo]));
       if (photo.summary) {
         item.classList.add("summary-thumb");
         item.append(open, Object.assign(document.createElement("span"), { className: "summary-label", textContent: "Summary" }));
@@ -2361,6 +2392,16 @@ async function summaryImage() {
   });
   const blob = await canvasToPng(canvas);
   return { blob, name: photoFileName(samples[0]?.t ?? Date.now(), app.rideRoute.id, "summary") };
+}
+
+/** Ride files and photos: downloads in a browser, the share sheet in the app. */
+async function saveFiles(files) {
+  if (!nativeApp?.saveFiles) return files.forEach(({ blob, name }, i) => setTimeout(() => downloadBlob(blob, name), i * 250));
+  try {
+    await nativeApp.saveFiles(files);
+  } catch (error) {
+    if (error.name !== "AbortError") notify(`Saving failed: ${error.message}`, "error");
+  }
 }
 
 /** Phones: hand the summary and all photos to another app, e.g. Strava. */

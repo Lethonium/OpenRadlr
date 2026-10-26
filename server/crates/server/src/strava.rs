@@ -23,6 +23,12 @@ pub const STATE_COOKIE: &str = "openradlr_oauth_state";
 pub const SESSION_SECONDS: i64 = 30 * 24 * 3600;
 /// Time to come back from Strava's consent screen.
 pub const STATE_SECONDS: i64 = 600;
+/// The app's login (see [`AppLogins`]): its secret, in the app's web view.
+pub const APP_LOGIN_COOKIE: &str = "openradlr_app_login";
+/// The app's login id, in the system sign-in sheet on its way through Strava.
+pub const APP_ID_COOKIE: &str = "openradlr_app_id";
+/// Where the sign-in sheet hands back to the app (`openradlr://` opens it).
+pub const APP_CALLBACK_URL: &str = "openradlr://strava";
 /// Refresh the access token when it expires within this many seconds.
 const REFRESH_MARGIN_S: i64 = 300;
 
@@ -271,6 +277,98 @@ impl Accounts {
     }
 }
 
+struct AppLogin {
+    secret_hash: String,
+    created_s: i64,
+    /// Set once Strava said yes: the session and the hash of its ticket.
+    done: Option<(String, String)>,
+}
+
+/// Logins from the OpenRadlr app (docs/app.md). Its web view can't sign in
+/// with every provider, so the app opens Strava in the system's sign-in
+/// sheet, which has its own cookies:
+///
+/// 1. The web view starts a login and keeps its secret as a cookie.
+/// 2. The sheet carries only the login's id through Strava.
+/// 3. Strava's answer sends the sheet to `openradlr://strava` with a ticket,
+///    which reaches the device that signed in.
+/// 4. The web view claims the session with secret and ticket.
+///
+/// Someone who sends a victim their own login link holds the secret but never
+/// sees the ticket; an app that grabs the `openradlr://` URL holds the ticket
+/// but not the secret.
+#[derive(Default)]
+pub struct AppLogins {
+    logins: Mutex<HashMap<String, AppLogin>>,
+}
+
+impl AppLogins {
+    /// A new login: its id (for the sheet) and secret (for the web view).
+    pub fn start(&self, now_s: i64) -> (String, String) {
+        let mut logins = self.logins.lock().unwrap_or_else(|e| e.into_inner());
+        logins.retain(|_, login| now_s - login.created_s <= STATE_SECONDS);
+        let (id, secret) = (random_token(), random_token());
+        logins.insert(
+            id.clone(),
+            AppLogin {
+                secret_hash: hash_id(&secret),
+                created_s: now_s,
+                done: None,
+            },
+        );
+        (id, secret)
+    }
+
+    /// Whether `id` is a login still waiting for Strava.
+    pub fn is_pending(&self, id: &str, now_s: i64) -> bool {
+        let logins = self.logins.lock().unwrap_or_else(|e| e.into_inner());
+        logins
+            .get(id)
+            .is_some_and(|login| login.done.is_none() && now_s - login.created_s <= STATE_SECONDS)
+    }
+
+    /// Strava said yes: the session waits for the web view. Returns the ticket
+    /// for the `openradlr://` URL, or None for an unknown or used login.
+    pub fn complete(&self, id: &str, session: String, now_s: i64) -> Option<String> {
+        let mut logins = self.logins.lock().unwrap_or_else(|e| e.into_inner());
+        let login = logins
+            .get_mut(id)
+            .filter(|login| login.done.is_none() && now_s - login.created_s <= STATE_SECONDS)?;
+        let ticket = random_token();
+        login.done = Some((session, hash_id(&ticket)));
+        Some(ticket)
+    }
+
+    /// The session of the login with this secret and ticket, once.
+    pub fn claim(&self, secret: &str, ticket: &str, now_s: i64) -> Option<String> {
+        let mut logins = self.logins.lock().unwrap_or_else(|e| e.into_inner());
+        let (secret_hash, ticket_hash) = (hash_id(secret), hash_id(ticket));
+        let id = logins
+            .iter()
+            .find(|(_, login)| login.secret_hash == secret_hash)
+            .map(|(id, _)| id.clone())?;
+        if !logins[&id].done.as_ref().is_some_and(|(_, hash)| *hash == ticket_hash) {
+            return None;
+        }
+        let login = logins.remove(&id)?;
+        let (session, _) = login.done?;
+        (now_s - login.created_s <= STATE_SECONDS).then_some(session)
+    }
+}
+
+/// Where a login ends: the page for the browser, the app's URL (with the
+/// ticket of a finished login) for its sign-in sheet.
+pub fn login_result_url(app: bool, result: &str, ticket: Option<&str>) -> String {
+    match (app, result) {
+        (true, _) => match ticket {
+            Some(ticket) => format!("{APP_CALLBACK_URL}?result={result}&ticket={ticket}"),
+            None => format!("{APP_CALLBACK_URL}?result={result}"),
+        },
+        (false, "connected") => "/".to_owned(),
+        (false, _) => format!("/?strava={result}"),
+    }
+}
+
 /// What Strava answers about an upload (passed on to the browser).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UploadStatus {
@@ -430,5 +528,63 @@ mod tests {
         assert!(expired.get(&kept, SESSION_SECONDS + 20).is_none());
         assert_eq!(expired.session_count(), 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_app_login_is_claimed_once_with_secret_and_ticket() {
+        let logins = AppLogins::default();
+        let (id, secret) = logins.start(1000);
+        assert!(logins.is_pending(&id, 1000));
+        let ticket = logins.complete(&id, "session-1".to_owned(), 1010).expect("a ticket");
+        assert!(!logins.is_pending(&id, 1010));
+        assert_eq!(
+            logins.complete(&id, "session-2".to_owned(), 1011),
+            None,
+            "one session per login"
+        );
+        assert_eq!(logins.claim(&secret, &id, 1012), None, "the id is no ticket");
+        assert_eq!(
+            logins.claim(&ticket, &ticket, 1012),
+            None,
+            "the ticket alone grants nothing"
+        );
+        assert_eq!(logins.claim(&secret, &ticket, 1012), Some("session-1".to_owned()));
+        assert_eq!(logins.claim(&secret, &ticket, 1013), None);
+    }
+
+    #[test]
+    fn a_login_link_sent_to_someone_else_gives_its_sender_nothing() {
+        let logins = AppLogins::default();
+        // The sender starts a login and keeps the secret; the victim signs in with the link.
+        let (id, secret) = logins.start(1000);
+        let _ticket_on_the_victims_phone = logins.complete(&id, "victim".to_owned(), 1010);
+        assert_eq!(logins.claim(&secret, "", 1011), None);
+        assert_eq!(logins.claim(&secret, &random_token(), 1011), None);
+    }
+
+    #[test]
+    fn app_logins_expire_like_oauth_states() {
+        let logins = AppLogins::default();
+        let (id, secret) = logins.start(1000);
+        assert!(!logins.is_pending(&id, 1000 + STATE_SECONDS + 1));
+        let ticket = logins
+            .complete(&id, "s".to_owned(), 1000 + STATE_SECONDS)
+            .expect("a ticket");
+        assert_eq!(logins.claim(&secret, &ticket, 1000 + STATE_SECONDS + 1), None);
+        assert!(!logins.is_pending("unknown", 1000));
+    }
+
+    #[test]
+    fn logins_end_in_the_browser_or_in_the_app() {
+        assert_eq!(login_result_url(false, "connected", None), "/");
+        assert_eq!(login_result_url(false, "denied", None), "/?strava=denied");
+        assert_eq!(
+            login_result_url(true, "connected", Some("t1")),
+            "openradlr://strava?result=connected&ticket=t1"
+        );
+        assert_eq!(
+            login_result_url(true, "expired", None),
+            "openradlr://strava?result=expired"
+        );
     }
 }

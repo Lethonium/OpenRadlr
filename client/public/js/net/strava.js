@@ -19,6 +19,19 @@ export function stravaMessage(param) {
   }
 }
 
+/**
+ * The `openradlr://strava?result=…&ticket=…` URL an app login ends on (see
+ * the server's AppLogins): what happened, and the ticket to claim the session.
+ */
+export function appLoginResult(url) {
+  try {
+    const params = new URL(url).searchParams;
+    return { result: params.get("result") ?? "failed", ticket: params.get("ticket") };
+  } catch {
+    return { result: "failed", ticket: null };
+  }
+}
+
 export class StravaClient {
   /** @param {{fetch?: typeof fetch, sleep?: (ms: number) => Promise<void>}} [deps] */
   constructor({ fetch: fetchFn = (...args) => globalThis.fetch(...args), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
@@ -31,6 +44,27 @@ export class StravaClient {
     const response = await this.fetch("/api/me", { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) return null;
     return response.json();
+  }
+
+  /**
+   * The app starts a login for the system sign-in sheet (docs/app.md): the
+   * server keeps its secret in this web view's cookies and answers the URL
+   * the sheet opens.
+   */
+  async startAppLogin() {
+    const { url } = await this.#json(await this.fetch("/auth/strava/app", { method: "POST", credentials: "same-origin" }));
+    return url;
+  }
+
+  /** Back from the sheet: trades the ticket for this web view's session cookie. */
+  async claimAppLogin(ticket) {
+    const response = await this.fetch("/auth/strava/app/claim", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ticket }),
+    });
+    if (!response.ok) await this.#json(response);
   }
 
   async logout() {

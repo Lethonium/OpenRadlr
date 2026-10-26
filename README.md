@@ -210,6 +210,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 ├── client/
 │   ├── public/             browser client (plain ES modules, no build step)
 │   └── test/               client unit tests (node:test)
+├── app/                    iOS and Android app: the client in a Capacitor shell with native Bluetooth
 ├── routes/                 route files (JSON), shared by server and clients
 ├── landing/                landing page for the main domain (Astro, static)
 ├── deploy/Caddyfile        HTTPS reverse proxy
@@ -226,6 +227,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 - [Vehicles](docs/vehicles.md) — tandems and beer bikes, codes, captain, bots
 - [Workouts](docs/workouts.md) — café circuits, presets, exercises, history
 - [Devices](docs/devices.md) — FTMS, heart rate, Zwift Click/Play/Ride controllers
+- [App](docs/app.md) — the iOS and Android app: building, testing, own server
 - [Routes](docs/routes.md) — route file format
 - [Deploying](docs/deploy.md) — production behind a reverse proxy, Strava, limits
 - [Decisions](docs/adr/) — architecture decision records

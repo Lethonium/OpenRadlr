@@ -1,0 +1,3 @@
+node_modules/
+# Written by capacitor.config.ts on every `cap` command.
+www/server.js

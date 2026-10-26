@@ -203,6 +203,8 @@ when `OPENRADLR_ALLOWED_ORIGINS` is set and the page's origin isn't listed, and
 | `GET /api/studio` | the spin studio: `slot_s` (1800), `lobby_s` (300), `seats_per_room`, `classes[]` (`id`, `name`, `description`, `duration_s`, `segments[]` with `duration_s`, `from`/`to` as a fraction of FTP, `cadence` `[lo, hi]`, `cue`), `schedule[]` (the current slot and the next five: `class_id`, `name`, `starts_at_s`); 404 when the studio is closed |
 | `GET /auth/strava` | starts "Connect with Strava" (redirect) |
 | `GET /auth/strava/callback` | Strava sends the rider back here; sets the `openradlr_session` cookie |
+| `POST /auth/strava/app` | the app starts a login in the system sign-in sheet: `{url}` to open, its secret as a cookie ([app](app.md#strava-sign-in)) |
+| `POST /auth/strava/app/claim` | `{ticket}` from the `openradlr://strava` URL; sets `openradlr_session` in the app's web view |
 | `POST /auth/logout` | forgets the session |
 | `GET /api/me` | `athlete_id`, `name`, `can_upload` — or 401 |
 | `POST /api/strava/upload?name=…` | body: a FIT file (the client marks it a virtual ride) or a TCX file; uploads it, answers Strava's upload status (`id`, `status`, `error`, `activity_id`) |
