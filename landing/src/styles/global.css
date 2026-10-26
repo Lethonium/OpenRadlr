@@ -1,0 +1,179 @@
+/* Colours and fonts follow the app (client/public/styles.css), so the click
+   from here into the app feels like one product. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0f1216;
+  --surface: #171b21;
+  --surface-2: #1f252d;
+  --border: #2a313b;
+  --text: #e8ecf1;
+  --muted: #8a94a3;
+  --accent: #ff7a1a;
+  --accent-text: #1a0d02;
+  --lemon: #ffd21f;
+  --terrain-edge: #5fb47c;
+  --climb: #ff5d5d;
+  --sprint: #4cc3ff;
+  --radius: 10px;
+
+  --display: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --max: 68rem;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 100%;
+  line-height: 1.6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.0625rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--lemon);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+}
+
+h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+  max-width: 62ch;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gutter), var(--max));
+  margin-inline: auto;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Buttons look like the app's: orange primary, quiet secondary. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.75em 1.4em;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.button:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.button.primary:hover {
+  background: #ff8c3a;
+  color: var(--accent-text);
+}
+
+.button.large {
+  font-size: 1.125rem;
+  padding: 0.85em 1.6em;
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 10;
+}
+
+.skip:focus {
+  top: 1rem;
+}
+
+/* Long text page (changelog). */
+.prose {
+  padding-block: clamp(2rem, 6vw, 4.5rem) clamp(3rem, 8vw, 6rem);
+}
+
+.prose h1 {
+  font-size: clamp(2.75rem, 7vw, 4.5rem);
+  margin-bottom: 1.5rem;
+}
+
+.prose h2 {
+  font-size: 2rem;
+  margin: 3rem 0 1rem;
+}
+
+.prose h3 {
+  font-size: 1.375rem;
+  margin: 2rem 0 0.75rem;
+  font-style: normal;
+}
+
+.prose p,
+.prose ul {
+  margin-bottom: 1rem;
+  max-width: 68ch;
+}
+
+.prose li {
+  margin-bottom: 0.5rem;
+  max-width: 68ch;
+}

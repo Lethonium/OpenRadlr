@@ -1,0 +1,12 @@
+[package]
+name = "openradlr-sim"
+description = "Deterministic, dependency-free riding simulation: route, physics, drafting, bots and races."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

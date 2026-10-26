@@ -1,0 +1,29 @@
+# HTTPS reverse proxy for public OpenRadlr servers.
+# Caddy fetches and renews certificates automatically and proxies WebSockets.
+
+# Landing page (optional, COMPOSE_PROFILES=tls,landing). One or more addresses,
+# e.g. "openradlr.com, www.openradlr.com"; www. redirects to the bare domain.
+# Unset, it falls back to a local-only address nobody reaches from outside.
+{$OPENRADLR_LANDING_DOMAIN:http://landing.localhost} {
+	@www header_regexp www Host ^www\.(.+)$
+	redir @www https://{re.www.1}{uri} permanent
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+	}
+
+	reverse_proxy landing:80
+}
+
+# The app: game server, client and WebSocket (e.g. app.openradlr.com).
+{$OPENRADLR_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy server:8080
+}

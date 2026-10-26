@@ -1,0 +1,31 @@
+---
+import { getEntry, render } from "astro:content";
+import Base from "../layouts/Base.astro";
+
+const entry = await getEntry("changelog", "changelog");
+if (!entry) throw new Error("CHANGELOG.md not found");
+const { Content } = await render(entry);
+---
+
+<Base title="Changelog" description="What changed in OpenRadlr, release by release.">
+  <article class="wrap prose changelog">
+    <Content />
+  </article>
+</Base>
+
+<style>
+  .changelog :global(h2) {
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .changelog :global(h3) {
+    color: var(--muted);
+  }
+  .changelog :global(strong) {
+    color: var(--text);
+    font-weight: 700;
+  }
+  .changelog :global(li) {
+    color: #c5ccd6;
+  }
+</style>

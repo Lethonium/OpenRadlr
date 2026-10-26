@@ -1,0 +1,77 @@
+---
+// The elevation profile of a real route, drawn as the ground the hero stands
+// on: the area below the line is filled with the page colour, climbs are
+// traced red and sprints blue, as on the app's profile.
+import { loadProfile } from "../lib/route";
+
+interface Props {
+  route: string;
+}
+
+const profile = loadProfile(Astro.props.route);
+const W = 1000;
+const H = 160;
+const TOP = 12; // room for the stroke at the highest point
+const x = (d: number) => (d / profile.lengthM) * W;
+const y = (e: number) => TOP + (1 - (e - profile.minEle) / (profile.maxEle - profile.minEle)) * (H - TOP - 28);
+
+const line = (from = 0, to = profile.lengthM) =>
+  profile.samples
+    .filter(([d]) => d >= from && d <= to)
+    .map(([d, e], i) => `${i ? "L" : "M"}${x(d).toFixed(1)},${y(e).toFixed(1)}`)
+    .join("");
+const area = `${line()}L${W},${H}L0,${H}Z`;
+const km = (m: number) => (m / 1000).toFixed(1);
+---
+
+<figure class="profile">
+  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+    <path class="ground" d={area} />
+    <path class="road" d={line()} />
+    {profile.segments.map((s) => <path class={s.type} d={line(s.from, s.to)} />)}
+  </svg>
+  <figcaption>
+    {profile.name}: {km(profile.lengthM)} km, {Math.round(profile.climbM)} m of climbing.
+    One of the routes on the island, drawn from the game’s own map.
+  </figcaption>
+</figure>
+
+<style>
+  .profile {
+    margin: 0;
+    position: relative;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: clamp(90px, 14vw, 190px);
+  }
+  path {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .ground {
+    fill: var(--bg);
+  }
+  .road {
+    stroke: var(--terrain-edge);
+    stroke-width: 2;
+  }
+  .climb {
+    stroke: var(--climb);
+    stroke-width: 4;
+  }
+  .sprint {
+    stroke: var(--sprint);
+    stroke-width: 4;
+  }
+  figcaption {
+    /* Full width (it covers whatever is behind), text aligned with .wrap. */
+    padding-inline: max(var(--gutter), (100% - var(--max)) / 2);
+    background: var(--bg);
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+</style>

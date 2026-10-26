@@ -1,0 +1,147 @@
+# OpenRadlr — proof of concept
+#
+#   make up        build and start (http://localhost:8080)
+#   make update    git pull, rebuild, restart
+#
+# All settings come from .env (see .env.example). Docker Compose reads .env
+# automatically for the ${...} values below.
+
+name: openradlr
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Exported by the Makefile (git commit and date); `dev` when built by hand.
+        OPENRADLR_BUILD_SHA: ${OPENRADLR_BUILD_SHA:-dev}
+        OPENRADLR_BUILD_DATE: ${OPENRADLR_BUILD_DATE:-}
+    image: openradlr-server:${OPENRADLR_IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      OPENRADLR_SERVER_NAME: ${OPENRADLR_SERVER_NAME:-OpenRadlr}
+      OPENRADLR_ROUTE_FILE: /app/routes/${OPENRADLR_ROUTE:-rolling-hills}.json
+      OPENRADLR_TARGET_RIDERS: ${OPENRADLR_TARGET_RIDERS:-12}
+      OPENRADLR_MAX_PLAYERS: ${OPENRADLR_MAX_PLAYERS:-50}
+      OPENRADLR_MAX_PADDLE_PLAYERS: ${OPENRADLR_MAX_PADDLE_PLAYERS:-20}
+      OPENRADLR_MAX_VISIBLE_RIDERS: ${OPENRADLR_MAX_VISIBLE_RIDERS:-200}
+      OPENRADLR_TICK_HZ: ${OPENRADLR_TICK_HZ:-20}
+      OPENRADLR_BROADCAST_HZ: ${OPENRADLR_BROADCAST_HZ:-4}
+      OPENRADLR_RACE_COUNTDOWN_S: ${OPENRADLR_RACE_COUNTDOWN_S:-30}
+      OPENRADLR_MAX_RACE_LAPS: ${OPENRADLR_MAX_RACE_LAPS:-20}
+      OPENRADLR_BOT_SEED: ${OPENRADLR_BOT_SEED:-}
+      OPENRADLR_AUTH_MODE: ${OPENRADLR_AUTH_MODE:-open}
+      OPENRADLR_ROUTES_DIR: /app/routes
+      OPENRADLR_PUBLIC_URL: ${OPENRADLR_PUBLIC_URL:-}
+      OPENRADLR_TRUST_PROXY: ${OPENRADLR_TRUST_PROXY:-false}
+      OPENRADLR_MAX_CONNECTIONS_PER_IP: ${OPENRADLR_MAX_CONNECTIONS_PER_IP:-4}
+      OPENRADLR_MESSAGES_PER_SECOND: ${OPENRADLR_MESSAGES_PER_SECOND:-20}
+      OPENRADLR_ALLOWED_ORIGINS: ${OPENRADLR_PUBLIC_URL:-}
+      OPENRADLR_STRAVA_CLIENT_ID: ${OPENRADLR_STRAVA_CLIENT_ID:-}
+      OPENRADLR_STRAVA_CLIENT_SECRET: ${OPENRADLR_STRAVA_CLIENT_SECRET:-}
+      OPENRADLR_SECRET_KEY: ${OPENRADLR_SECRET_KEY:-}
+      OPENRADLR_REQUIRE_STRAVA: ${OPENRADLR_REQUIRE_STRAVA:-false}
+      OPENRADLR_ALLOW_SIMULATED_TRAINER: ${OPENRADLR_ALLOW_SIMULATED_TRAINER:-true}
+      OPENRADLR_PRIVACY_URL: ${OPENRADLR_PRIVACY_URL:-}
+      OPENRADLR_ANALYTICS_DOMAIN: ${OPENRADLR_ANALYTICS_DOMAIN:-}
+      OPENRADLR_ANALYTICS_SCRIPT: ${OPENRADLR_ANALYTICS_SCRIPT:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      # Defaults to localhost only. Set OPENRADLR_HTTP_BIND=0.0.0.0 to expose it.
+      - "${OPENRADLR_HTTP_BIND:-127.0.0.1}:${OPENRADLR_HTTP_PORT:-8080}:8080"
+    networks:
+      default:
+      metrics:
+        aliases: [openradlr-server]
+    volumes:
+      # Routes are mounted so new routes need no rebuild.
+      - ./routes:/app/routes:ro
+      # Strava logins (SQLite), so they survive `make update`. Back this volume up.
+      - data:/app/data
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional landing page (static Astro site, see landing/). Enable with
+  # COMPOSE_PROFILES=landing (plus tls for the bundled Caddy) and
+  # OPENRADLR_LANDING_DOMAIN in .env. Without it, nothing changes.
+  landing:
+    build:
+      context: .
+      dockerfile: landing/Dockerfile
+      args:
+        PUBLIC_SITE_URL: ${OPENRADLR_LANDING_URL:-https://openradlr.com}
+        PUBLIC_APP_URL: ${OPENRADLR_PUBLIC_URL:-https://app.openradlr.com}
+        PUBLIC_DISCORD_URL: ${OPENRADLR_DISCORD_URL:-}
+        # Same privacy policy as the app's start menu, so one setting covers both.
+        PUBLIC_PRIVACY_URL: ${OPENRADLR_PRIVACY_URL:-}
+        PUBLIC_IMPRINT_URL: ${OPENRADLR_LANDING_IMPRINT_URL:-}
+        PUBLIC_PLAUSIBLE_DOMAIN: ${OPENRADLR_LANDING_PLAUSIBLE_DOMAIN:-}
+        # Same script as the app, so one setting covers both.
+        PUBLIC_PLAUSIBLE_SCRIPT: ${OPENRADLR_ANALYTICS_SCRIPT:-}
+    image: openradlr-landing:${OPENRADLR_IMAGE_TAG:-local}
+    profiles: ["landing"]
+    restart: unless-stopped
+    ports:
+      # For your own reverse proxy on this machine; the bundled Caddy uses the
+      # Compose network instead.
+      - "${OPENRADLR_HTTP_BIND:-127.0.0.1}:${OPENRADLR_LANDING_PORT:-8081}:80"
+    read_only: true
+    tmpfs:
+      - /config
+      - /data
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional HTTPS for public servers without their own reverse proxy
+  # (Web Bluetooth needs a secure context). Enable with COMPOSE_PROFILES=tls
+  # and OPENRADLR_DOMAIN in .env. Behind your own Caddy/nginx, leave it off.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      OPENRADLR_DOMAIN: ${OPENRADLR_DOMAIN:-localhost}
+      OPENRADLR_LANDING_DOMAIN: ${OPENRADLR_LANDING_DOMAIN:-http://landing.localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  metrics:
+    name: openradlr-metrics

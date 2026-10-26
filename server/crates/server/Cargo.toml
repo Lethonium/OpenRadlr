@@ -1,0 +1,35 @@
+[package]
+name = "openradlr-server"
+description = "OpenRadlr multiplayer game server: WebSocket protocol, game loop and static client hosting."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "openradlr-server"
+path = "src/main.rs"
+
+[dependencies]
+openradlr-sim = { path = "../sim" }
+axum = { version = "0.8", features = ["ws"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# Strava: token exchange and uploads over HTTPS (rustls with bundled roots, no system OpenSSL).
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+# Strava logins survive restarts: SQLite on a volume, refresh tokens encrypted, session ids hashed.
+rusqlite = { version = "0.40", features = ["bundled"] }
+aes-gcm = "0.11"
+sha2 = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync", "signal"] }
+tower-http = { version = "0.7", features = ["fs", "set-header", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+tokio-tungstenite = "0.29"
+tokio = { version = "1", features = ["io-util"] }

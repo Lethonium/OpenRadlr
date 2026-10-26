@@ -1,0 +1,9 @@
+[
+  { "type": "climb", "name": "Femés", "lat": 28.8955, "lon": -13.7919 },
+  { "type": "climb", "name": "Timanfaya", "lat": 28.9874, "lon": -13.7414 },
+  { "type": "climb", "name": "Tabayesco", "lat": 29.1745, "lon": -13.4685 },
+  { "type": "climb", "name": "Mirador del Río", "lat": 29.2026, "lon": -13.4803 },
+  { "type": "sprint", "name": "Yaiza", "lat": 28.938, "lon": -13.7683, "length": 300 },
+  { "type": "sprint", "name": "Teguise", "lat": 29.0589, "lon": -13.5502, "length": 300 },
+  { "type": "sprint", "name": "Haría", "lat": 29.1459, "lon": -13.5001, "length": 300 }
+]

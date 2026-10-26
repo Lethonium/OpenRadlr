@@ -1,0 +1,3844 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1216;
+  --surface: #171b21;
+  --surface-2: #1f252d;
+  --border: #2a313b;
+  --text: #e8ecf1;
+  --muted: #8a94a3;
+  --accent: #ff7a1a;
+  --accent-text: #1a0d02;
+  --lemon: #ffd21f;
+  --danger: #ff5d5d;
+  --grid: #3a434f;
+  --road: #2b3139;
+  --terrain: #24402f;
+  --terrain-edge: #5fb47c;
+  --me: #ff7a1a;
+  --human: #4cc3ff;
+  --bot: #8f99a8;
+  --climb: rgba(255, 93, 93, 0.12);
+  --sprint: rgba(76, 195, 255, 0.12);
+  --radius: 10px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  justify-content: space-between;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  width: 100%;
+  padding: 12px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+input[type="range"] {
+  padding: 0;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+kbd {
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+}
+
+/* Start menu */
+.start {
+  min-height: 100vh;
+  padding: 0 24px 40px;
+  background:
+    radial-gradient(1200px 500px at 15% -10%, rgba(255, 122, 26, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(76, 195, 255, 0.08), transparent 60%),
+    var(--bg);
+}
+
+/* Drone view of the island behind the menu: fades in once built. */
+.start {
+  position: relative;
+  isolation: isolate;
+}
+
+.menu-world {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.4s ease;
+}
+
+.menu-world::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(15, 18, 22, 0.6) 0%, rgba(15, 18, 22, 0.05) 28%, rgba(15, 18, 22, 0.15) 55%, rgba(15, 18, 22, 0.88) 100%),
+    linear-gradient(90deg, rgba(15, 18, 22, 0.35) 0%, transparent 40%, transparent 60%, rgba(15, 18, 22, 0.55) 100%);
+}
+
+.start.world-ready .menu-world {
+  opacity: 1;
+}
+
+.start.world-ready .route-card,
+.start.world-ready .start-panel,
+.start.world-ready .server-status,
+.start.world-ready .menu-profile {
+  background: rgba(23, 27, 33, 0.8);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.start.world-ready .start-routes h1,
+.start.world-ready .lede {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75), 0 0 18px rgba(15, 18, 22, 0.8);
+}
+
+.start.world-ready .lede {
+  color: #c9d1db;
+}
+
+.start.world-ready .route-card[aria-pressed="true"] {
+  background: rgba(31, 26, 22, 0.86);
+}
+
+/* The window the drone camera looks through: the map until the island is ready. */
+.menu-stage {
+  position: relative;
+  margin: 0 0 10px;
+  height: clamp(200px, 34vh, 380px);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #163a4e;
+}
+
+.menu-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.9s ease;
+}
+
+.start.world-ready .menu-stage {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Over the island the map shrinks into a corner: where the drone is looking. */
+.start.world-ready .menu-map {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: clamp(110px, 28%, 210px);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  opacity: 0.92;
+}
+
+/* On wide screens the drone view is the show: a smaller map, tucked into the corner. */
+@media (min-width: 720px) {
+  .start.world-ready .menu-map {
+    top: 8px;
+    right: 8px;
+    width: 128px;
+    border-radius: 8px;
+    opacity: 0.85;
+  }
+}
+
+.stage-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 10px;
+  right: 14px;
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.stage-caption strong {
+  font-size: 17px;
+  margin-right: 6px;
+}
+
+.menu-profile {
+  display: block;
+  width: 100%;
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+@media (max-width: 520px) {
+  .start {
+    padding: 0 16px 32px;
+  }
+
+  .menu-stage {
+    height: clamp(180px, 30vh, 260px);
+  }
+}
+
+.start-head {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The lemon tucks into the aero position on hover. */
+.brand-mark {
+  height: 54px;
+  width: auto;
+  transition: transform 0.25s ease;
+}
+
+.brand:hover .brand-mark {
+  transform: translateX(3px) rotate(-6deg);
+}
+
+.brand-word {
+  font-size: 28px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+.brand-word span,
+.hud-brand span {
+  color: var(--lemon);
+}
+
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.build-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.build-label,
+.build-reload {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.build-label {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.build-reload {
+  color: var(--lemon);
+  text-decoration: underline;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot.online {
+  background: #3ddc97;
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.2);
+}
+
+.status-dot.full {
+  background: var(--danger);
+}
+
+.start-grid {
+  max-width: 1180px;
+  margin: 24px auto 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 32px;
+  align-items: start;
+}
+
+.start-routes h1 {
+  font-size: 34px;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.route-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.community-distance {
+  margin: 16px 0 0;
+}
+
+.route-card {
+  width: 100%;
+  min-height: 150px;
+  text-align: left;
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.route-card:hover {
+  border-color: var(--muted);
+}
+
+.route-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 8px 30px rgba(255, 122, 26, 0.12);
+}
+
+.route-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.route-name {
+  font-size: 18px;
+}
+
+.route-tag {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.route-description {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.route-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-riders {
+  color: var(--muted);
+}
+
+.route-riders.active {
+  color: #3ddc97;
+  font-weight: 600;
+}
+
+.start-panel {
+  position: sticky;
+  top: 16px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .start-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .start-panel {
+    position: static;
+  }
+
+  .start-routes h1 {
+    font-size: 26px;
+  }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.lede {
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 18px;
+  display: grid;
+  gap: 12px;
+}
+
+legend {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+label output {
+  color: var(--text);
+  float: right;
+}
+
+.device-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.device-status {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.device-status.ok {
+  color: var(--terrain-edge);
+}
+
+/* Focus moved by a controller (Zwift Click, Play, Ride) must be easy to see from the saddle. */
+.controller-nav :focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.warning {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 122, 26, 0.1);
+  border: 1px solid rgba(255, 122, 26, 0.4);
+  font-size: 14px;
+}
+
+.error {
+  color: var(--danger);
+  min-height: 1.2em;
+  font-size: 14px;
+  white-space: pre-line;
+}
+
+.live-reading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.live-reading strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.diagnostics {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.diagnostics summary {
+  cursor: pointer;
+}
+
+.diagnostics-hint {
+  margin: 8px 0;
+}
+
+.diagnostics-log {
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.muted-count {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+/* 3D view */
+.view-switch {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.toggle {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.toggle[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.view-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+.labels3d {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.label3d {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(15, 18, 22, 0.72);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.label3d.me {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.label3d .badge {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e8ecf1;
+}
+
+/* Virtual shifting */
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text);
+}
+
+.gear-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* The workout card needs no trainer: only the heart-rate row of the devices stays. */
+#profile-form.workout .trainer-only,
+#profile-form.workout .ride-only {
+  display: none;
+}
+
+.field-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Training / ERG */
+.mode-switch {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.mode-switch .toggle {
+  flex: 1;
+}
+
+.erg-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.erg-row button {
+  font-size: 18px;
+  padding: 4px 0;
+}
+
+.erg-value {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ftp-test {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ftp-test h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.workout-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.workout-picker select {
+  width: 100%;
+}
+
+.workout-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workout-actions button {
+  flex: 1;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+
+/* ===================================================================== */
+/* Ride screen: the world fills the window, the HUD floats on top.       */
+/* `#ride[data-layout]` picks one of four layouts (see js/view/hud.js).  */
+/* ===================================================================== */
+
+:root {
+  --glass: rgba(15, 18, 22, 0.72);
+  --glass-strong: rgba(15, 18, 22, 0.86);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --hud-text: #f2f4f7;
+  --hud-muted: #c3cad3;
+  --num: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --gap: 20px;
+}
+
+body.riding {
+  overflow: hidden;
+}
+
+.ride {
+  position: fixed;
+  inset: 0;
+  color: var(--hud-text);
+  background: #0b0e11;
+}
+
+.world-wrap,
+.canvas-peloton {
+  position: absolute;
+  inset: 0;
+}
+
+/* Its own stacking context: name labels never rise above the HUD or dialogs. */
+.world-wrap {
+  z-index: 0;
+}
+
+.canvas-world,
+.canvas-peloton {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ride[data-layout="training"] .world-wrap,
+.ride[data-layout="training"] .canvas-peloton {
+  bottom: 250px;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud button,
+.hud select,
+.hud output,
+.hud .glass,
+.hud canvas {
+  pointer-events: auto;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.caption {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.num-xl,
+.num-l,
+.num-m,
+.num-s,
+.gauge-power,
+.gear-value {
+  font-family: var(--num);
+  font-stretch: condensed;
+  font-weight: 700;
+  line-height: 1;
+  display: block;
+}
+
+.num-xl {
+  font-size: 68px;
+}
+
+.num-l {
+  font-size: 48px;
+}
+
+.num-m {
+  font-size: 34px;
+  font-weight: 600;
+}
+
+.num-s {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.grade {
+  color: #ffb27a;
+}
+
+.unit {
+  font-size: 14px;
+  color: var(--hud-muted);
+}
+
+.layout {
+  display: none;
+}
+
+.ride[data-layout="cockpit"] .layout-cockpit,
+.ride[data-layout="broadcast"] .layout-broadcast,
+.ride[data-layout="training"] .layout-training,
+.ride[data-layout="race"] .layout-race {
+  display: block;
+}
+
+/* --- shared pieces --------------------------------------------------- */
+
+.hud-info {
+  position: absolute;
+  top: var(--gap);
+  left: var(--gap);
+  padding: 10px 16px;
+  display: grid;
+  gap: 2px;
+}
+
+.hud-brand {
+  font-size: 12px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-text);
+}
+
+.hud-route {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.hud-numbers {
+  font-family: var(--num);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.hud-actions {
+  position: absolute;
+  top: var(--gap);
+  right: var(--gap);
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button,
+.text-button {
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  color: var(--hud-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.icon-button {
+  padding: 0;
+}
+
+.icon-button svg,
+.text-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hud-gear {
+  position: absolute;
+  right: var(--gap);
+  bottom: var(--gap);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.gear-button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 22px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+  color: var(--hud-text);
+}
+
+.gear-readout {
+  display: grid;
+  justify-items: center;
+  min-width: 70px;
+}
+
+.gear-value {
+  font-size: 34px;
+  color: var(--human);
+}
+
+.gear-value small {
+  font-size: 16px;
+  color: var(--hud-muted);
+}
+
+.gear-ratio {
+  font-size: 12px;
+  color: var(--hud-muted);
+}
+
+.hud-status {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.pill {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pill-draft {
+  background: rgba(76, 195, 255, 0.28);
+  border: 1px solid rgba(76, 195, 255, 0.5);
+}
+
+.hud-ticker {
+  position: absolute;
+  left: var(--gap);
+  top: 130px;
+  width: min(320px, 40vw);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.hud-ticker li {
+  background: var(--glass);
+  border-radius: 10px;
+  padding: 6px 12px;
+  animation: ticker-fade 9s forwards;
+}
+
+.hud-ticker .feed-error {
+  color: #ffb0b0;
+}
+
+@keyframes ticker-fade {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- A · cockpit ----------------------------------------------------- */
+
+.layout-cockpit::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 300px;
+  background: linear-gradient(to top, rgba(10, 12, 15, 0.8), rgba(10, 12, 15, 0));
+}
+
+.cluster {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 32px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+.cluster-side {
+  display: grid;
+  justify-items: center;
+  min-width: 110px;
+}
+
+.cluster-side .num-m {
+  margin-top: 12px;
+}
+
+.gauge {
+  position: relative;
+  width: 300px;
+  height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.gauge svg {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 300px;
+  height: 170px;
+  fill: none;
+}
+
+.gauge-track {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+
+.gauge-fill {
+  stroke: var(--accent);
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 100;
+  transition: stroke-dashoffset 0.25s linear;
+}
+
+.gauge-target {
+  stroke: var(--hud-text);
+  stroke-width: 4;
+}
+
+.gauge-power {
+  font-size: 92px;
+}
+
+.gauge-sub {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--hud-muted);
+}
+
+.gauge-sub strong {
+  color: var(--accent);
+}
+
+.upcoming {
+  position: absolute;
+  left: var(--gap);
+  bottom: 28px;
+  width: 260px;
+  display: grid;
+  gap: 6px;
+}
+
+.upcoming-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-muted);
+}
+
+.canvas-upcoming {
+  width: 100%;
+  height: 52px;
+}
+
+/* --- B · broadcast --------------------------------------------------- */
+
+.bar {
+  position: absolute;
+  top: var(--gap);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  overflow: hidden;
+}
+
+.bar > div {
+  padding: 10px 22px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+}
+
+.bar .bar-power {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.bar .bar-power .caption {
+  color: var(--accent-text);
+}
+
+.bar-sub {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bar-grade {
+  border-left: 1px solid var(--glass-line);
+}
+
+.ride[data-layout="broadcast"] .hud-status,
+.ride[data-layout="race"] .hud-status {
+  top: 140px;
+}
+
+.nearby {
+  position: absolute;
+  left: var(--gap);
+  top: 140px;
+  width: 300px;
+  padding: 12px 0 8px;
+}
+
+.nearby h2,
+.groups h2 {
+  padding: 0 16px;
+  color: var(--hud-muted);
+}
+
+.nearby .rider {
+  padding: 5px 16px;
+}
+
+.nearby .rider.me {
+  background: rgba(255, 122, 26, 0.18);
+}
+
+.canvas-minimap {
+  position: absolute;
+  right: var(--gap);
+  top: 80px;
+  width: 210px;
+  height: 160px;
+}
+
+.ride[data-layout="broadcast"] .hud-gear {
+  bottom: auto;
+  top: 256px;
+}
+
+.ride[data-layout="broadcast"] .hud-ticker,
+.ride[data-layout="race"] .hud-ticker {
+  top: auto;
+  left: auto;
+  right: var(--gap);
+  bottom: 150px;
+  width: 300px;
+}
+
+.strip {
+  position: absolute;
+  left: var(--gap);
+  right: var(--gap);
+  bottom: var(--gap);
+  height: 112px;
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+}
+
+.canvas-profile {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.strip-next {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 150px;
+  font-size: 16px;
+}
+
+/* --- C · training ---------------------------------------------------- */
+
+.ride[data-layout="training"] .hud-info {
+  display: none;
+}
+
+.ride[data-layout="training"] .hud-gear {
+  display: none;
+}
+
+.ride[data-layout="training"] .hud-ticker {
+  top: 100px;
+}
+
+.workout-chip {
+  position: absolute;
+  top: var(--gap);
+  left: var(--gap);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workout-chip strong {
+  font-size: 17px;
+}
+
+.erg-badge {
+  background: #2a7a52;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.training-actions {
+  position: absolute;
+  top: 76px;
+  right: var(--gap);
+  display: flex;
+  gap: 8px;
+}
+
+.training-actions > button {
+  height: 44px;
+  color: var(--hud-text);
+  font-weight: 600;
+}
+
+.intensity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.intensity button {
+  width: 40px;
+  height: 38px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--hud-text);
+  font-size: 18px;
+}
+
+.intensity output {
+  min-width: 52px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.targets {
+  position: absolute;
+  left: 50%;
+  bottom: 300px;
+  transform: translateX(-50%);
+  display: flex;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.targets > div {
+  padding: 12px 28px;
+  display: grid;
+  justify-items: center;
+}
+
+.targets-power {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.targets .on-target {
+  color: #5fe0a0;
+}
+
+.targets .off-target {
+  color: #ffb27a;
+}
+
+.band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 250px;
+  background: #12161b;
+  border-top: 1px solid var(--glass-line);
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 200px;
+  pointer-events: auto;
+}
+
+.band-stats {
+  padding: 18px 22px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.band-stats:first-child {
+  border-right: 1px solid var(--glass-line);
+}
+
+.band-stats:last-child {
+  border-left: 1px solid var(--glass-line);
+}
+
+.band-chart {
+  padding: 16px 22px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.band-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.canvas-workout {
+  /* A fixed height: a percentage would grow with the backing store every frame. */
+  width: 100%;
+  height: 140px;
+}
+
+.progress {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+/* --- D · race -------------------------------------------------------- */
+
+.race-top {
+  position: absolute;
+  top: 76px;
+  left: var(--gap);
+  right: var(--gap);
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.ride[data-layout="race"] .hud-info {
+  display: none;
+}
+
+.race-position {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: 14px;
+  padding: 8px 22px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+}
+
+.race-position .caption {
+  color: var(--accent-text);
+}
+
+.race-box {
+  padding: 8px 20px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+}
+
+.race-timeline {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 16px 4px;
+  display: grid;
+  gap: 2px;
+}
+
+.canvas-timeline {
+  width: 100%;
+  height: 30px;
+}
+
+.marker-banner {
+  position: absolute;
+  top: 190px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(46, 160, 103, 0.92);
+  border-radius: 12px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.marker-banner.climb {
+  background: rgba(200, 60, 80, 0.92);
+}
+
+.marker-banner .caption {
+  color: #fff;
+}
+
+.marker-banner strong {
+  font-family: var(--num);
+  font-size: 28px;
+}
+
+/* Lap and time are already in the race bar. */
+.ride[data-layout="race"] #race-status {
+  display: none;
+}
+
+.ride[data-layout="race"] .hud-status {
+  top: 248px;
+}
+
+.groups {
+  position: absolute;
+  top: 190px;
+  right: var(--gap);
+  width: 300px;
+  padding: 12px 0;
+}
+
+.groups h2 + .group-list {
+  margin-bottom: 10px;
+}
+
+.group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+}
+
+.group-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px 16px;
+}
+
+.group-list.around li {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+.group-list li.mine {
+  background: rgba(255, 122, 26, 0.18);
+  font-weight: 700;
+}
+
+.group-list .gap {
+  font-family: var(--num);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.group-list .pos {
+  color: var(--hud-muted);
+}
+
+.race-metrics {
+  position: absolute;
+  left: var(--gap);
+  bottom: var(--gap);
+  display: flex;
+  gap: 10px;
+}
+
+.race-power {
+  padding: 10px 22px;
+}
+
+.race-grid {
+  padding: 10px 18px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 22px;
+  align-content: center;
+}
+
+.ride[data-layout="race"] .hud-gear {
+  left: 520px;
+  right: auto;
+}
+
+/* --- drawers --------------------------------------------------------- */
+
+.drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: min(360px, 92vw);
+  overflow-y: auto;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  z-index: 5;
+  color: var(--text);
+}
+
+.drawer-left {
+  left: 0;
+  border-right: 1px solid var(--border);
+}
+
+.drawer-right {
+  right: 0;
+  border-left: 1px solid var(--border);
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.drawer-head .icon-button {
+  font-size: 24px;
+  background: transparent;
+}
+
+.drawer .view-switch,
+.drawer .scene-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.drawer .scene-controls select {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.drawer label {
+  margin-bottom: 4px;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* --- lists shared by HUD and drawers -------------------------------- */
+
+.rider-list,
+.results,
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.rider,
+.result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 96px;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.result {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.rider-subhead {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+
+.rider-list.bots {
+  opacity: 0.7;
+}
+
+.rider.me,
+.result.me {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rider-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-gap,
+.rider-power {
+  text-align: right;
+  color: var(--hud-muted);
+}
+
+.rider-gap {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--hud-muted);
+  font-weight: 400;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  background: var(--human);
+}
+
+.dot.bot {
+  background: var(--bot);
+}
+
+.race-controls {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.race-controls label {
+  grid-template-columns: auto auto;
+  align-items: center;
+}
+
+.feed {
+  max-height: 260px;
+  overflow-y: auto;
+  color: var(--muted);
+}
+
+.feed li {
+  padding: 2px 0;
+}
+
+.feed .feed-chat {
+  color: var(--text);
+}
+
+.feed .feed-error {
+  color: var(--danger);
+}
+
+.chat {
+  display: flex;
+  gap: 6px;
+}
+
+.chat input {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-warning {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  background: rgba(60, 30, 10, 0.92);
+}
+
+.toast-split {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 90vw;
+  margin: 0;
+  padding: 10px 18px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--surface-2);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  z-index: 6;
+}
+
+/* While the connection is being restored the ride goes on: a small pill, not a wall. */
+.reconnecting {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--danger);
+  font-size: 14px;
+  z-index: 6;
+}
+
+.unfinished {
+  margin: 16px 0;
+  display: grid;
+  gap: 10px;
+}
+
+.unfinished-label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.unfinished .muted {
+  margin: 0;
+}
+
+.unfinished .muted:empty {
+  display: none;
+}
+
+.unfinished-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- smaller screens ------------------------------------------------- */
+
+.num-l,
+.num-m {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .nearby,
+  .canvas-minimap,
+  .groups,
+  .upcoming {
+    display: none;
+  }
+
+  .ride[data-layout="broadcast"] .hud-gear {
+    top: 80px;
+  }
+
+  .ride[data-layout="race"] .hud-gear {
+    left: auto;
+    right: var(--gap);
+    bottom: var(--gap);
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --gap: 12px;
+  }
+
+  .hud-info,
+  .upcoming,
+  .hud-ticker,
+  .strip-next,
+  .band-stats,
+  .race-grid {
+    display: none;
+  }
+
+  .text-button {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .cluster {
+    gap: 12px;
+    bottom: 90px;
+  }
+
+  .cluster-side {
+    min-width: 70px;
+  }
+
+  .gauge {
+    width: 220px;
+    height: 150px;
+  }
+
+  .gauge svg {
+    width: 220px;
+    height: 125px;
+  }
+
+  .gauge-power {
+    font-size: 64px;
+  }
+
+  .num-l {
+    font-size: 36px;
+  }
+
+  .bar > div {
+    padding: 8px 10px;
+  }
+
+  .bar > div:nth-child(n + 4) {
+    display: none;
+  }
+
+  .bar {
+    top: 72px;
+  }
+
+  .band {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .targets > div {
+    padding: 8px 14px;
+  }
+
+  .num-xl {
+    font-size: 44px;
+  }
+
+  .race-top {
+    flex-wrap: wrap;
+  }
+
+  .race-timeline {
+    flex-basis: 100%;
+    order: 5;
+  }
+}
+
+/* Strava */
+.account {
+  margin-bottom: 14px;
+}
+
+.strava-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.strava-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 0;
+  background: #fc4c02;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.strava-button:hover {
+  background: #e34402;
+}
+
+/* End-of-ride dialog */
+.modal {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 10, 13, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(560px, 100%);
+  /* Scrolls on short screens so the buttons at the bottom stay reachable. */
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+  color: var(--text);
+}
+
+.modal-card h2 {
+  font-size: 22px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 0;
+}
+
+.summary div {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.summary dt {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.summary dd {
+  margin: 4px 0 0;
+  font-family: var(--num);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+/* The workout summary: tiles share the row, so two tiles fill it and a missing heart-rate tile leaves no gap. */
+#workout-summary-list {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+#workout-summary-list > div {
+  flex: 1 1 140px;
+}
+
+#workout-summary-list dd {
+  font-size: 22px;
+  white-space: nowrap;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-actions > * {
+  flex: 1;
+}
+
+/* Pinned to the bottom of the card, so leaving never needs scrolling. */
+.modal-nav {
+  position: sticky;
+  bottom: -24px;
+  margin: 0 -24px -24px;
+  padding: 14px 24px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Ride photos in the finish dialog */
+.photos {
+  display: grid;
+  gap: 10px;
+}
+
+.photos h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.photo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.photo-list:empty {
+  display: none;
+}
+
+.photo-list li {
+  position: relative;
+}
+
+.photo-thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.photo-thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.photo-thumb:hover,
+.photo-thumb:focus-visible {
+  border-color: var(--accent);
+}
+
+.photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(8, 10, 13, 0.75);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.summary-label {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(8, 10, 13, 0.75);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Paused (#89): the ride timer is stopped; below the "reconnecting" pill. */
+.pause-pill {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  font-size: 14px;
+  z-index: 6;
+}
+/* Online riders on the social button, photo counter on the camera button */
+.online-count {
+  font-family: var(--num);
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 1ch;
+}
+
+.photo-button {
+  position: relative;
+}
+
+.photo-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+.photo-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo-flash.flash {
+  animation: photo-flash 0.45s ease-out;
+}
+
+@keyframes photo-flash {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-flash.flash {
+    animation-duration: 0.01s;
+  }
+
+  .menu-world,
+  .menu-map {
+    transition: none;
+  }
+
+  .brand-mark {
+    transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* A junction ahead (#15): the roads to choose from, the planned one lit */
+.junction {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  max-width: calc(100vw - 32px);
+  z-index: 2;
+}
+
+.junction-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.junction-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.junction-option {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--hud-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.junction-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: rgba(255, 122, 26, 0.22);
+}
+
+.junction-arrow {
+  grid-row: span 2;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.junction-option small {
+  color: var(--hud-muted);
+  font-size: 12px;
+}
+
+.junction-hint {
+  font-size: 12px;
+  color: var(--hud-muted);
+}
+
+/* Both at once: the race call sits below the junction. */
+.junction:not([hidden]) ~ .race-call {
+  top: 250px;
+}
+
+.ride[data-layout="race"] .junction {
+  top: 250px;
+}
+
+/* Race announcement: join during the countdown */
+.race-call {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 8px 8px 16px;
+  font-size: 15px;
+  white-space: nowrap;
+  border-color: rgba(255, 122, 26, 0.6);
+  z-index: 2;
+}
+
+.race-call .muted {
+  color: var(--hud-muted);
+}
+
+.primary-small {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.race-call.entered .primary-small {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--hud-text);
+}
+
+.ride[data-layout="race"] .race-call {
+  top: 250px;
+}
+
+/* Scheduled events: the lobby call sits below a race call when both show. */
+.race-call:not([hidden]) ~ .event-call {
+  top: 196px;
+}
+
+.junction:not([hidden]) ~ .race-call:not([hidden]) ~ .event-call {
+  top: 306px;
+}
+
+.junction:not([hidden]) ~ .event-call {
+  top: 250px;
+}
+
+.events {
+  margin-top: 28px;
+}
+
+.events h2 {
+  margin: 0;
+}
+
+.event-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.event-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+/* ===================================================================== */
+/* Spin studio: `#ride[data-mode="studio"]` swaps the road HUD for this.  */
+/* ===================================================================== */
+
+.ride:not([data-mode="studio"]) .studio-only,
+.ride[data-mode="studio"] .route-only,
+.ride[data-mode="studio"] .layout:not(.layout-studio),
+.ride[data-mode="studio"] .canvas-peloton,
+.ride[data-mode="studio"] #world-wrap {
+  display: none !important;
+}
+
+.ride[data-mode="studio"] .layout-studio {
+  display: block;
+}
+
+.ride[data-mode="studio"] .hud-ticker {
+  left: auto;
+  right: var(--gap);
+  top: 132px;
+}
+
+.ride[data-mode="studio"] .hud-gear {
+  top: auto;
+  bottom: 196px;
+}
+
+.label3d.coach {
+  background: #ffd23a;
+  color: #1a1400;
+  font-weight: 700;
+}
+
+.studio-cue {
+  position: absolute;
+  top: var(--gap);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 2 * var(--gap)));
+  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "phase countdown"
+    "cue countdown"
+    "next next";
+  column-gap: 16px;
+  row-gap: 2px;
+  align-items: center;
+}
+
+.studio-cue .caption {
+  grid-area: phase;
+}
+
+.studio-cue strong {
+  grid-area: cue;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.studio-countdown {
+  grid-area: countdown;
+  font-family: var(--num);
+  font-size: 54px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-countdown.soon {
+  color: #ffd23a;
+}
+
+.studio-next {
+  grid-area: next;
+  font-size: 13px;
+  color: var(--hud-muted);
+}
+
+.studio-board {
+  position: absolute;
+  top: 112px;
+  left: var(--gap);
+  width: 240px;
+  max-height: calc(100% - 112px - 220px);
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.studio-board h2,
+.board-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.studio-board h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+
+.board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.board-list li {
+  padding: 3px 4px;
+  border-radius: 6px;
+}
+
+.board-list li.me {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.board-list .board-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-list .badge {
+  margin-left: 6px;
+}
+
+.studio-controls {
+  position: absolute;
+  top: 76px;
+  right: var(--gap);
+  display: flex;
+  gap: 8px;
+}
+
+.studio-controls > button {
+  height: 44px;
+  padding: 0 14px;
+  color: var(--hud-text);
+  font-weight: 600;
+}
+
+.studio-controls > .toggle[aria-pressed="true"] {
+  color: var(--accent-text);
+}
+
+.studio-targets {
+  bottom: 200px;
+}
+
+.studio-targets .caption span {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.studio-band {
+  position: absolute;
+  left: var(--gap);
+  right: var(--gap);
+  bottom: var(--gap);
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.studio-band-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-band .canvas-workout {
+  height: 64px;
+}
+
+.studio-band-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .studio-board {
+    display: none;
+  }
+
+  .studio-cue {
+    top: 76px;
+    padding: 8px 14px;
+  }
+
+  .studio-controls {
+    top: auto;
+    bottom: 278px;
+    right: 50%;
+    transform: translateX(50%);
+  }
+
+  .studio-controls > button {
+    white-space: nowrap;
+  }
+
+  .studio-targets {
+    bottom: 184px;
+  }
+
+  .studio-band {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .studio-band .canvas-workout {
+    height: 44px;
+  }
+
+  .studio-band-stats .num-m {
+    font-size: 24px;
+  }
+
+  .studio-targets > div {
+    padding: 8px 14px;
+  }
+
+  .studio-targets .num-xl {
+    font-size: 44px;
+  }
+
+  .studio-cue strong {
+    font-size: 16px;
+  }
+
+  .studio-countdown {
+    font-size: 40px;
+  }
+}
+
+/* --- phones and touch screens --------------------------------------- */
+
+/* Notches and home indicators: the HUD, drawers and dialogs stay clear of them. */
+body {
+  min-height: 100dvh;
+}
+
+.start {
+  min-height: 100dvh;
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+  padding-bottom: max(40px, env(safe-area-inset-bottom));
+}
+
+.start-head {
+  padding-top: max(18px, env(safe-area-inset-top));
+}
+
+.hud {
+  top: env(safe-area-inset-top);
+  right: env(safe-area-inset-right);
+  bottom: env(safe-area-inset-bottom);
+  left: env(safe-area-inset-left);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ride button,
+.start button {
+  /* No double-tap zoom and no grey flash when tapping fast. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.drawer {
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.modal {
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+/* No Bluetooth in this browser (every iPhone): a friendly note, no dead buttons. */
+.no-bluetooth {
+  margin: 0 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 31, 0.35);
+  background: rgba(255, 210, 31, 0.08);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.no-bluetooth strong {
+  display: block;
+  color: var(--lemon);
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.no-bluetooth .bluetooth-only {
+  display: none !important;
+}
+
+.no-bluetooth #use-simulated {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+/* Lane buttons and the simulated power stepper: only where fingers are the input. */
+.lane-controls,
+.sim-stepper {
+  display: none;
+}
+
+.drawer-backdrop {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .lane-controls {
+    display: block;
+  }
+
+  .lane-button {
+    position: absolute;
+    top: 52%;
+    width: 56px;
+    height: 72px;
+    padding: 0;
+    border-radius: 16px;
+    color: var(--hud-text);
+    display: grid;
+    place-items: center;
+  }
+
+  .lane-button:active {
+    background: rgba(255, 122, 26, 0.35);
+    border-color: var(--accent);
+  }
+
+  .lane-button svg {
+    width: 28px;
+    height: 28px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  #lane-left {
+    left: var(--gap);
+  }
+
+  #lane-right {
+    right: var(--gap);
+  }
+
+  /* Above the right lane button, under the right thumb. */
+  .sim-stepper {
+    position: absolute;
+    right: var(--gap);
+    bottom: calc(48% + 12px);
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    padding: 6px 4px;
+    width: 64px;
+  }
+
+  /* Stacked: more power on top. */
+  .sim-stepper #sim-up {
+    order: -1;
+  }
+
+  .sim-stepper #sim-down {
+    order: 1;
+  }
+
+  .sim-stepper button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 22px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: transparent;
+    color: var(--hud-text);
+  }
+
+  .sim-stepper button:active {
+    background: rgba(255, 122, 26, 0.45);
+  }
+
+  .sim-readout {
+    display: grid;
+    justify-items: center;
+  }
+
+  .sim-readout .caption {
+    font-size: 10px;
+  }
+
+  .sim-readout output {
+    font-family: var(--num);
+    font-weight: 700;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+
+  /* Comfortable tap targets in forms, drawers and dialogs. */
+  .start button,
+  .start input:not([type="range"]):not([type="checkbox"]),
+  .start select,
+  .drawer button,
+  .drawer select,
+  .drawer input:not([type="range"]):not([type="checkbox"]),
+  .modal button:not(.photo-remove) {
+    min-height: 44px;
+  }
+
+  .check input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* Phones: the start screen gets shorter, the Ride button is always at hand. */
+@media (max-width: 520px) {
+  .start {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .start-routes h1 {
+    font-size: 24px;
+  }
+
+  .start-routes .lede {
+    font-size: 15px;
+  }
+
+  /* Routes as a strip of cards to swipe through. */
+  .route-list {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin: 14px -16px 0;
+    padding: 0 16px 6px;
+    gap: 10px;
+  }
+
+  .route-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .route-list > li {
+    flex: 0 0 82%;
+    scroll-snap-align: center;
+  }
+
+  .route-list > li:only-child {
+    flex-basis: 100%;
+  }
+
+  .route-card {
+    height: 100%;
+    min-height: 132px;
+    padding: 14px 16px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .device-row {
+    flex-wrap: wrap;
+  }
+
+  .device-row .device-status {
+    flex-basis: 100%;
+  }
+
+  .start-panel #join {
+    position: sticky;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 2;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 6px var(--surface);
+  }
+
+  /* Camera and layout live in the menu's View panel: the top bar never wraps. */
+  #hud-camera,
+  #hud-layout {
+    display: none;
+  }
+
+  .hud-actions {
+    left: var(--gap);
+    justify-content: flex-end;
+  }
+
+  .hud-status {
+    top: 66px;
+  }
+
+  .pill {
+    padding: 5px 12px;
+    font-size: 13px;
+  }
+
+  .junction {
+    top: 104px;
+  }
+
+  .gear-readout {
+    min-width: 54px;
+  }
+
+  .gear-value {
+    font-size: 28px;
+  }
+
+  /* The finish dialog takes the whole screen. */
+  .modal {
+    padding: 0;
+  }
+
+  .modal-card {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding: max(20px, env(safe-area-inset-top)) 16px 24px;
+  }
+
+  .modal-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .modal-nav {
+    margin: 0 -16px -24px;
+    padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .modal-nav > * {
+    flex: 1 1 0;
+  }
+}
+
+/* Phones: a smaller cockpit that never runs off the screen ("−3.2 %" is wide). */
+@media (max-width: 440px) {
+  .cluster {
+    gap: 6px;
+    max-width: calc(100% - 2 * var(--gap));
+  }
+
+  .cluster-side {
+    min-width: 58px;
+  }
+
+  .gauge,
+  .gauge svg {
+    width: 190px;
+  }
+
+  .gauge svg {
+    height: 108px;
+  }
+
+  .gauge {
+    height: 132px;
+  }
+
+  .gauge-power {
+    font-size: 54px;
+  }
+
+  .num-l {
+    font-size: 28px;
+  }
+
+  .num-m {
+    font-size: 24px;
+  }
+}
+
+/* Drawers become bottom sheets: reachable with a thumb, the ride stays visible above. */
+@media (max-width: 760px) {
+  .drawer-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(8, 10, 13, 0.45);
+  }
+
+  .drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 85dvh;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    padding-top: 22px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    overscroll-behavior: contain;
+    animation: sheet-up 0.18s ease-out;
+  }
+
+  /* The grab handle look. */
+  .drawer::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+/* Phones held sideways: little height, so the cockpit shrinks and the clutter goes. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --gap: 10px;
+  }
+
+  .hud-info,
+  .upcoming,
+  .hud-ticker,
+  .nearby,
+  .canvas-minimap,
+  .groups {
+    display: none;
+  }
+
+  .layout-cockpit::before {
+    height: 160px;
+  }
+
+  .cluster {
+    bottom: var(--gap);
+    gap: 14px;
+  }
+
+  .cluster-side {
+    min-width: 70px;
+  }
+
+  .gauge,
+  .gauge svg {
+    width: 200px;
+  }
+
+  .gauge {
+    height: 128px;
+  }
+
+  .gauge svg {
+    height: 112px;
+  }
+
+  .gauge-power {
+    font-size: 54px;
+  }
+
+  .num-l {
+    font-size: 32px;
+  }
+
+  .num-m {
+    font-size: 26px;
+  }
+
+  .hud-status {
+    top: var(--gap);
+  }
+
+  .junction {
+    top: 60px;
+  }
+
+  .strip {
+    height: 76px;
+  }
+
+  .drawer {
+    max-height: 92dvh;
+  }
+
+  .lane-button {
+    top: 38%;
+  }
+
+  #hud-camera,
+  #hud-layout {
+    display: none;
+  }
+
+  .sim-stepper {
+    bottom: auto;
+    top: var(--gap);
+    right: auto;
+    left: var(--gap);
+    display: flex;
+    align-items: center;
+    width: auto;
+  }
+
+  .sim-stepper #sim-up,
+  .sim-stepper #sim-down {
+    order: 0;
+  }
+
+  .sim-readout {
+    min-width: 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer {
+    animation: none;
+  }
+}
+
+/* --- phone paddles --------------------------------------------------- */
+
+.no-bluetooth #use-paddles {
+  background: var(--lemon);
+  border-color: var(--lemon);
+  color: #1a1400;
+  font-weight: 700;
+}
+
+/* Under the HUD (later in the page), above the world; taps fall through the HUD.
+   The pads are see-through touch zones: the road stays the show. */
+.paddles {
+  position: absolute;
+  inset: 0;
+  --pad-height: 32%;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.paddle-swipe {
+  position: absolute;
+  inset: 0 0 var(--pad-height) 0;
+  touch-action: none;
+}
+
+.paddle {
+  position: absolute;
+  bottom: 0;
+  width: 50%;
+  height: var(--pad-height);
+  touch-action: none;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(to top, rgba(10, 12, 15, 0.7), rgba(10, 12, 15, 0.25));
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.paddle-left {
+  left: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.paddle-right {
+  right: 0;
+}
+
+.paddle-label {
+  font-family: var(--num);
+  font-size: 72px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The paddle to tap next glows: the rhythm reads at a glance. */
+.paddle.next {
+  background: linear-gradient(to top, rgba(255, 122, 26, 0.38), rgba(255, 122, 26, 0.06));
+}
+
+.paddle.next .paddle-label {
+  color: rgba(255, 210, 31, 0.55);
+}
+
+.paddle.hit .paddle-label {
+  animation: paddle-hit 0.18s ease-out;
+}
+
+.paddle.stumble {
+  animation: paddle-stumble 0.35s ease-out;
+  background: linear-gradient(to top, rgba(255, 93, 93, 0.45), rgba(255, 93, 93, 0.05));
+}
+
+.paddle-ripple {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  margin: -70px 0 0 -70px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 210, 31, 0.8);
+  pointer-events: none;
+  animation: paddle-ripple 0.45s ease-out forwards;
+}
+
+@keyframes paddle-hit {
+  from {
+    transform: scale(1.35);
+    color: var(--lemon);
+  }
+}
+
+@keyframes paddle-stumble {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes paddle-ripple {
+  from {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* A slim strip: rhythm on top, energy as a line, hint and combo below. */
+.paddle-meter {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--pad-height) + 6px);
+  transform: translateX(-50%);
+  width: min(300px, calc(100% - 24px));
+  padding: 7px 10px 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "rhythm rhythm"
+    "energy energy"
+    "hint head";
+  gap: 5px 8px;
+  align-items: center;
+  pointer-events: none;
+  color: var(--hud-text);
+  background: rgba(15, 18, 22, 0.42);
+  border-color: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+/* Fixed width: the combo coming and going must not move the hint. */
+.paddle-meter-head {
+  grid-area: head;
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 6px;
+  width: 96px;
+  height: 18px;
+}
+
+.paddle-meter-head .caption {
+  display: none;
+}
+
+.paddle-combo {
+  line-height: 18px;
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--num);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--lemon);
+}
+
+.paddle-combo.milestone {
+  animation: paddle-hit 0.5s ease-out;
+}
+
+.paddle-spm {
+  min-width: 52px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--hud-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.paddle-energy {
+  grid-area: energy;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.paddle-energy-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(to right, #3ddc97, var(--lemon));
+  transition: width 0.25s linear;
+}
+
+.paddle-energy.low .paddle-energy-fill {
+  background: var(--danger);
+}
+
+.paddle-rhythm {
+  grid-area: rhythm;
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, rgba(76, 195, 255, 0.22), rgba(255, 255, 255, 0.08) 45%, rgba(255, 93, 93, 0.28));
+}
+
+.paddle-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: rgba(61, 220, 151, 0.55);
+  box-shadow: 0 0 0 1px rgba(61, 220, 151, 0.9) inset;
+}
+
+.paddle-marker {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 14px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+  transition: left 0.2s linear;
+}
+
+.paddle-hint {
+  grid-area: hint;
+  line-height: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.paddles[data-zone="sweet"] .paddle-hint {
+  color: #3ddc97;
+}
+
+.paddles[data-zone="sprint"] .paddle-hint {
+  color: var(--accent);
+}
+
+.paddles[data-zone="tired"] .paddle-hint {
+  color: var(--danger);
+}
+
+/* While paddling the numbers move up into the sky, on a soft dark gradient:
+   speed · power · grade in one row, no arc (cadence and heart rate mean
+   little when tapping). The road and the paddles keep the lower half. */
+body.paddling .layout-cockpit::before {
+  top: calc(-1 * env(safe-area-inset-top));
+  bottom: auto;
+  height: calc(170px + env(safe-area-inset-top));
+  background: linear-gradient(to bottom, rgba(10, 12, 15, 0.72), rgba(10, 12, 15, 0.35) 55%, rgba(10, 12, 15, 0));
+}
+
+body.paddling .cluster {
+  top: calc(var(--gap) + 54px);
+  bottom: auto;
+  align-items: center;
+  gap: 18px;
+}
+
+body.paddling .gauge {
+  width: auto;
+  height: auto;
+  min-width: 110px;
+}
+
+body.paddling .gauge svg,
+body.paddling .cluster-side > :nth-child(n + 3) {
+  display: none;
+}
+
+body.paddling .gauge-power {
+  font-size: 46px;
+}
+
+body.paddling .gauge-sub {
+  font-size: 12px;
+}
+
+body.paddling .cluster-side {
+  min-width: 64px;
+}
+
+body.paddling .cluster-side .num-l {
+  font-size: 28px;
+}
+
+body.paddling .cluster-side .caption {
+  font-size: 10px;
+}
+
+/* Status pill and junction choice go below the numbers. */
+body.paddling .hud-status {
+  top: calc(var(--gap) + 136px);
+}
+
+body.paddling .junction {
+  top: calc(var(--gap) + 176px);
+}
+
+/* Race numbers sit above the paddles, not under the thumbs. */
+body.paddling .race-metrics {
+  bottom: calc(var(--pad-height) + 76px);
+}
+
+body.paddling .hud-gear {
+  display: none !important;
+}
+
+/* Lane arrows shrink and step back (swiping works too). */
+body.paddling .lane-button {
+  top: 44%;
+  width: 44px;
+  height: 52px;
+  opacity: 0.6;
+}
+
+/* Phones held sideways: the pads become the outer strips, under the thumbs. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .paddles {
+    --pad-height: 0px;
+  }
+
+  .paddle {
+    top: 92px;
+    height: auto;
+    width: 20%;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .paddle::after {
+    left: 0;
+    right: 0;
+  }
+
+  .paddle-swipe {
+    inset: 0 20%;
+  }
+
+  .paddle-meter {
+    bottom: var(--gap);
+    width: min(280px, 48%);
+  }
+
+  body.paddling .cluster {
+    top: var(--gap);
+    left: var(--gap);
+    transform: none;
+  }
+
+  body.paddling .layout-cockpit::before {
+    height: 110px;
+  }
+
+  body.paddling .lane-controls,
+  body.paddling .hud-status {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paddle.hit .paddle-label,
+  .paddle.stumble .paddle-label,
+  .paddle-ripple,
+  .paddle-combo.milestone {
+    animation: none;
+  }
+}
+
+/* Units setting (km · kg / mi · lb) */
+.unit-switch {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* --- shared vehicles (#55) ------------------------------------------ */
+
+.hud-vehicle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vehicle-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vehicle-view {
+  margin-top: 10px;
+}
+
+.vehicle-form {
+  display: grid;
+  gap: 8px;
+}
+
+.vehicle-aboard {
+  display: grid;
+  gap: 6px;
+}
+
+.vehicle-captain,
+.vehicle-code-row {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.vehicle-code {
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.12em;
+}
+
+.vehicle-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.vehicle-seat {
+  display: grid;
+  grid-template-columns: 1.5em 1fr auto auto;
+  grid-template-areas: "no name marks power" ". bar bar share";
+  align-items: center;
+  column-gap: 8px;
+  font-size: 14px;
+}
+
+.vehicle-seat.me .vehicle-seat-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.vehicle-seat.free {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.vehicle-seat-no { grid-area: no; color: var(--muted); }
+.vehicle-seat-name { grid-area: name; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vehicle-seat-marks { grid-area: marks; color: var(--muted); }
+.vehicle-seat-power { grid-area: power; font-variant-numeric: tabular-nums; }
+.vehicle-seat-share { grid-area: share; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.vehicle-share-bar {
+  grid-area: bar;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.vehicle-share-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Aboard: races and events are off (the server refuses them). */
+body.aboard #race-controls,
+body.aboard #events-panel,
+body.aboard #race-call-button,
+body.aboard #event-call-button {
+  display: none;
+}
+
+.ftp-prompt {
+  margin: 12px 0;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--accent, currentColor);
+  border-radius: 8px;
+}
+
+.ftp-prompt-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.ftp-prompt .muted {
+  margin: 0;
+}
+
+.ftp-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.splits {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.splits th,
+.splits td {
+  padding: 4px 8px;
+  text-align: right;
+}
+
+.splits th:first-child,
+.splits td:first-child {
+  text-align: left;
+}
+
+.splits th {
+  color: var(--muted, inherit);
+  font-weight: 500;
+}
+
+.splits tr.best td {
+  font-weight: 700;
+  color: var(--accent, inherit);
+}
+
+/* ===================================================================== */
+/* Café workout (#77): body.working-out swaps the ride HUD for this.      */
+/* ===================================================================== */
+
+body.working-out #hud,
+body.working-out #peloton,
+body.working-out #paddles {
+  display: none !important;
+}
+
+.workout-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  padding: max(var(--gap), env(safe-area-inset-top)) max(var(--gap), env(safe-area-inset-right)) max(var(--gap), env(safe-area-inset-bottom)) max(var(--gap), env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workout-hud .glass,
+.workout-hud button {
+  pointer-events: auto;
+}
+
+.workout-main {
+  /* The ring card and the stats card are two cards: keep a gap between them. */
+  margin-bottom: 14px;
+  padding: 14px 24px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.workout-ring {
+  --progress: 0;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  /* The block's time used up so far fills the ring clockwise. */
+  background: conic-gradient(var(--accent) calc(var(--progress) * 360deg), rgba(255, 255, 255, 0.14) 0);
+}
+
+.workout-ring-inner {
+  width: 158px;
+  height: 158px;
+  border-radius: 50%;
+  background: var(--glass-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 10px;
+}
+
+.workout-exercise {
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.workout-paused {
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #111;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workout-paused:empty {
+  display: none;
+}
+
+.workout-time {
+  font-family: var(--num);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.workout-next {
+  color: var(--hud-muted);
+  font-weight: 600;
+}
+
+.workout-stats {
+  margin-bottom: auto;
+  display: flex;
+  gap: 22px;
+  padding: 10px 18px;
+}
+
+.workout-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.workout-stats strong {
+  font-family: var(--num);
+  font-size: 24px;
+}
+
+.workout-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+@media (max-width: 640px), (max-height: 520px) {
+  .workout-ring {
+    width: 140px;
+    height: 140px;
+  }
+
+  .workout-ring-inner {
+    width: 116px;
+    height: 116px;
+  }
+
+  .workout-exercise {
+    font-size: 16px;
+  }
+
+  .workout-time {
+    font-size: 44px;
+  }
+
+  .workout-stats {
+    gap: 14px;
+  }
+}
+
+.workout-note {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 1rem;
+  max-width: min(90vw, 28rem);
+  text-align: center;
+  z-index: 5;
+}

@@ -1,0 +1,468 @@
+---
+import { Picture } from "astro:assets";
+import Base from "../layouts/Base.astro";
+import Profile from "../components/Profile.astro";
+import { site, appHost } from "../site";
+import hero from "../assets/hero.png";
+import ride from "../assets/ride.png";
+import studio from "../assets/studio.png";
+
+const devicesUrl = `${site.githubUrl}/blob/main/docs/devices.md`;
+
+const features = [
+  {
+    title: "One island, everyone on it",
+    text: "Pick a route and you ride the same roads as everyone else on the server: valley, cliffs, a col and three cafés.",
+  },
+  {
+    title: "Never an empty road",
+    text: "Bots ride along when it’s quiet, each with its own fitness and style. They’re always marked, and make room as people join.",
+  },
+  {
+    title: "Drafting and races",
+    text: "Sit on a wheel to save watts. Join a race during its countdown, then go for the climbs and the sprints.",
+  },
+  {
+    title: "Spin studio",
+    text: "A group class starts every 30 minutes. Coach Lemon calls the blocks, targets follow your FTP, and the room board ranks time on target.",
+  },
+  {
+    title: "Workouts in ERG mode",
+    text: "Ride the built-in sessions or import your own .zwo files. The trainer holds the watts, you hold on.",
+  },
+  {
+    title: "Virtual shifting",
+    text: "Gears for single-speed setups like the Zwift Cog. Shift from the keyboard, the screen or a Zwift Click, Play or Ride.",
+  },
+  {
+    title: "Strava upload",
+    text: "Finish a ride and send it to Strava as a virtual ride with its climbing and a map. Or download .fit, .gpx and .tcx.",
+  },
+  {
+    title: "Runs in the browser",
+    text: "Nothing to install or update. Add it to your home screen and it opens like an app.",
+  },
+];
+
+const faq = [
+  {
+    q: "Is it really free?",
+    a: "Yes. Riding is free, with no subscription and no paywalled features. The code is open source, so anyone can run their own server too.",
+  },
+  {
+    q: "Do I need an account?",
+    a: "No. Enter a name and ride. Your profile (weight, FTP, devices) stays in your browser. Connecting Strava is optional and only needed for uploads.",
+  },
+  {
+    q: "Does it work on an iPhone or iPad?",
+    a: "Safari on iOS can’t talk to Bluetooth devices. The free Bluefy browser can: open the app there. Chrome or Edge on Android, Windows, macOS and ChromeOS work out of the box.",
+  },
+  {
+    q: "I don’t have a smart trainer. Can I still try it?",
+    a: "Yes. Pick Simulated trainer on the start screen and set your power with the arrow keys. A power meter on a classic trainer works too, without resistance control.",
+  },
+  {
+    q: "Who are the other riders?",
+    a: "People, and bots marked as bots. Bots keep the roads busy when few people are online, chase drafts and race, and leave as more humans join.",
+  },
+];
+---
+
+<Base overlay>
+  <section class="hero" aria-labelledby="hero-title">
+    <Picture
+      class="hero-shot"
+      src={hero}
+      formats={["avif", "webp"]}
+      fallbackFormat="jpg"
+      widths={[800, 1280, 1920]}
+      sizes="100vw"
+      alt="A rider in the OpenRadlr 3D world on a winding country road in evening light, seen from the drone camera."
+      loading="eager"
+      fetchpriority="high"
+    />
+    <div class="wrap hero-text">
+      <h1 id="hero-title">Free indoor cycling, together.</h1>
+      <p class="lede">
+        Connect your smart trainer, open the browser and ride an island world with friends, strangers and bots.
+        Open source, no subscription.
+      </p>
+      <div class="actions">
+        <a class="button primary large" href={site.appUrl}>Ride now on {appHost}</a>
+        <a class="button large" href="#host">Host your own server</a>
+      </div>
+    </div>
+    <div class="hero-ground">
+      <Profile route="col-de-la-forge" />
+    </div>
+  </section>
+
+  <section class="section features" aria-labelledby="features-title">
+    <div class="wrap split">
+      <div class="split-head">
+        <h2 id="features-title">Everything you need for a winter on the trainer</h2>
+      </div>
+      <ul class="feature-list">
+        {
+          features.map((f) => (
+            <li>
+              <h3>{f.title}</h3>
+              <p>{f.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="section shots" aria-label="Screenshots">
+    <div class="wrap shots-grid">
+      <figure>
+        <Picture
+          src={ride}
+          formats={["avif", "webp"]}
+          fallbackFormat="jpg"
+          widths={[640, 1080, 1600]}
+          sizes="(min-width: 68rem) 34rem, 100vw"
+          alt="A ride in OpenRadlr: the rider on a country road, with power, speed, cadence and gradient on screen."
+        />
+        <figcaption>On the road: watts, speed, gradient, and the next sprint or climb.</figcaption>
+      </figure>
+      <figure>
+        <Picture
+          src={studio}
+          formats={["avif", "webp"]}
+          fallbackFormat="jpg"
+          widths={[640, 1080, 1600]}
+          sizes="(min-width: 68rem) 34rem, 100vw"
+          alt="The OpenRadlr spin studio: Coach Lemon on stage, riders side by side, the room board and the class plan with target and power."
+        />
+        <figcaption>In the spin studio: a class every half hour, bikes side by side.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section needs" aria-labelledby="needs-title">
+    <div class="wrap split">
+      <div class="split-head">
+        <h2 id="needs-title">What you need</h2>
+        <p class="muted">About two minutes from opening the page to your first pedal stroke.</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <h3>A smart trainer or a power meter</h3>
+          <p>
+            Anything that speaks Bluetooth FTMS or Cycling Power, like a Wahoo KICKR Core or a Van Rysel D500. A heart
+            rate strap is optional. <a href={devicesUrl}>Which devices work</a>
+          </p>
+        </li>
+        <li>
+          <h3>Chrome or Edge</h3>
+          <p>
+            On Windows, macOS, Android or ChromeOS, for Web Bluetooth. On iPhone and iPad, use the Bluefy browser.
+          </p>
+        </li>
+        <li>
+          <h3>A name</h3>
+          <p>
+            Open <a href={site.appUrl}>{appHost}</a>, type a name, connect your trainer and pick a route. No sign-up.
+          </p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section host" id="host" aria-labelledby="host-title">
+    <div class="wrap split">
+      <div class="split-head">
+        <h2 id="host-title">Open source. Host your own.</h2>
+      </div>
+      <div class="host-body">
+        <p>
+          OpenRadlr is open source and every server is a single Docker container. Run one at home for your LAN, on a
+          small VPS for your club, or ride on ours. The game server is written in Rust, the client is plain JavaScript.
+        </p>
+        <pre><code><span class="muted"># needs Docker with Compose and make</span>
+git clone {site.githubUrl}.git
+cd OpenRadlr
+make up</code></pre>
+        <p>
+          Then open <code>http://localhost:8080</code>. Bug reports, routes and pull requests are welcome
+          on <a href={site.githubUrl}>GitHub</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section faq" aria-labelledby="faq-title">
+    <div class="wrap split">
+      <div class="split-head">
+        <h2 id="faq-title">Questions</h2>
+      </div>
+      <div class="faq-list">
+        {
+          faq.map((item) => (
+            <details>
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section last-call" aria-label="Start riding">
+    <div class="wrap last-call-inner">
+      <p class="last-call-line">The road is open.</p>
+      <a class="button primary large" href={site.appUrl}>Ride now on {appHost}</a>
+      <p class="community muted">
+        {
+          site.discordUrl ? (
+            <>
+              Looking for riding partners? Meet them on <a href={site.discordUrl}>Discord</a>.
+            </>
+          ) : (
+            <>
+              A community Discord is on its way. Until then, ideas and bug reports go to{" "}
+              <a href={`${site.githubUrl}/issues`}>GitHub issues</a>.
+            </>
+          )
+        }{" "}
+        Riding stays free for everyone.
+      </p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* Hero: the game's own picture, standing on a real route profile. */
+  .hero {
+    position: relative;
+    min-height: min(100svh, 62rem);
+    display: grid;
+    grid-template-rows: 1fr auto;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .hero :global(.hero-shot) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 60% 40%;
+    z-index: -2;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(to right, rgb(15 18 22 / 0.85) 0%, rgb(15 18 22 / 0.35) 55%, rgb(15 18 22 / 0) 80%),
+      linear-gradient(to bottom, rgb(15 18 22 / 0.6) 0%, rgb(15 18 22 / 0) 25%);
+  }
+  .hero-text {
+    align-self: end;
+    padding-top: 8rem;
+    padding-bottom: clamp(1.5rem, 4vw, 3rem);
+  }
+  h1 {
+    font-size: clamp(3.5rem, 11vw, 8.5rem);
+    line-height: 0.88;
+    max-width: 11ch;
+    text-shadow: 0 2px 24px rgb(15 18 22 / 0.5);
+  }
+  .lede {
+    margin-top: 1.5rem;
+    font-size: clamp(1.125rem, 2vw, 1.3rem);
+    max-width: 40ch;
+    text-shadow: 0 1px 12px rgb(15 18 22 / 0.8);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+  .actions .button:not(.primary) {
+    background: rgb(23 27 33 / 0.75);
+    backdrop-filter: blur(6px);
+  }
+  .hero-ground {
+    margin-bottom: -1px;
+  }
+  .hero-ground :global(figcaption) {
+    padding-top: 0.25rem;
+    background: var(--bg);
+  }
+
+  /* Sections */
+  .section {
+    padding-block: clamp(4rem, 10vw, 7.5rem);
+  }
+  .section + .section {
+    border-top: 1px solid var(--border);
+  }
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 2.5rem clamp(2rem, 6vw, 5rem);
+    align-items: start;
+  }
+  .split-head {
+    position: sticky;
+    top: 2rem;
+  }
+  .split-head p {
+    margin-top: 1rem;
+  }
+  @media (max-width: 52rem) {
+    .split {
+      grid-template-columns: 1fr;
+    }
+    .split-head {
+      position: static;
+    }
+  }
+
+  .feature-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 2.25rem 2.5rem;
+  }
+  .feature-list h3 {
+    margin-bottom: 0.4rem;
+  }
+  .feature-list p {
+    color: var(--muted);
+  }
+
+  .shots {
+    padding-top: 0;
+    border-top: 0 !important;
+  }
+  .shots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+    gap: 1.5rem;
+  }
+  .shots figure {
+    margin: 0;
+  }
+  .shots :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .shots figcaption {
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.9375rem;
+  }
+
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2rem;
+  }
+  .steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 3.5rem 1fr;
+    column-gap: 1rem;
+  }
+  .steps li::before {
+    content: counter(step);
+    grid-row: span 2;
+    font-family: var(--display);
+    font-style: italic;
+    font-weight: 800;
+    font-size: 3.5rem;
+    line-height: 0.8;
+    color: var(--lemon);
+  }
+  .steps h3 {
+    margin-bottom: 0.4rem;
+  }
+  .steps p {
+    color: var(--muted);
+  }
+
+  .host-body {
+    display: grid;
+    gap: 1.25rem;
+  }
+  pre {
+    margin: 0;
+    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    line-height: 1.7;
+  }
+
+  .faq-list {
+    border-top: 1px solid var(--border);
+  }
+  details {
+    border-bottom: 1px solid var(--border);
+  }
+  summary {
+    cursor: pointer;
+    padding: 1.1rem 2rem 1.1rem 0;
+    font-weight: 600;
+    font-size: 1.125rem;
+    list-style: none;
+    position: relative;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary::after {
+    content: "+";
+    position: absolute;
+    right: 0.25rem;
+    color: var(--accent);
+    font-size: 1.5rem;
+    line-height: 1;
+    top: 50%;
+    translate: 0 -50%;
+  }
+  details[open] summary::after {
+    content: "−";
+  }
+  details p {
+    padding-bottom: 1.25rem;
+    color: var(--muted);
+  }
+
+  .last-call-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+  .community {
+    flex-basis: 100%;
+    margin-top: 1rem;
+  }
+  .last-call-line {
+    font-family: var(--display);
+    font-style: italic;
+    font-weight: 800;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    line-height: 1;
+  }
+</style>

@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="OpenRadlr — open-source indoor cycling with friends and bots." />
+    <title>OpenRadlr</title>
+    <meta name="theme-color" content="#0f1216" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="icons/favicon-64.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <main>
+      <!-- Start menu -->
+      <section id="setup" class="start">
+        <!-- The 3D island from a drone, behind the menu (the ride's canvas moves in here until joining). -->
+        <div id="menu-world" class="menu-world" aria-hidden="true"></div>
+        <header class="start-head">
+          <div class="brand">
+            <img class="brand-mark" src="icons/brand-mark.png" alt="" width="69" height="54" />
+            <span class="brand-word">Open<span>Radlr</span></span>
+          </div>
+          <div class="server-status" aria-live="polite">
+            <span id="server-dot" class="status-dot" aria-hidden="true"></span>
+            <strong id="server-label">Connecting…</strong>
+            <span id="server-players" class="muted"></span>
+          </div>
+        </header>
+
+        <div class="build-line">
+          <button type="button" id="build-label" class="build-label" title="Copy the build details"></button>
+          <button type="button" id="build-reload" class="build-reload" hidden>Update available, reload</button>
+          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" hidden>Privacy</a>
+        </div>
+
+        <div class="start-grid">
+          <section class="start-routes" aria-labelledby="routes-title">
+            <h1 id="routes-title">Where do you want to ride?</h1>
+            <p id="routes-lede" class="lede">Pick a route. Everyone on the same route rides together — friends, strangers and bots.</p>
+            <section id="unfinished" class="unfinished card" aria-live="polite" hidden>
+              <p id="unfinished-label" class="unfinished-label"></p>
+              <div class="unfinished-actions">
+                <button type="button" id="continue-ride" class="primary">Continue</button>
+                <button type="button" id="save-unfinished" class="secondary">Save</button>
+                <button type="button" id="discard-unfinished" class="secondary">Discard</button>
+              </div>
+              <div id="unfinished-save" class="unfinished-actions" hidden>
+                <button type="button" id="unfinished-fit" class="secondary">Download FIT</button>
+                <button type="button" id="unfinished-photos" class="secondary" hidden>Download photos</button>
+                <button type="button" id="unfinished-strava" class="secondary" hidden>Upload to Strava</button>
+              </div>
+              <p id="unfinished-status" class="muted"></p>
+            </section>
+            <figure id="menu-stage" class="menu-stage">
+              <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route"></canvas>
+              <figcaption class="stage-caption"><strong id="stage-name"></strong> <span id="stage-stats"></span></figcaption>
+            </figure>
+            <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden></canvas>
+            <ul id="route-list" class="route-list"></ul>
+            <p id="routes-empty" class="muted" hidden>Waiting for the server…</p>
+            <p id="community-distance" class="muted community-distance" hidden></p>
+            <section id="events" class="events" aria-labelledby="events-title" hidden>
+              <h2 id="events-title">Events</h2>
+              <ul id="event-list" class="event-list"></ul>
+            </section>
+          </section>
+
+          <form id="profile-form" class="card start-panel" novalidate>
+            <fieldset id="account" class="account" hidden>
+              <legend>Account</legend>
+              <div id="strava-connected" class="strava-row" hidden>
+                <span>Connected to Strava as <strong id="strava-name">…</strong></span>
+                <button type="button" id="strava-logout" class="secondary">Disconnect</button>
+              </div>
+              <div id="strava-disconnected" class="strava-row" hidden>
+                <a class="strava-button" href="/auth/strava">Connect with Strava</a>
+                <span id="strava-hint" class="field-hint">Optional: upload rides to Strava when you finish.</span>
+              </div>
+              <p id="strava-message" class="warning" hidden></p>
+            </fieldset>
+
+            <fieldset>
+              <legend>Rider</legend>
+              <label>Name <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
+              <div class="field-row">
+                <label>Weight (<span data-unit="weight">kg</span>) <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
+                <label class="ride-only">FTP (W) <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
+              </div>
+              <p id="ftp-source" class="field-hint ride-only"></p>
+              <label class="ride-only">Splits
+                <select id="split-mode" name="split-mode">
+                  <option value="auto">Auto</option>
+                  <option value="lap">Every lap</option>
+                  <option value="1">Every 1 km</option>
+                  <option value="5">Every 5 km</option>
+                  <option value="10">Every 10 km</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
+              <div class="unit-switch" role="group" aria-label="Units">
+                <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
+                <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+              </div>
+              <p id="level-label" class="muted" hidden></p>
+              <label class="ride-only">
+                Trainer difficulty <output id="difficulty-value">50 %</output>
+                <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" />
+              </label>
+            </fieldset>
+
+            <fieldset id="workout-setup" hidden>
+              <legend>Workout</legend>
+              <label>Circuit <select id="workout-preset" name="workout-preset"></select></label>
+              <p id="workout-preset-summary" class="field-hint"></p>
+              <label class="check"><input id="workout-cues" type="checkbox" checked /> Beep in the last 3 seconds</label>
+            </fieldset>
+
+            <fieldset id="devices">
+              <legend>Devices</legend>
+              <p id="bluetooth-warning" class="no-bluetooth trainer-only" hidden>
+                <strong>No trainer needed to try it.</strong>
+                This browser can't reach Bluetooth trainers (iPhone, iPad, Safari and Firefox can't). Ride without one below, or use Chrome or Edge on Android, Windows, macOS or ChromeOS over https:// to connect a trainer.
+              </p>
+              <div class="device-row trainer-only">
+                <button type="button" id="reconnect-trainer" data-gesture-only hidden></button>
+                <button type="button" id="connect-trainer" class="bluetooth-only" data-gesture-only>Connect trainer</button>
+                <button type="button" id="use-paddles" class="secondary paddles-button">📱 Phone paddles</button>
+                <button type="button" id="use-simulated" class="secondary">Simulated trainer</button>
+                <span id="trainer-status" class="device-status">No trainer</span>
+              </div>
+              <p id="paddle-note" class="field-hint trainer-only" hidden>No trainer? Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Phone paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
+              <p id="power-only-note" class="field-hint trainer-only" hidden>This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
+              <div class="device-row bluetooth-only">
+                <button type="button" id="reconnect-hr" data-gesture-only class="secondary" hidden></button>
+                <button type="button" id="connect-hr" data-gesture-only class="secondary">Connect heart rate</button>
+                <span id="hr-status" class="device-status">Optional</span>
+              </div>
+              <div class="device-row bluetooth-only trainer-only">
+                <button type="button" id="reconnect-controller" data-gesture-only class="secondary" hidden></button>
+                <button type="button" id="connect-controller" data-gesture-only class="secondary">Connect controller</button>
+                <span id="controller-status" class="device-status">Optional · Zwift Click, Play or Ride</span>
+              </div>
+              <p id="controller-live" class="live-reading trainer-only" hidden>Press a button to check: <strong id="controller-buttons">–</strong></p>
+              <label class="check trainer-only"><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
+              <div id="gear-settings" class="gear-settings trainer-only" hidden>
+                <label>Chainring (teeth) <input id="chainring" type="number" min="20" max="60" step="1" /></label>
+                <label>Rear cog (teeth) <input id="cog" type="number" min="10" max="36" step="1" /></label>
+                <p class="field-hint">The gear your chain actually sits in. Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift Click or the on-screen buttons.</p>
+              </div>
+              <p id="live-reading" class="live-reading trainer-only" hidden>Pedal to check: <strong id="live-values">– W · – rpm</strong></p>
+            </fieldset>
+
+            <p id="setup-error" class="error" role="alert"></p>
+            <button type="submit" id="join" class="primary">Ride</button>
+            <button type="button" id="board-start" class="secondary">Board with code</button>
+            <div id="start-vehicle" class="vehicle-view" hidden></div>
+
+            <details id="diagnostics" class="diagnostics">
+              <summary>Device diagnostics</summary>
+              <p class="diagnostics-hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
+              <pre id="diagnostics-log" class="diagnostics-log">No device connected yet.</pre>
+              <button type="button" id="copy-diagnostics" class="secondary">Copy report</button>
+            </details>
+          </form>
+        </div>
+      </section>
+
+      <!-- Ride: the world fills the screen, the HUD floats on top. -->
+      <section id="ride" class="ride" data-layout="cockpit" hidden>
+        <div id="world-wrap" class="world-wrap" hidden>
+          <canvas id="world3d" class="canvas-world" aria-label="3D view of the road behind your rider"></canvas>
+          <div id="labels3d" class="labels3d" aria-hidden="true"></div>
+        </div>
+        <canvas id="peloton" class="canvas-peloton" aria-label="Riders around you, one row per lane"></canvas>
+        <div id="studio-wrap" class="world-wrap studio-only" hidden>
+          <canvas id="studio3d" class="canvas-world" aria-label="3D view of the spin studio"></canvas>
+          <div id="studio-labels" class="labels3d" aria-hidden="true"></div>
+        </div>
+
+        <!-- Phone paddles: tap left and right in turn; swipe above them for lanes -->
+        <div id="paddles" class="paddles" data-zone="idle" hidden>
+          <div class="paddle-swipe" aria-hidden="true"></div>
+          <div class="paddle-meter glass" aria-live="polite">
+            <div class="paddle-meter-head"><span class="caption">Energy</span><span class="paddle-combo"></span><span class="paddle-spm"></span></div>
+            <div class="paddle-energy"><span class="paddle-energy-fill"></span></div>
+            <div class="paddle-rhythm" aria-hidden="true"><span class="paddle-band"></span><span class="paddle-marker"></span></div>
+            <strong class="paddle-hint">Tap left, then right · swipe for lanes</strong>
+          </div>
+          <div class="paddle paddle-left" data-side="left" role="button" aria-label="Left paddle"><span class="paddle-label">L</span></div>
+          <div class="paddle paddle-right" data-side="right" role="button" aria-label="Right paddle"><span class="paddle-label">R</span></div>
+        </div>
+
+        <!-- Café workout (#77): replaces the ride HUD while body.working-out -->
+        <div id="workout-hud" class="workout-hud" hidden>
+          <div class="workout-main glass" role="status" aria-live="off">
+            <div class="workout-ring">
+              <div class="workout-ring-inner">
+                <strong class="workout-exercise" data-w="exercise">Get ready</strong>
+                <span class="workout-paused" data-w="paused"></span>
+                <span class="workout-time" data-w="time">0:30</span>
+              </div>
+            </div>
+            <span class="workout-next" data-w="next"></span>
+          </div>
+          <div class="workout-stats glass">
+            <div><span class="caption">Block</span><strong data-w="block">Block 1/1</strong></div>
+            <div><span class="caption">Elapsed</span><strong data-w="elapsed">0:00</strong></div>
+            <div><span class="caption">Remaining</span><strong data-w="remaining">0:00</strong></div>
+            <div hidden><span class="caption">Heart</span><strong data-w="hr"></strong></div>
+          </div>
+          <div class="workout-buttons">
+            <button type="button" id="workout-pause" class="text-button glass">Pause</button>
+            <button type="button" id="workout-skip-block" class="text-button glass">Skip block</button>
+            <button type="button" id="workout-end" class="text-button glass">End workout</button>
+          </div>
+        </div>
+        <p id="workout-note" class="workout-note glass" role="alert" hidden></p>
+        <div id="workout-summary" class="modal" role="dialog" aria-modal="true" aria-labelledby="workout-summary-title" hidden>
+          <div class="modal-card">
+            <h2 id="workout-summary-title">Workout complete</h2>
+            <p id="workout-summary-plan" class="muted"></p>
+            <dl id="workout-summary-list" class="summary">
+              <div><dt>Worked</dt><dd id="workout-summary-worked">–</dd></div>
+              <div><dt>Blocks</dt><dd id="workout-summary-blocks">–</dd></div>
+              <div id="workout-summary-hr-row"><dt>Heart rate</dt><dd id="workout-summary-hr">–</dd></div>
+            </dl>
+            <p id="workout-summary-none" class="muted" hidden>No exercise block was finished, so nothing was saved.</p>
+            <div class="modal-actions"><button type="button" id="workout-back" class="primary-small">Back to menu</button></div>
+          </div>
+        </div>
+
+        <div class="hud" id="hud">
+          <!-- Shared: route info, actions, gear, status, ticker -->
+          <div class="hud-info glass">
+            <span class="hud-brand">Open<span>Radlr</span></span>
+            <span class="hud-route" id="hud-route">Route</span>
+            <span class="hud-numbers"><span data-m="distance">0.00</span> <span data-unit="distance">km</span> · <span data-m="time">0:00</span> · <span data-m="avg-speed">–</span> <span data-unit="speed">km/h</span> avg</span>
+            <span class="hud-vehicle" id="hud-vehicle" data-m="vehicle" hidden></span>
+          </div>
+
+          <div class="hud-actions">
+            <button type="button" class="text-button glass" id="open-social" aria-label="Riders and chat" title="Riders and chat">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7" /><path d="M18 14.3c2.2.7 3.5 2.8 3.5 5.7" /></svg>
+              <span id="hud-online" class="online-count">–</span>
+            </button>
+            <button type="button" class="text-button glass" id="pause-ride" title="Pause (Space)" hidden>Pause</button>
+            <button type="button" class="icon-button glass photo-button" id="take-photo" aria-label="Take a photo (P)" title="Photo (P)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M8.5 6l1.5-2.5h4L15.5 6" /><circle cx="12" cy="12.5" r="3.5" /></svg>
+              <span id="photo-count" class="photo-badge" hidden>0</span>
+            </button>
+            <button type="button" class="icon-button glass" id="hud-camera" aria-label="Change camera (C)" title="Camera (C)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+            </button>
+            <button type="button" class="text-button glass route-only" id="hud-layout" title="Layout (L)">Auto · Cockpit</button>
+            <button type="button" class="text-button glass" id="open-menu" title="Menu (M)" aria-controls="menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
+              Menu
+            </button>
+          </div>
+
+          <div class="hud-gear glass" id="hud-gear-tile" hidden>
+            <button type="button" id="shift-down" class="gear-button" aria-label="Easier gear (Q)">−</button>
+            <div class="gear-readout">
+              <span class="caption">Gear</span>
+              <span class="gear-value"><span id="hud-gear">12</span><small id="hud-gear-count">/24</small></span>
+              <span class="gear-ratio" id="hud-gear-sub">1.00</span>
+            </div>
+            <button type="button" id="shift-up" class="gear-button" aria-label="Harder gear (E)">+</button>
+          </div>
+
+          <div class="hud-status route-only">
+            <span id="race-status" class="pill glass">Free ride</span>
+            <span id="draft-status" class="pill pill-draft" hidden></span>
+            <span id="group-gap" class="pill glass" hidden></span>
+            <span id="sharing-line" class="pill glass" hidden></span>
+            <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden>Power only</span>
+          </div>
+
+          <div id="junction" class="junction glass route-only" role="group" aria-labelledby="junction-title" hidden>
+            <span id="junction-title" class="junction-title">Junction</span>
+            <div id="junction-options" class="junction-options"></div>
+            <span class="junction-hint muted">← → to choose</span>
+          </div>
+
+          <div id="race-call" class="race-call glass route-only" hidden>
+            <span><strong id="race-call-title">Race</strong> <span id="race-call-text" class="muted"></span></span>
+            <button type="button" id="race-call-button" class="primary-small">Join race</button>
+          </div>
+
+          <div id="event-call" class="race-call event-call glass route-only" hidden>
+            <span id="event-call-text"></span>
+            <button type="button" id="event-call-button" class="primary-small">Join (J)</button>
+          </div>
+
+          <ul id="hud-ticker" class="hud-ticker" aria-live="polite"></ul>
+
+          <!-- Touch screens: lanes (and roads at a junction) without a keyboard -->
+          <div class="lane-controls route-only" id="lane-controls">
+            <button type="button" id="lane-left" class="lane-button glass" aria-label="Lane left (←)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+            </button>
+            <button type="button" id="lane-right" class="lane-button glass" aria-label="Lane right (→)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+
+          <!-- Simulated trainer on touch screens: power right on the HUD -->
+          <div class="sim-stepper glass" id="sim-stepper" hidden>
+            <button type="button" id="sim-down" aria-label="Less power (↓)">−</button>
+            <span class="sim-readout"><span class="caption">Sim</span><output id="sim-stepper-value">150 W</output></span>
+            <button type="button" id="sim-up" aria-label="More power (↑)">+</button>
+          </div>
+
+          <!-- A · Cockpit -->
+          <div class="layout layout-cockpit">
+            <div class="cluster">
+              <div class="cluster-side">
+                <span class="num-l" data-m="speed">0.0</span><span class="caption" data-unit="speed">km/h</span>
+                <span class="num-m" data-m="cadence">–</span><span class="caption">rpm</span>
+              </div>
+              <div class="gauge">
+                <svg viewBox="0 0 300 170" aria-hidden="true">
+                  <path class="gauge-track" d="M30 160 A120 120 0 0 1 270 160" pathLength="100" />
+                  <path class="gauge-fill" id="gauge-fill" d="M30 160 A120 120 0 0 1 270 160" pathLength="100" />
+                  <line class="gauge-target" id="gauge-target" x1="150" y1="26" x2="150" y2="54" hidden />
+                </svg>
+                <span class="gauge-power" data-m="power">0</span>
+                <span class="gauge-sub">W · <strong data-m="wkg">0.0</strong> W/kg · <span data-m="zone">Z1</span><span data-m="target-suffix"></span></span>
+              </div>
+              <div class="cluster-side">
+                <span class="num-l grade" data-m="grade">0.0 %</span><span class="caption">grade</span>
+                <span class="num-m" data-m="hr">–</span><span class="caption">bpm</span>
+              </div>
+            </div>
+            <div class="upcoming">
+              <span class="upcoming-label" data-m="next-marker">Road ahead</span>
+              <canvas id="upcoming" class="canvas-upcoming" aria-label="Elevation of the next 2 km"></canvas>
+            </div>
+          </div>
+
+          <!-- B · Broadcast -->
+          <div class="layout layout-broadcast">
+            <div class="bar glass">
+              <div class="bar-power"><span class="caption">Power</span><span class="num-l" data-m="power">0</span><span class="bar-sub"><span data-m="wkg">0.0</span> W/kg<span data-m="target-suffix"></span></span></div>
+              <div><span class="caption">Speed</span><span class="num-m" data-m="speed">0.0</span><span class="unit" data-unit="speed">km/h</span></div>
+              <div><span class="caption">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
+              <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
+              <div class="bar-grade"><span class="caption">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
+            </div>
+            <div class="nearby glass">
+              <h2>Nearby</h2>
+              <ol id="hud-nearby" class="rider-list"></ol>
+              <div id="hud-seats" class="vehicle-view compact" hidden></div>
+            </div>
+            <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route"></canvas>
+            <div class="strip glass">
+              <canvas id="profile" class="canvas-profile" aria-label="Elevation profile of the lap with all riders"></canvas>
+              <div class="strip-next"><span class="caption">Next</span><strong data-m="next-marker">–</strong><span class="muted" data-m="lap-info">Free ride</span><span class="caption">Last split</span><strong data-m="last-split">–</strong></div>
+            </div>
+          </div>
+
+          <!-- C · Training -->
+          <div class="layout layout-training">
+            <div class="workout-chip glass">
+              <span class="caption accent">Workout</span>
+              <strong id="workout-name">No workout running</strong>
+              <span id="erg-badge" class="erg-badge" hidden>ERG</span>
+            </div>
+            <div class="training-actions">
+              <button type="button" id="hud-skip" class="glass">Skip block</button>
+              <span class="intensity glass">
+                <button type="button" id="hud-intensity-down" aria-label="Lower intensity">−</button>
+                <output data-m="intensity">100 %</output>
+                <button type="button" id="hud-intensity-up" aria-label="Raise intensity">+</button>
+              </span>
+              <button type="button" id="hud-stop" class="glass">Stop</button>
+            </div>
+            <div class="targets glass">
+              <div><span class="caption">Target</span><span class="num-xl" data-m="target">–</span></div>
+              <div class="targets-power"><span class="caption">Power</span><span class="num-xl" data-m="power" id="training-power">0</span></div>
+              <div><span class="caption">Block left</span><span class="num-xl" id="workout-block-time">–</span></div>
+            </div>
+            <div class="band">
+              <div class="band-stats">
+                <div><span class="caption">Cadence</span><span class="num-m" data-m="cadence">–</span></div>
+                <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span></div>
+                <div><span class="caption">Speed</span><span class="num-s"><span data-m="speed">0.0</span> <span data-unit="speed">km/h</span></span></div>
+                <div><span class="caption">Last split</span><span class="num-s" data-m="last-split-short">–</span></div>
+              </div>
+              <div class="band-chart">
+                <div class="band-labels"><span id="workout-block">Start a workout from the menu (M)</span><span id="workout-next" class="muted"></span></div>
+                <canvas id="workout-chart" class="canvas-workout" aria-label="Workout blocks and progress"></canvas>
+                <div class="progress"><span id="workout-progress"></span></div>
+              </div>
+              <div class="band-stats">
+                <div><span class="caption">Elapsed</span><span class="num-m" id="workout-elapsed">0:00</span></div>
+                <div><span class="caption">Remaining</span><span class="num-m" id="workout-remaining">0:00</span></div>
+                <div><span class="caption">Avg power</span><span class="num-s" id="workout-avg">– W</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- E · Spin studio (its own mode, not one of the road layouts) -->
+          <div class="layout layout-studio studio-only">
+            <div class="studio-cue glass" aria-live="polite">
+              <span class="caption accent" id="studio-phase">Lobby</span>
+              <strong id="studio-cue">Free spin: the class starts soon</strong>
+              <span class="studio-countdown" id="studio-countdown">–</span>
+              <span class="studio-next" id="studio-next"></span>
+            </div>
+
+            <div class="studio-board glass">
+              <h2><span id="studio-room">Room 1</span><span>On target</span></h2>
+              <ol id="studio-board" class="board-list"></ol>
+            </div>
+
+            <div class="studio-controls">
+              <button type="button" id="studio-erg" class="glass toggle" aria-pressed="true" title="ERG: the trainer holds the target">ERG</button>
+              <span class="intensity glass" title="Intensity (↑/↓)">
+                <button type="button" id="studio-intensity-down" aria-label="Lower intensity">−</button>
+                <output id="studio-intensity">100 %</output>
+                <button type="button" id="studio-intensity-up" aria-label="Raise intensity">+</button>
+              </span>
+              <button type="button" id="studio-voice" class="glass toggle" aria-pressed="false" title="The coach reads the cues out loud">Coach voice</button>
+            </div>
+
+            <div class="targets glass studio-targets">
+              <div><span class="caption">Target</span><span class="num-xl" id="studio-target">–</span></div>
+              <div class="targets-power"><span class="caption">Power</span><span class="num-xl" id="studio-power">0</span></div>
+              <div><span class="caption">Cadence <span id="studio-cadence-cue"></span></span><span class="num-xl" id="studio-cadence">–</span></div>
+            </div>
+
+            <div class="studio-band glass">
+              <div class="studio-band-labels"><strong id="studio-class">Class</strong><span id="studio-class-left" class="muted"></span></div>
+              <canvas id="studio-chart" class="canvas-workout" aria-label="Blocks of the class and progress"></canvas>
+              <div class="studio-band-stats">
+                <div><span class="caption">On target</span><span class="num-m" id="studio-on-target">–</span></div>
+                <div><span class="caption">Work</span><span class="num-m" id="studio-kj">0 kJ</span></div>
+                <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span></div>
+                <div><span class="caption">Time</span><span class="num-m" data-m="time">0:00</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- D · Race -->
+          <div class="layout layout-race">
+            <div class="race-top">
+              <div class="race-position"><span class="caption">Position</span><span class="num-l" data-m="position">–</span></div>
+              <div class="glass race-box"><span class="caption">Lap</span><span class="num-m" data-m="lap">–</span></div>
+              <div class="glass race-timeline">
+                <span class="caption" data-m="race-caption">No race running · start one from the menu (M)</span>
+                <canvas id="race-timeline" class="canvas-timeline" aria-label="Race progress of all racers"></canvas>
+              </div>
+              <div class="glass race-box"><span class="caption">To go</span><span class="num-m" data-m="to-go">–</span></div>
+            </div>
+            <div class="marker-banner" id="marker-banner" hidden><span class="caption" data-m="banner-label">Sprint</span><strong data-m="banner-distance">600 m</strong></div>
+            <div id="race-groups-panel" class="groups glass" hidden>
+              <h2>Groups <span>Gap</span></h2>
+              <ol id="race-groups" class="group-list"></ol>
+              <h2>Around you</h2>
+              <ol id="race-around" class="group-list around"></ol>
+            </div>
+            <div class="race-metrics">
+              <div class="glass race-power"><span class="caption">Power</span><span class="num-xl" data-m="power">0</span><span class="bar-sub accent"><span data-m="wkg">0.0</span> W/kg</span></div>
+              <div class="glass race-grid">
+                <span class="caption">Speed</span><span class="caption">Cadence</span>
+                <span class="num-m" data-m="speed">0.0</span><span class="num-m" data-m="cadence">–</span>
+                <span class="caption">Heart</span><span class="caption">Grade</span>
+                <span class="num-m" data-m="hr">–</span><span class="num-m" data-m="grade">0.0 %</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Behind an open drawer on small screens: a tap closes it -->
+        <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+
+        <!-- Left drawer: riders and chat -->
+        <aside id="social" class="drawer drawer-left" aria-label="Riders and chat" hidden>
+          <div class="drawer-head"><h2>Riders</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
+          <p id="online-summary" class="field-hint">Counting riders…</p>
+          <ol id="rider-list" class="rider-list"></ol>
+          <h3 id="bot-heading" class="rider-subhead" hidden>Bots nearby</h3>
+          <ol id="bot-list" class="rider-list bots" hidden></ol>
+          <h2>Feed</h2>
+          <ul id="feed" class="feed"></ul>
+          <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" /><button type="submit" class="secondary">Send</button></form>
+        </aside>
+
+        <!-- Right drawer: training, race, view and device settings -->
+        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden>
+          <div class="drawer-head"><h2>Menu</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
+
+          <div class="panel route-only" id="training-panel">
+            <h2>Training</h2>
+            <div class="mode-switch" role="group" aria-label="Trainer mode">
+              <button type="button" id="mode-sim" class="toggle" aria-pressed="true">Road (sim)</button>
+              <button type="button" id="mode-erg" class="toggle" aria-pressed="false">ERG</button>
+            </div>
+            <div id="erg-manual" class="erg-row" hidden>
+              <button type="button" id="erg-down" aria-label="Lower target">−</button>
+              <output id="erg-target" class="erg-value">150 W</output>
+              <button type="button" id="erg-up" aria-label="Raise target">+</button>
+            </div>
+            <div id="erg-intensity" class="erg-row" hidden>
+              <button type="button" id="intensity-down" aria-label="Lower intensity">−</button>
+              <output id="intensity-value" class="erg-value">100 %</output>
+              <button type="button" id="intensity-up" aria-label="Raise intensity">+</button>
+            </div>
+            <div id="ftp-test" class="ftp-test">
+              <h3 id="ftp-test-heading">FTP test</h3>
+              <p id="ftp-test-body" class="field-hint" aria-live="polite"></p>
+              <div id="ftp-test-fields" class="gear-settings" hidden>
+                <label>Start (W)<input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
+                <label>Step per minute (W)<input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
+              </div>
+              <div class="workout-actions">
+                <button type="button" id="ftp-test-primary"></button>
+                <button type="button" id="ftp-test-secondary" class="secondary"></button>
+              </div>
+            </div>
+            <div id="workout-picker" class="workout-picker">
+              <select id="workout-select" aria-label="Workout"></select>
+              <input id="workout-file" type="file" accept=".zwo,.xml" hidden />
+              <div class="workout-actions">
+                <button type="button" id="workout-start">Start workout</button>
+                <button type="button" id="workout-import" class="secondary">Import .zwo</button>
+              </div>
+              <p id="workout-description" class="field-hint"></p>
+            </div>
+            <div id="workout-running" class="workout-actions" hidden>
+              <button type="button" id="workout-skip" class="secondary">Skip block</button>
+              <button type="button" id="workout-stop" class="secondary">Stop workout</button>
+            </div>
+            <p id="training-note" class="field-hint"></p>
+          </div>
+
+          <div class="panel">
+            <h2>Ride</h2>
+            <button type="button" id="finish-ride" class="primary">Finish ride</button>
+            <p class="field-hint">Shows your summary and photos; download the ride or upload it to Strava.</p>
+            <button type="button" id="menu-photo" class="secondary">Take a photo (P)</button>
+          </div>
+
+          <div class="panel route-only" id="vehicle-panel">
+            <h2>Tandem and beer bike</h2>
+            <div id="vehicle-buttons" class="vehicle-buttons">
+              <button type="button" id="vehicle-create-open" class="secondary">Create a vehicle</button>
+              <button type="button" id="vehicle-board-open" class="secondary">Board with code</button>
+            </div>
+            <div id="vehicle-view" class="vehicle-view" hidden></div>
+          </div>
+
+          <div class="panel route-only">
+            <h2>Race</h2>
+            <p class="field-hint">Start a race and others can join during the countdown (<kbd>J</kbd>). Riders who don't join keep riding as before.</p>
+            <p id="race-blocked" class="field-hint" hidden></p>
+            <div id="race-controls" class="race-controls">
+              <label>Laps
+                <select id="race-laps">
+                  <option>1</option><option selected>2</option><option>3</option><option>5</option>
+                </select>
+              </label>
+              <button type="button" id="start-race">Start a race</button>
+              <button type="button" id="leave-race" class="secondary" hidden>Leave race</button>
+            </div>
+            <h3 id="results-title" hidden></h3>
+            <ol id="race-results" class="results"></ol>
+          </div>
+
+          <div class="panel route-only" id="events-panel" hidden>
+            <h2>Events</h2>
+            <ul id="ride-event-list" class="event-list"></ul>
+          </div>
+
+          <div class="panel">
+            <h2>Units</h2>
+            <div class="unit-switch" role="group" aria-label="Units">
+              <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
+              <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+            </div>
+          </div>
+
+          <div class="panel route-only">
+            <h2>View</h2>
+            <label>Layout
+              <select id="layout-mode">
+                <option value="auto">Auto (follows your ride)</option>
+                <option value="cockpit">Cockpit</option>
+                <option value="broadcast">Broadcast</option>
+                <option value="training">Training</option>
+                <option value="race">Race</option>
+              </select>
+            </label>
+            <div class="view-switch" role="group" aria-label="View">
+              <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
+              <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
+              <span id="view-note" class="view-note"></span>
+            </div>
+            <div id="scene-controls" class="scene-controls">
+              <button type="button" id="camera-mode" class="toggle" title="Camera (C)">Camera: Chase</button>
+              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters">Graphics: High</button>
+              <select id="time-mode" aria-label="Time of day" title="Time of day (T)">
+                <option value="auto">Time: auto</option>
+                <option value="day">Day</option>
+                <option value="golden">Golden hour</option>
+                <option value="dusk">Dusk</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="panel" id="sim-panel" hidden>
+            <h2>Simulated power <output id="sim-power-value">150 W</output></h2>
+            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" />
+          </div>
+
+          <div class="panel">
+            <h2>Difficulty <output id="ride-difficulty-value">50 %</output></h2>
+            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Trainer difficulty" />
+          </div>
+
+          <div class="panel">
+            <h2>Trainer <span id="trainer-packets" class="muted-count"></span></h2>
+            <button type="button" id="ride-copy-diagnostics" class="secondary">Copy diagnostics</button>
+          </div>
+
+          <div class="panel">
+            <h2>Keys</h2>
+            <p class="hint">
+              <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> change lane · <kbd>J</kbd> join/leave a race · <kbd>L</kbd> layout · <kbd>M</kbd> menu · <kbd>V</kbd> 3D/2D · <kbd>C</kbd> camera · <kbd>T</kbd> time of day · <kbd>P</kbd> photo
+              <span id="shift-hint" hidden> · <kbd>E</kbd>/<kbd>Q</kbd> or <kbd>+</kbd>/<kbd>−</kbd> shift</span>
+              <span id="power-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> simulated power</span>
+              <span id="erg-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> ERG target</span>
+            </p>
+          </div>
+        </aside>
+
+        <div id="finish" class="modal" role="dialog" aria-modal="true" aria-labelledby="finish-title" hidden>
+          <div class="modal-card">
+            <h2 id="finish-title">Ride complete</h2>
+            <p id="finish-route" class="muted"></p>
+            <dl id="finish-summary" class="summary"></dl>
+            <table id="finish-splits" class="splits" hidden></table>
+            <section id="ftp-prompt" class="ftp-prompt" aria-live="polite" hidden>
+              <p id="ftp-prompt-title" class="ftp-prompt-title"></p>
+              <p id="ftp-prompt-detail" class="muted"></p>
+              <div class="ftp-prompt-actions">
+                <button type="button" id="ftp-prompt-use" class="primary">Use it</button>
+                <button type="button" id="ftp-prompt-dismiss" class="secondary">Not now</button>
+              </div>
+            </section>
+            <div class="modal-actions">
+              <button type="button" id="upload-strava" class="strava-button" hidden>Upload to Strava</button>
+              <button type="button" id="download-tcx" class="secondary">Download .tcx</button>
+              <button type="button" id="download-gpx" class="secondary">Download .gpx</button>
+              <button type="button" id="download-fit" class="secondary">Download .fit</button>
+            </div>
+            <p id="upload-status" class="field-hint" aria-live="polite"></p>
+
+            <section class="photos" aria-labelledby="photos-title">
+              <h3 id="photos-title">Photos <span id="photos-count" class="muted"></span></h3>
+              <ul id="photo-list" class="photo-list"></ul>
+              <p id="photos-hint" class="field-hint">Take photos while you ride with the camera button or <kbd>P</kbd>. The summary card comes with them; save them here and add them to your Strava activity.</p>
+              <div class="modal-actions">
+                <button type="button" id="download-photos">Download all images</button>
+                <button type="button" id="share-photos" class="secondary" hidden>Share…</button>
+              </div>
+            </section>
+
+            <div class="modal-actions modal-nav">
+              <button type="button" id="ride-on" class="secondary">Keep riding</button>
+              <button type="button" id="back-to-start" class="secondary">Back to menu</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="photo-flash" class="photo-flash" aria-hidden="true" hidden></div>
+        <p id="split-toast" class="toast-split glass" role="status" hidden></p>
+        <p id="trainer-warning" class="warning toast-warning" hidden>No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
+        <div id="pause-pill" class="pause-pill" role="status" hidden></div>
+        <div id="reconnecting" class="reconnecting" role="status" hidden>Reconnecting…</div>
+        <div id="disconnected" class="banner" hidden>
+          Connection lost.
+          <button type="button" id="finish-and-save">Finish and save</button>
+          <button type="button" id="keep-trying" class="secondary">Keep trying</button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

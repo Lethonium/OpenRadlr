@@ -1,0 +1,11 @@
+---
+import Base from "../layouts/Base.astro";
+import { site } from "../site";
+---
+
+<Base title="Page not found">
+  <article class="wrap prose">
+    <h1>Wrong turn.</h1>
+    <p>This page doesn’t exist. Head back to the <a href="/">start</a>, or go straight to the <a href={site.appUrl}>app</a>.</p>
+  </article>
+</Base>

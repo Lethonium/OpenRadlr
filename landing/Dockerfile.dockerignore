@@ -1,0 +1,8 @@
+# Build context is the repository root; only send what the landing build reads.
+*
+!landing
+!routes
+!CHANGELOG.md
+landing/node_modules
+landing/dist
+landing/.astro
