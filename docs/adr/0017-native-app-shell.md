@@ -1,4 +1,4 @@
-# 15. A native app shell around the browser client
+# 17. A native app shell around the browser client
 
 Date: 2026-10-19 · Status: accepted
 

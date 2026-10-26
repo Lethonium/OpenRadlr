@@ -15,4 +15,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stays on and ride files open the share sheet. *Connect with Strava* uses the
   system sign-in sheet, so Google and Apple sign-in work too. On iOS, devices
   stay connected while the app is in the background. Browsers are unaffected
-  ([docs/app.md](docs/app.md), ADR 0015).
+  ([docs/app.md](docs/app.md), ADR 0017).

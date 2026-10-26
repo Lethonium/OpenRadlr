@@ -3,7 +3,7 @@
 No browser on iOS has Web Bluetooth, so on an iPhone or iPad you can only
 connect a trainer through the app. `app/` is a [Capacitor](https://capacitorjs.com)
 project that shows the normal OpenRadlr page and connects it to native
-Bluetooth. Why we chose this approach: [ADR 0015](adr/0015-native-app-shell.md).
+Bluetooth. Why we chose this approach: [ADR 0017](adr/0017-native-app-shell.md).
 
 ## How it works
 
@@ -135,7 +135,7 @@ npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets 
   there, so your rider stops and the ride picks up again when you come back. App Review asks why an app uses this mode; the answer is "keeps the
   rider's fitness devices connected". Android has no equivalent yet (it would
   need a foreground service); there the devices reconnect when you return.
-- **Picker filters:** the native picker takes one filter (see ADR 0015).
+- **Picker filters:** the native picker takes one filter (see ADR 0017).
   Zwift controllers are found by their name prefix "Zwift".
 - **App Store review:** an app that wraps a website must offer more than the
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
