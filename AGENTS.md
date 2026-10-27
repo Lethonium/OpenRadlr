@@ -7,7 +7,8 @@ repeat it. Here is the operational knowledge on top of that.
 ## Running locally
 - `make dev` — Rust server on 127.0.0.1:8080, serves `client/public` statically
   (`OPENRADLR_STATIC_DIR=../client/public`, route file `rolling-hills.json`).
-  Cold cargo build takes ~75s.
+  Cold cargo build takes ~75s. It reads `.env.dev` if present (gitignored; see
+  `.env.dev.example`): e.g. all routes, or Strava as in production.
 - `make up` — Docker Compose stack (creates `.env` from `.env.example` via `make setup`).
 - The client is plain ES modules — **no build step**. But the start menu fetches
   `/api/info` on load; served statically without a backend, it renders with an empty

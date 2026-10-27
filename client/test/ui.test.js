@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
-import { DEFAULT_PROFILE, ProfileStore, validateProfile } from "../public/js/profile/profileStore.js";
+import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
 import { describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, riderSections } from "../public/js/view/panels.js";
 import { ridersInWindow } from "../public/js/view/pelotonView.js";
@@ -225,4 +225,13 @@ test("splitMode is validated and defaults to auto", () => {
   assert.deepEqual(validateProfile(base), []);
   for (const splitMode of ["auto", "lap", "1", "5", "10", "off"]) assert.deepEqual(validateProfile({ ...base, splitMode }), []);
   assert.deepEqual(validateProfile({ ...base, splitMode: "7" }), ["Splits must be auto, lap, 1, 5, 10 or off."]);
+});
+
+test("edits are kept as they're typed, each field only once it's valid", () => {
+  const previous = { ...DEFAULT_PROFILE, name: "Anna", weightKg: 70 };
+  const kept = keepValid(previous, { name: " Bea ", weightKg: 7, ftp: 250, difficulty: 0.6 });
+  assert.deepEqual([kept.name, kept.weightKg, kept.ftp, kept.difficulty], ["Bea", 70, 250, 0.6]);
+  assert.equal(keepValid(previous, { name: "  " }).name, "Anna");
+  assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).chainring, 34);
+  assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).cog, 16);
 });

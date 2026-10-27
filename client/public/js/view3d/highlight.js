@@ -18,6 +18,13 @@ export const HIGHLIGHT = Object.freeze({
   beacon: [1.0, 0.82, 0.2],
 });
 
+/**
+ * How high the bands lie over the road (m). Routes of a map share roads: a band
+ * on top of another at the same height flickers between the two (z-fighting), so
+ * the picked route lies clearly over the faint bands of the others.
+ */
+export const HIGHLIGHT_LIFT = Object.freeze({ picked: 0.6, other: 0.3 });
+
 /** Band colour at `distance`: climbs and sprints from the route's markers, else the route colour. */
 export function highlightColor(route, distance, colors = HIGHLIGHT) {
   for (const marker of route.markers ?? []) {
@@ -31,10 +38,11 @@ export function highlightColor(route, distance, colors = HIGHLIGHT) {
 
 /**
  * Band along `route`: `width` metres wide, `lift` above the road. With
- * `color` the whole band has that colour (other routes); otherwise it shows
- * the markers and a beacon stands at the start.
+ * `color` the whole band has that colour (other routes, lower); otherwise it
+ * shows the markers and a beacon stands at the start.
  */
-export function buildHighlight(route, { width = 12, lift = 0.35, step = 8, color = null, beacon = 60 } = {}) {
+export function buildHighlight(route, { width = 12, lift = null, step = 8, color = null, beacon = 60 } = {}) {
+  lift ??= color ? HIGHLIGHT_LIFT.other : HIGHLIGHT_LIFT.picked;
   const mesh = new MeshBuilder();
   const half = width / 2;
   const edge = (frame, side) => add(add(frame.center, scale(frame.right, side * half)), [0, lift, 0]);

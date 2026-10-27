@@ -152,6 +152,11 @@ again after changing them. Details: [landing/README.md](../landing/README.md).
 
 3. `make up`.
 
+To try it locally, copy `.env.dev.example` to `.env.dev` and run `make dev`
+(see the comments in that file). Strava accepts `localhost` and `127.0.0.1` as
+callback domains, so the same Strava app works locally. Open the app at
+`http://localhost:8080` (the `OPENRADLR_PUBLIC_URL` in that file).
+
 Riders then see *Connect with Strava* on the start screen. After a ride,
 *Finish ride* offers *Upload to Strava* (and `.tcx`, `.gpx` and `.fit` downloads either way).
 Strava gets a FIT file marked as a virtual ride (`sub_sport` virtual activity):

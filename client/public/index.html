@@ -19,7 +19,7 @@
   <body>
     <main>
       <!-- Start menu -->
-      <section id="setup" class="start">
+      <section id="setup" class="start loading">
         <!-- The 3D island from a drone, behind the menu (the ride's canvas moves in here until joining). -->
         <div id="menu-world" class="menu-world" aria-hidden="true"></div>
         <header class="start-head">
@@ -42,8 +42,8 @@
 
         <div class="start-grid">
           <section class="start-routes" aria-labelledby="routes-title">
-            <h1 id="routes-title">Where do you want to ride?</h1>
-            <p id="routes-lede" class="lede">Pick a route. Everyone on the same route rides together — friends, strangers and bots.</p>
+            <div id="activity-tabs" class="activity-tabs" role="tablist" aria-label="What do you want to do?" hidden></div>
+            <div class="tabs-skeleton" aria-hidden="true"></div>
             <section id="unfinished" class="unfinished card" aria-live="polite" hidden>
               <p id="unfinished-label" class="unfinished-label"></p>
               <div class="unfinished-actions">
@@ -58,62 +58,51 @@
               </div>
               <p id="unfinished-status" class="muted"></p>
             </section>
-            <figure id="menu-stage" class="menu-stage">
-              <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route"></canvas>
-              <figcaption class="stage-caption"><strong id="stage-name"></strong> <span id="stage-stats"></span></figcaption>
-            </figure>
-            <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden></canvas>
-            <ul id="route-list" class="route-list"></ul>
-            <p id="routes-empty" class="muted" hidden>Waiting for the server…</p>
-            <p id="community-distance" class="muted community-distance" hidden></p>
-            <section id="events" class="events" aria-labelledby="events-title" hidden>
-              <h2 id="events-title">Events</h2>
-              <ul id="event-list" class="event-list"></ul>
-            </section>
+            <div id="activity-panel" class="activity-panel" role="tabpanel">
+              <header class="stage-head">
+                <h1 id="routes-title">Where do you want to ride?</h1>
+                <p id="stage-stats" class="stage-stats"></p>
+                <p id="routes-lede" class="lede">Everyone on the same route rides together — friends, strangers and bots.</p>
+              </header>
+              <!-- The window the drone camera looks through (and the map until the island is ready). -->
+              <figure id="menu-stage" class="menu-stage">
+                <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route"></canvas>
+                <p class="stage-loading" aria-hidden="true">Loading the island…</p>
+              </figure>
+              <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden></canvas>
+              <ul id="route-list" class="route-list" aria-label="Routes"></ul>
+              <ul class="route-skeleton" aria-hidden="true"><li></li><li></li><li></li></ul>
+              <p id="routes-empty" class="muted" hidden>Waiting for the server…</p>
+              <section id="events" class="events" aria-labelledby="events-title" hidden>
+                <h2 id="events-title" class="visually-hidden">Events</h2>
+                <ul id="event-list" class="event-list"></ul>
+              </section>
+              <p id="community-distance" class="muted community-distance" hidden></p>
+            </div>
           </section>
 
           <form id="profile-form" class="card start-panel" novalidate>
-            <fieldset id="account" class="account" hidden>
-              <legend>Account</legend>
-              <div id="strava-connected" class="strava-row" hidden>
-                <span>Connected to Strava as <strong id="strava-name">…</strong></span>
-                <button type="button" id="strava-logout" class="secondary">Disconnect</button>
-              </div>
-              <div id="strava-disconnected" class="strava-row" hidden>
-                <a class="strava-button" href="/auth/strava">Connect with Strava</a>
-                <span id="strava-hint" class="field-hint">Optional: upload rides to Strava when you finish.</span>
-              </div>
-              <p id="strava-message" class="warning" hidden></p>
-            </fieldset>
-
             <fieldset>
               <legend>Rider</legend>
+              <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
+              <div id="account" class="strava-line" hidden>
+                <div class="device-line">
+                  <svg class="strava-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.39 17.94l-2.09-4.12h-3.07L15.39 24l5.15-10.18h-3.08M10.2 0L3.16 13.82h4.15l2.89-5.48 2.88 5.48h4.12z" /></svg>
+                  <span id="strava-connected" class="device-status ok" hidden>Strava · <strong id="strava-name">…</strong></span>
+                  <span id="strava-disconnected" class="device-status" hidden></span>
+                  <button type="button" id="strava-logout" class="secondary small" hidden>Disconnect</button>
+                  <a id="strava-connect" class="strava-button small" href="/auth/strava" hidden>Connect</a>
+                </div>
+                <p id="strava-hint" class="field-hint" hidden></p>
+                <p id="strava-message" class="warning" hidden></p>
+              </div>
               <label>Name <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
               <div class="field-row">
-                <label>Weight (<span data-unit="weight">kg</span>) <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
+                <label><span class="label-text">Weight (<span data-unit="weight">kg</span>)</span> <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
                 <label class="ride-only">FTP (W) <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
               </div>
               <p id="ftp-source" class="field-hint ride-only"></p>
-              <label class="ride-only">Splits
-                <select id="split-mode" name="split-mode">
-                  <option value="auto">Auto</option>
-                  <option value="lap">Every lap</option>
-                  <option value="1">Every 1 km</option>
-                  <option value="5">Every 5 km</option>
-                  <option value="10">Every 10 km</option>
-                  <option value="off">Off</option>
-                </select>
-              </label>
-              <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
-              <div class="unit-switch" role="group" aria-label="Units">
-                <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
-                <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
-              </div>
               <p id="level-label" class="muted" hidden></p>
-              <label class="ride-only">
-                Trainer difficulty <output id="difficulty-value">50 %</output>
-                <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" />
-              </label>
             </fieldset>
 
             <fieldset id="workout-setup" hidden>
@@ -124,50 +113,113 @@
             </fieldset>
 
             <fieldset id="devices">
-              <legend>Devices</legend>
-              <p id="bluetooth-warning" class="no-bluetooth trainer-only" hidden>
-                <strong>No trainer needed to try it.</strong>
-                This browser can't reach Bluetooth trainers (iPhone, iPad, Safari and Firefox can't). Ride without one below, or use Chrome or Edge on Android, Windows, macOS or ChromeOS over https:// to connect a trainer.
-              </p>
-              <div class="device-row trainer-only">
-                <button type="button" id="reconnect-trainer" data-gesture-only hidden></button>
-                <button type="button" id="connect-trainer" class="bluetooth-only" data-gesture-only>Connect trainer</button>
-                <button type="button" id="use-paddles" class="secondary paddles-button">📱 Phone paddles</button>
-                <button type="button" id="use-simulated" class="secondary">Simulated trainer</button>
-                <span id="trainer-status" class="device-status">No trainer</span>
+              <legend class="trainer-only">How are you riding?</legend>
+              <legend class="workout-only">Devices</legend>
+              <div id="ride-modes" class="ride-modes trainer-only" role="radiogroup" aria-label="How are you riding?">
+                <button type="button" class="mode-card" data-mode="trainer" role="radio" aria-checked="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5" /><circle cx="18" cy="16" r="3.5" /><path d="M6 16l4-7h5l3 7M10 9l-1.5-3H6M14 9l1-3h2" /></svg>
+                  <strong>Smart trainer</strong><span>Bluetooth</span>
+                </button>
+                <button type="button" id="use-paddles" class="mode-card" data-mode="paddles" role="radio" aria-checked="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>
+                  <strong>Phone paddles</strong><span>No bike needed</span>
+                </button>
+                <button type="button" id="use-simulated" class="mode-card" data-mode="sim" role="radio" aria-checked="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5" /><path d="M6 10h1M9 10h1M12 10h1M15 10h1M18 10h0M7 14h10" /></svg>
+                  <strong>Simulator</strong><span>Just try it</span>
+                </button>
               </div>
-              <p id="paddle-note" class="field-hint trainer-only" hidden>No trainer? Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Phone paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
-              <p id="power-only-note" class="field-hint trainer-only" hidden>This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
-              <div class="device-row bluetooth-only">
-                <button type="button" id="reconnect-hr" data-gesture-only class="secondary" hidden></button>
-                <button type="button" id="connect-hr" data-gesture-only class="secondary">Connect heart rate</button>
-                <span id="hr-status" class="device-status">Optional</span>
-              </div>
-              <div class="device-row bluetooth-only trainer-only">
-                <button type="button" id="reconnect-controller" data-gesture-only class="secondary" hidden></button>
-                <button type="button" id="connect-controller" data-gesture-only class="secondary">Connect controller</button>
-                <span id="controller-status" class="device-status">Optional · Zwift Click, Play or Ride</span>
-              </div>
-              <p id="controller-live" class="live-reading trainer-only" hidden>Press a button to check: <strong id="controller-buttons">–</strong></p>
-              <label class="check trainer-only"><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
-              <div id="gear-settings" class="gear-settings trainer-only" hidden>
+              <p id="ride-mode-reason" class="field-hint trainer-only" hidden></p>
+
+              <!-- Smart trainer: one action at a time (reconnect, connect, or what's connected and live) -->
+              <div id="trainer-panel" class="mode-panel trainer-only" data-for="trainer">
+                <p id="bluetooth-warning" class="bluetooth-note" hidden>
+                  <strong>This browser can't reach Bluetooth trainers.</strong>
+                  Use Chrome or Edge on Android, Windows, macOS or ChromeOS. iPhone, iPad, Safari and Firefox can't, but phone paddles work everywhere.
+                </p>
+                <div class="device-line bluetooth-only">
+                  <span class="device-dot" aria-hidden="true"></span>
+                  <span id="trainer-status" class="device-status">No trainer connected</span>
+                  <button type="button" id="reconnect-trainer" class="primary-small" data-gesture-only hidden></button>
+                  <button type="button" id="connect-trainer" class="primary-small" data-gesture-only>Connect</button>
+                </div>
+                <p id="live-reading" class="live-reading" hidden>Pedal to check: <strong id="live-values">– W · – rpm</strong></p>
+                <p id="power-only-note" class="field-hint" hidden>This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
+                <label class="ride-only difficulty">
+                  <span class="label-text">Trainer difficulty <output id="difficulty-value">50 %</output></span>
+                  <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" />
+                </label>
+                <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
+                <div id="gear-settings" class="gear-settings trainer-only" hidden>
                 <label>Chainring (teeth) <input id="chainring" type="number" min="20" max="60" step="1" /></label>
                 <label>Rear cog (teeth) <input id="cog" type="number" min="10" max="36" step="1" /></label>
                 <p class="field-hint">The gear your chain actually sits in. Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift Click or the on-screen buttons.</p>
               </div>
-              <p id="live-reading" class="live-reading trainer-only" hidden>Pedal to check: <strong id="live-values">– W · – rpm</strong></p>
+              </div>
+              <div class="mode-panel trainer-only" data-for="paddles" hidden>
+                <p id="paddle-note" class="field-hint">Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
+              </div>
+              <div class="mode-panel trainer-only" data-for="sim" hidden>
+                <p class="field-hint">Set your power with <kbd>↑</kbd>/<kbd>↓</kbd> (or on-screen buttons). For trying OpenRadlr out: no Strava upload.</p>
+              </div>
+
+              <!-- Optional Bluetooth add-ons -->
+              <div id="addons" class="addons">
+                <div id="addon-hr" class="device-line addon">
+                  <span class="device-dot" aria-hidden="true"></span>
+                  <span class="addon-name">Heart rate</span>
+                  <span id="hr-status" class="device-status">Optional</span>
+                  <button type="button" id="reconnect-hr" class="secondary small" data-gesture-only hidden></button>
+                  <button type="button" id="connect-hr" class="secondary small" data-gesture-only>Add</button>
+                </div>
+                <div id="addon-controller" class="device-line addon trainer-only">
+                  <span class="device-dot" aria-hidden="true"></span>
+                  <span class="addon-name">Controller</span>
+                  <span id="controller-status" class="device-status">Zwift Click, Play or Ride</span>
+                  <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
+                  <button type="button" id="connect-controller" class="secondary small" data-gesture-only>Add</button>
+                </div>
+                <p id="controller-live" class="live-reading trainer-only" hidden>Press a button to check: <strong id="controller-buttons">–</strong></p>
+              </div>
             </fieldset>
 
-            <p id="setup-error" class="error" role="alert"></p>
-            <button type="submit" id="join" class="primary">Ride</button>
-            <button type="button" id="board-start" class="secondary">Board with code</button>
-            <div id="start-vehicle" class="vehicle-view" hidden></div>
+            <!-- Always in reach: sticks to the bottom of the panel (or of the screen on phones). -->
+            <div class="dock-actions">
+              <p id="setup-error" class="error" role="alert"></p>
+              <button type="submit" id="join" class="primary">Ride</button>
+              <!-- A friend's tandem or beer bike: a valid code turns Ride into Board -->
+              <div id="board-start" class="board-line">
+                <label for="board-code">Joining a friend's tandem or beer bike?</label>
+                <input id="board-code" class="code-input" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code" />
+              </div>
+            </div>
 
-            <details id="diagnostics" class="diagnostics">
+            <details id="start-settings" class="start-settings">
+              <summary>Settings</summary>
+              <fieldset>
+                <legend class="visually-hidden">Ride settings</legend>
+                <div class="unit-switch" role="group" aria-label="Units">
+                  <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
+                  <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+                </div>
+                <label class="ride-only">Splits
+                  <select id="split-mode" name="split-mode">
+                    <option value="auto">Auto</option>
+                    <option value="lap">Every lap</option>
+                    <option value="1">Every 1 km</option>
+                    <option value="5">Every 5 km</option>
+                    <option value="10">Every 10 km</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+                <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
+              </fieldset>
+              <details id="diagnostics" class="diagnostics">
               <summary>Device diagnostics</summary>
               <p class="diagnostics-hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
               <pre id="diagnostics-log" class="diagnostics-log">No device connected yet.</pre>
               <button type="button" id="copy-diagnostics" class="secondary">Copy report</button>
+            </details>
             </details>
           </form>
         </div>

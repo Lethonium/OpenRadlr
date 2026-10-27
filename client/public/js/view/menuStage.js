@@ -55,10 +55,12 @@ export class MenuStage {
    * @param {(ready: boolean) => void} [deps.onWorld] the island is (no longer) on screen
    * @param {(view: object, dt: number, timeS: number) => void} [deps.render] draws one frame
    * @param {number} [deps.rebuildDelayMs] waits for the pick to settle before rebuilding
+   * @param {number} [deps.landingCheckMs] then how often it looks whether the camera has landed
    */
   constructor(deps) {
     this.deps = {
       rebuildDelayMs: 900,
+      landingCheckMs: 250,
       requestFrame: (callback) => globalThis.requestAnimationFrame(callback),
       cancelFrame: (handle) => globalThis.cancelAnimationFrame(handle),
       setTimer: (callback, ms) => setTimeout(callback, ms),
@@ -136,9 +138,13 @@ export class MenuStage {
       this.#show(route, neighbours);
     }
     if (!this.uses3d || this.#viewRouteId === id || this.#buildingId === id) return;
-    // The first world right away; later ones once the pick has settled.
+    // The first world right away; later ones once the pick has settled and the camera
+    // has landed: swapping worlds stalls the main thread, which mid-glide shows as a hitch.
     this.deps.clearTimer(this.#buildTimer);
-    const build = () => this.#build(id, file, others, network);
+    const build = () => {
+      if (this.#camera?.flying) this.#buildTimer = this.deps.setTimer(build, this.deps.landingCheckMs);
+      else this.#build(id, file, others, network);
+    };
     if (this.#view || this.#buildingId) this.#buildTimer = this.deps.setTimer(build, this.deps.rebuildDelayMs);
     else build();
   }
@@ -176,7 +182,9 @@ export class MenuStage {
     this.#lenses = null;
     const picked = this.#routes.find((r) => r.id === this.#selectedId);
     if (picked && picked.kind === undefined) this.#show(route, others.map((f) => this.#geometry(f)));
-    if (picked?.kind === "workout") this.#showGym();
+    else if (picked?.kind === "workout") this.#showGym();
+    // The studio (or nothing picked): the island orbit, also out of the camera's opening shot.
+    else this.#camera.showIsland();
     this.#applyLens();
     this.deps.onWorld(true);
     this.#loop();
