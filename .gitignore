@@ -4,6 +4,7 @@
 
 # Local configuration
 .env
+.env.dev
 
 # Editors and OS
 .idea/
