@@ -1091,6 +1091,10 @@ label output {
   font-size: 14px;
 }
 
+.addon.shows-device .addon-name {
+  display: none;
+}
+
 .addons {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1267,6 +1271,37 @@ button.small {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* Virtual shifting's real gear, on one line: "Chain on 34 × 14 teeth". */
+.gear-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 30px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.gear-line[hidden] {
+  display: none;
+}
+
+.gear-line input {
+  width: 64px;
+  padding: 6px 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.gear-line .field-hint {
+  flex-basis: 100%;
+}
+
+.check-hint {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 /* The workout card needs no trainer: only the heart-rate row of the devices stays. */

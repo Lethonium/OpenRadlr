@@ -34,6 +34,15 @@ import { FIRST_CONNECT_ATTEMPTS, connectGatt } from "./gattConnect.js";
 /** How often a trainer that refused control is asked again (another app may have let go). */
 export const CONTROL_RETRY_MS = 10_000;
 
+/**
+ * The trainer can follow the road, now or once it has control: true also while
+ * another app blocks it. A ride plans its gears and ERG on this, not on control
+ * at the moment of joining, which a busy trainer may give a few seconds late.
+ */
+export function couldControlResistance(trainer) {
+  return Boolean(trainer) && (trainer.canControlResistance !== false || Boolean(trainer.controlBlocked));
+}
+
 export function isBluetoothAvailable(nav = globalThis.navigator) {
   return Boolean(nav?.bluetooth);
 }

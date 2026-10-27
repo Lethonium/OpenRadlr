@@ -29,6 +29,11 @@ export class DeviceLog extends Emitter {
     this.#add({ level: "error", message });
   }
 
+  /** Counts a packet without logging it (e.g. a controller's idle messages): the report shows they arrive. */
+  count(source) {
+    this.packets[source] = (this.packets[source] ?? 0) + 1;
+  }
+
   /**
    * Counts a raw notification and logs the first few of each source verbatim.
    * @param {string} source

@@ -5,9 +5,9 @@
  */
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
-import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
+import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
@@ -201,6 +201,8 @@ const app = {
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
+  /** The last controller press that wasn't a shift, for the controller check. */
+  lastControllerPress: null,
   gearbox: null,
   training: null,
   /** The guided FTP ramp test of this ride (null outside a ride). */
@@ -419,7 +421,16 @@ function initSetup() {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null });
+      // Name what's being looked for: the line's own label may be hidden in favour of the device name.
+      // With a controller connected already, the hint goes under the line: the connected half stays in view.
+      const adding = kind === "controller" && app.controllers.length > 0;
+      const pending = names?.length
+        ? `Looking for ${names.join(" + ")}…`
+        : adding && expectsOtherHalf(app.controllers)
+          ? `Pick the other ${app.controllers[0].label} in the browser's window (wake it with a button press)…`
+          : `Pick your ${CHOOSER_NAMES[kind]} in the browser's window…`;
+      const ok = await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), adding ? "controller-live" : DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
+      if (adding && ok) renderControllerCheck();
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
       renderReconnectButtons();
@@ -848,6 +859,9 @@ function connected(kind, device) {
   renderReconnectButtons();
 }
 
+/** What the browser's device window should list, for the line's hint while it is open. */
+const CHOOSER_NAMES = { trainer: "trainer", hr: "heart rate strap", controller: "controller (wake it with a button press)" };
+
 /** What each device line says while nothing is connected or remembered. */
 const IDLE_STATUS = { trainer: "No trainer connected", hr: "Optional", controller: "Zwift Click, Play or Ride" };
 
@@ -864,13 +878,21 @@ function renderReconnectButtons() {
     const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
     if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS[kind];
   }
-  // One main action per line: reconnecting the known trainer beats the chooser, which then reads "Other".
-  const smart = app.trainer && deviceKind(app.trainer) === "trainer";
-  const reconnecting = !$("reconnect-trainer").hidden;
-  const connect = $("connect-trainer");
-  connect.textContent = smart ? "Change" : reconnecting ? "Other" : "Connect";
-  connect.className = smart || reconnecting ? "secondary small" : "primary-small";
-  $("connect-hr").textContent = app.heartRateMonitor ? "Change" : "Add";
+  // One main action per line: Reconnect a known device (the chooser then reads "Other"), else connect, change or add.
+  const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
+  for (const kind of Object.keys(DEVICES)) {
+    const reconnect = $(`reconnect-${kind}`);
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
+    reconnect.hidden = !actions.reconnect;
+    const connect = $(`connect-${kind}`);
+    connect.textContent = actions.other;
+    // The trainer's first connect is the main action of the card; add-ons stay quiet.
+    connect.className = kind === "trainer" && actions.other === "Connect" ? "primary-small" : "secondary small";
+    // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
+    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
+    // Both halves of a pair are in: nothing more to add.
+    connect.hidden = kind === "controller" && app.controllers.length >= 2;
+  }
 }
 
 /** The ride-mode cards and the panel of the chosen one; outside a ride the trainer follows the choice. */
@@ -983,14 +1005,19 @@ function showTrainerControl(trainer) {
   const controllable = canControl(trainer);
   const paddles = trainer instanceof PaddleTrainer;
   const blocked = Boolean(trainer.controlBlocked);
+  // Virtual shifting stays on offer while blocked: it works as soon as the trainer is free.
+  const could = couldControlResistance(trainer);
   $("trainer-status").textContent = trainerLabel(trainer);
   $("power-only-note").hidden = controllable || paddles;
   $("power-only-note").textContent = blocked ? BLOCKED_NOTE : POWER_ONLY_NOTE;
   // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
-  $("virtual-shifting").disabled = !controllable;
-  $("virtual-shifting-row").hidden = !controllable;
-  if (!controllable && !blocked) $("virtual-shifting").checked = false;
-  $("gear-settings").hidden = !controllable || !$("virtual-shifting").checked;
+  $("virtual-shifting").disabled = !could;
+  $("virtual-shifting-row").hidden = !could;
+  if (!could) $("virtual-shifting").checked = false;
+  $("gear-settings").hidden = !could || !$("virtual-shifting").checked;
+  // In a ride, the HUD says it too.
+  $("power-only").hidden = controllable || paddles;
+  $("power-only").textContent = blocked ? "Resistance blocked" : "Power only";
 }
 
 function useTrainer(trainer) {
@@ -1042,11 +1069,24 @@ function useHeartRateMonitor(monitor) {
 }
 
 function useController(controller) {
+  // Every button it ever sent: tells a Click half's side (+ or −) and confirms it works.
+  controller.seen = new Set();
   app.controllers.push(controller);
   const input = new ControllerInput();
   $("controller-live").hidden = false;
+  renderControllerCheck();
   controller.on("buttons", (pressed) => {
-    if (pressed.length) $("controller-buttons").textContent = `${controller.label}: ${pressed.join(" + ")}`;
+    if (pressed.length) {
+      const known = controller.seen.size;
+      for (const button of pressed) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      renderControllerCheck();
+      // The first shift tells the half's side: the line names it.
+      if (controller.seen.size !== known) {
+        renderControllerStatus();
+        renderReconnectButtons();
+      }
+    }
     for (const action of input.update(pressed, navigationRoot() !== null)) runAction(action);
   });
   controller.on("battery", renderControllerStatus);
@@ -1063,10 +1103,17 @@ function useController(controller) {
 
 function renderControllerStatus() {
   const status = $("controller-status");
-  status.textContent = app.controllers
-    .map((c) => (c.connected ? `${c.label}${c.battery !== null ? ` · ${c.battery} %` : ""}` : `${c.label} · reconnecting…`))
-    .join(", ");
+  status.textContent = controllerLine(app.controllers);
   status.classList.toggle("ok", app.controllers.every((c) => c.connected));
+}
+
+/** Under the controller line: + and − confirmed one by one, across both halves of a pair. */
+function renderControllerCheck() {
+  const check = $("controller-live");
+  const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
+  check.textContent = controllerCheck({ seen, last: app.lastControllerPress ?? null });
+  check.dataset.state = seen.size ? "live" : "";
+  delete check.dataset.note;
 }
 
 /** Whatever the rider navigates with a controller right now; null while riding. */
@@ -1224,7 +1271,9 @@ async function joinRide(restored = null) {
   const saved = profiles.save(profile);
   app.profile = await profiles.ensureKeys(saved).catch(() => saved);
 
-  const controllable = canControl(app.trainer);
+  // Planned on what the trainer can do once it has control, not on control right now: a busy
+  // trainer gives control a few seconds late, and a ride without its gearbox would ignore every shift.
+  const controllable = couldControlResistance(app.trainer);
   if (route?.kind === "studio") {
     const response = await fetch("/api/studio");
     if (!response.ok) throw new Error(`Could not load the studio (HTTP ${response.status}).`);
@@ -1553,6 +1602,7 @@ function startRide() {
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();
   $("power-only").hidden = canControl(app.trainer) || app.trainer instanceof PaddleTrainer;
+  $("power-only").textContent = app.trainer?.controlBlocked ? "Resistance blocked" : "Power only";
   document.body.classList.add("riding");
   $("hud-route").textContent = app.route.name;
   app.rideStartedAt = now();

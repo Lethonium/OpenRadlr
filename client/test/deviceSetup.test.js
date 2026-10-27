@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, controllerSide, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
 
 const road = { id: "col" };
 const studio = { id: "spin-studio", kind: "studio" };
@@ -69,3 +69,53 @@ test("the live check: waiting, connected and still, the numbers once power flows
   assert.equal(silent.state, "silent");
   assert.match(silent.text, /No data for 7 s/);
 });
+
+test("each device line has one main action: reconnect the known one, add or change, never both squeezed in", () => {
+  assert.deepEqual(deviceActions({ kind: "controller", connected: false, remembered: true }), { reconnect: true, other: "Other" });
+  assert.deepEqual(deviceActions({ kind: "controller", connected: false, remembered: false }), { reconnect: false, other: "Add" });
+  assert.deepEqual(deviceActions({ kind: "controller", connected: true, remembered: false }), { reconnect: false, other: "Add another" });
+  assert.deepEqual(deviceActions({ kind: "hr", connected: true, remembered: true }), { reconnect: false, other: "Change" });
+  assert.deepEqual(deviceActions({ kind: "hr", connected: false, remembered: false }), { reconnect: false, other: "Add" });
+  assert.deepEqual(deviceActions({ kind: "trainer", connected: false, remembered: false }), { reconnect: false, other: "Connect" });
+  assert.deepEqual(deviceActions({ kind: "trainer", connected: true, remembered: true }), { reconnect: false, other: "Change" });
+});
+
+test("the controller check confirms + and − one by one: with two Click halves, both must arrive", () => {
+  assert.equal(controllerCheck({ seen: new Set() }), "Press + and − to check");
+  assert.equal(controllerCheck({ seen: new Set(["shiftUp"]) }), "✓ + works · press − to check");
+  assert.equal(controllerCheck({ seen: new Set(["shiftDown"]) }), "✓ − works · press + to check");
+  assert.equal(controllerCheck({ seen: new Set(["shiftUp", "shiftDown"]) }), "✓ + and − both work");
+  assert.equal(controllerCheck({ seen: new Set(["a"]), last: { label: "Zwift Play", buttons: ["a"] } }), "✓ Zwift Play: A · press + and − to check");
+});
+
+test("a controller's side comes from its first shift: a Click v2 half sends only + or only −", () => {
+  assert.equal(controllerSide(new Set()), null);
+  assert.equal(controllerSide(new Set(["shiftUp", "y"])), "+");
+  assert.equal(controllerSide(new Set(["shiftDown"])), "−");
+  assert.equal(controllerSide(new Set(["shiftUp", "shiftDown"])), null, "a one-piece controller has both");
+});
+
+test("the controller line lists each half with its side and battery", () => {
+  const click = (side, battery, connected = true) => ({ label: "Zwift Click", seen: new Set(side ? [side === "+" ? "shiftUp" : "shiftDown"] : []), battery, connected });
+  assert.equal(controllerLine([click("−", 70), click("+", 68)]), "Zwift Click − 70 % · + 68 %", "a pair: the name once");
+  assert.equal(controllerLine([click(null, null)]), "Zwift Click");
+  assert.equal(controllerLine([click("−", 70)]), "Zwift Click − 70 %");
+  assert.equal(controllerLine([click("−", 70), click("+", 68, false)]), "Zwift Click − 70 % · + reconnecting…");
+  assert.equal(controllerLine([click("+", 68), { label: "Zwift Play", seen: new Set(), battery: 50, connected: true }]), "Zwift Click + 68 % · Zwift Play 50 %");
+});
+
+test("one Click or Play half connected: the other half is expected", () => {
+  const half = (label, seen = []) => ({ label, seen: new Set(seen), connected: true });
+  assert.equal(expectsOtherHalf([half("Zwift Click", ["shiftUp"])]), true);
+  assert.equal(expectsOtherHalf([half("Zwift Play")]), true);
+  assert.equal(expectsOtherHalf([half("Zwift Click", ["shiftUp", "shiftDown"])]), false, "a one-piece Click v1");
+  assert.equal(expectsOtherHalf([half("Zwift Ride")]), false);
+  assert.equal(expectsOtherHalf([half("Zwift Click"), half("Zwift Click")]), false);
+  assert.equal(expectsOtherHalf([]), false);
+  assert.deepEqual(deviceActions({ kind: "controller", connected: true, remembered: false, otherHalf: true }), { reconnect: false, other: "Add other half" });
+});
+
+test("picking the half that's already connected says which one to pick", () => {
+  assert.match(connectErrorText(new Error("Zwift Click is already connected.")), /already connected: pick the other Zwift Click/);
+});
+
