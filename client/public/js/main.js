@@ -419,7 +419,9 @@ function initSetup() {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null });
+      // Name what's being looked for: the line's own label may be hidden in favour of the device name.
+      const pending = names?.length ? `Looking for ${names.join(" + ")}…` : "Connecting…";
+      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
       renderReconnectButtons();
