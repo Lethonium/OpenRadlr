@@ -7,7 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, deviceActions, liveCheck, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
@@ -201,6 +201,8 @@ const app = {
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
+  /** The last controller press that wasn't a shift, for the controller check. */
+  lastControllerPress: null,
   gearbox: null,
   training: null,
   /** The guided FTP ramp test of this ride (null outside a ride). */
@@ -420,8 +422,15 @@ function initSetup() {
     const pick = async (button, names) => {
       button.disabled = true;
       // Name what's being looked for: the line's own label may be hidden in favour of the device name.
-      const pending = names?.length ? `Looking for ${names.join(" + ")}…` : `Pick your ${CHOOSER_NAMES[kind]} in the browser's window…`;
-      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
+      // With a controller connected already, the hint goes under the line: the connected half stays in view.
+      const adding = kind === "controller" && app.controllers.length > 0;
+      const pending = names?.length
+        ? `Looking for ${names.join(" + ")}…`
+        : adding && expectsOtherHalf(app.controllers)
+          ? `Pick the other ${app.controllers[0].label} in the browser's window (wake it with a button press)…`
+          : `Pick your ${CHOOSER_NAMES[kind]} in the browser's window…`;
+      const ok = await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), adding ? "controller-live" : DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
+      if (adding && ok) renderControllerCheck();
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
       renderReconnectButtons();
@@ -873,14 +882,16 @@ function renderReconnectButtons() {
   const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
   for (const kind of Object.keys(DEVICES)) {
     const reconnect = $(`reconnect-${kind}`);
-    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden });
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
     reconnect.hidden = !actions.reconnect;
     const connect = $(`connect-${kind}`);
     connect.textContent = actions.other;
     // The trainer's first connect is the main action of the card; add-ons stay quiet.
     connect.className = kind === "trainer" && actions.other === "Connect" ? "primary-small" : "secondary small";
-    // A remembered device's name says what it is ("Zwift Click"): the generic label makes room for Reconnect.
-    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect);
+    // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
+    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
+    // Both halves of a pair are in: nothing more to add.
+    connect.hidden = kind === "controller" && app.controllers.length >= 2;
   }
 }
 
@@ -1053,14 +1064,23 @@ function useHeartRateMonitor(monitor) {
 }
 
 function useController(controller) {
+  // Every button it ever sent: tells a Click half's side (+ or −) and confirms it works.
+  controller.seen = new Set();
   app.controllers.push(controller);
   const input = new ControllerInput();
   $("controller-live").hidden = false;
-  $("controller-live").textContent = controllerCheck(null);
+  renderControllerCheck();
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
-      $("controller-live").textContent = controllerCheck({ label: controller.label, buttons: pressed });
-      $("controller-live").dataset.state = "live";
+      const known = controller.seen.size;
+      for (const button of pressed) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      renderControllerCheck();
+      // The first shift tells the half's side: the line names it.
+      if (controller.seen.size !== known) {
+        renderControllerStatus();
+        renderReconnectButtons();
+      }
     }
     for (const action of input.update(pressed, navigationRoot() !== null)) runAction(action);
   });
@@ -1078,10 +1098,17 @@ function useController(controller) {
 
 function renderControllerStatus() {
   const status = $("controller-status");
-  status.textContent = app.controllers
-    .map((c) => (c.connected ? `${c.label}${c.battery !== null ? ` · ${c.battery} %` : ""}` : `${c.label} · reconnecting…`))
-    .join(", ");
+  status.textContent = controllerLine(app.controllers);
   status.classList.toggle("ok", app.controllers.every((c) => c.connected));
+}
+
+/** Under the controller line: + and − confirmed one by one, across both halves of a pair. */
+function renderControllerCheck() {
+  const check = $("controller-live");
+  const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
+  check.textContent = controllerCheck({ seen, last: app.lastControllerPress ?? null });
+  check.dataset.state = seen.size ? "live" : "";
+  delete check.dataset.note;
 }
 
 /** Whatever the rider navigates with a controller right now; null while riding. */
