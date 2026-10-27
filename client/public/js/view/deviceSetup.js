@@ -40,3 +40,34 @@ export function addonsShown(mode, bluetooth, picked) {
   const riding = mode !== "paddles";
   return { hr: riding, controller: riding };
 }
+
+/**
+ * A failed connect in plain words: what to try, not what the browser said.
+ * The browser's message stays in the device log (Settings → Device diagnostics).
+ */
+export function connectErrorText(error, deviceName = null) {
+  const name = error?.name;
+  const message = error?.message ?? "";
+  if (/adapter/i.test(message)) return "Bluetooth is off on this computer. Turn it on and try again.";
+  if (name === "NotFoundError") return "Cancelled";
+  if (name === "TimeoutError") return `No answer from ${deviceName ?? "the device"}. Is it awake, and free of other apps (Zwift, the trainer's app)?`;
+  if (name === "SecurityError" || name === "NotAllowedError") return "Bluetooth is blocked for this site in the browser settings.";
+  if (/neither FTMS|subscribe to any power/i.test(message)) return "This device doesn't send power data: pick your trainer, not a sensor.";
+  if (name === "NetworkError" || /GATT|connection/i.test(message)) return "Couldn't connect. Wake it with a few pedal strokes, close other apps using it, then try again.";
+  return `Couldn't connect (${message}). Settings → Device diagnostics has the details.`;
+}
+
+/** After this long without a packet the trainer is probably asleep or taken by another app. */
+export const SILENT_AFTER_MS = 5000;
+
+/**
+ * The live check under the trainer: is data arriving, and is it real?
+ * `sinceDataMs`: time since the last packet (null: none yet).
+ * @returns {{state: "waiting" | "idle" | "live" | "silent", text: string}}
+ */
+export function liveCheck({ sinceDataMs, power, cadence }) {
+  if (sinceDataMs === null || sinceDataMs === undefined) return { state: "waiting", text: "Connected · waiting for data…" };
+  if (sinceDataMs > SILENT_AFTER_MS) return { state: "silent", text: `No data for ${Math.floor(sinceDataMs / 1000)} s: is the trainer awake and free of other apps?` };
+  if (power > 0) return { state: "live", text: `✓ ${Math.round(power)} W · ${Number.isFinite(cadence) ? Math.round(cadence) : "–"} rpm` };
+  return { state: "idle", text: "Connected · pedal to check" };
+}

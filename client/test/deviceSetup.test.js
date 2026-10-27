@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addonsShown, chooseRideMode, rideModes } from "../public/js/view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
 
 const road = { id: "col" };
 const studio = { id: "spin-studio", kind: "studio" };
@@ -47,4 +47,25 @@ test("heart rate and controller are add-ons to Bluetooth riding: not with paddle
   assert.deepEqual(addonsShown("trainer", false, road), { hr: false, controller: false });
   assert.deepEqual(addonsShown("paddles", true, { kind: "workout" }), { hr: true, controller: false });
   assert.deepEqual(addonsShown("trainer", false, { kind: "workout" }), { hr: false, controller: false });
+});
+
+test("connect errors in plain words: what to do, not what the browser said", () => {
+  const err = (name, message = "") => Object.assign(new Error(message), { name });
+  assert.equal(connectErrorText(err("NotFoundError", "User cancelled the requestDevice() chooser.")), "Cancelled");
+  assert.match(connectErrorText(err("NotFoundError", "Bluetooth adapter not available.")), /Bluetooth is off/);
+  assert.match(connectErrorText(err("TimeoutError"), "KICKR CORE"), /No answer from KICKR CORE.*other apps/);
+  assert.match(connectErrorText(err("NetworkError", "GATT operation failed for unknown reason.")), /Couldn't connect.*pedal/);
+  assert.match(connectErrorText(err("SecurityError")), /blocked .*browser settings/);
+  assert.match(connectErrorText(new Error("This device offers neither FTMS Indoor Bike Data nor Cycling Power data.")), /doesn't send power/);
+  assert.match(connectErrorText(new Error("Something odd")), /Something odd.*Device diagnostics/);
+});
+
+test("the live check: waiting, connected and still, the numbers once power flows, a hint when data stops", () => {
+  assert.deepEqual(liveCheck({ sinceDataMs: null }), { state: "waiting", text: "Connected · waiting for data…" });
+  assert.deepEqual(liveCheck({ sinceDataMs: 200, power: 0, cadence: 0 }), { state: "idle", text: "Connected · pedal to check" });
+  assert.deepEqual(liveCheck({ sinceDataMs: 200, power: 182.4, cadence: 88 }), { state: "live", text: "✓ 182 W · 88 rpm" });
+  assert.deepEqual(liveCheck({ sinceDataMs: 200, power: 150 }), { state: "live", text: "✓ 150 W · – rpm" });
+  const silent = liveCheck({ sinceDataMs: 7_400, power: 182 });
+  assert.equal(silent.state, "silent");
+  assert.match(silent.text, /No data for 7 s/);
 });

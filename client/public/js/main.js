@@ -7,7 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
@@ -199,6 +199,8 @@ const app = {
   reconnector: null,
   autosaveTimer: null,
   lastTrainerDataAt: null,
+  /** The trainer's last reading, for the start menu's live check. */
+  lastReading: null,
   gearbox: null,
   training: null,
   /** The guided FTP ramp test of this ride (null outside a ride). */
@@ -400,7 +402,8 @@ function initSetup() {
   $("virtual-shifting").checked = app.profile.virtualShifting;
   $("chainring").value = app.profile.chainring;
   $("cog").value = app.profile.cog;
-  $("gear-settings").hidden = !app.profile.virtualShifting;
+  // The gears show with a trainer that can change resistance (useTrainer), not before.
+  $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", (e) => ($("gear-settings").hidden = !e.target.checked));
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
@@ -416,7 +419,7 @@ function initSetup() {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true });
+      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null });
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
       renderReconnectButtons();
@@ -477,8 +480,14 @@ function setDifficultyInputs(difficulty) {
 
 function initStartMenu() {
   openStartMenu();
-  // Countdowns tick every second between the (slower) info refreshes.
-  setInterval(renderEvents, 1000);
+  // Countdowns tick every second between the (slower) info refreshes; so does the trainer check.
+  setInterval(() => {
+    renderEvents();
+    if (app.ride) return;
+    renderLiveCheck();
+    // Nothing sends resistance in the menu: ask a blocked trainer again from here.
+    Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
+  }, 1000);
   window.addEventListener("resize", () => app.menu && app.drawMenuStage());
 
   // Coming back from Strava: show what happened, then tidy the address bar.
@@ -769,21 +778,27 @@ function joinEventFromRide(row) {
 }
 
 /** @returns {Promise<boolean>} true once connected */
-async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = "Connecting…" } = {}) {
+async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = "Connecting…", deviceName = null } = {}) {
   const status = $(statusId);
   status.textContent = pending;
+  status.dataset.note = "pending";
   status.classList.remove("ok");
   try {
     const device = await connect();
     onConnected(device);
     // useTrainer() writes its own label (it knows about power-only trainers).
     if (!keepLabel) status.textContent = device.label;
+    delete status.dataset.note;
     status.classList.add("ok");
     return true;
   } catch (error) {
     // Given up quietly: the rider connected another device meanwhile.
-    if (error.name === "AbortError") return false;
-    status.textContent = error.name === "NotFoundError" ? "Cancelled" : `Failed: ${error.message}`;
+    if (error.name === "AbortError") {
+      delete status.dataset.note;
+      return false;
+    }
+    status.textContent = connectErrorText(error, deviceName);
+    status.dataset.note = "error";
     if (error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
@@ -833,13 +848,21 @@ function connected(kind, device) {
   renderReconnectButtons();
 }
 
-/** "Reconnect KICKR CORE" next to each kind with a remembered device that isn't connected. */
+/** What each device line says while nothing is connected or remembered. */
+const IDLE_STATUS = { trainer: "No trainer connected", hr: "Optional", controller: "Zwift Click, Play or Ride" };
+
+/** "Reconnect" next to each kind with a remembered device that isn't connected. */
 function renderReconnectButtons() {
   for (const kind of Object.keys(DEVICES)) {
     const button = $(`reconnect-${kind}`);
     const names = [...new Set(missingDevices(kind).map((entry) => entry.name))];
     button.hidden = !isBluetoothAvailable() || names.length === 0;
-    button.textContent = `Reconnect ${names.join(" + ")}`;
+    // The name goes in the status line, the button stays short: nothing gets squeezed to "N…".
+    button.textContent = "Reconnect";
+    button.title = `Reconnect ${names.join(" + ")}`;
+    const status = $(DEVICES[kind].statusId);
+    const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
+    if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS[kind];
   }
   // One main action per line: reconnecting the known trainer beats the chooser, which then reads "Other".
   const smart = app.trainer && deviceKind(app.trainer) === "trainer";
@@ -886,6 +909,16 @@ function applyRideMode(mode) {
   renderReconnectButtons();
 }
 
+/** Under the trainer: waiting, still, the numbers, or no data any more (asleep, taken by another app). */
+function renderLiveCheck() {
+  const reading = $("live-reading");
+  if (reading.hidden || !app.trainer) return;
+  const sinceDataMs = app.lastTrainerDataAt === null ? null : (now() - app.lastTrainerDataAt) * 1000;
+  const check = liveCheck({ sinceDataMs, power: app.lastReading?.power, cadence: app.lastReading?.cadence });
+  reading.textContent = check.text;
+  reading.dataset.state = check.state;
+}
+
 /** No trainer: the smart trainer card waits for one. */
 function dropTrainer() {
   app.trainer?.disconnect();
@@ -893,7 +926,7 @@ function dropTrainer() {
   $("trainer-status").textContent = "No trainer connected";
   $("trainer-status").classList.remove("ok");
   $("live-reading").hidden = true;
-  $("live-reading").classList.remove("live");
+  delete $("trainer-status").dataset.note;
   $("power-only-note").hidden = true;
   $("virtual-shifting-row").hidden = true;
   $("gear-settings").hidden = true;
@@ -931,14 +964,33 @@ async function autoConnect(entry, device) {
     },
     (opened) => connected(entry.kind, opened),
     spec.statusId,
-    { keepLabel: true, pending: entry.kind === "controller" ? `Press a button on ${entry.name}…` : `Looking for ${entry.name}…` },
+    { keepLabel: true, deviceName: entry.name, pending: entry.kind === "controller" ? `Press a button on ${entry.name}…` : `Looking for ${entry.name}…` },
   );
   // Two controllers share one status line: show the ones that made it.
   if (!ok && entry.kind === "controller" && app.controllers.length) renderControllerStatus();
 }
 
 function trainerLabel(trainer) {
+  if (trainer.controlBlocked) return `${trainer.label} · resistance blocked`;
   return canControl(trainer) ? trainer.label : `${trainer.label} · power only`;
+}
+
+const POWER_ONLY_NOTE = "This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.";
+const BLOCKED_NOTE = "Another app is controlling this trainer (Zwift, the trainer's own app, a phone nearby), so resistance can't follow the road. Close it: OpenRadlr takes over within a few seconds.";
+
+/** What the trainer lets us do: label, the note, virtual shifting. Again whenever control changes. */
+function showTrainerControl(trainer) {
+  const controllable = canControl(trainer);
+  const paddles = trainer instanceof PaddleTrainer;
+  const blocked = Boolean(trainer.controlBlocked);
+  $("trainer-status").textContent = trainerLabel(trainer);
+  $("power-only-note").hidden = controllable || paddles;
+  $("power-only-note").textContent = blocked ? BLOCKED_NOTE : POWER_ONLY_NOTE;
+  // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
+  $("virtual-shifting").disabled = !controllable;
+  $("virtual-shifting-row").hidden = !controllable;
+  if (!controllable && !blocked) $("virtual-shifting").checked = false;
+  $("gear-settings").hidden = !controllable || !$("virtual-shifting").checked;
 }
 
 function useTrainer(trainer) {
@@ -946,30 +998,18 @@ function useTrainer(trainer) {
   app.trainer = trainer;
   app.lastTrainerDataAt = null;
   $("trainer-status").classList.add("ok");
-
-  // Power-only trainers: no ERG, no virtual shifting.
-  const controllable = canControl(trainer);
-  const paddles = trainer instanceof PaddleTrainer;
-  $("power-only-note").hidden = controllable || paddles;
-  $("trainer-status").textContent = trainerLabel(trainer);
-  $("virtual-shifting").disabled = !controllable;
-  // Virtual shifting is offered once a trainer that can change resistance is there.
-  $("virtual-shifting-row").hidden = !controllable;
-  $("gear-settings").hidden = !controllable || !$("virtual-shifting").checked;
-  if (!controllable) {
-    $("virtual-shifting").checked = false;
-    $("gear-settings").hidden = true;
-  }
+  delete $("trainer-status").dataset.note;
+  showTrainerControl(trainer);
+  trainer.on("control", () => showTrainerControl(trainer));
 
   // Live check on the setup screen: the rider sees right away whether data arrives.
+  app.lastReading = null;
   $("live-reading").hidden = false;
-  $("live-reading").classList.remove("live");
-  trainer.on("data", ({ power, cadence }) => {
+  renderLiveCheck();
+  trainer.on("data", (reading) => {
     app.lastTrainerDataAt = now();
-    if (power > 0) $("live-reading").classList.add("live");
-    const watts = Number.isFinite(power) ? Math.round(power) : "–";
-    const rpm = Number.isFinite(cadence) ? Math.round(cadence) : "–";
-    $("live-values").textContent = `${watts} W · ${rpm} rpm`;
+    app.lastReading = reading;
+    renderLiveCheck();
   });
   trainer.on("disconnected", () => {
     $("trainer-status").textContent = "Reconnecting…";
@@ -977,7 +1017,7 @@ function useTrainer(trainer) {
     notify(`${trainer.label} disconnected. Reconnecting…`, "error");
   });
   trainer.on("reconnected", () => {
-    $("trainer-status").textContent = trainerLabel(trainer);
+    showTrainerControl(trainer);
     $("trainer-status").classList.add("ok");
     notify(`${trainer.label} is back.`);
   });
