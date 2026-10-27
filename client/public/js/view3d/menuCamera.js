@@ -4,6 +4,12 @@
  * from the start; on the workout card a low circle around the café's outdoor
  * gym. With reduced motion it cuts between still views instead.
  *
+ * Each view is a shot that keeps moving on its own (the orbit turns, the follow
+ * rolls along the road). A flight blends the shot it leaves into the next one,
+ * both still moving, with an easing whose speed and acceleration start and end
+ * at zero: the camera never jolts, also when a flight is interrupted. Following
+ * the road goes through a critically damped spring, so hairpins become arcs.
+ *
  * Works on the scene's plain-data `overview` (centre, size, sea level and a
  * coarse height grid), so it runs on the main thread without the terrain.
  */
@@ -17,6 +23,12 @@ export const MENU_CAMERA = Object.freeze({
   orbitHeight: 0.42,
   /** Seconds for a flight between views. */
   flightS: 3.2,
+  /** The opening: a wider, higher orbit, and a longer descent from it (s). */
+  introDistance: 1.6,
+  introHeight: 1.05,
+  introS: 4.6,
+  /** How quickly the road follow catches up with the road (s): larger is smoother but lags in bends. */
+  followSmoothS: 0.8,
   /** Following a route: speed along it, and where the camera sits (metres). */
   followSpeed: 18,
   back: 260,
@@ -31,7 +43,28 @@ export const MENU_CAMERA = Object.freeze({
   gymHeight: 17,
 });
 
-const ease = (t) => t * t * (3 - 2 * t);
+/** Smootherstep: speed and acceleration both start and end at zero. */
+const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+
+/**
+ * One step of a critically damped spring from `state` towards `goal` (per
+ * component): it follows without overshooting and its velocity never jumps.
+ * @param {{value: number[], velocity: number[]}} state changed in place
+ */
+export function springTo(state, goal, smoothS, dt) {
+  const omega = 2 / Math.max(1e-3, smoothS);
+  const x = omega * dt;
+  const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  for (let k = 0; k < goal.length; k += 1) {
+    const change = state.value[k] - goal[k];
+    const temp = (state.velocity[k] + omega * change) * dt;
+    state.velocity[k] = (state.velocity[k] - omega * temp) * decay;
+    state.value[k] = goal[k] + (change + temp) * decay;
+  }
+  return state;
+}
+
+const spring = (value) => ({ value: value.slice(), velocity: value.map(() => 0) });
 
 /** Ground (or sea) height from the overview's coarse grid, bilinear. */
 export function groundAt(overview, x, z) {
@@ -77,102 +110,182 @@ export function gymPose(gym, overview, angle, settings = MENU_CAMERA) {
   return { eye, target: [cx, cy + 1.2, cz] };
 }
 
+// --- shots: each view keeps moving by itself ---------------------------------
+// `ctx` holds the overview, the settings and whether anything moves (reduced motion).
+// advance(step, landed): the follow and the gym orbit only start once the camera is there.
+
+function islandShot(ctx, angle) {
+  return {
+    view: "island",
+    angle,
+    advance(step) {
+      if (ctx.moving) this.angle += ctx.settings.orbitRate * step;
+    },
+    pose() {
+      return orbitPose(ctx.overview, this.angle, ctx.settings);
+    },
+  };
+}
+
+/** The opening: the island from high and wide, turning slowly, before the first descent. */
+function introShot(ctx, angle) {
+  const s = ctx.settings;
+  const wide = { ...s, orbitDistance: s.introDistance, orbitHeight: s.introHeight };
+  return { ...islandShot(ctx, angle), view: "intro", pose() {
+    return orbitPose(ctx.overview, this.angle, wide);
+  } };
+}
+
+function routeShot(ctx, route) {
+  const s = ctx.settings;
+  const start = routePose(route, 0, ctx.overview, s);
+  return {
+    view: "route",
+    route,
+    distance: 0,
+    eye: spring(start.eye),
+    target: spring(start.target),
+    advance(step, landed) {
+      if (!ctx.moving) return;
+      if (landed) this.distance = (this.distance + s.followSpeed * step) % route.length;
+      const raw = routePose(route, this.distance, ctx.overview, s);
+      springTo(this.eye, raw.eye, s.followSmoothS, step);
+      springTo(this.target, raw.target, s.followSmoothS, step);
+    },
+    pose() {
+      const eye = this.eye.value.slice();
+      // Cutting a bend short never takes the camera into a hill.
+      eye[1] = Math.max(eye[1], groundAt(ctx.overview, eye[0], eye[2]) + s.clearance);
+      return { eye, target: this.target.value.slice() };
+    },
+  };
+}
+
+function gymShot(ctx, gym) {
+  return {
+    view: "gym",
+    gym,
+    // Start between the road and the gym, a little ahead of it.
+    angle: Math.atan2(-Math.cos(gym.yaw), -Math.sin(gym.yaw)) - 0.6,
+    advance(step, landed) {
+      if (ctx.moving && landed) this.angle = (this.angle + ctx.settings.gymRate * step) % (2 * Math.PI);
+    },
+    pose() {
+      return gymPose(gym, ctx.overview, this.angle, ctx.settings);
+    },
+  };
+}
+
+/** Holds a pose: the start of a flight that interrupts flights already interrupted. */
+function stillShot(pose) {
+  return { view: "still", advance() {}, pose: () => ({ eye: pose.eye.slice(), target: pose.target.slice() }) };
+}
+
+/**
+ * From one moving shot to another. `fromClearance`: how low the camera flies from
+ * (the gym orbit is lower than the usual clearance), so the floor moves with the flight.
+ */
+function flight(ctx, from, to, fromClearance, seconds = ctx.settings.flightS) {
+  return {
+    view: to.view,
+    from,
+    to,
+    t: 0,
+    advance(step) {
+      from.advance(step, true);
+      to.advance(step, false);
+      this.t = Math.min(1, this.t + step / seconds);
+    },
+    pose() {
+      const a = from.pose();
+      const b = to.pose();
+      const e = ease(this.t);
+      const landing = Math.min(ctx.settings.clearance, b.eye[1] - groundAt(ctx.overview, b.eye[0], b.eye[2]));
+      const clearance = fromClearance + (landing - fromClearance) * e;
+      const eye = lerp3(a.eye, b.eye, e);
+      eye[1] = Math.max(eye[1], groundAt(ctx.overview, eye[0], eye[2]) + clearance);
+      return { eye, target: lerp3(a.target, b.target, e) };
+    },
+  };
+}
+
+const flightDepth = (shot) => (shot.from ? 1 + flightDepth(shot.from) : 0);
+
 export class MenuCamera {
   eye = null;
   target = null;
-  /** "island", "route" or "gym". */
-  view = "island";
-  #angle;
-  #route = null;
-  #gym = null;
-  #gymAngle = 0;
-  #distance = 0;
-  #from = null;
-  #flight = 1;
+  #ctx;
+  #shot;
+  /** The last island shot: coming back, the orbit goes on from where it was. */
+  #island;
 
   /**
    * @param {{center: number[], radius: number, sea: number}} overview from the built scene
-   * @param {{reducedMotion?: boolean, settings?: object, angle?: number}} [options]
+   * @param {{reducedMotion?: boolean, settings?: object, angle?: number, intro?: boolean}} [options]
+   *   `intro`: open high and wide; the first view picked is a long descent from there
    */
-  constructor(overview, { reducedMotion = false, settings = MENU_CAMERA, angle = 0.9 } = {}) {
+  constructor(overview, { reducedMotion = false, settings = MENU_CAMERA, angle = 0.9, intro = false } = {}) {
     this.overview = overview;
     this.reducedMotion = reducedMotion;
     this.settings = settings;
-    this.#angle = angle;
-    const pose = orbitPose(overview, angle, settings);
-    this.eye = pose.eye;
-    this.target = pose.target;
+    this.#ctx = { overview, settings, moving: !reducedMotion };
+    this.#island = islandShot(this.#ctx, angle);
+    this.#shot = intro && !reducedMotion ? introShot(this.#ctx, angle) : this.#island;
+    ({ eye: this.eye, target: this.target } = this.#shot.pose());
   }
 
-  /** Circle the whole island. */
-  showIsland() {
-    if (this.view === "island") return;
-    this.#begin();
-    this.view = "island";
-    this.#route = null;
-    this.#gym = null;
-  }
-
-  /** Glide down to `route` (a RouteGeometry) and follow it from the start. */
-  showRoute(route) {
-    if (this.view === "route" && this.#route === route) return;
-    this.#begin();
-    this.view = "route";
-    this.#route = route;
-    this.#gym = null;
-    this.#distance = 0;
-  }
-
-  /** Glide down to the outdoor `gym` (`{center, yaw}`) and circle it, from the road side. */
-  showGym(gym) {
-    if (this.view === "gym" && this.#gym === gym) return;
-    this.#begin();
-    this.view = "gym";
-    this.#gym = gym;
-    this.#route = null;
-    // Start between the road and the gym, a little ahead of it.
-    this.#gymAngle = Math.atan2(-Math.cos(gym.yaw), -Math.sin(gym.yaw)) - 0.6;
+  /** "intro", "island", "route" or "gym": where the camera is, or is flying to. */
+  get view() {
+    return this.#shot.view;
   }
 
   /** True while flying from one view to another. */
   get flying() {
-    return this.#flight < 1;
+    return Boolean(this.#shot.to) && this.#shot.t < 1;
   }
 
-  #begin() {
-    // How low the camera flies from: the floor starts there, not at the usual clearance.
+  /** The shot the camera is on or flying to. */
+  get #goal() {
+    return this.#shot.to ?? this.#shot;
+  }
+
+  /** Circle the whole island. */
+  showIsland() {
+    if (this.#goal.view === "island") return;
+    this.#island = islandShot(this.#ctx, this.#island.angle);
+    this.#go(this.#island);
+  }
+
+  /** Glide down to `route` (a RouteGeometry) and follow it from the start. */
+  showRoute(route) {
+    if (this.#goal.view === "route" && this.#goal.route === route) return;
+    this.#go(routeShot(this.#ctx, route));
+  }
+
+  /** Glide down to the outdoor `gym` (`{center, yaw}`) and circle it, from the road side. */
+  showGym(gym) {
+    if (this.#goal.view === "gym" && this.#goal.gym === gym) return;
+    this.#go(gymShot(this.#ctx, gym));
+  }
+
+  #go(next) {
+    if (this.reducedMotion) {
+      this.#shot = next;
+      return;
+    }
     const height = this.eye[1] - groundAt(this.overview, this.eye[0], this.eye[2]);
-    this.#from = { eye: this.eye, target: this.target, clearance: Math.min(this.settings.clearance, height) };
-    this.#flight = this.reducedMotion ? 1 : 0;
+    let from = this.#shot;
+    // A flight interrupted twice already: start from where the camera is, held still.
+    if (flightDepth(from) >= 2) from = stillShot({ eye: this.eye, target: this.target });
+    const seconds = from.view === "intro" ? this.settings.introS : this.settings.flightS;
+    this.#shot = flight(this.#ctx, from, next, Math.min(this.settings.clearance, height), seconds);
   }
 
   update(dt) {
     const step = Math.max(0, Math.min(0.1, dt));
-    const s = this.settings;
-    const moving = !this.reducedMotion;
-    let pose;
-    if (this.view === "route" && this.#route) {
-      // Only start rolling along the road once the camera is down there.
-      if (moving && this.#flight >= 1) this.#distance = (this.#distance + s.followSpeed * step) % this.#route.length;
-      pose = routePose(this.#route, this.#distance, this.overview, s);
-    } else if (this.view === "gym" && this.#gym) {
-      if (moving && this.#flight >= 1) this.#gymAngle = (this.#gymAngle + s.gymRate * step) % (2 * Math.PI);
-      pose = gymPose(this.#gym, this.overview, this.#gymAngle, s);
-    } else {
-      if (moving) this.#angle += s.orbitRate * step;
-      pose = orbitPose(this.overview, this.#angle, s);
-    }
-    if (this.#flight < 1 && this.#from) {
-      this.#flight = Math.min(1, this.#flight + step / s.flightS);
-      const t = ease(this.#flight);
-      // From or to lower than the usual clearance (the gym): the floor moves with the flight.
-      const landing = Math.min(s.clearance, pose.eye[1] - groundAt(this.overview, pose.eye[0], pose.eye[2]));
-      const clearance = this.#from.clearance + (landing - this.#from.clearance) * t;
-      pose = { eye: lerp3(this.#from.eye, pose.eye, t), target: lerp3(this.#from.target, pose.target, t) };
-      pose.eye[1] = Math.max(pose.eye[1], groundAt(this.overview, pose.eye[0], pose.eye[2]) + clearance);
-    }
-    this.eye = pose.eye;
-    this.target = pose.target;
+    this.#shot.advance(step, true);
+    if (this.#shot.to && this.#shot.t >= 1) this.#shot = this.#shot.to;
+    ({ eye: this.eye, target: this.target } = this.#shot.pose());
     return this;
   }
 }
