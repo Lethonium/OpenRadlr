@@ -7,7 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, deviceActions, liveCheck, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
@@ -864,13 +864,19 @@ function renderReconnectButtons() {
     const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
     if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS[kind];
   }
-  // One main action per line: reconnecting the known trainer beats the chooser, which then reads "Other".
-  const smart = app.trainer && deviceKind(app.trainer) === "trainer";
-  const reconnecting = !$("reconnect-trainer").hidden;
-  const connect = $("connect-trainer");
-  connect.textContent = smart ? "Change" : reconnecting ? "Other" : "Connect";
-  connect.className = smart || reconnecting ? "secondary small" : "primary-small";
-  $("connect-hr").textContent = app.heartRateMonitor ? "Change" : "Add";
+  // One main action per line: Reconnect a known device (the chooser then reads "Other"), else connect, change or add.
+  const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
+  for (const kind of Object.keys(DEVICES)) {
+    const reconnect = $(`reconnect-${kind}`);
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden });
+    reconnect.hidden = !actions.reconnect;
+    const connect = $(`connect-${kind}`);
+    connect.textContent = actions.other;
+    // The trainer's first connect is the main action of the card; add-ons stay quiet.
+    connect.className = kind === "trainer" && actions.other === "Connect" ? "primary-small" : "secondary small";
+    // A remembered device's name says what it is ("Zwift Click"): the generic label makes room for Reconnect.
+    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect);
+  }
 }
 
 /** The ride-mode cards and the panel of the chosen one; outside a ride the trainer follows the choice. */
@@ -1045,8 +1051,12 @@ function useController(controller) {
   app.controllers.push(controller);
   const input = new ControllerInput();
   $("controller-live").hidden = false;
+  $("controller-live").textContent = controllerCheck(null);
   controller.on("buttons", (pressed) => {
-    if (pressed.length) $("controller-buttons").textContent = `${controller.label}: ${pressed.join(" + ")}`;
+    if (pressed.length) {
+      $("controller-live").textContent = controllerCheck({ label: controller.label, buttons: pressed });
+      $("controller-live").dataset.state = "live";
+    }
     for (const action of input.update(pressed, navigationRoot() !== null)) runAction(action);
   });
   controller.on("battery", renderControllerStatus);

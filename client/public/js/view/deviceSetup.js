@@ -71,3 +71,35 @@ export function liveCheck({ sinceDataMs, power, cadence }) {
   if (power > 0) return { state: "live", text: `✓ ${Math.round(power)} W · ${Number.isFinite(cadence) ? Math.round(cadence) : "–"} rpm` };
   return { state: "idle", text: "Connected · pedal to check" };
 }
+
+/**
+ * A device line's actions: Reconnect for a remembered device that isn't
+ * connected (the chooser then reads "Other"), else one button to connect,
+ * change or (controllers come in pairs) add another.
+ * @returns {{reconnect: boolean, other: string}}
+ */
+export function deviceActions({ kind, connected, remembered }) {
+  if (connected) return { reconnect: false, other: kind === "controller" ? "Add another" : "Change" };
+  if (remembered) return { reconnect: true, other: "Other" };
+  return { reconnect: false, other: kind === "trainer" ? "Connect" : "Add" };
+}
+
+const BUTTON_NAMES = {
+  shiftUp: "shift up (+)",
+  shiftDown: "shift down (−)",
+  up: "up",
+  down: "down",
+  left: "left",
+  right: "right",
+  a: "A",
+  b: "B",
+  y: "Y",
+  z: "Z",
+};
+
+/** The controller check under the line: what to press, then what arrived. `last`: {label, buttons} or null. */
+export function controllerCheck(last) {
+  if (!last?.buttons?.length) return "Press + or − to check";
+  const names = last.buttons.map((button) => BUTTON_NAMES[button] ?? `button ${button}`);
+  return `✓ ${last.label}: ${names.join(", ")}`;
+}

@@ -12,6 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The trainer's live check says whether data arrives ("Connected · pedal to check", "✓ 182 W · 88 rpm", "No data for 7 s").
 - The reconnect line shows the remembered trainer's name instead of squeezing it to "N…"; the gear fields only show with a trainer that can shift.
 - The start menu's panel is solid (it could render see-through in Chrome).
+- Device lines have one main action (Reconnect a remembered device, else connect, change or add another) and no longer wrap; the controller check names the button pressed ("✓ Zwift Click: shift up (+)").
+- Virtual shifting's gear is one line ("Chain on 34 × 14 teeth"); the device report counts a controller's idle messages, so it shows whether a controller sends anything at all.
 
 ### Changed
 - "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.

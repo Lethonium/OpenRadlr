@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { DeviceLog } from "../public/js/ble/deviceLog.js";
 import assert from "node:assert/strict";
 import {
   encodeRequestControl,
@@ -118,4 +119,13 @@ test("only a real trainer counts as a power source for Strava", () => {
   assert.equal(canExportRide(real), true);
   assert.equal(canExportRide(sim), true);
   assert.equal(canExportRide(paddles), false);
+});
+
+test("the device report counts packets it doesn't log, e.g. a controller's idle messages", () => {
+  const log = new DeviceLog();
+  log.count("zwift idle");
+  log.count("zwift idle");
+  assert.deepEqual(log.packets, { "zwift idle": 2 });
+  assert.equal(log.entries.length, 0, "counted, not logged");
+  assert.match(log.report(), /"zwift idle":2/);
 });

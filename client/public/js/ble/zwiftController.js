@@ -124,7 +124,9 @@ export class ZwiftController extends Emitter {
 
   #onPacket = (event) => {
     const message = parseControllerMessage(event.target.value);
-    if (message.kind !== "idle") this.#log?.packet("zwift", event.target.value, message);
+    // Idle messages come every second: counted only, so a report shows whether anything arrives at all.
+    if (message.kind === "idle") this.#log?.count("zwift idle");
+    else this.#log?.packet("zwift", event.target.value, message);
     if (message.kind === "buttons") {
       // Every change is logged with its bytes, so a rider can report what each button sends.
       const key = message.buttons.join("+");

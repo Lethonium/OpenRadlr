@@ -145,12 +145,16 @@
                 </div>
                 <p id="live-reading" class="live-reading" aria-live="polite" hidden></p>
                 <p id="power-only-note" class="field-hint" hidden></p>
-                <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
-                <div id="gear-settings" class="gear-settings trainer-only" hidden>
-                <label>Chainring (teeth) <input id="chainring" type="number" min="20" max="60" step="1" /></label>
-                <label>Rear cog (teeth) <input id="cog" type="number" min="10" max="36" step="1" /></label>
-                <p class="field-hint">The gear your chain actually sits in. Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift Click or the on-screen buttons.</p>
-              </div>
+                <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> Virtual shifting <span class="check-hint">Zwift Cog or one fixed gear</span></label>
+                <!-- One line: the gear the chain really sits in; shifting happens in software from there -->
+                <div id="gear-settings" class="gear-line trainer-only" hidden>
+                  <span class="gear-line-label">Chain on</span>
+                  <input id="chainring" type="number" min="20" max="60" step="1" inputmode="numeric" aria-label="Chainring teeth" />
+                  <span aria-hidden="true">×</span>
+                  <input id="cog" type="number" min="10" max="36" step="1" inputmode="numeric" aria-label="Rear cog teeth" />
+                  <span class="gear-line-label">teeth</span>
+                  <p class="field-hint">Shift with <kbd>+</kbd>/<kbd>−</kbd> on a Zwift Click, <kbd>E</kbd>/<kbd>Q</kbd> or the buttons on screen.</p>
+                </div>
               </div>
               <div class="mode-panel trainer-only" data-for="paddles" hidden>
                 <p id="paddle-note" class="field-hint">Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
@@ -175,7 +179,7 @@
                   <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
                   <button type="button" id="connect-controller" class="secondary small" data-gesture-only>Add</button>
                 </div>
-                <p id="controller-live" class="live-reading trainer-only" hidden>Press a button to check: <strong id="controller-buttons">–</strong></p>
+                <p id="controller-live" class="live-reading trainer-only" aria-live="polite" hidden></p>
               </div>
             </fieldset>
 

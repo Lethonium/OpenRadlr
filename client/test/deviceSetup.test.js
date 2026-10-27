@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addonsShown, chooseRideMode, connectErrorText, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, deviceActions, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
 
 const road = { id: "col" };
 const studio = { id: "spin-studio", kind: "studio" };
@@ -68,4 +68,21 @@ test("the live check: waiting, connected and still, the numbers once power flows
   const silent = liveCheck({ sinceDataMs: 7_400, power: 182 });
   assert.equal(silent.state, "silent");
   assert.match(silent.text, /No data for 7 s/);
+});
+
+test("each device line has one main action: reconnect the known one, add or change, never both squeezed in", () => {
+  assert.deepEqual(deviceActions({ kind: "controller", connected: false, remembered: true }), { reconnect: true, other: "Other" });
+  assert.deepEqual(deviceActions({ kind: "controller", connected: false, remembered: false }), { reconnect: false, other: "Add" });
+  assert.deepEqual(deviceActions({ kind: "controller", connected: true, remembered: false }), { reconnect: false, other: "Add another" });
+  assert.deepEqual(deviceActions({ kind: "hr", connected: true, remembered: true }), { reconnect: false, other: "Change" });
+  assert.deepEqual(deviceActions({ kind: "hr", connected: false, remembered: false }), { reconnect: false, other: "Add" });
+  assert.deepEqual(deviceActions({ kind: "trainer", connected: false, remembered: false }), { reconnect: false, other: "Connect" });
+  assert.deepEqual(deviceActions({ kind: "trainer", connected: true, remembered: true }), { reconnect: false, other: "Change" });
+});
+
+test("the controller check names what was pressed, in the rider's terms", () => {
+  assert.equal(controllerCheck(null), "Press + or − to check");
+  assert.equal(controllerCheck({ label: "Zwift Click", buttons: ["shiftUp"] }), "✓ Zwift Click: shift up (+)");
+  assert.equal(controllerCheck({ label: "Zwift Play", buttons: ["a", "shiftDown"] }), "✓ Zwift Play: A, shift down (−)");
+  assert.equal(controllerCheck({ label: "Zwift Ride", buttons: ["0x400"] }), "✓ Zwift Ride: button 0x400");
 });
