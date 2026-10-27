@@ -420,7 +420,7 @@ function initSetup() {
     const pick = async (button, names) => {
       button.disabled = true;
       // Name what's being looked for: the line's own label may be hidden in favour of the device name.
-      const pending = names?.length ? `Looking for ${names.join(" + ")}…` : "Connecting…";
+      const pending = names?.length ? `Looking for ${names.join(" + ")}…` : `Pick your ${CHOOSER_NAMES[kind]} in the browser's window…`;
       await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
@@ -849,6 +849,9 @@ function connected(kind, device) {
   DEVICES[kind].use(device);
   renderReconnectButtons();
 }
+
+/** What the browser's device window should list, for the line's hint while it is open. */
+const CHOOSER_NAMES = { trainer: "trainer", hr: "heart rate strap", controller: "controller (wake it with a button press)" };
 
 /** What each device line says while nothing is connected or remembered. */
 const IDLE_STATUS = { trainer: "No trainer connected", hr: "Optional", controller: "Zwift Click, Play or Ride" };
