@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- A trainer held by another app (Zwift, its own app) is shown as "resistance blocked" with what to do, instead of looking connected while resistance never follows the road; OpenRadlr asks for control again every 10 s.
+- Connecting no longer hangs on "Connecting…": every attempt gives up after 15 s, and Chrome's often failing first connect is retried.
+- Connect errors say what to try ("Is it awake, and free of other apps?") instead of the browser's message.
+- The trainer's live check says whether data arrives ("Connected · pedal to check", "✓ 182 W · 88 rpm", "No data for 7 s").
+- The reconnect line shows the remembered trainer's name instead of squeezing it to "N…"; the gear fields only show with a trainer that can shift.
+- The start menu's panel is solid (it could render see-through in Chrome).
+
+### Changed
+- "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.
+
 ### Changed
 - Start screen: tabs for Ride, Studio, Workout and Events; the picked route is described once, above compact route cards.
 - Start screen: "How are you riding?" picks a smart trainer, phone paddles or the simulator; the choice is remembered. Heart rate and controllers are optional add-ons on their own lines.

@@ -143,12 +143,8 @@
                   <button type="button" id="reconnect-trainer" class="primary-small" data-gesture-only hidden></button>
                   <button type="button" id="connect-trainer" class="primary-small" data-gesture-only>Connect</button>
                 </div>
-                <p id="live-reading" class="live-reading" hidden>Pedal to check: <strong id="live-values">– W · – rpm</strong></p>
-                <p id="power-only-note" class="field-hint" hidden>This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
-                <label class="ride-only difficulty">
-                  <span class="label-text">Trainer difficulty <output id="difficulty-value">50 %</output></span>
-                  <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" />
-                </label>
+                <p id="live-reading" class="live-reading" aria-live="polite" hidden></p>
+                <p id="power-only-note" class="field-hint" hidden></p>
                 <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
                 <div id="gear-settings" class="gear-settings trainer-only" hidden>
                 <label>Chainring (teeth) <input id="chainring" type="number" min="20" max="60" step="1" /></label>
@@ -213,6 +209,11 @@
                   </select>
                 </label>
                 <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
+                <label class="ride-only">
+                  <span class="label-text">Climb feel <output id="difficulty-value">50 %</output></span>
+                  <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
+                  <span id="difficulty-hint" class="field-hint">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.</span>
+                </label>
               </fieldset>
               <details id="diagnostics" class="diagnostics">
               <summary>Device diagnostics</summary>
@@ -675,8 +676,8 @@
           </div>
 
           <div class="panel">
-            <h2>Difficulty <output id="ride-difficulty-value">50 %</output></h2>
-            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Trainer difficulty" />
+            <h2>Climb feel <output id="ride-difficulty-value">50 %</output></h2>
+            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" />
           </div>
 
           <div class="panel">
