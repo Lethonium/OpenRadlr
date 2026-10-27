@@ -7,6 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
+import { addonsShown, chooseRideMode, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
@@ -18,7 +19,7 @@ import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { ProfileStore, validateProfile } from "./profile/profileStore.js";
+import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
@@ -68,7 +69,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { planDuration, planSummary } from "./workout/plan.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
@@ -78,13 +79,13 @@ import { gymOfRoute } from "./workout/gymSpots.js";
 import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
-import { MenuCamera } from "./view3d/menuCamera.js";
+import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, STUDIO_CAMERAS, STUDIO_CAMERA_LABELS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { PaddleView } from "./view/paddleView.js";
-import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, vehicleErrorLine } from "./ride/vehicle.js";
+import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, normaliseCode, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 
 const $ = (id) => document.getElementById(id);
@@ -98,6 +99,7 @@ const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
+const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
 const INFO_REFRESH_MS = 5000;
@@ -151,7 +153,8 @@ const app = {
   /** Shared vehicles (#55): panels, energy per seat for the summary, code to board on joining. */
   vehicleView: null,
   seatsView: null,
-  startVehicleView: null,
+  /** A valid vehicle code typed in the start menu: Ride becomes Board. */
+  boardCode: null,
   seatEnergy: null,
   vehicleId: null,
   vehicleKind: null,
@@ -215,6 +218,10 @@ const app = {
   info: null,
   /** Client time the current `info` arrived, to keep event countdowns running between refreshes. */
   infoAt: 0,
+  /** The first /api/info answer (or failure) is in: the start menu's placeholders go. */
+  infoLoaded: false,
+  /** Docks the start menu's map in the corner once the opening's descent is done. */
+  mapDockTimer: null,
   /** Event to join with the connection that is being opened (from the events list). */
   pendingEventId: null,
   /** The event I entered during this ride: names the ride files. */
@@ -224,6 +231,12 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
+  /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
+  activity: null,
+  /** The route the Ride tab goes back to. */
+  rideRouteId: readSetting(ROUTE_KEY),
+  /** How the rider rides: "trainer", "paddles" or "sim" (null: what this browser does best). */
+  rideMode: readSetting(RIDE_MODE_KEY),
   infoTimer: null,
   strava: new StravaClient(),
   wakeLock: new ScreenWakeLock(),
@@ -389,14 +402,16 @@ function initSetup() {
   $("cog").value = app.profile.cog;
   $("gear-settings").hidden = !app.profile.virtualShifting;
   $("virtual-shifting").addEventListener("change", (e) => ($("gear-settings").hidden = !e.target.checked));
-  $("use-simulated").addEventListener("click", () => {
-    useTrainer(new SimulatedTrainer());
-    renderReconnectButtons();
-  });
-  $("use-paddles").addEventListener("click", () => {
-    useTrainer(new PaddleTrainer({ ftp: Number($("ftp").value) }));
-    renderReconnectButtons();
-  });
+  // Name, weight, FTP and settings are kept as they change, not only when riding.
+  $("profile-form").addEventListener("change", keepFormEdits);
+  for (const card of document.querySelectorAll(".mode-card")) {
+    card.addEventListener("click", () => {
+      if (card.getAttribute("aria-disabled") === "true") return;
+      app.rideMode = card.dataset.mode;
+      writeSetting(RIDE_MODE_KEY, app.rideMode);
+      renderRideModes();
+    });
+  }
   for (const kind of Object.keys(DEVICES)) {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
@@ -418,6 +433,12 @@ function initSetup() {
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    const action = $("join").dataset.action;
+    // The server rides with Strava accounts only: the button takes the rider there.
+    if (action === "strava") return location.assign("/auth/strava");
+    if (action === "board") return boardFromMenu();
+    const typed = $("board-code").value.trim();
+    if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
     joinRide().catch(joinFailed);
   });
 }
@@ -486,6 +507,7 @@ function openStartMenu() {
     } catch {
       app.info = null;
     }
+    app.infoLoaded = true;
     renderStartMenu();
   };
   initMenuStage();
@@ -508,12 +530,18 @@ function initMenuStage() {
   const home = { parent: canvas.parentElement, next: canvas.nextSibling };
   app.menuCanvasHome = home;
   if (use3d) $("menu-world").append(canvas);
+  $("setup").classList.toggle("world-building", use3d);
   let shown = { route: null, routes: [] };
+  // Where the stage sits on screen: measured when the layout changes (not on every
+  // frame), and eased, so a reflow or a scroll glides the view instead of jerking it.
+  let stageGoal = null;
+  let stageEased = null;
+  const measureStage = () => (stageGoal = stageOffset($("menu-stage")));
+  new ResizeObserver(measureStage).observe($("setup"));
+  window.addEventListener("resize", measureStage);
+  window.addEventListener("scroll", measureStage, { passive: true });
   const drawStage = () => {
     const { route, routes } = shown;
-    const picked = pickRoute(routesOf(app.info), app.routeId);
-    $("stage-name").textContent = picked?.name ?? "";
-    $("stage-stats").textContent = stageStats(picked);
     $("menu-profile").hidden = !route;
     drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
@@ -533,7 +561,8 @@ function initMenuStage() {
         }
       : null,
     lensFor: (kind, overview) => (kind === "gym" ? gymLens(overview) : droneLens(overview)),
-    createCamera: (overview) => new MenuCamera(overview, { reducedMotion }),
+    // The first world opens with a descent from high over the island.
+    createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
       ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
       { mesh: buildHighlight(route), glow: 1 },
@@ -543,12 +572,26 @@ function initMenuStage() {
       drawStage();
     },
     onWorld: (ready) => {
-      $("setup").classList.toggle("world-ready", ready);
+      const setup = $("setup");
+      setup.classList.remove("world-building");
+      setup.classList.toggle("world-ready", ready);
+      // The island fades in while the full map fades out; the map docks in the corner
+      // once the camera has come down (the opening's descent), not in the same frame.
+      clearTimeout(app.mapDockTimer);
+      if (!ready) setup.classList.remove("map-docked");
+      else if (!setup.classList.contains("map-docked")) {
+        app.mapDockTimer = setTimeout(() => {
+          setup.classList.add("map-docked");
+          drawStage();
+        }, reducedMotion ? 0 : 1800);
+      }
       // The map changes size (full stage or the corner inset): draw it again.
       drawStage();
     },
     render: (view, dt, timeS) => {
-      view.viewOffset = stageOffset($("menu-stage"));
+      stageGoal ??= stageOffset($("menu-stage"));
+      stageEased ??= { value: stageGoal.slice(), velocity: [0, 0] };
+      view.viewOffset = reducedMotion ? stageGoal : springTo(stageEased, stageGoal, 0.35, dt).value.slice();
       view.render({ riders: [], myId: null, timeS, colors: themeColors() });
     },
   });
@@ -567,7 +610,8 @@ function closeMenuStage(routeId) {
   if (!app.menu) return;
   app.menuView = app.menu.takeView(routeId);
   app.menu = null;
-  $("setup").classList.remove("world-ready");
+  clearTimeout(app.mapDockTimer);
+  $("setup").classList.remove("world-ready", "map-docked", "world-building");
   const canvas = $("world3d");
   const { parent, next } = app.menuCanvasHome;
   if (canvas.parentElement !== parent) parent.insertBefore(canvas, next);
@@ -586,25 +630,30 @@ async function loadStravaAccount() {
 
 function renderAccount() {
   const strava = app.info?.strava;
-  $("account").hidden = !strava?.enabled;
-  if (!strava?.enabled) return;
-  if (app.stravaAccount === undefined) {
+  if (strava?.enabled && app.stravaAccount === undefined) {
     app.stravaAccount = null;
     loadStravaAccount();
   }
-  const account = app.stravaAccount;
-  $("strava-connected").hidden = !account;
-  $("strava-disconnected").hidden = Boolean(account);
-  if (account) $("strava-name").textContent = account.name;
-  $("strava-hint").textContent = strava.required
-    ? "This server needs a Strava account to ride (it keeps bots out). Uploading stays your choice after each ride."
-    : "Optional: upload rides to Strava when you finish (rides with a real trainer).";
+  const line = stravaLine(app.info, app.stravaAccount);
+  $("account").hidden = !line.shown;
+  if (!line.shown) return;
+  $("account").classList.toggle("required", line.required);
+  $("strava-connected").hidden = !line.connected;
+  $("strava-logout").hidden = !line.connected;
+  $("strava-disconnected").hidden = line.connected;
+  // Where Strava is required, the Ride button is the way to connect: no second button.
+  $("strava-connect").hidden = line.connected || line.required;
+  if (line.connected) $("strava-name").textContent = line.text;
+  else $("strava-disconnected").textContent = line.required ? "Strava account needed" : line.text;
+  $("strava-hint").hidden = !line.required;
+  $("strava-hint").textContent = line.required ? line.text : "";
 }
 
 function renderStartMenu() {
   renderAccount();
-  const status = serverStatus(app.info);
-  $("server-label").textContent = app.info?.name ?? "OpenRadlr";
+  // Until the first answer: connecting, not "unreachable".
+  const status = app.infoLoaded ? serverStatus(app.info) : { text: "Connecting…", full: false, phoneFull: false, online: false };
+  $("server-label").textContent = serverName(app.info);
   $("server-players").textContent = status.text;
   const build = buildLabel(app.info, BUILD);
   const privacy = privacyUrl(app.info);
@@ -615,51 +664,75 @@ function renderStartMenu() {
   $("build-reload").hidden = !build.stale;
   $("server-dot").className = `status-dot${status.online ? (status.full ? " full" : " online") : ""}`;
 
-  // Production servers may hide the simulated trainer (OPENRADLR_ALLOW_SIMULATED_TRAINER=false).
-  $("use-simulated").hidden = app.info?.simulated_trainer === false;
 
   const routes = routesOf(app.info);
   const selected = pickRoute(routes, app.routeId);
-  $("routes-empty").hidden = routes.length > 0;
+  // Placeholders until the server first answers (or doesn't), so nothing jumps in.
+  $("setup").classList.toggle("loading", !app.infoLoaded);
+  $("routes-empty").hidden = routes.length > 0 || !app.infoLoaded;
   const community = communityDistance(app.info);
   $("community-distance").hidden = !community;
   $("community-distance").textContent = community ?? "";
-  renderRoutes($("route-list"), routes, selected?.id ?? null, (id) => {
+  // Tabs split the cards by what you do there; the last route ridden is kept for the Ride tab.
+  if (activityOf(selected) === "ride" && selected) app.rideRouteId = selected.id;
+  const events = menuEventRows();
+  const tabs = activityTabs(routes, events);
+  const activity = shownActivity(tabs, app.activity, selected);
+  $("setup").dataset.activity = activity;
+  $("activity-tabs").hidden = tabs.length < 2;
+  renderActivityTabs($("activity-tabs"), tabs, activity, (id) => {
+    app.activity = id;
+    // Events are ridden on routes: that tab goes back to the last route, like the Ride tab.
+    const card = pickForActivity(routes, id === "events" ? "ride" : id, id === "ride" || id === "events" ? app.rideRouteId : app.routeId);
+    if (card) {
+      app.routeId = card.id;
+      writeSetting(ROUTE_KEY, card.id);
+    }
+    renderStartMenu();
+  });
+  $("stage-stats").textContent = activity === "events" ? "" : stageStats(selected);
+  const cards = routesFor(activity, routes);
+  $("route-list").hidden = !showsCards(activity, cards);
+  renderRoutes($("route-list"), cards, selected?.id ?? null, (id) => {
     app.routeId = id;
     writeSetting(ROUTE_KEY, id);
     renderStartMenu();
   });
   app.menu?.select(routes, selected?.id ?? null);
-  renderEvents();
+  renderEvents(events);
   renderUnfinished();
-  // Paddles ride the road: the studio's classes need a trainer (or the sim).
-  $("use-paddles").hidden = app.info?.paddle_mode === false || selected?.kind === "studio";
   // The workout needs no trainer: its preset picker replaces the devices, bar the heart-rate row.
   const workout = selected?.kind === "workout";
   $("profile-form").classList.toggle("workout", workout);
   $("workout-setup").hidden = !workout;
-  $("routes-title").textContent = stageHeadline(selected);
-  $("routes-lede").textContent = stageLede(selected);
+  $("routes-title").textContent = stageHeadline(selected, activity);
+  $("routes-lede").textContent = stageLede(selected, activity);
   $("devices").hidden = !devicesVisible(selected, isBluetoothAvailable());
+  renderRideModes();
   // Vehicles are on the roads: no boarding from the workout card.
   $("board-start").hidden = workout;
-  if (workout) $("start-vehicle").hidden = true;
   const join = $("join");
   const needsStrava = Boolean(app.info?.strava?.required) && !app.stravaAccount;
   if (!join.dataset.busy) {
     // A rider on a phone takes a phone seat, so the trainer seats being gone doesn't stop them.
     const full = deviceKind(app.trainer) === "paddle" ? status.phoneFull : status.full;
-    join.disabled = full || needsStrava;
-    join.textContent = full ? "Server is full" : needsStrava ? "Connect Strava to ride" : workout ? "Start workout" : selected ? `Ride ${selected.name}` : "Ride";
+    const action = joinAction({ selected, full, needsStrava, boardCode: app.boardCode });
+    join.disabled = action.disabled;
+    join.textContent = action.label;
+    join.dataset.action = action.kind;
   }
 }
 
-/** The scheduled events from the last /api/info, in the start menu and the ride menu. */
-function renderEvents() {
+/** The scheduled events from the last /api/info, with the server's clock carried forward. */
+function menuEventRows() {
   const info = app.info;
-  const rows = info?.events?.length && Number.isFinite(info.now_s) ? eventRows({ ...info, now_s: info.now_s + (Date.now() - app.infoAt) / 1000 }, Date.now(), {}, enteredEventId()) : [];
+  return info?.events?.length && Number.isFinite(info.now_s) ? eventRows({ ...info, now_s: info.now_s + (Date.now() - app.infoAt) / 1000 }, Date.now(), {}, enteredEventId()) : [];
+}
+
+/** The scheduled events in the start menu's Events tab and the ride menu. */
+function renderEvents(rows = menuEventRows()) {
   const riding = Boolean(app.ride) && !$("ride").hidden;
-  $("events").hidden = rows.length === 0 || riding;
+  $("events").hidden = rows.length === 0 || riding || $("setup").dataset.activity !== "events";
   if (!$("events").hidden) renderEventList($("event-list"), rows, joinEventFromMenu);
   $("events-panel").hidden = rows.length === 0 || !riding;
   if (!$("events-panel").hidden) renderEventList($("ride-event-list"), rows, joinEventFromRide, leaveEventFromRide);
@@ -768,6 +841,62 @@ function renderReconnectButtons() {
     button.hidden = !isBluetoothAvailable() || names.length === 0;
     button.textContent = `Reconnect ${names.join(" + ")}`;
   }
+  // One main action per line: reconnecting the known trainer beats the chooser, which then reads "Other".
+  const smart = app.trainer && deviceKind(app.trainer) === "trainer";
+  const reconnecting = !$("reconnect-trainer").hidden;
+  const connect = $("connect-trainer");
+  connect.textContent = smart ? "Change" : reconnecting ? "Other" : "Connect";
+  connect.className = smart || reconnecting ? "secondary small" : "primary-small";
+  $("connect-hr").textContent = app.heartRateMonitor ? "Change" : "Add";
+}
+
+/** The ride-mode cards and the panel of the chosen one; outside a ride the trainer follows the choice. */
+function renderRideModes() {
+  const picked = pickRoute(routesOf(app.info), app.routeId);
+  const bluetooth = isBluetoothAvailable();
+  const modes = rideModes({ info: app.info, picked });
+  const mode = chooseRideMode(app.rideMode, modes, bluetooth);
+  for (const card of document.querySelectorAll(".mode-card")) {
+    const entry = modes.find((m) => m.id === card.dataset.mode);
+    card.hidden = !entry;
+    card.setAttribute("aria-checked", String(card.dataset.mode === mode));
+    card.setAttribute("aria-disabled", String(!entry?.available));
+    card.title = entry?.reason ?? "";
+  }
+  const reason = modes.find((m) => m.id === app.rideMode && !m.available)?.reason ?? "";
+  $("ride-mode-reason").hidden = !reason;
+  $("ride-mode-reason").textContent = reason;
+  for (const panel of document.querySelectorAll(".mode-panel")) panel.hidden = panel.dataset.for !== mode;
+  const addons = addonsShown(mode, bluetooth, picked);
+  $("addon-hr").hidden = !addons.hr;
+  $("addon-controller").hidden = !addons.controller;
+  $("controller-live").hidden = !addons.controller || app.controllers.length === 0;
+  if (!app.ride && picked?.kind !== "workout") applyRideMode(mode);
+}
+
+/** Connects what the chosen mode rides with; switching back to the trainer looks for the known one. */
+function applyRideMode(mode) {
+  const kind = app.trainer ? deviceKind(app.trainer) : null;
+  if (mode === "paddles" && kind !== "paddle") useTrainer(new PaddleTrainer({ ftp: Number($("ftp").value) }));
+  else if (mode === "sim" && kind !== "sim") useTrainer(new SimulatedTrainer());
+  else if (mode === "trainer" && (kind === "paddle" || kind === "sim")) {
+    dropTrainer();
+    initKnownDevices(["trainer"]);
+  } else return;
+  renderReconnectButtons();
+}
+
+/** No trainer: the smart trainer card waits for one. */
+function dropTrainer() {
+  app.trainer?.disconnect();
+  app.trainer = null;
+  $("trainer-status").textContent = "No trainer connected";
+  $("trainer-status").classList.remove("ok");
+  $("live-reading").hidden = true;
+  $("live-reading").classList.remove("live");
+  $("power-only-note").hidden = true;
+  $("virtual-shifting-row").hidden = true;
+  $("gear-settings").hidden = true;
 }
 
 /**
@@ -775,9 +904,9 @@ function renderReconnectButtons() {
  * connect on their own, once they are switched on (#43). Browsers without
  * `getDevices()` get the Reconnect buttons only.
  */
-async function initKnownDevices() {
+async function initKnownDevices(kinds = Object.keys(DEVICES)) {
   renderReconnectButtons();
-  const known = knownDevices.list();
+  const known = knownDevices.list().filter((entry) => kinds.includes(entry.kind));
   if (!isBluetoothAvailable() || !known.length) return;
   const found = await grantedDevices(known);
   const support = typeof navigator.bluetooth.getDevices === "function" ? `getDevices() found ${found.length}` : "no getDevices() in this browser";
@@ -822,9 +951,11 @@ function useTrainer(trainer) {
   const controllable = canControl(trainer);
   const paddles = trainer instanceof PaddleTrainer;
   $("power-only-note").hidden = controllable || paddles;
-  $("paddle-note").hidden = !paddles;
   $("trainer-status").textContent = trainerLabel(trainer);
   $("virtual-shifting").disabled = !controllable;
+  // Virtual shifting is offered once a trainer that can change resistance is there.
+  $("virtual-shifting-row").hidden = !controllable;
+  $("gear-settings").hidden = !controllable || !$("virtual-shifting").checked;
   if (!controllable) {
     $("virtual-shifting").checked = false;
     $("gear-settings").hidden = true;
@@ -832,8 +963,10 @@ function useTrainer(trainer) {
 
   // Live check on the setup screen: the rider sees right away whether data arrives.
   $("live-reading").hidden = false;
+  $("live-reading").classList.remove("live");
   trainer.on("data", ({ power, cadence }) => {
     app.lastTrainerDataAt = now();
+    if (power > 0) $("live-reading").classList.add("live");
     const watts = Number.isFinite(power) ? Math.round(power) : "–";
     const rpm = Number.isFinite(cadence) ? Math.round(cadence) : "–";
     $("live-values").textContent = `${watts} W · ${rpm} rpm`;
@@ -991,16 +1124,9 @@ function showSetupError(message) {
   renderStartMenu();
 }
 
-/** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
-async function joinRide(restored = null) {
-  // Codes count for this join attempt only, also when it fails early.
-  const vehicleCode = app.vehicleCode;
-  const boardCode = app.pendingBoardCode;
-  app.vehicleCode = null;
-  app.pendingBoardCode = null;
-  $("setup-error").textContent = "";
-  const profile = {
-    ...app.profile,
+/** The start menu's rider fields as profile values. */
+function formProfile() {
+  return {
     name: $("name").value.trim(),
     weightKg: displayToKg(Number($("weight").value)),
     ftp: Number($("ftp").value),
@@ -1011,9 +1137,27 @@ async function joinRide(restored = null) {
     chainring: Number($("chainring").value),
     cog: Number($("cog").value),
   };
+}
+
+/** Keeps what is typed in the start menu, before riding: the valid fields only. */
+function keepFormEdits() {
+  if (app.ride) return;
+  app.profile = profiles.save(keepValid(app.profile, formProfile()));
+  $("ftp-source").textContent = ftpProvenance(app.profile, { locale: navigator.language });
+}
+
+/** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
+async function joinRide(restored = null) {
+  // Codes count for this join attempt only, also when it fails early.
+  const vehicleCode = app.vehicleCode;
+  const boardCode = app.pendingBoardCode;
+  app.vehicleCode = null;
+  app.pendingBoardCode = null;
+  $("setup-error").textContent = "";
+  const profile = { ...app.profile, ...formProfile() };
   const errors = validateProfile(profile);
   if (pickRoute(routesOf(app.info), app.routeId)?.kind === "workout") return joinWorkout(profile, errors);
-  if (!app.trainer) errors.push("Connect a trainer or use the simulated trainer.");
+  if (!app.trainer) errors.push("Connect your smart trainer, or pick phone paddles or the simulator.");
   if (app.trainer instanceof SimulatedTrainer && app.info?.simulated_trainer === false) {
     errors.push("This server only accepts real trainers.");
   }
@@ -1486,18 +1630,25 @@ function startRoad({ simulated, setSimPower }) {
  * map when the studio is), then boards; a code on another route rejoins there (#55).
  */
 function initStartVehicle() {
-  const view = new VehicleView($("start-vehicle"), {
-    onBoard: (code) => {
-      if ($("join").dataset.busy) return;
-      const routeId = boardingRoute(routesOf(app.info), app.routeId);
-      if (routeId) app.routeId = routeId;
-      app.pendingBoardCode = code;
-      renderStartMenu();
-      joinRide().catch(joinFailed);
-    },
+  // A valid code turns Ride into Board (one main action); a wrong one says why on Ride.
+  $("board-code").addEventListener("input", (event) => {
+    app.boardCode = normaliseCode(event.target.value).code;
+    $("setup-error").textContent = "";
+    renderStartMenu();
   });
-  app.startVehicleView = view;
-  $("board-start").addEventListener("click", () => view.showBoard());
+}
+
+/** Start menu: ride onto the friend's vehicle with the typed code. */
+function boardFromMenu() {
+  if ($("join").dataset.busy || !app.boardCode) return;
+  const routeId = boardingRoute(routesOf(app.info), app.routeId);
+  if (routeId) app.routeId = routeId;
+  app.pendingBoardCode = app.boardCode;
+  // The code is used up by this join: back in the menu, Ride rides again.
+  app.boardCode = null;
+  $("board-code").value = "";
+  renderStartMenu();
+  joinRide().catch(joinFailed);
 }
 
 /** Ride menu: create or board a vehicle, see its seats, leave it. */
