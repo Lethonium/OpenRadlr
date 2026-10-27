@@ -4,12 +4,12 @@
  * modules, which are unit-tested; this file only connects them.
  */
 import { loadAnalytics } from "./analytics.js";
-import { DeviceLog } from "./ble/deviceLog.js";
+import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
-import { ControllerInput } from "./input/controller.js";
+import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
@@ -121,7 +121,7 @@ const writeSetting = (key, value) => {
 };
 
 const profiles = new ProfileStore();
-const deviceLog = new DeviceLog();
+const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 const app = {
   profile: profiles.load(),
   redrawStage: null,
@@ -201,6 +201,10 @@ const app = {
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
+  /** The open drawer was opened with the controller (+ and − together): its buttons navigate it. */
+  drawerByController: false,
+  /** All controllers' presses as one stream (MergedControllers), made with the first controller. */
+  controllerInput: null,
   /** The last controller press that wasn't a shift, for the controller check. */
   lastControllerPress: null,
   gearbox: null,
@@ -440,7 +444,10 @@ function initSetup() {
     $(`reconnect-${kind}`).addEventListener("click", (event) => pick(event.currentTarget, missingDevices(kind).map((entry) => entry.name)));
   }
   // The strong controller focus ring only while a controller drives the focus.
-  window.addEventListener("pointerdown", () => document.documentElement.classList.remove("controller-nav"));
+  window.addEventListener("pointerdown", () => {
+    document.documentElement.classList.remove("controller-nav");
+    app.drawerByController = false;
+  });
   initDiagnostics();
   initStartVehicle();
   initStartMenu();
@@ -887,7 +894,9 @@ function renderReconnectButtons() {
     const connect = $(`connect-${kind}`);
     connect.textContent = actions.other;
     // The trainer's first connect is the main action of the card; add-ons stay quiet.
-    connect.className = kind === "trainer" && actions.other === "Connect" ? "primary-small" : "secondary small";
+    // The trainer's first connect is the card's main action; so is the missing half of a Click.
+    const main = (kind === "trainer" && actions.other === "Connect") || (kind === "controller" && lonelyHalfHint() !== null);
+    connect.className = main ? "primary-small" : "secondary small";
     // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
     $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
     // Both halves of a pair are in: nothing more to add.
@@ -1071,8 +1080,15 @@ function useHeartRateMonitor(monitor) {
 function useController(controller) {
   // Every button it ever sent: tells a Click half's side (+ or −) and confirms it works.
   controller.seen = new Set();
+  controller.connectedAt = now();
   app.controllers.push(controller);
-  const input = new ControllerInput();
+  // A half that relays says so (battery, status) within a second; one that stays quiet sends only its own side.
+  setTimeout(() => {
+    renderControllerCheck();
+    renderReconnectButtons();
+  }, 3000);
+  // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
+  app.controllerInput ??= new MergedControllers(new ControllerInput());
   $("controller-live").hidden = false;
   renderControllerCheck();
   controller.on("buttons", (pressed) => {
@@ -1087,10 +1103,27 @@ function useController(controller) {
         renderReconnectButtons();
       }
     }
-    for (const action of input.update(pressed, navigationRoot() !== null)) runAction(action);
+    const found = navigationRoot();
+    const screen = !found ? null : found.id === "setup" || found.id === "finish" ? found.id : "drawer";
+    const root = controllerNavigates({ screen, openedByController: app.drawerByController }) ? found : null;
+    // Riding without an unlocked left Click half (locked, rebooting or not connected): B shifts down.
+    const buttons = remapForDown(pressed, root === null && needsDownButton(app.controllers));
+    const actions = app.controllerInput.update(controller.id, buttons, root !== null);
+    // The whole chain in the device report: what the press did, and where (menu or ride).
+    if (actions.length) deviceLog.info(`${controller.label} → ${actions.join(", ")} (${root ? `navigating ${root.id}` : "riding"})`);
+    for (const action of actions) runAction(action);
   });
   controller.on("battery", renderControllerStatus);
+  controller.on("locked", (locked) => {
+    renderControllerCheck();
+    // Once per ride: why − moved to B, and that the half comes back by itself.
+    if (locked && app.ride && !app.ride.clickLockNoted) {
+      app.ride.clickLockNoted = true;
+      notify(`${controller.label}: left half locked by Zwift's firmware, restarting it. Meanwhile B on the right half shifts down.`);
+    }
+  });
   controller.on("disconnected", () => {
+    app.controllerInput.forget(controller.id);
     renderControllerStatus();
     notify(`${controller.label} disconnected. Press a button to wake it; reconnecting…`, "error");
   });
@@ -1107,13 +1140,20 @@ function renderControllerStatus() {
   status.classList.toggle("ok", app.controllers.every((c) => c.connected));
 }
 
-/** Under the controller line: + and − confirmed one by one, across both halves of a pair. */
+/** Under the controller line: + and − confirmed one by one, or which Click half is missing. */
 function renderControllerCheck() {
   const check = $("controller-live");
+  const missing = lonelyHalfHint();
   const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
-  check.textContent = controllerCheck({ seen, last: app.lastControllerPress ?? null });
-  check.dataset.state = seen.size ? "live" : "";
+  check.textContent = missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null });
+  check.dataset.state = missing ? "silent" : seen.size ? "live" : "";
   delete check.dataset.note;
+}
+
+/** A lone Click half that has had time to say it relays, and hasn't. */
+function lonelyHalfHint() {
+  const settled = app.controllers.every((c) => now() - c.connectedAt > 2.5);
+  return settled ? missingHalfHint(app.controllers) : null;
 }
 
 /** Whatever the rider navigates with a controller right now; null while riding. */
@@ -1126,6 +1166,8 @@ function navigationRoot() {
 
 /** Runs an action from a controller: menu navigation here, the rest like the keyboard. */
 function runAction(action) {
+  // A menu the controller opens is navigated with it; one opened by mouse or touch is not.
+  if (action === "toggleMenu") app.drawerByController = true;
   const root = navigationRoot();
   if (action === "focusNext" || action === "focusPrev") {
     document.documentElement.classList.add("controller-nav");
@@ -2439,7 +2481,11 @@ function initRecovery() {
   // The page may be gone in a moment (tab closed, phone locked): save now.
   window.addEventListener("pagehide", saveRide);
   window.addEventListener("pagehide", saveWorkoutRecord);
+  // Window and tab changes in the device report: devices misbehaving "after switching windows" leave a trace.
+  window.addEventListener("blur", () => deviceLog.info("Window lost focus"));
+  window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
+    deviceLog.info(`Page ${document.visibilityState}`);
     if (document.visibilityState !== "hidden") return;
     saveRide();
     saveWorkoutRecord();
@@ -2653,9 +2699,13 @@ function initShifting() {
 
 /** Shifts one gear; the same entry point serves keyboard, buttons and controllers. */
 function shift(direction) {
-  if (!app.gearbox || app.training.mode === "erg" || app.studio?.erg) return;
+  // Every ignored shift says why in the device report: "shifting stopped" is otherwise guesswork.
+  const ignored = !app.gearbox ? "no gears in this ride (virtual shifting off, or no trainer that can change resistance)" : app.training.mode === "erg" || app.studio?.erg ? "ERG holds the power" : null;
+  if (ignored) return deviceLog.info(`Shift ignored: ${ignored}`);
+  const from = app.gearbox.gear;
   const changed = direction > 0 ? app.gearbox.shiftUp() : app.gearbox.shiftDown();
-  if (!changed) return;
+  if (!changed) return deviceLog.info(`Shift ignored: already in the ${direction > 0 ? "hardest" : "easiest"} gear (${from})`);
+  deviceLog.info(`Gear ${from} → ${app.gearbox.gear}`);
   renderGear();
   app.session.refreshResistance();
 }

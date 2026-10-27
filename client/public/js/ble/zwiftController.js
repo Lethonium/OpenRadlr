@@ -15,6 +15,7 @@
 import { Emitter } from "../util/emitter.js";
 import { toHex } from "./deviceLog.js";
 import { Reconnector } from "./reconnector.js";
+import { FIRST_CONNECT_ATTEMPTS, connectGatt } from "./gattConnect.js";
 import {
   ASYNC_CHARACTERISTIC,
   SYNC_RX_CHARACTERISTIC,
@@ -23,10 +24,18 @@ import {
   ZWIFT_RIDE_SERVICE,
   ZWIFT_SERVICE,
   encodeHandshake,
+  encodePodReset,
   parseControllerMessage,
 } from "./zwiftProtocol.js";
 
 export { RECONNECT_DELAYS_MS } from "./reconnector.js";
+
+/**
+ * A controller asleep only wakes for a button press and then advertises for a
+ * few seconds: waits that grow to half a minute miss it. Attempts against a
+ * sleeping controller are cheap, so they stay short.
+ */
+export const CONTROLLER_RECONNECT_DELAYS_MS = Object.freeze([500, 1000, 2000]);
 
 /** What the chooser lists: Zwift devices, or the remembered ones by name. */
 function requestOptions(names) {
@@ -41,8 +50,24 @@ export class ZwiftController extends Emitter {
   #log;
   #reconnector;
   #lastButtons = "";
+  #timers;
+  #mode = null;
+  #commands = null;
+  /** Rebooting on purpose (locked): the link drops and comes back without alarming the rider. */
+  #rebooting = false;
   battery = null;
   connected = false;
+  /**
+   * Says more than its own buttons (battery, status): the Click half that relays
+   * the other's presses. A half that never does sends only its own side.
+   */
+  relays = false;
+  /**
+   * Its status reports mode 1: Zwift's firmware stopped its plain button messages
+   * (a Click v2's left half, about a minute after connecting unless the Zwift app
+   * unlocked it). Reconnecting doesn't undo it; the app offers a fallback instead.
+   */
+  locked = false;
 
   /**
    * @param {{device: object, log?: import("./deviceLog.js").DeviceLog | null, setTimeout?: Function, clearTimeout?: Function}} deps
@@ -53,14 +78,20 @@ export class ZwiftController extends Emitter {
     this.#log = log;
     this.label = device.name ?? "Zwift controller";
     this.id = device.id;
+    this.#timers = { setTimeout: schedule, clearTimeout: cancel };
     this.#reconnector = new Reconnector({
       open: () => this.#open(),
       release: () => device.gatt.disconnect(),
       onLost: () => {
+        if (this.#rebooting) return log?.info("Controller rebooting");
         log?.error("Controller disconnected; reconnecting");
         this.emit("disconnected");
       },
       onBack: () => {
+        if (this.#rebooting) {
+          this.#rebooting = false;
+          return log?.info("Controller back after the reboot");
+        }
         log?.info("Controller reconnected");
         this.emit("reconnected");
       },
@@ -70,6 +101,7 @@ export class ZwiftController extends Emitter {
       },
       setTimeout: schedule,
       clearTimeout: cancel,
+      delays: CONTROLLER_RECONNECT_DELAYS_MS,
     });
   }
 
@@ -96,7 +128,7 @@ export class ZwiftController extends Emitter {
   static async open(device, options = {}) {
     const controller = new ZwiftController({ device, ...options });
     try {
-      await controller.#open();
+      await controller.#open({ attempts: FIRST_CONNECT_ATTEMPTS });
     } catch (error) {
       device.gatt.disconnect();
       throw error;
@@ -105,8 +137,9 @@ export class ZwiftController extends Emitter {
     return controller;
   }
 
-  async #open() {
-    const server = await this.#device.gatt.connect();
+  /** Connects, subscribes and sends the handshake; a hanging attempt gives up (connectGatt), so reconnecting goes on. */
+  async #open({ attempts = 1 } = {}) {
+    const server = await connectGatt(this.#device, { attempts, log: this.#log, ...this.#timers });
     const service = await firstService(server, [ZWIFT_SERVICE, ZWIFT_RIDE_SERVICE]);
     if (!service) throw new Error("This device is not a Zwift Click, Play or Ride controller.");
     const notifications = await service.getCharacteristic(ASYNC_CHARACTERISTIC);
@@ -117,6 +150,8 @@ export class ZwiftController extends Emitter {
     answers.addEventListener("characteristicvaluechanged", this.#onPacket);
     await notifications.startNotifications();
     await answers.startNotifications();
+    this.#mode = null;
+    this.#commands = commands;
     await write(commands, encodeHandshake());
     this.connected = true;
     this.#log?.info("Controller: sent RideOn handshake");
@@ -124,9 +159,13 @@ export class ZwiftController extends Emitter {
 
   #onPacket = (event) => {
     const message = parseControllerMessage(event.target.value);
-    // Idle messages come every second: counted only, so a report shows whether anything arrives at all.
+    // Idle messages and an unchanged battery level come every few seconds: counted only, so the
+    // report's packet budget is left for what matters (buttons, messages we don't know yet).
     if (message.kind === "idle") this.#log?.count("zwift idle");
+    else if (message.kind === "battery" && message.level === this.battery) this.#log?.count("zwift battery");
     else this.#log?.packet("zwift", event.target.value, message);
+    // Anything beyond buttons and the handshake (battery, status, device info): the half that relays.
+    if (!["buttons", "handshake", "idle"].includes(message.kind)) this.relays = true;
     if (message.kind === "buttons") {
       // Every change is logged with its bytes, so a rider can report what each button sends.
       const key = message.buttons.join("+");
@@ -137,7 +176,37 @@ export class ZwiftController extends Emitter {
       this.battery = message.level;
       this.emit("battery", message.level);
     } else if (message.kind === "handshake") this.#log?.info("Controller answered RideOn");
+    else if (message.kind === "status") this.#onStatus(message.mode);
   };
+
+  /**
+   * A Click v2 locks its plain buttons about 50 s after the handshake and then
+   * reports mode 1 (Zwift's app presumably unlocks it with its encrypted
+   * handshake, which we don't speak). A second RideOn on the same link does not
+   * help; a fresh connection does, for another ~50 s. So on mode 1 the
+   * controller reconnects quietly (no "disconnected" for the rider), at most
+   * every 10 s; if that fails, the usual reconnecting takes over.
+   */
+  #onStatus(mode) {
+    if (mode !== this.#mode) this.#log?.info(`${this.label} reports mode ${mode}${mode === 1 ? " (locked: no plain buttons)" : ""}`);
+    this.#mode = mode;
+    const locked = mode === 1;
+    if (locked === this.locked) return;
+    this.locked = locked;
+    this.emit("locked", locked);
+    if (locked) this.#reboot();
+  }
+
+  /** Locked: a reboot (not a reconnect, which doesn't help) gives about another minute of plain buttons. */
+  #reboot() {
+    if (this.#rebooting || !this.#commands) return;
+    this.#rebooting = true;
+    this.#log?.info(`${this.label} locked: rebooting it for plain buttons`);
+    write(this.#commands, encodePodReset()).catch((error) => {
+      this.#rebooting = false;
+      this.#log?.error(`Reboot failed: ${error.message}`);
+    });
+  }
 
   #lost() {
     this.connected = false;

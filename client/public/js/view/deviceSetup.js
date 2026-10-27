@@ -130,12 +130,54 @@ export function controllerLine(controllers) {
     const name = pair && i > 0 ? "" : c.label;
     return [name, side, state].filter(Boolean).join(" ");
   });
-  return parts.join(" · ");
+  // A pair's second half before its first press or battery: still say it's there.
+  if (pair && parts.slice(1).every((part) => !part)) return controllers.every((c) => controllerSide(c.seen) === null && (c.battery === null || c.battery === undefined)) ? `${parts[0]} · both halves` : `${parts[0]} · other half`;
+  return parts.map((part) => part || "other half").join(" · ");
 }
 
-/** Click v2 and Play come as two halves: with one connected (and not a one-piece Click v1), the other is expected. */
+/**
+ * Click v2 and Play come as two halves: with one connected, the other is expected.
+ * A Click's halves differ (one relays the other, one sends only its own side), so
+ * both are connected and their presses merged (MergedControllers). Not once one
+ * half has sent both + and −: that one relays.
+ */
 export function expectsOtherHalf(controllers) {
   if (controllers.length !== 1) return false;
   const [only] = controllers;
   return /zwift (click|play)/i.test(only.label) && !(only.seen.has("shiftUp") && only.seen.has("shiftDown"));
+}
+
+/**
+ * A lone Click half that only sends its own buttons (no battery, no status) can't
+ * shift the other way: say which side is missing. Null when nothing is missing.
+ */
+export function missingHalfHint(controllers) {
+  if (controllers.length !== 1) return null;
+  const [only] = controllers;
+  if (!/zwift click/i.test(only.label) || only.relays) return null;
+  // The half that doesn't relay is the right one (it never locks): B covers shifting down.
+  return "Right half only: + shifts up, B shifts down. Add the other half for the − lever.";
+}
+
+const isClickV2Half = (controller) => /zwift click/i.test(controller.label);
+
+/**
+ * A Click v2's − lever is on its left half, which Zwift's firmware locks about a
+ * minute after connecting unless the Zwift app unlocked it (riders' reports;
+ * BikeControl documents the same). The right half never locks. So shifting down
+ * needs a fallback button on the right half when no unlocked left half is there:
+ * none connected (`relays` false: the right half alone) or the left one locked.
+ */
+export function needsDownButton(controllers) {
+  const halves = controllers.filter((c) => c.connected && isClickV2Half(c));
+  if (halves.length === 0) return false;
+  return !halves.some((c) => c.relays && !c.locked);
+}
+
+/** The right half's button that shifts down when needed: B, as in BikeControl's right-side mode. */
+export const DOWN_BUTTON = "b";
+
+/** While the fallback is needed, B shifts down instead of its usual action. */
+export function remapForDown(pressed, active) {
+  return active ? pressed.map((button) => (button === DOWN_BUTTON ? "shiftDown" : button)) : pressed;
 }

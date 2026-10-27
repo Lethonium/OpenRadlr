@@ -18,9 +18,9 @@ export class Reconnector {
    * @param {{
    *   open: () => Promise<void>, release: () => void,
    *   onLost?: () => void, onBack?: () => void, onFailed?: (error: Error, attempt: number) => void,
-   *   setTimeout?: Function, clearTimeout?: Function,
+   *   setTimeout?: Function, clearTimeout?: Function, delays?: readonly number[],
    * }} deps `open` connects and subscribes again; `release` drops a link
-   *   that came back after close()
+   *   that came back after close(); `delays` between attempts (the last repeats)
    */
   constructor({
     open,
@@ -30,8 +30,9 @@ export class Reconnector {
     onFailed = () => {},
     setTimeout: schedule = (fn, ms) => globalThis.setTimeout(fn, ms),
     clearTimeout: cancel = (id) => globalThis.clearTimeout(id),
+    delays = RECONNECT_DELAYS_MS,
   }) {
-    Object.assign(this, { open, release, onLost, onBack, onFailed, schedule, cancel });
+    Object.assign(this, { open, release, onLost, onBack, onFailed, schedule, cancel, delays });
   }
 
   get closed() {
@@ -55,7 +56,7 @@ export class Reconnector {
   }
 
   #scheduleRetry() {
-    const delay = RECONNECT_DELAYS_MS[Math.min(this.#attempt, RECONNECT_DELAYS_MS.length - 1)];
+    const delay = this.delays[Math.min(this.#attempt, this.delays.length - 1)];
     this.#attempt += 1;
     this.#timer = this.schedule(() => this.#retry(), delay);
   }
