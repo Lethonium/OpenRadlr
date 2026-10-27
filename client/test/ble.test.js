@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { DeviceLog } from "../public/js/ble/deviceLog.js";
+import { DeviceLog, deviceLogOptions } from "../public/js/ble/deviceLog.js";
 import assert from "node:assert/strict";
 import {
   encodeRequestControl,
@@ -128,4 +128,18 @@ test("the device report counts packets it doesn't log, e.g. a controller's idle 
   assert.deepEqual(log.packets, { "zwift idle": 2 });
   assert.equal(log.entries.length, 0, "counted, not logged");
   assert.match(log.report(), /"zwift idle":2/);
+});
+
+test("?debug=controller captures every controller packet, the trainer's stay capped", () => {
+  assert.deepEqual(deviceLogOptions(""), {});
+  assert.deepEqual(deviceLogOptions("?route=col"), {});
+  const options = deviceLogOptions("?debug=controller");
+  const log = new DeviceLog(options);
+  const view = new DataView(new Uint8Array([0x19, 0x10, 0x46]).buffer);
+  for (let i = 0; i < 50; i += 1) log.packet("zwift", view, {});
+  for (let i = 0; i < 50; i += 1) log.packet("ftms", view, {});
+  const logged = (source) => log.entries.filter((e) => e.message.startsWith(`${source} #`)).length;
+  assert.equal(logged("zwift"), 50);
+  assert.equal(logged("ftms"), 20);
+  assert.match(log.report(), /Capturing: zwift/);
 });

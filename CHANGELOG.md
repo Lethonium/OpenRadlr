@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
+- Both Click halves can be connected, whichever comes first: their presses are merged into one stream, so a press that one half relays for the other shifts once, and quick + then − is two shifts.
+- A Click that falls asleep is found again within seconds (it advertises only briefly when woken), and a reconnect attempt that hangs gives up after 15 s instead of ending all reconnects.
+- A menu opened with the mouse during a ride no longer turns the Click's shifters into menu navigation; a menu opened with the Click (+ and − together) is still navigated with it.
+- Controller navigation in the start menu goes on from where the focus is (e.g. the button just clicked to pair), and skips the build label and privacy link.
+- The device report traces each controller press to its result ("Zwift Click → shiftDown (riding)", "Gear 12 → 11", or why a shift was ignored), notes window and tab switches, and with `?debug=controller` keeps every controller packet.
+
+### Fixed
 - A trainer held by another app (Zwift, its own app) is shown as "resistance blocked" with what to do, instead of looking connected while resistance never follows the road; OpenRadlr asks for control again every 10 s.
 - Connecting no longer hangs on "Connecting…": every attempt gives up after 15 s, and Chrome's often failing first connect is retried.
 - Connect errors say what to try ("Is it awake, and free of other apps?") instead of the browser's message.

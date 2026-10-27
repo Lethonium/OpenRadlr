@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, controllerSide, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "../public/js/view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, controllerSide, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, DOWN_BUTTON, rideModes } from "../public/js/view/deviceSetup.js";
 
 const road = { id: "col" };
 const studio = { id: "spin-studio", kind: "studio" };
@@ -99,6 +99,8 @@ test("the controller line lists each half with its side and battery", () => {
   const click = (side, battery, connected = true) => ({ label: "Zwift Click", seen: new Set(side ? [side === "+" ? "shiftUp" : "shiftDown"] : []), battery, connected });
   assert.equal(controllerLine([click("−", 70), click("+", 68)]), "Zwift Click − 70 % · + 68 %", "a pair: the name once");
   assert.equal(controllerLine([click(null, null)]), "Zwift Click");
+  assert.equal(controllerLine([click(null, null), click(null, null)]), "Zwift Click · both halves", "a pair before anything is known");
+  assert.equal(controllerLine([click("−", 70), click(null, null)]), "Zwift Click − 70 % · other half");
   assert.equal(controllerLine([click("−", 70)]), "Zwift Click − 70 %");
   assert.equal(controllerLine([click("−", 70), click("+", 68, false)]), "Zwift Click − 70 % · + reconnecting…");
   assert.equal(controllerLine([click("+", 68), { label: "Zwift Play", seen: new Set(), battery: 50, connected: true }]), "Zwift Click + 68 % · Zwift Play 50 %");
@@ -106,16 +108,48 @@ test("the controller line lists each half with its side and battery", () => {
 
 test("one Click or Play half connected: the other half is expected", () => {
   const half = (label, seen = []) => ({ label, seen: new Set(seen), connected: true });
+  // Click v2 halves differ: one relays the other, one sends only its own side. Both, to be sure.
   assert.equal(expectsOtherHalf([half("Zwift Click", ["shiftUp"])]), true);
   assert.equal(expectsOtherHalf([half("Zwift Play")]), true);
-  assert.equal(expectsOtherHalf([half("Zwift Click", ["shiftUp", "shiftDown"])]), false, "a one-piece Click v1");
+  assert.equal(expectsOtherHalf([half("Zwift Play", ["shiftUp", "shiftDown"])]), false);
   assert.equal(expectsOtherHalf([half("Zwift Ride")]), false);
   assert.equal(expectsOtherHalf([half("Zwift Click"), half("Zwift Click")]), false);
   assert.equal(expectsOtherHalf([]), false);
   assert.deepEqual(deviceActions({ kind: "controller", connected: true, remembered: false, otherHalf: true }), { reconnect: false, other: "Add other half" });
 });
 
+test("a lone Click half that only sends its own side asks for the other half", () => {
+  const half = (seen, relays) => ({ label: "Zwift Click", seen: new Set(seen), connected: true, relays });
+  assert.equal(missingHalfHint([half(["shiftUp"], false)]), "Right half only: + shifts up, B shifts down. Add the other half for the − lever.");
+  assert.equal(missingHalfHint([half([], false)]), "Right half only: + shifts up, B shifts down. Add the other half for the − lever.");
+  assert.equal(missingHalfHint([half([], true)]), null, "it relays: both sides arrive");
+  assert.equal(missingHalfHint([half([], false), half([], true)]), null, "both connected");
+  assert.equal(missingHalfHint([{ label: "Zwift Ride", seen: new Set(), connected: true, relays: false }]), null);
+});
+
 test("picking the half that's already connected says which one to pick", () => {
   assert.match(connectErrorText(new Error("Zwift Click is already connected.")), /already connected: pick the other Zwift Click/);
 });
 
+
+// --- Click v2: shifting down when the left half can't ------------------------------------
+
+const clickHalf = ({ relays, locked = false, connected = true }) => ({ label: "Zwift Click", seen: new Set(), relays, locked, connected });
+
+test("a fallback button for shifting down is needed when no unlocked left Click half is connected", () => {
+  assert.equal(needsDownButton([clickHalf({ relays: true })]), false, "the left half shifts down itself");
+  assert.equal(needsDownButton([clickHalf({ relays: true, locked: true })]), true, "locked by Zwift's firmware");
+  assert.equal(needsDownButton([clickHalf({ relays: false })]), true, "the right half alone has no −");
+  assert.equal(needsDownButton([clickHalf({ relays: true }), clickHalf({ relays: false })]), false);
+  assert.equal(needsDownButton([clickHalf({ relays: true, locked: true }), clickHalf({ relays: false })]), true);
+  assert.equal(needsDownButton([{ label: "Zwift Ride", seen: new Set(), relays: true, locked: false, connected: true }]), false, "only the Click v2");
+  assert.equal(needsDownButton([]), false);
+});
+
+test("while needed, B on the right half shifts down (BikeControl's right-side mapping); otherwise buttons stay as they are", () => {
+  assert.equal(DOWN_BUTTON, "b");
+  assert.deepEqual(remapForDown(["b"], true), ["shiftDown"]);
+  assert.deepEqual(remapForDown(["b", "shiftUp"], true), ["shiftDown", "shiftUp"]);
+  assert.deepEqual(remapForDown(["b"], false), ["b"]);
+  assert.deepEqual(remapForDown(["a"], true), ["a"]);
+});
