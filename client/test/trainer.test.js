@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CadenceCalculator, parseCyclingPowerMeasurement } from "../public/js/ble/cyclingPower.js";
 import { DeviceLog } from "../public/js/ble/deviceLog.js";
-import { SmartTrainer } from "../public/js/ble/devices.js";
+import { PaddleTrainer, SimulatedTrainer, SmartTrainer, couldControlResistance } from "../public/js/ble/devices.js";
 import { ReadingMerger } from "../public/js/ble/readingMerger.js";
 import { dataView } from "./helpers.js";
 import { fakeTrainer } from "./fakeBluetooth.js";
@@ -271,4 +271,16 @@ test("a blocked trainer can be asked again while nothing is sent yet (the start 
   t = 10_000;
   await trainer.retryControl();
   assert.equal(trainer.canControlResistance, true);
+});
+
+test("a blocked trainer could still follow the road once it has control: rides plan for it (gears, ERG)", async () => {
+  const blocked = (await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: { failWrite: true } } } })).trainer;
+  assert.equal(couldControlResistance(blocked), true);
+  const powerOnly = (await connect({ services: { [CPS]: { [POWER]: {} } } })).trainer;
+  assert.equal(couldControlResistance(powerOnly), false);
+  // No real intervals: they would keep the test process alive.
+  const still = { setInterval: () => 0, clearInterval: () => {} };
+  assert.equal(couldControlResistance(new SimulatedTrainer(still)), true);
+  assert.equal(couldControlResistance(new PaddleTrainer(still)), false);
+  assert.equal(couldControlResistance(null), false);
 });

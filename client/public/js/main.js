@@ -5,7 +5,7 @@
  */
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog } from "./ble/deviceLog.js";
-import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
+import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
@@ -1005,14 +1005,19 @@ function showTrainerControl(trainer) {
   const controllable = canControl(trainer);
   const paddles = trainer instanceof PaddleTrainer;
   const blocked = Boolean(trainer.controlBlocked);
+  // Virtual shifting stays on offer while blocked: it works as soon as the trainer is free.
+  const could = couldControlResistance(trainer);
   $("trainer-status").textContent = trainerLabel(trainer);
   $("power-only-note").hidden = controllable || paddles;
   $("power-only-note").textContent = blocked ? BLOCKED_NOTE : POWER_ONLY_NOTE;
   // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
-  $("virtual-shifting").disabled = !controllable;
-  $("virtual-shifting-row").hidden = !controllable;
-  if (!controllable && !blocked) $("virtual-shifting").checked = false;
-  $("gear-settings").hidden = !controllable || !$("virtual-shifting").checked;
+  $("virtual-shifting").disabled = !could;
+  $("virtual-shifting-row").hidden = !could;
+  if (!could) $("virtual-shifting").checked = false;
+  $("gear-settings").hidden = !could || !$("virtual-shifting").checked;
+  // In a ride, the HUD says it too.
+  $("power-only").hidden = controllable || paddles;
+  $("power-only").textContent = blocked ? "Resistance blocked" : "Power only";
 }
 
 function useTrainer(trainer) {
@@ -1266,7 +1271,9 @@ async function joinRide(restored = null) {
   const saved = profiles.save(profile);
   app.profile = await profiles.ensureKeys(saved).catch(() => saved);
 
-  const controllable = canControl(app.trainer);
+  // Planned on what the trainer can do once it has control, not on control right now: a busy
+  // trainer gives control a few seconds late, and a ride without its gearbox would ignore every shift.
+  const controllable = couldControlResistance(app.trainer);
   if (route?.kind === "studio") {
     const response = await fetch("/api/studio");
     if (!response.ok) throw new Error(`Could not load the studio (HTTP ${response.status}).`);
@@ -1595,6 +1602,7 @@ function startRide() {
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();
   $("power-only").hidden = canControl(app.trainer) || app.trainer instanceof PaddleTrainer;
+  $("power-only").textContent = app.trainer?.controlBlocked ? "Resistance blocked" : "Power only";
   document.body.classList.add("riding");
   $("hud-route").textContent = app.route.name;
   app.rideStartedAt = now();
