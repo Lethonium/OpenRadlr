@@ -1,0 +1,5 @@
+{"name":"smoke","width":1920,"height":1080,"scale":1,"steps":[
+ {"goto":"http://localhost:8080"},{"wait":1},{"still":"menu"},
+ {"fill":["#name","Lemon"]},{"click":"#use-simulated"},{"click":"#join"},{"wait":3},{"power":280},{"wait":2},
+ {"rec":"start"},{"wait":6},{"rec":"stop"},{"still":"ride"}
+]}

@@ -1,0 +1,34 @@
+--- a/server/crates/server/src/runtime.rs
++++ b/server/crates/server/src/runtime.rs
+@@ -318,7 +318,7 @@
+     events: Arc<Mutex<Vec<EventInfoWire>>>,
+ ) {
+     let mut since_refresh_s = 0.0;
+-    let mut interval = tokio::time::interval(Duration::from_secs_f64(core.tick_seconds()));
++    let mut interval = tokio::time::interval(Duration::from_secs_f64(core.tick_seconds() / crate::promo_time_scale()));
+     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+ 
+     loop {
+--- a/server/crates/server/src/connection.rs
++++ b/server/crates/server/src/connection.rs
+@@ -60,7 +60,8 @@
+     });
+ 
+     let started = Instant::now();
+-    let now = move || started.elapsed().as_secs_f64();
++    let scale = crate::promo_time_scale();
++    let now = move || started.elapsed().as_secs_f64() * scale;
+     let mut session = Session::new(Arc::clone(&state.info), state.protection.limits, now());
+     // The world this connection joined, and its seat under the player cap.
+     let mut game: Option<GameHandle> = None;
+--- a/server/crates/server/src/lib.rs
++++ b/server/crates/server/src/lib.rs
+@@ -108,3 +108,8 @@
+         assert_eq!((set.sha.as_str(), set.date.as_str()), ("3f2a9c1", "2026-10-16T09:12Z"));
+     }
+ }
++
++/// Promo recording only: run game time slower than wall time (OPENRADLR_TIME_SCALE, default 1).
++pub fn promo_time_scale() -> f64 {
++    std::env::var("OPENRADLR_TIME_SCALE").ok().and_then(|v| v.parse().ok()).filter(|v: &f64| *v > 0.0).unwrap_or(1.0)
++}
