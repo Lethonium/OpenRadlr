@@ -138,6 +138,9 @@ export function createContext(canvas) {
 }
 
 export class Renderer {
+  /** Occlusion queries by key: `{query, pending, seen}`. */
+  #queries = new Map();
+
   /** @param {WebGL2RenderingContext} gl */
   constructor(gl) {
     this.gl = gl;
@@ -350,6 +353,49 @@ export class Renderer {
     this.draw(handle, model, tint);
     gl.uniform1f(this.uniforms.u_fogScale, 1);
     gl.uniform1f(this.uniforms.u_unlit, 0);
+  }
+
+  /**
+   * Asks the GPU whether any of `handle` at `model` is in sight, against the
+   * depth drawn so far (call after the opaque meshes). Nothing is drawn. The
+   * answer comes a frame or two later through `occlusion(key)`; one query
+   * per key is in flight at a time, so this is cheap to call every frame.
+   */
+  queryOcclusion(key, handle, model) {
+    const gl = this.gl;
+    let entry = this.#queries.get(key);
+    if (!entry) {
+      entry = { query: gl.createQuery(), pending: false, seen: undefined };
+      this.#queries.set(key, entry);
+    }
+    if (entry.pending) {
+      // Never block on the GPU: read only what is ready.
+      if (!gl.getQueryParameter(entry.query, gl.QUERY_RESULT_AVAILABLE)) return;
+      entry.seen = gl.getQueryParameter(entry.query, gl.QUERY_RESULT) > 0;
+      entry.pending = false;
+    }
+    gl.colorMask(false, false, false, false);
+    gl.depthMask(false);
+    gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, entry.query);
+    this.draw(handle, model);
+    gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+    gl.depthMask(true);
+    gl.colorMask(true, true, true, true);
+    entry.pending = true;
+  }
+
+  /** The latest answer for `key`: true (partly in sight), false (hidden) or undefined (none yet). */
+  occlusion(key) {
+    return this.#queries.get(key)?.seen;
+  }
+
+  /** Drops the queries of keys not in `keys`. */
+  keepOcclusion(keys) {
+    for (const [key, entry] of this.#queries) {
+      if (keys.has(key)) continue;
+      this.gl.deleteQuery(entry.query);
+      this.#queries.delete(key);
+    }
   }
 
   /**
