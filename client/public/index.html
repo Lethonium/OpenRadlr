@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="OpenRadlr — open-source indoor cycling with friends and bots." />
+    <meta name="description" content="OpenRadlr — open-source indoor cycling with friends and bots." data-i18n-attr="content:app.description" />
     <title>OpenRadlr</title>
     <meta name="theme-color" content="#0f1216" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -27,155 +27,155 @@
             <img class="brand-mark" src="icons/brand-mark.png" alt="" width="69" height="54" />
             <span class="brand-word">Open<span>Radlr</span></span>
           </div>
-          <div class="lang-switch" role="group" aria-label="Language">
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
             <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
             <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
           </div>
           <div class="server-status" aria-live="polite">
             <span id="server-dot" class="status-dot" aria-hidden="true"></span>
-            <strong id="server-label">Connecting…</strong>
+            <strong id="server-label" data-i18n="menu.server.connecting">Connecting…</strong>
             <span id="server-players" class="muted"></span>
           </div>
         </header>
 
         <div class="build-line">
-          <button type="button" id="build-label" class="build-label" title="Copy the build details"></button>
-          <button type="button" id="build-reload" class="build-reload" hidden>Update available, reload</button>
-          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" hidden>Privacy</a>
+          <button type="button" id="build-label" class="build-label" title="Copy the build details" data-i18n-attr="title:menu.build.copy"></button>
+          <button type="button" id="build-reload" class="build-reload" hidden data-i18n="menu.build.update">Update available, reload</button>
+          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" hidden data-i18n="menu.privacy">Privacy</a>
         </div>
 
         <div class="start-grid">
           <section class="start-routes" aria-labelledby="routes-title">
-            <h1 id="routes-title">Where do you want to ride?</h1>
-            <p id="routes-lede" class="lede">Pick a route. Everyone on the same route rides together — friends, strangers and bots.</p>
+            <h1 id="routes-title" data-i18n="menu.routes.title">Where do you want to ride?</h1>
+            <p id="routes-lede" class="lede" data-i18n="menu.routes.lede">Pick a route. Everyone on the same route rides together — friends, strangers and bots.</p>
             <section id="unfinished" class="unfinished card" aria-live="polite" hidden>
               <p id="unfinished-label" class="unfinished-label"></p>
               <div class="unfinished-actions">
-                <button type="button" id="continue-ride" class="primary">Continue</button>
-                <button type="button" id="save-unfinished" class="secondary">Save</button>
-                <button type="button" id="discard-unfinished" class="secondary">Discard</button>
+                <button type="button" id="continue-ride" class="primary" data-i18n="unfinished.continue">Continue</button>
+                <button type="button" id="save-unfinished" class="secondary" data-i18n="unfinished.save">Save</button>
+                <button type="button" id="discard-unfinished" class="secondary" data-i18n="unfinished.discard">Discard</button>
               </div>
               <div id="unfinished-save" class="unfinished-actions" hidden>
-                <button type="button" id="unfinished-fit" class="secondary">Download FIT</button>
-                <button type="button" id="unfinished-photos" class="secondary" hidden>Download photos</button>
-                <button type="button" id="unfinished-strava" class="secondary" hidden>Upload to Strava</button>
+                <button type="button" id="unfinished-fit" class="secondary" data-i18n="unfinished.downloadFit">Download FIT</button>
+                <button type="button" id="unfinished-photos" class="secondary" hidden data-i18n="unfinished.downloadPhotos">Download photos</button>
+                <button type="button" id="unfinished-strava" class="secondary" hidden data-i18n="unfinished.uploadStrava">Upload to Strava</button>
               </div>
               <p id="unfinished-status" class="muted"></p>
             </section>
             <figure id="menu-stage" class="menu-stage">
-              <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route"></canvas>
+              <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route" data-i18n-attr="aria-label:menu.map.label"></canvas>
               <figcaption class="stage-caption"><strong id="stage-name"></strong> <span id="stage-stats"></span></figcaption>
             </figure>
-            <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden></canvas>
+            <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" data-i18n-attr="aria-label:menu.profile.label" hidden></canvas>
             <ul id="route-list" class="route-list"></ul>
-            <p id="routes-empty" class="muted" hidden>Waiting for the server…</p>
+            <p id="routes-empty" class="muted" hidden data-i18n="menu.routes.empty">Waiting for the server…</p>
             <p id="community-distance" class="muted community-distance" hidden></p>
             <section id="events" class="events" aria-labelledby="events-title" hidden>
-              <h2 id="events-title">Events</h2>
+              <h2 id="events-title" data-i18n="events.title">Events</h2>
               <ul id="event-list" class="event-list"></ul>
             </section>
           </section>
 
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset id="account" class="account" hidden>
-              <legend>Account</legend>
+              <legend data-i18n="account.title">Account</legend>
               <div id="strava-connected" class="strava-row" hidden>
-                <span>Connected to Strava as <strong id="strava-name">…</strong></span>
-                <button type="button" id="strava-logout" class="secondary">Disconnect</button>
+                <span><span data-i18n="strava.connectedAs">Connected to Strava as</span> <strong id="strava-name">…</strong></span>
+                <button type="button" id="strava-logout" class="secondary" data-i18n="strava.disconnect">Disconnect</button>
               </div>
               <div id="strava-disconnected" class="strava-row" hidden>
-                <a class="strava-button" href="/auth/strava">Connect with Strava</a>
-                <span id="strava-hint" class="field-hint">Optional: upload rides to Strava when you finish.</span>
+                <a class="strava-button" href="/auth/strava" data-i18n="strava.connect">Connect with Strava</a>
+                <span id="strava-hint" class="field-hint" data-i18n="strava.hint">Optional: upload rides to Strava when you finish.</span>
               </div>
               <p id="strava-message" class="warning" hidden></p>
             </fieldset>
 
             <fieldset>
-              <legend>Rider</legend>
-              <label>Name <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
+              <legend data-i18n="rider.title">Rider</legend>
+              <label><span data-i18n="rider.name">Name</span> <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
               <div class="field-row">
-                <label>Weight (<span data-unit="weight">kg</span>) <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
-                <label class="ride-only">FTP (W) <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
+                <label><span><span data-i18n="rider.weight">Weight</span> (<span data-unit="weight">kg</span>)</span> <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
+                <label class="ride-only"><span data-i18n="rider.ftp">FTP (W)</span> <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
               </div>
               <p id="ftp-source" class="field-hint ride-only"></p>
-              <label class="ride-only">Splits
+              <label class="ride-only"><span data-i18n="rider.splits">Splits</span>
                 <select id="split-mode" name="split-mode">
-                  <option value="auto">Auto</option>
-                  <option value="lap">Every lap</option>
-                  <option value="1">Every 1 km</option>
-                  <option value="5">Every 5 km</option>
-                  <option value="10">Every 10 km</option>
-                  <option value="off">Off</option>
+                  <option value="auto" data-i18n="rider.split.auto">Auto</option>
+                  <option value="lap" data-i18n="rider.split.lap">Every lap</option>
+                  <option value="1"></option>
+                  <option value="5"></option>
+                  <option value="10"></option>
+                  <option value="off" data-i18n="rider.split.off">Off</option>
                 </select>
               </label>
-              <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
-              <div class="unit-switch" role="group" aria-label="Units">
+              <label class="check"><input id="auto-pause" type="checkbox" /> <span data-i18n="rider.autoPause">Auto-pause when I stop</span></label>
+              <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
                 <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
                 <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
               </div>
-              <div class="lang-switch" role="group" aria-label="Language">
+              <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
                 <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
                 <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
               </div>
               <p id="level-label" class="muted" hidden></p>
               <label class="ride-only">
-                Trainer difficulty <output id="difficulty-value">50 %</output>
+                <span data-i18n="rider.difficulty">Trainer difficulty</span> <output id="difficulty-value">50 %</output>
                 <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" />
               </label>
             </fieldset>
 
             <fieldset id="workout-setup" hidden>
-              <legend>Workout</legend>
-              <label>Circuit <select id="workout-preset" name="workout-preset"></select></label>
+              <legend data-i18n="workout.title">Workout</legend>
+              <label><span data-i18n="workout.circuit">Circuit</span> <select id="workout-preset" name="workout-preset"></select></label>
               <p id="workout-preset-summary" class="field-hint"></p>
-              <label class="check"><input id="workout-cues" type="checkbox" checked /> Beep in the last 3 seconds</label>
+              <label class="check"><input id="workout-cues" type="checkbox" checked /> <span data-i18n="workout.cues">Beep in the last 3 seconds</span></label>
             </fieldset>
 
             <fieldset id="devices">
-              <legend>Devices</legend>
+              <legend data-i18n="devices.title">Devices</legend>
               <p id="bluetooth-warning" class="no-bluetooth trainer-only" hidden>
-                <strong>No trainer needed to try it.</strong>
-                This browser can't reach Bluetooth trainers (iPhone, iPad, Safari and Firefox can't). Ride without one below, or use Chrome or Edge on Android, Windows, macOS or ChromeOS over https:// to connect a trainer.
+                <strong data-i18n="devices.noTrainerNeeded">No trainer needed to try it.</strong>
+                <span data-i18n="devices.noBluetooth">This browser can't reach Bluetooth trainers (iPhone, iPad, Safari and Firefox can't). Ride without one below, or use Chrome or Edge on Android, Windows, macOS or ChromeOS over https:// to connect a trainer.</span>
               </p>
               <div class="device-row trainer-only">
                 <button type="button" id="reconnect-trainer" data-gesture-only hidden></button>
-                <button type="button" id="connect-trainer" class="bluetooth-only" data-gesture-only>Connect trainer</button>
-                <button type="button" id="use-paddles" class="secondary paddles-button">📱 Phone paddles</button>
-                <button type="button" id="use-simulated" class="secondary">Simulated trainer</button>
-                <span id="trainer-status" class="device-status">No trainer</span>
+                <button type="button" id="connect-trainer" class="bluetooth-only" data-gesture-only data-i18n="devices.connectTrainer">Connect trainer</button>
+                <button type="button" id="use-paddles" class="secondary paddles-button" data-i18n="devices.paddles">📱 Phone paddles</button>
+                <button type="button" id="use-simulated" class="secondary" data-i18n="devices.simulated">Simulated trainer</button>
+                <span id="trainer-status" class="device-status" data-i18n="devices.noTrainer">No trainer</span>
               </div>
-              <p id="paddle-note" class="field-hint trainer-only" hidden>No trainer? Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Phone paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
-              <p id="power-only-note" class="field-hint trainer-only" hidden>This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
+              <p id="paddle-note" class="field-hint trainer-only" hidden data-i18n="devices.paddleNote">No trainer? Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Phone paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
+              <p id="power-only-note" class="field-hint trainer-only" hidden data-i18n="devices.powerOnlyNote">This trainer only sends power. You ride and race normally, but resistance won't follow the road; ERG and virtual shifting need a trainer that can change resistance.</p>
               <div class="device-row bluetooth-only">
                 <button type="button" id="reconnect-hr" data-gesture-only class="secondary" hidden></button>
-                <button type="button" id="connect-hr" data-gesture-only class="secondary">Connect heart rate</button>
-                <span id="hr-status" class="device-status">Optional</span>
+                <button type="button" id="connect-hr" data-gesture-only class="secondary" data-i18n="devices.connectHr">Connect heart rate</button>
+                <span id="hr-status" class="device-status" data-i18n="devices.optional">Optional</span>
               </div>
               <div class="device-row bluetooth-only trainer-only">
                 <button type="button" id="reconnect-controller" data-gesture-only class="secondary" hidden></button>
-                <button type="button" id="connect-controller" data-gesture-only class="secondary">Connect controller</button>
-                <span id="controller-status" class="device-status">Optional · Zwift Click, Play or Ride</span>
+                <button type="button" id="connect-controller" data-gesture-only class="secondary" data-i18n="devices.connectController">Connect controller</button>
+                <span id="controller-status" class="device-status" data-i18n="devices.controllerOptional">Optional · Zwift Click, Play or Ride</span>
               </div>
-              <p id="controller-live" class="live-reading trainer-only" hidden>Press a button to check: <strong id="controller-buttons">–</strong></p>
-              <label class="check trainer-only"><input id="virtual-shifting" type="checkbox" /> Virtual shifting (Zwift Cog or a single gear)</label>
+              <p id="controller-live" class="live-reading trainer-only" hidden><span data-i18n="devices.pressButton">Press a button to check:</span> <strong id="controller-buttons">–</strong></p>
+              <label class="check trainer-only"><input id="virtual-shifting" type="checkbox" /> <span data-i18n="devices.virtualShifting">Virtual shifting (Zwift Cog or a single gear)</span></label>
               <div id="gear-settings" class="gear-settings trainer-only" hidden>
-                <label>Chainring (teeth) <input id="chainring" type="number" min="20" max="60" step="1" /></label>
-                <label>Rear cog (teeth) <input id="cog" type="number" min="10" max="36" step="1" /></label>
-                <p class="field-hint">The gear your chain actually sits in. Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift Click or the on-screen buttons.</p>
+                <label><span data-i18n="devices.chainring">Chainring (teeth)</span> <input id="chainring" type="number" min="20" max="60" step="1" /></label>
+                <label><span data-i18n="devices.cog">Rear cog (teeth)</span> <input id="cog" type="number" min="10" max="36" step="1" /></label>
+                <p class="field-hint" data-i18n="devices.gearHint">The gear your chain actually sits in. Shift with E/Q, +/−, a Zwift Click or the on-screen buttons.</p>
               </div>
-              <p id="live-reading" class="live-reading trainer-only" hidden>Pedal to check: <strong id="live-values">– W · – rpm</strong></p>
+              <p id="live-reading" class="live-reading trainer-only" hidden><span data-i18n="devices.pedalCheck">Pedal to check:</span> <strong id="live-values">– W · – rpm</strong></p>
             </fieldset>
 
             <p id="setup-error" class="error" role="alert"></p>
-            <button type="submit" id="join" class="primary">Ride</button>
-            <button type="button" id="board-start" class="secondary">Board with code</button>
+            <button type="submit" id="join" class="primary" data-i18n="menu.join">Ride</button>
+            <button type="button" id="board-start" class="secondary" data-i18n="menu.boardCode">Board with code</button>
             <div id="start-vehicle" class="vehicle-view" hidden></div>
 
             <details id="diagnostics" class="diagnostics">
-              <summary>Device diagnostics</summary>
-              <p class="diagnostics-hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
-              <pre id="diagnostics-log" class="diagnostics-log">No device connected yet.</pre>
-              <button type="button" id="copy-diagnostics" class="secondary">Copy report</button>
+              <summary data-i18n="diagnostics.title">Device diagnostics</summary>
+              <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
+              <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
+              <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
             </details>
           </form>
         </div>
@@ -591,7 +591,7 @@
 
           <div class="panel">
             <h2>Units</h2>
-            <div class="unit-switch" role="group" aria-label="Units">
+            <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
               <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
               <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
             </div>
@@ -674,12 +674,12 @@
             <p id="upload-status" class="field-hint" aria-live="polite"></p>
 
             <section class="photos" aria-labelledby="photos-title">
-              <h3 id="photos-title">Photos <span id="photos-count" class="muted"></span></h3>
+              <h3 id="photos-title"><span data-i18n="photos.title">Photos</span> <span id="photos-count" class="muted"></span></h3>
               <ul id="photo-list" class="photo-list"></ul>
-              <p id="photos-hint" class="field-hint">Take photos while you ride with the camera button or <kbd>P</kbd>. The summary card comes with them; save them here and add them to your Strava activity.</p>
+              <p id="photos-hint" class="field-hint" data-i18n="photos.hint">Take photos while you ride with the camera button or P. The summary card comes with them; save them here and add them to your Strava activity.</p>
               <div class="modal-actions">
-                <button type="button" id="download-photos">Download all images</button>
-                <button type="button" id="share-photos" class="secondary" hidden>Share…</button>
+                <button type="button" id="download-photos" data-i18n="photos.downloadAll">Download all images</button>
+                <button type="button" id="share-photos" class="secondary" hidden data-i18n="photos.share">Share…</button>
               </div>
             </section>
 
