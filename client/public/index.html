@@ -492,43 +492,43 @@
         <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
 
         <!-- Left drawer: riders and chat -->
-        <aside id="social" class="drawer drawer-left" aria-label="Riders and chat" hidden>
-          <div class="drawer-head"><h2>Riders</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
-          <p id="online-summary" class="field-hint">Counting riders…</p>
+        <aside id="social" class="drawer drawer-left" aria-label="Riders and chat" hidden data-i18n-attr="aria-label:ride.ridersAndChat">
+          <div class="drawer-head"><h2 data-i18n="drawer.riders">Riders</h2><button type="button" class="icon-button" data-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button></div>
+          <p id="online-summary" class="field-hint" data-i18n="drawer.countingRiders">Counting riders…</p>
           <ol id="rider-list" class="rider-list"></ol>
-          <h3 id="bot-heading" class="rider-subhead" hidden>Bots nearby</h3>
+          <h3 id="bot-heading" class="rider-subhead" hidden data-i18n="drawer.botsNearby">Bots nearby</h3>
           <ol id="bot-list" class="rider-list bots" hidden></ol>
-          <h2>Feed</h2>
+          <h2 data-i18n="drawer.feed">Feed</h2>
           <ul id="feed" class="feed"></ul>
-          <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" /><button type="submit" class="secondary">Send</button></form>
+          <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" data-i18n-attr="aria-label:drawer.chatMessage,placeholder:drawer.sayHello" /><button type="submit" class="secondary" data-i18n="drawer.send">Send</button></form>
         </aside>
 
         <!-- Right drawer: training, race, view and device settings -->
-        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden>
-          <div class="drawer-head"><h2>Menu</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
+        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden data-i18n-attr="aria-label:ride.menu">
+          <div class="drawer-head"><h2 data-i18n="ride.menu">Menu</h2><button type="button" class="icon-button" data-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button></div>
 
           <div class="panel route-only" id="training-panel">
-            <h2>Training</h2>
-            <div class="mode-switch" role="group" aria-label="Trainer mode">
-              <button type="button" id="mode-sim" class="toggle" aria-pressed="true">Road (sim)</button>
+            <h2 data-i18n="drawer.training">Training</h2>
+            <div class="mode-switch" role="group" aria-label="Trainer mode" data-i18n-attr="aria-label:drawer.trainerMode">
+              <button type="button" id="mode-sim" class="toggle" aria-pressed="true" data-i18n="drawer.roadSim">Road (sim)</button>
               <button type="button" id="mode-erg" class="toggle" aria-pressed="false">ERG</button>
             </div>
             <div id="erg-manual" class="erg-row" hidden>
-              <button type="button" id="erg-down" aria-label="Lower target">−</button>
+              <button type="button" id="erg-down" aria-label="Lower target" data-i18n-attr="aria-label:drawer.lowerTarget">−</button>
               <output id="erg-target" class="erg-value">150 W</output>
-              <button type="button" id="erg-up" aria-label="Raise target">+</button>
+              <button type="button" id="erg-up" aria-label="Raise target" data-i18n-attr="aria-label:drawer.raiseTarget">+</button>
             </div>
             <div id="erg-intensity" class="erg-row" hidden>
-              <button type="button" id="intensity-down" aria-label="Lower intensity">−</button>
+              <button type="button" id="intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
               <output id="intensity-value" class="erg-value">100 %</output>
-              <button type="button" id="intensity-up" aria-label="Raise intensity">+</button>
+              <button type="button" id="intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
             </div>
             <div id="ftp-test" class="ftp-test">
-              <h3 id="ftp-test-heading">FTP test</h3>
+              <h3 id="ftp-test-heading" data-i18n="drawer.ftpTest">FTP test</h3>
               <p id="ftp-test-body" class="field-hint" aria-live="polite"></p>
               <div id="ftp-test-fields" class="gear-settings" hidden>
-                <label>Start (W)<input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
-                <label>Step per minute (W)<input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
+                <label><span data-i18n="drawer.startW">Start (W)</span><input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
+                <label><span data-i18n="drawer.stepPerMinuteW">Step per minute (W)</span><input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
               </div>
               <div class="workout-actions">
                 <button type="button" id="ftp-test-primary"></button>
@@ -536,117 +536,117 @@
               </div>
             </div>
             <div id="workout-picker" class="workout-picker">
-              <select id="workout-select" aria-label="Workout"></select>
+              <select id="workout-select" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></select>
               <input id="workout-file" type="file" accept=".zwo,.xml" hidden />
               <div class="workout-actions">
-                <button type="button" id="workout-start">Start workout</button>
-                <button type="button" id="workout-import" class="secondary">Import .zwo</button>
+                <button type="button" id="workout-start" data-i18n="drawer.startWorkout">Start workout</button>
+                <button type="button" id="workout-import" class="secondary" data-i18n="drawer.importZwo">Import .zwo</button>
               </div>
               <p id="workout-description" class="field-hint"></p>
             </div>
             <div id="workout-running" class="workout-actions" hidden>
-              <button type="button" id="workout-skip" class="secondary">Skip block</button>
-              <button type="button" id="workout-stop" class="secondary">Stop workout</button>
+              <button type="button" id="workout-skip" class="secondary" data-i18n="ride.skipBlock">Skip block</button>
+              <button type="button" id="workout-stop" class="secondary" data-i18n="drawer.stopWorkout">Stop workout</button>
             </div>
             <p id="training-note" class="field-hint"></p>
           </div>
 
           <div class="panel">
-            <h2>Ride</h2>
-            <button type="button" id="finish-ride" class="primary">Finish ride</button>
-            <p class="field-hint">Shows your summary and photos; download the ride or upload it to Strava.</p>
-            <button type="button" id="menu-photo" class="secondary">Take a photo (P)</button>
+            <h2 data-i18n="menu.join">Ride</h2>
+            <button type="button" id="finish-ride" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+            <p class="field-hint" data-i18n="drawer.showsYourSummaryAnd">Shows your summary and photos; download the ride or upload it to Strava.</p>
+            <button type="button" id="menu-photo" class="secondary" data-i18n="ride.takeAPhotoP">Take a photo (P)</button>
           </div>
 
           <div class="panel route-only" id="vehicle-panel">
-            <h2>Tandem and beer bike</h2>
+            <h2 data-i18n="drawer.tandemAndBeerBike">Tandem and beer bike</h2>
             <div id="vehicle-buttons" class="vehicle-buttons">
-              <button type="button" id="vehicle-create-open" class="secondary">Create a vehicle</button>
-              <button type="button" id="vehicle-board-open" class="secondary">Board with code</button>
+              <button type="button" id="vehicle-create-open" class="secondary" data-i18n="drawer.createAVehicle">Create a vehicle</button>
+              <button type="button" id="vehicle-board-open" class="secondary" data-i18n="menu.boardCode">Board with code</button>
             </div>
             <div id="vehicle-view" class="vehicle-view" hidden></div>
           </div>
 
           <div class="panel route-only">
-            <h2>Race</h2>
-            <p class="field-hint">Start a race and others can join during the countdown (<kbd>J</kbd>). Riders who don't join keep riding as before.</p>
+            <h2 data-i18n="ride.race">Race</h2>
+            <p class="field-hint" data-i18n="drawer.raceHint">Start a race and others can join during the countdown (J). Riders who don't join keep riding as before.</p>
             <p id="race-blocked" class="field-hint" hidden></p>
             <div id="race-controls" class="race-controls">
-              <label>Laps
+              <label><span data-i18n="drawer.laps">Laps</span>
                 <select id="race-laps">
                   <option>1</option><option selected>2</option><option>3</option><option>5</option>
                 </select>
               </label>
-              <button type="button" id="start-race">Start a race</button>
-              <button type="button" id="leave-race" class="secondary" hidden>Leave race</button>
+              <button type="button" id="start-race" data-i18n="drawer.startARace">Start a race</button>
+              <button type="button" id="leave-race" class="secondary" hidden data-i18n="drawer.leaveRace">Leave race</button>
             </div>
             <h3 id="results-title" hidden></h3>
             <ol id="race-results" class="results"></ol>
           </div>
 
           <div class="panel route-only" id="events-panel" hidden>
-            <h2>Events</h2>
+            <h2 data-i18n="events.title">Events</h2>
             <ul id="ride-event-list" class="event-list"></ul>
           </div>
 
           <div class="panel">
-            <h2>Units</h2>
+            <h2 data-i18n="rider.units">Units</h2>
             <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
-              <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
-              <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+              <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+              <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
             </div>
           </div>
 
           <div class="panel route-only">
-            <h2>View</h2>
-            <label>Layout
+            <h2 data-i18n="drawer.view">View</h2>
+            <label><span data-i18n="drawer.layout">Layout</span>
               <select id="layout-mode">
-                <option value="auto">Auto (follows your ride)</option>
-                <option value="cockpit">Cockpit</option>
-                <option value="broadcast">Broadcast</option>
-                <option value="training">Training</option>
-                <option value="race">Race</option>
+                <option value="auto" data-i18n="drawer.layoutAuto">Auto (follows your ride)</option>
+                <option value="cockpit" data-i18n="drawer.layoutCockpit">Cockpit</option>
+                <option value="broadcast" data-i18n="drawer.layoutBroadcast">Broadcast</option>
+                <option value="training" data-i18n="drawer.layoutTraining">Training</option>
+                <option value="race" data-i18n="drawer.layoutRace">Race</option>
               </select>
             </label>
-            <div class="view-switch" role="group" aria-label="View">
+            <div class="view-switch" role="group" aria-label="View" data-i18n-attr="aria-label:drawer.view">
               <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
               <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
               <span id="view-note" class="view-note"></span>
             </div>
             <div id="scene-controls" class="scene-controls">
-              <button type="button" id="camera-mode" class="toggle" title="Camera (C)">Camera: Chase</button>
-              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters">Graphics: High</button>
-              <select id="time-mode" aria-label="Time of day" title="Time of day (T)">
-                <option value="auto">Time: auto</option>
-                <option value="day">Day</option>
-                <option value="golden">Golden hour</option>
-                <option value="dusk">Dusk</option>
+              <button type="button" id="camera-mode" class="toggle" title="Camera (C)" data-i18n="drawer.cameraChase" data-i18n-attr="title:ride.cameraC">Camera: Chase</button>
+              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters" data-i18n="drawer.graphicsHigh" data-i18n-attr="title:drawer.lowerThisIfThe">Graphics: High</button>
+              <select id="time-mode" aria-label="Time of day" title="Time of day (T)" data-i18n-attr="title:drawer.timeOfDayT,aria-label:drawer.timeOfDay">
+                <option value="auto" data-i18n="drawer.timeAuto">Time: auto</option>
+                <option value="day" data-i18n="drawer.timeDay">Day</option>
+                <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
+                <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
               </select>
             </div>
           </div>
 
           <div class="panel" id="sim-panel" hidden>
-            <h2>Simulated power <output id="sim-power-value">150 W</output></h2>
-            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" />
+            <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
+            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
           </div>
 
           <div class="panel">
-            <h2>Difficulty <output id="ride-difficulty-value">50 %</output></h2>
-            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Trainer difficulty" />
+            <h2><span data-i18n="drawer.difficulty">Difficulty</span> <output id="ride-difficulty-value">50 %</output></h2>
+            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Trainer difficulty" data-i18n-attr="aria-label:rider.difficulty" />
           </div>
 
           <div class="panel">
-            <h2>Trainer <span id="trainer-packets" class="muted-count"></span></h2>
-            <button type="button" id="ride-copy-diagnostics" class="secondary">Copy diagnostics</button>
+            <h2><span data-i18n="drawer.trainer">Trainer</span> <span id="trainer-packets" class="muted-count"></span></h2>
+            <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
           </div>
 
           <div class="panel">
-            <h2>Keys</h2>
+            <h2 data-i18n="drawer.keys">Keys</h2>
             <p class="hint">
-              <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> change lane · <kbd>J</kbd> join/leave a race · <kbd>L</kbd> layout · <kbd>M</kbd> menu · <kbd>V</kbd> 3D/2D · <kbd>C</kbd> camera · <kbd>T</kbd> time of day · <kbd>P</kbd> photo
-              <span id="shift-hint" hidden> · <kbd>E</kbd>/<kbd>Q</kbd> or <kbd>+</kbd>/<kbd>−</kbd> shift</span>
-              <span id="power-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> simulated power</span>
-              <span id="erg-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> ERG target</span>
+              <span data-i18n="drawer.keysHint">←/→ or A/D change lane · J join/leave a race · L layout · M menu · V 3D/2D · C camera · T time of day · P photo</span>
+              <span id="shift-hint" hidden> · <span data-i18n="drawer.shiftHint">E/Q or +/− shift</span></span>
+              <span id="power-hint" hidden> · <span data-i18n="drawer.powerHint">↑/↓ simulated power</span></span>
+              <span id="erg-hint" hidden> · <span data-i18n="drawer.ergHint">↑/↓ ERG target</span></span>
             </p>
           </div>
         </aside>

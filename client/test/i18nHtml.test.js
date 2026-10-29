@@ -8,10 +8,6 @@ import en from "../public/js/i18n/en.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
-// Subtrees not converted yet ("#id" or ".class"); each conversion task shrinks this list.
-const PENDING_SECTIONS = ["#social", "#menu"];
-// Subtrees inside a pending one that are already converted and therefore checked.
-const CHECKED_WITHIN_PENDING = [".photos"];
 // en keys that HTML does not use (JS-built text added by later tasks, test seeds).
 const PENDING_KEY_PREFIXES = ["test."];
 const ALLOWED_TEXT = new Set(["Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm", "rpm", "bpm", "W/kg", "W/kg ·", "ERG", "0 kJ"]);
@@ -30,11 +26,6 @@ function parseAttrs(source) {
     attrs[m[1]] = decode(m[2] ?? m[3] ?? "");
   }
   return attrs;
-}
-
-function matchesSelector(node, selector) {
-  if (selector.startsWith("#")) return node.attrs.id === selector.slice(1);
-  return (node.attrs.class ?? "").split(/\s+/).includes(selector.slice(1));
 }
 
 /** Tiny HTML walk: returns text chunks and elements, with ancestors for each. */
@@ -69,15 +60,7 @@ const ancestors = (el) => {
   return list;
 };
 
-function isPending(el) {
-  const chain = [el, ...ancestors(el)];
-  const pendingAt = chain.findIndex((n) => PENDING_SECTIONS.some((s) => n.tag && matchesSelector(n, s)));
-  if (pendingAt === -1) return false;
-  const checked = chain.slice(0, pendingAt).some((n) => CHECKED_WITHIN_PENDING.some((s) => matchesSelector(n, s)));
-  return !checked;
-}
-
-const elements = walk(html).filter((el) => !isPending(el) && !["script", "style"].includes(el.tag));
+const elements = walk(html).filter((el) => !["script", "style"].includes(el.tag));
 const problems = [];
 const used = new Set();
 
