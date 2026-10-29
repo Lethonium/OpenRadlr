@@ -1,6 +1,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { applyTranslations } from "../public/js/i18n/apply.js";
+import de from "../public/js/i18n/de.js";
 import { setLocale } from "../public/js/i18n/i18n.js";
 
 afterEach(() => setLocale("en"));
@@ -35,16 +36,16 @@ function fakeRoot(children, self = {}) {
 }
 
 test("sets text from data-i18n", () => {
-  const el = fakeEl({ i18n: "test.hello" });
+  const el = fakeEl({ i18n: "menu.privacy" });
   applyTranslations(fakeRoot([el]));
-  assert.equal(el.textContent, "Hello {name}");
+  assert.equal(el.textContent, "Privacy");
 });
 
 test("sets attributes from data-i18n-attr pairs", () => {
-  const el = fakeEl({ attr: "title:test.hello,aria-label:test.rider.other" });
+  const el = fakeEl({ attr: "title:menu.privacy,aria-label:menu.language" });
   applyTranslations(fakeRoot([el]));
-  assert.equal(el.attrs.title, "Hello {name}");
-  assert.equal(el.attrs["aria-label"], "{n} riders");
+  assert.equal(el.attrs.title, "Privacy");
+  assert.equal(el.attrs["aria-label"], "Language");
 });
 
 test("assigns markup-like text as text, never innerHTML", () => {
@@ -54,25 +55,31 @@ test("assigns markup-like text as text, never innerHTML", () => {
 });
 
 test("renders English when de lacks the key", () => {
-  setLocale("de");
-  const el = fakeEl({ i18n: "test.hello" });
-  applyTranslations(fakeRoot([el]));
-  assert.equal(el.textContent, "Hello {name}");
+  const saved = de["menu.privacy"];
+  delete de["menu.privacy"];
+  try {
+    setLocale("de");
+    const el = fakeEl({ i18n: "menu.privacy" });
+    applyTranslations(fakeRoot([el]));
+    assert.equal(el.textContent, "Privacy");
+  } finally {
+    de["menu.privacy"] = saved;
+  }
 });
 
 test("handles the root element itself", () => {
-  const self = fakeEl({ i18n: "test.hello" });
+  const self = fakeEl({ i18n: "menu.privacy" });
   const root = Object.assign(self, { querySelectorAll: () => [] });
   applyTranslations(root);
-  assert.equal(self.textContent, "Hello {name}");
+  assert.equal(self.textContent, "Privacy");
 });
 
 test("translates a cloned subtree like the ride template", () => {
-  const el = fakeEl({ i18n: "test.hello" });
+  const el = fakeEl({ i18n: "menu.privacy" });
   const template = fakeRoot([el]);
   const clone = fakeRoot([{ ...el, attrs: {}, dataset: { ...el.dataset }, matches: el.matches, setAttribute() {} }]);
   applyTranslations(template);
   applyTranslations(clone);
   const [cloned] = clone.querySelectorAll("[data-i18n]");
-  assert.equal(cloned.textContent, "Hello {name}");
+  assert.equal(cloned.textContent, "Privacy");
 });

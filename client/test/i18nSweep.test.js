@@ -20,8 +20,8 @@ export function proseLiterals(source) {
     for (const match of line.matchAll(LITERAL)) {
       const text = match[2].replace(/\$\{[^}]*\}/g, "");
       if (CLASS_LIST.test(match[2])) continue;
-      const capitalWord = /^[A-Z][a-z]{2,}[a-z….!?:,\s]*$/.test(text);
-      const twoWords = !PLAIN_TOKEN.test(text) && /[A-Za-z]{2,} [A-Za-z]{2,}/.test(text);
+      const capitalWord = /^[A-Z][a-z]{2,}[a-z….!?:,\s]*(\([A-Z]\))?$/.test(text);
+      const twoWords = !PLAIN_TOKEN.test(text) && /[A-Za-z]{2,} [A-Za-z]{2,}/.test(text) || /^[A-Z][a-z]{2,} \(/.test(text);
       if (twoWords || capitalWord) found.push({ line: index + 1, text });
     }
   });

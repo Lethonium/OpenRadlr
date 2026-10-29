@@ -1,5 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import de from "../public/js/i18n/de.js";
 import {
   detectLocale, getLocale, setLocale, t, tn, initLocale, saveLocale, LOCALE_KEY,
 } from "../public/js/i18n/i18n.js";
@@ -25,31 +26,37 @@ test("detectLocale: unsupported saved value is ignored", () => {
 });
 
 test("t interpolates params", () => {
-  assert.equal(t("test.hello", { name: "Ann" }), "Hello Ann");
+  assert.equal(t("panels.joined", { who: "Ann" }), "Ann joined");
 });
 test("t falls back to en when de lacks the key", () => {
-  setLocale("de");
-  assert.equal(t("test.hello", { name: "Ann" }), "Hello Ann");
+  const saved = de["menu.privacy"];
+  delete de["menu.privacy"];
+  try {
+    setLocale("de");
+    assert.equal(t("menu.privacy"), "Privacy");
+  } finally {
+    de["menu.privacy"] = saved;
+  }
 });
 test("t returns the key when unknown", () => {
   assert.equal(t("no.such.key"), "no.such.key");
 });
 test("t inserts param values literally", () => {
-  assert.equal(t("test.hello", { name: "<b>$&{x}" }), "Hello <b>$&{x}");
+  assert.equal(t("panels.joined", { who: "<b>$&{x}" }), "<b>$&{x} joined");
 });
 test("t leaves a missing param placeholder", () => {
-  assert.equal(t("test.hello"), "Hello {name}");
+  assert.equal(t("panels.joined"), "{who} joined");
 });
 
 test("tn en plural forms", () => {
-  assert.equal(tn("test.rider", 0), "0 riders");
-  assert.equal(tn("test.rider", 1), "1 rider");
-  assert.equal(tn("test.rider", 2), "2 riders");
+  assert.equal(tn("menu.riders", 0), "0 riders");
+  assert.equal(tn("menu.riders", 1), "1 rider");
+  assert.equal(tn("menu.riders", 2), "2 riders");
 });
 test("tn de plural forms", () => {
   setLocale("de");
-  assert.equal(tn("test.rider", 1), "1 Fahrer");
-  assert.equal(tn("test.rider", 2), "2 Fahrer");
+  assert.equal(tn("menu.riders", 1), "1 Fahrer");
+  assert.equal(tn("menu.riders", 2), "2 Fahrer");
 });
 
 test("initLocale survives a throwing storage", () => {

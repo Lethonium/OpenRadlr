@@ -2578,7 +2578,7 @@ function renderEventCall(event) {
   if (banner) {
     $("event-call-text").textContent = banner;
     $("event-call").classList.toggle("entered", Boolean(event.entered));
-    $("event-call-button").textContent = event.entered ? "Leave (J)" : "Join (J)";
+    $("event-call-button").textContent = event.entered ? t("event.call.leave") : t("event.call.join");
   }
   const gap = event?.phase === "running" && event.entered && event.sharing ? groupGapLine(event.sharing.gap_s) : "";
   $("group-gap").hidden = !gap;
@@ -3373,7 +3373,7 @@ function frame() {
   });
   if (kept) updateSplits();
 
-  const draftText = draft ? `Drafting · −${draft.savingPercent} % drag` : "";
+  const draftText = draft ? t("hud.drafting", { percent: draft.savingPercent }) : "";
   $("draft-status").hidden = !draft;
   if ($("draft-status").textContent !== draftText) $("draft-status").textContent = draftText;
 

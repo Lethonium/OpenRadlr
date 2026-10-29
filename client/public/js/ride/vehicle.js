@@ -86,7 +86,8 @@ export function vehicleMarkers(riders, myId) {
 export const soloRiders = (riders) => riders.filter((r) => !r.vehicle);
 
 export function vehicleLabel(kind, captainName) {
-  return t("vehicle.label", { name: captainName, kind: kindName(kind), kindLower: kindName(kind).toLowerCase() });
+  const inSentence = { tandem: t("vehicle.kind.tandem"), beer_bike: t("vehicle.kind.beerBike") }[kind] ?? kindName(kind).toLowerCase();
+  return t("vehicle.label", { name: captainName, kind: inSentence });
 }
 
 /** "Vehicle 980 W · you 20 %", or null when `myId` is not aboard. */

@@ -86,7 +86,8 @@ export function describeEvent(event, myId, myVehicleId = null) {
   const who = (id, name, isBot) => (id === myId ? t("panels.you") : `${name}${isBot ? ` ${t("panels.botSuffix")}` : ""}`);
   switch (event.kind) {
     case "rider_joined":
-      return event.is_bot ? null : t("panels.joined", { who: who(event.rider_id, event.name, false) });
+      if (event.is_bot) return null;
+      return event.rider_id === myId ? t("panels.joinedYou") : t("panels.joined", { who: event.name });
     case "rider_left":
       return null;
     case "race_countdown":
@@ -111,12 +112,12 @@ export function describeEvent(event, myId, myVehicleId = null) {
         : t("panels.event.finished");
     }
     case "vehicle_boarded":
-      return myVehicleId !== null && event.vehicle_id === myVehicleId ? t("panels.boarded", { who: who(event.rider_id, event.name) }) : null;
+      return myVehicleId !== null && event.vehicle_id === myVehicleId ? (event.rider_id === myId ? t("panels.boardedYou") : t("panels.boarded", { who: event.name })) : null;
     case "vehicle_left":
-      return myVehicleId !== null && event.vehicle_id === myVehicleId ? t("panels.left", { who: who(event.rider_id, event.name) }) : null;
+      return myVehicleId !== null && event.vehicle_id === myVehicleId ? (event.rider_id === myId ? t("panels.leftYou") : t("panels.left", { who: event.name })) : null;
     case "captain_changed":
       if (myVehicleId === null || event.vehicle_id !== myVehicleId) return null;
-      return event.rider_id === myId ? t("panels.captain.you") : t("panels.captain.other", { name: event.name });
+      return event.rider_id === myId ? t("panels.captain.you") : t("panels.captain.named", { name: event.name });
     default:
       return null;
   }
