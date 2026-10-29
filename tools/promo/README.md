@@ -32,11 +32,19 @@ If the machine has none, set `PROMO_GL=software` (slow, see above).
 
 ## Shot files
 
-JSON, see the header of `rec.mjs`: `width`, `height`, `scale` (game speed, 1 = real time)
-and `steps`: `goto`, `wait` (game seconds), `click`, `fill`, `select`, `key` (KeyboardEvent
-code, e.g. `KeyC` camera, `KeyT` time of day, `KeyL` layout, `KeyV` 2D/3D, `KeyM` menu),
-`power` (simulated trainer watts), `eval`, `still` (PNG), `rec: start|stop`.
+JSON, see the header of `rec.mjs`: `width`, `height`, `scale` (game speed, 1 = real time),
+`storage` (localStorage entries set before the page loads, e.g. the profile with metric units)
+and `steps`: `goto`, `wait` (game seconds), `click`, `hover`, `waitFor` (a selector to become
+visible), `fill`, `select`, `key` (KeyboardEvent code, e.g. `KeyC` camera, `KeyT` time of day,
+`KeyL` layout, `KeyV` 2D/3D, `KeyM` menu, `KeyJ` join an event), `power` (simulated trainer
+watts), `eval` (an expression; awaited if it returns a promise), `still` (PNG),
+`rec: start|stop`. `{"rec": "start", "clip": "drone"}` records into its own folder
+`raw/<shot>/drone/` with its own `frames.ffconcat`, so one ride can give several clips
+(switch the camera with `KeyC` between them).
 Use 1920x1080 for the main video and 1080x1920 for shorts/reels.
+
+`eval` steps may inject `<style>` to hide UI for clean shots: the recorder bypasses the
+app's Content-Security-Policy, which would otherwise block inline styles.
 
 ## Slow-motion fallback (`time-scale.patch`)
 
