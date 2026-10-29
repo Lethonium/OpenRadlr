@@ -10,7 +10,7 @@ use crate::race::RacePhase;
 use crate::schedule::{Occurrence, Phase, Schedule};
 use crate::sharing::{Flow, Member, Sharing};
 use crate::world::{RiderId, RouteIndex, World};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Power sharing is recomputed once this many seconds have accumulated.
 const SHARE_INTERVAL_S: f64 = 1.0;
@@ -445,6 +445,8 @@ impl Events {
         }
 
         let ids: Vec<RiderId> = active.entrants.iter().map(|e| e.id).collect();
+        // How far behind the line each entrant stands (a race keeps it in its odometer).
+        let mut behind = BTreeMap::new();
         let ok = match self.defs[i].kind {
             EventKind::Race => {
                 let laps = match self.defs[i].length {
@@ -457,7 +459,7 @@ impl Events {
             EventKind::GroupRide => {
                 // A manual race still running on the route stops for the ride.
                 world.complete_race(route);
-                world.line_up(route, &ids);
+                behind = world.line_up(route, &ids);
                 for &id in &ids {
                     world.set_group_ride(id, true);
                 }
@@ -467,10 +469,13 @@ impl Events {
         for &id in &ids {
             world.lock_turns(id, true);
         }
-        // Distances count from the start line, wherever the odometers stood.
+        // Distances count from the start line, wherever the odometers stood
+        // and also for the rows behind it.
         for e in &mut active.entrants {
             if let Some(rider) = world.rider(e.id) {
-                e.start_odometer = rider.odometer;
+                e.start_odometer = rider
+                    .race_start_odometer
+                    .unwrap_or(rider.odometer + behind.get(&e.id).copied().unwrap_or(0.0));
             }
         }
         active.stage = Stage::Running;
@@ -933,6 +938,39 @@ mod tests {
         let mine = results.iter().find(|r| r.rider_id == me).unwrap();
         assert_eq!((mine.place, mine.time_s), (None, None));
         assert!(rig.world.rider(me).is_some());
+    }
+
+    #[test]
+    fn group_ride_distances_count_from_the_start_line_also_for_the_back_rows() {
+        let mut rig = Rig::new(vec![ride_def()]);
+        let (a, b) = (rig.human("A", 3.0), rig.human("B", 3.0));
+        let powers = [(a, 200.0), (b, 200.0)];
+        rig.run_to(200.0, &powers);
+        rig.events.join(&mut rig.world, a, "ride", rig.now).unwrap();
+        rig.events.join(&mut rig.world, b, "ride", rig.now).unwrap();
+        rig.run_to(300.0 + DT, &powers);
+
+        let active = rig.events.active[0].as_ref().expect("running");
+        let route = rig.world.route(0);
+        for e in &active.entrants {
+            // Metres still to ride to the line: negative ridden distance.
+            let to_line = route.forward_gap(rig.world.rider(e.id).unwrap().position, 0.0) % route.length();
+            let to_line = if to_line > route.length() / 2.0 {
+                to_line - route.length()
+            } else {
+                to_line
+            };
+            assert!(
+                (e.distance_m + to_line).abs() < 0.5,
+                "{}: {} vs {to_line}",
+                e.name,
+                e.distance_m
+            );
+        }
+        assert!(
+            active.entrants.iter().any(|e| e.distance_m < -2.0),
+            "a back row starts behind the line"
+        );
     }
 
     #[test]
