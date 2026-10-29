@@ -68,3 +68,14 @@ test("saveLocale never throws", () => {
 test("setLocale with unsupported code returns en", () => {
   assert.equal(setLocale("xx"), "en");
 });
+
+test("a saved choice round-trips through storage", () => {
+  const data = {};
+  const storage = { setItem: (k, v) => { data[k] = v; }, getItem: (k) => data[k] ?? null };
+  saveLocale("de", storage);
+  assert.equal(initLocale({ storage, languages: ["en"] }), "de");
+});
+test("junk in storage falls back to the detected locale", () => {
+  const storage = { getItem: () => "" };
+  assert.equal(initLocale({ storage, languages: ["de"] }), "de");
+});

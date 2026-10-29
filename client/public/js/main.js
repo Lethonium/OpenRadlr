@@ -86,6 +86,9 @@ import { ScreenWakeLock } from "./util/wakeLock.js";
 import { PaddleView } from "./view/paddleView.js";
 import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
+import { applyTranslations } from "./i18n/apply.js";
+import { getLocale, initLocale, saveLocale, setLocale } from "./i18n/i18n.js";
+import { languageButtonStates } from "./i18n/selector.js";
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -267,6 +270,41 @@ const app = {
  */
 const rideTemplate = $("ride").cloneNode(true);
 
+/** Renderers of JS-built text; later tasks push theirs here so a language switch refreshes them. */
+const relocaliseHooks = [];
+
+/** Translates the page and the pre-cloned ride template and refreshes JS-built text. */
+function relocalise() {
+  document.documentElement.lang = getLocale();
+  applyTranslations(document);
+  applyTranslations(rideTemplate);
+  const pressed = languageButtonStates(getLocale());
+  for (const button of document.querySelectorAll("[data-lang]")) {
+    button.setAttribute("aria-pressed", String(pressed[button.dataset.lang]));
+  }
+  for (const hook of relocaliseHooks) hook();
+}
+
+/** localStorage, or undefined where even touching it throws. */
+function browserStorage() {
+  try {
+    return localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function changeLanguage(code) {
+  saveLocale(code, browserStorage());
+  setLocale(code);
+  // The ride screen is built for a ride and holds live state: start clean instead.
+  if (!$("ride").hidden) {
+    location.reload();
+    return;
+  }
+  relocalise();
+}
+
 /** True unless the trainer is known to only report power. */
 const canControl = (trainer) => trainer?.canControlResistance !== false;
 
@@ -357,6 +395,10 @@ async function offerFtp() {
 }
 
 function initSetup() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-lang]");
+    if (button) changeLanguage(button.dataset.lang);
+  });
   setUnits(app.profile.units);
   $("name").value = app.profile.name;
   $("weight").value = kgToDisplay(app.profile.weightKg);
@@ -3315,6 +3357,8 @@ function frame() {
   $("trainer-warning").hidden = silentFor < 5;
 }
 
+initLocale({ storage: browserStorage(), languages: navigator.languages });
+relocalise();
 initSetup();
 
 // Installable app (PWA). Service workers need https:// or localhost.
