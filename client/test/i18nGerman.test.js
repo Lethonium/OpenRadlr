@@ -2,7 +2,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { setLocale } from "../public/js/i18n/i18n.js";
-import { routeRiders, workoutTagline, stageHeadline } from "../public/js/view/startMenu.js";
+import { routeRiders, workoutTagline, stageHeadline, stageLede, routeCard } from "../public/js/view/startMenu.js";
 import { raceStatus, onlineSummary } from "../public/js/view/panels.js";
 import { eventBanner } from "../public/js/view/events.js";
 import { ftpPromptText } from "../public/js/view/ftpPrompt.js";
@@ -39,4 +39,11 @@ test("stage headline and workout presets read in German", () => {
   assert.equal(workoutTagline(PRESETS), "3 Workouts · 4–12 Min.");
   assert.equal(PRESETS[0].name, "Ganzkörper");
   assert.match(planSummary(PRESETS[0]), /^Kniebeugen 40 s · Pause 20 s/);
+});
+
+test("a bundled route's description is shown in German, its name is not", () => {
+  setLocale("de");
+  const route = { id: "riverside-flats", name: "Riverside Flats", description: "Fast and flat down the river valley, made for drafting and sprints." };
+  assert.equal(stageLede(route), "Schnell und flach das Flusstal entlang, wie gemacht fürs Windschattenfahren und für Sprints.");
+  assert.equal(routeCard(route).name, "Riverside Flats");
 });

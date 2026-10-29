@@ -119,7 +119,7 @@ export function stageLede(picked, activity = activityOf(picked)) {
   if (activity === "events") return t("menu.stage.eventsLede");
   if (picked?.kind === "workout") return t("menu.workout.lede");
   if (picked?.kind === "studio") return t("menu.studio.description");
-  return picked?.description || t("menu.stage.rideLede");
+  return routeDescription(picked ?? {}) || t("menu.stage.rideLede");
 }
 
 /** The workout card keeps only the heart-rate row of the devices, so without Bluetooth the heading goes. */
@@ -216,6 +216,16 @@ function drawWhenChanged(list, key, onSelect, draw) {
   draw((id) => handlers.get(list)(id));
 }
 
+/**
+ * A bundled route's description in the active language. Routes the dictionaries
+ * don't know (names and everything else from the server stay as sent) keep the server's text.
+ */
+export function routeDescription(route) {
+  const key = `route.${route.id}.description`;
+  const text = t(key);
+  return text === key ? (route.description ?? "") : text;
+}
+
 /** What a route card shows. */
 export function routeCard(route) {
   const studio = route.kind === "studio";
@@ -226,7 +236,7 @@ export function routeCard(route) {
     tag: studio ? t("menu.route.class") : workout ? t("menu.workout") : routeCharacter(route),
     // A route's description is under the headline once picked: the card stays compact.
     description: studio ? t("menu.studio.description") : workout ? t("menu.workout.tagline") : null,
-    title: route.description ?? "",
+    title: routeDescription(route),
     stats: studio ? studioTagline(route) : workout ? workoutTagline(PRESETS) : routeStats(route),
     riders: workout ? null : routeRiders(route),
     active: (route.players ?? 0) > 0,

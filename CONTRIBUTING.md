@@ -63,6 +63,8 @@ New UI text goes through the i18n module: `data-i18n` / `data-i18n-attr` in
 the rider use `formatNumber`, never `toFixed` into the page. The `i18nHtml`,
 `i18nSweep` and `i18nParity` tests fail on missing keys or stray English; mark
 a deliberate English literal (a log line, a file format) with `// i18n-ok`.
+A new bundled route needs a `route.<id>.description` key in both dictionaries (route
+names stay as they are); `i18nRoutes` fails without it.
 
 ## Architecture decisions
 

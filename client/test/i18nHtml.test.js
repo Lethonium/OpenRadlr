@@ -10,7 +10,7 @@ import en from "../public/js/i18n/en.js";
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
 // en keys neither HTML nor a JS string literal uses (keys built at run time, test seeds).
-const PENDING_KEY_PREFIXES = [];
+const PENDING_KEY_PREFIXES = ["route."]; // looked up as route.<id>.description
 const JS_ROOT = new URL("../public/js/", import.meta.url).pathname;
 function jsSource(dir) {
   return readdirSync(dir).map((name) => {
