@@ -4,11 +4,12 @@
  * modules, which are unit-tested; this file only connects them.
  */
 import { loadAnalytics } from "./analytics.js";
-import { DeviceLog } from "./ble/deviceLog.js";
-import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
+import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
+import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
-import { ControllerInput } from "./input/controller.js";
+import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
 import { activateFocused, moveFocus } from "./input/focusNav.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
@@ -18,7 +19,7 @@ import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { ProfileStore, validateProfile } from "./profile/profileStore.js";
+import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
@@ -68,7 +69,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { planDuration, planSummary } from "./workout/plan.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
@@ -78,13 +79,13 @@ import { gymOfRoute } from "./workout/gymSpots.js";
 import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
-import { MenuCamera } from "./view3d/menuCamera.js";
+import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, STUDIO_CAMERAS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { PaddleView } from "./view/paddleView.js";
-import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, vehicleErrorLine } from "./ride/vehicle.js";
+import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, normaliseCode, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
@@ -101,6 +102,7 @@ const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
+const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
 const INFO_REFRESH_MS = 5000;
@@ -122,7 +124,7 @@ const writeSetting = (key, value) => {
 };
 
 const profiles = new ProfileStore();
-const deviceLog = new DeviceLog();
+const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 const app = {
   profile: profiles.load(),
   redrawStage: null,
@@ -154,7 +156,8 @@ const app = {
   /** Shared vehicles (#55): panels, energy per seat for the summary, code to board on joining. */
   vehicleView: null,
   seatsView: null,
-  startVehicleView: null,
+  /** A valid vehicle code typed in the start menu: Ride becomes Board. */
+  boardCode: null,
   seatEnergy: null,
   vehicleId: null,
   vehicleKind: null,
@@ -199,6 +202,14 @@ const app = {
   reconnector: null,
   autosaveTimer: null,
   lastTrainerDataAt: null,
+  /** The trainer's last reading, for the start menu's live check. */
+  lastReading: null,
+  /** The open drawer was opened with the controller (+ and − together): its buttons navigate it. */
+  drawerByController: false,
+  /** All controllers' presses as one stream (MergedControllers), made with the first controller. */
+  controllerInput: null,
+  /** The last controller press that wasn't a shift, for the controller check. */
+  lastControllerPress: null,
   gearbox: null,
   training: null,
   /** The guided FTP ramp test of this ride (null outside a ride). */
@@ -218,6 +229,10 @@ const app = {
   info: null,
   /** Client time the current `info` arrived, to keep event countdowns running between refreshes. */
   infoAt: 0,
+  /** The first /api/info answer (or failure) is in: the start menu's placeholders go. */
+  infoLoaded: false,
+  /** Docks the start menu's map in the corner once the opening's descent is done. */
+  mapDockTimer: null,
   /** Event to join with the connection that is being opened (from the events list). */
   pendingEventId: null,
   /** The event I entered during this ride: names the ride files. */
@@ -227,6 +242,12 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
+  /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
+  activity: null,
+  /** The route the Ride tab goes back to. */
+  rideRouteId: readSetting(ROUTE_KEY),
+  /** How the rider rides: "trainer", "paddles" or "sim" (null: what this browser does best). */
+  rideMode: readSetting(RIDE_MODE_KEY),
   infoTimer: null,
   strava: new StravaClient(),
   wakeLock: new ScreenWakeLock(),
@@ -441,21 +462,33 @@ function initSetup() {
   $("virtual-shifting").checked = app.profile.virtualShifting;
   $("chainring").value = app.profile.chainring;
   $("cog").value = app.profile.cog;
-  $("gear-settings").hidden = !app.profile.virtualShifting;
+  // The gears show with a trainer that can change resistance (useTrainer), not before.
+  $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", (e) => ($("gear-settings").hidden = !e.target.checked));
-  $("use-simulated").addEventListener("click", () => {
-    useTrainer(new SimulatedTrainer());
-    renderReconnectButtons();
-  });
-  $("use-paddles").addEventListener("click", () => {
-    useTrainer(new PaddleTrainer({ ftp: Number($("ftp").value) }));
-    renderReconnectButtons();
-  });
+  // Name, weight, FTP and settings are kept as they change, not only when riding.
+  $("profile-form").addEventListener("change", keepFormEdits);
+  for (const card of document.querySelectorAll(".mode-card")) {
+    card.addEventListener("click", () => {
+      if (card.getAttribute("aria-disabled") === "true") return;
+      app.rideMode = card.dataset.mode;
+      writeSetting(RIDE_MODE_KEY, app.rideMode);
+      renderRideModes();
+    });
+  }
   for (const kind of Object.keys(DEVICES)) {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), DEVICES[kind].statusId, { keepLabel: true });
+      // Name what's being looked for: the line's own label may be hidden in favour of the device name.
+      // With a controller connected already, the hint goes under the line: the connected half stays in view.
+      const adding = kind === "controller" && app.controllers.length > 0;
+      const pending = names?.length
+        ? t("setup.looking", { names: names.join(" + ") })
+        : adding && expectsOtherHalf(app.controllers)
+          ? t("setup.pickOtherHalf", { label: app.controllers[0].label })
+          : t("setup.pickYour", { what: CHOOSER_NAMES()[kind] });
+      const ok = await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), adding ? "controller-live" : DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
+      if (adding && ok) renderControllerCheck();
       button.disabled = false;
       if (kind === "controller" && app.controllers.length) renderControllerStatus();
       renderReconnectButtons();
@@ -465,13 +498,22 @@ function initSetup() {
     $(`reconnect-${kind}`).addEventListener("click", (event) => pick(event.currentTarget, missingDevices(kind).map((entry) => entry.name)));
   }
   // The strong controller focus ring only while a controller drives the focus.
-  window.addEventListener("pointerdown", () => document.documentElement.classList.remove("controller-nav"));
+  window.addEventListener("pointerdown", () => {
+    document.documentElement.classList.remove("controller-nav");
+    app.drawerByController = false;
+  });
   initDiagnostics();
   initStartVehicle();
   initStartMenu();
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    const action = $("join").dataset.action;
+    // The server rides with Strava accounts only: the button takes the rider there.
+    if (action === "strava") return location.assign("/auth/strava");
+    if (action === "board") return boardFromMenu();
+    const typed = $("board-code").value.trim();
+    if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
     joinRide().catch(joinFailed);
   });
 }
@@ -521,8 +563,14 @@ function setDifficultyInputs(difficulty) {
 
 function initStartMenu() {
   openStartMenu();
-  // Countdowns tick every second between the (slower) info refreshes.
-  setInterval(renderEvents, 1000);
+  // Countdowns tick every second between the (slower) info refreshes; so does the trainer check.
+  setInterval(() => {
+    renderEvents();
+    if (app.ride) return;
+    renderLiveCheck();
+    // Nothing sends resistance in the menu: ask a blocked trainer again from here.
+    Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
+  }, 1000);
   window.addEventListener("resize", () => app.menu && app.drawMenuStage());
 
   // Coming back from Strava: show what happened, then tidy the address bar.
@@ -551,6 +599,7 @@ function openStartMenu() {
     } catch {
       app.info = null;
     }
+    app.infoLoaded = true;
     renderStartMenu();
   };
   initMenuStage();
@@ -573,12 +622,18 @@ function initMenuStage() {
   const home = { parent: canvas.parentElement, next: canvas.nextSibling };
   app.menuCanvasHome = home;
   if (use3d) $("menu-world").append(canvas);
+  $("setup").classList.toggle("world-building", use3d);
   let shown = { route: null, routes: [] };
+  // Where the stage sits on screen: measured when the layout changes (not on every
+  // frame), and eased, so a reflow or a scroll glides the view instead of jerking it.
+  let stageGoal = null;
+  let stageEased = null;
+  const measureStage = () => (stageGoal = stageOffset($("menu-stage")));
+  new ResizeObserver(measureStage).observe($("setup"));
+  window.addEventListener("resize", measureStage);
+  window.addEventListener("scroll", measureStage, { passive: true });
   const drawStage = () => {
     const { route, routes } = shown;
-    const picked = pickRoute(routesOf(app.info), app.routeId);
-    $("stage-name").textContent = picked?.name ?? "";
-    $("stage-stats").textContent = stageStats(picked);
     $("menu-profile").hidden = !route;
     drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
@@ -598,7 +653,8 @@ function initMenuStage() {
         }
       : null,
     lensFor: (kind, overview) => (kind === "gym" ? gymLens(overview) : droneLens(overview)),
-    createCamera: (overview) => new MenuCamera(overview, { reducedMotion }),
+    // The first world opens with a descent from high over the island.
+    createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
       ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
       { mesh: buildHighlight(route), glow: 1 },
@@ -608,12 +664,26 @@ function initMenuStage() {
       drawStage();
     },
     onWorld: (ready) => {
-      $("setup").classList.toggle("world-ready", ready);
+      const setup = $("setup");
+      setup.classList.remove("world-building");
+      setup.classList.toggle("world-ready", ready);
+      // The island fades in while the full map fades out; the map docks in the corner
+      // once the camera has come down (the opening's descent), not in the same frame.
+      clearTimeout(app.mapDockTimer);
+      if (!ready) setup.classList.remove("map-docked");
+      else if (!setup.classList.contains("map-docked")) {
+        app.mapDockTimer = setTimeout(() => {
+          setup.classList.add("map-docked");
+          drawStage();
+        }, reducedMotion ? 0 : 1800);
+      }
       // The map changes size (full stage or the corner inset): draw it again.
       drawStage();
     },
     render: (view, dt, timeS) => {
-      view.viewOffset = stageOffset($("menu-stage"));
+      stageGoal ??= stageOffset($("menu-stage"));
+      stageEased ??= { value: stageGoal.slice(), velocity: [0, 0] };
+      view.viewOffset = reducedMotion ? stageGoal : springTo(stageEased, stageGoal, 0.35, dt).value.slice();
       view.render({ riders: [], myId: null, timeS, colors: themeColors() });
     },
   });
@@ -632,7 +702,8 @@ function closeMenuStage(routeId) {
   if (!app.menu) return;
   app.menuView = app.menu.takeView(routeId);
   app.menu = null;
-  $("setup").classList.remove("world-ready");
+  clearTimeout(app.mapDockTimer);
+  $("setup").classList.remove("world-ready", "map-docked", "world-building");
   const canvas = $("world3d");
   const { parent, next } = app.menuCanvasHome;
   if (canvas.parentElement !== parent) parent.insertBefore(canvas, next);
@@ -651,25 +722,30 @@ async function loadStravaAccount() {
 
 function renderAccount() {
   const strava = app.info?.strava;
-  $("account").hidden = !strava?.enabled;
-  if (!strava?.enabled) return;
-  if (app.stravaAccount === undefined) {
+  if (strava?.enabled && app.stravaAccount === undefined) {
     app.stravaAccount = null;
     loadStravaAccount();
   }
-  const account = app.stravaAccount;
-  $("strava-connected").hidden = !account;
-  $("strava-disconnected").hidden = Boolean(account);
-  if (account) $("strava-name").textContent = account.name;
-  $("strava-hint").textContent = strava.required
-    ? t("strava.hintRequired")
-    : t("strava.hintOptional");
+  const line = stravaLine(app.info, app.stravaAccount);
+  $("account").hidden = !line.shown;
+  if (!line.shown) return;
+  $("account").classList.toggle("required", line.required);
+  $("strava-connected").hidden = !line.connected;
+  $("strava-logout").hidden = !line.connected;
+  $("strava-disconnected").hidden = line.connected;
+  // Where Strava is required, the Ride button is the way to connect: no second button.
+  $("strava-connect").hidden = line.connected || line.required;
+  if (line.connected) $("strava-name").textContent = line.text;
+  else $("strava-disconnected").textContent = line.required ? t("strava.accountNeeded") : line.text;
+  $("strava-hint").hidden = !line.required;
+  $("strava-hint").textContent = line.required ? line.text : "";
 }
 
 function renderStartMenu() {
   renderAccount();
-  const status = serverStatus(app.info);
-  $("server-label").textContent = app.info?.name ?? "OpenRadlr";
+  // Until the first answer: connecting, not "unreachable".
+  const status = app.infoLoaded ? serverStatus(app.info) : { text: t("menu.server.connecting"), full: false, phoneFull: false, online: false };
+  $("server-label").textContent = serverName(app.info);
   $("server-players").textContent = status.text;
   const build = buildLabel(app.info, BUILD);
   const privacy = privacyUrl(app.info);
@@ -680,51 +756,75 @@ function renderStartMenu() {
   $("build-reload").hidden = !build.stale;
   $("server-dot").className = `status-dot${status.online ? (status.full ? " full" : " online") : ""}`;
 
-  // Production servers may hide the simulated trainer (OPENRADLR_ALLOW_SIMULATED_TRAINER=false).
-  $("use-simulated").hidden = app.info?.simulated_trainer === false;
 
   const routes = routesOf(app.info);
   const selected = pickRoute(routes, app.routeId);
-  $("routes-empty").hidden = routes.length > 0;
+  // Placeholders until the server first answers (or doesn't), so nothing jumps in.
+  $("setup").classList.toggle("loading", !app.infoLoaded);
+  $("routes-empty").hidden = routes.length > 0 || !app.infoLoaded;
   const community = communityDistance(app.info);
   $("community-distance").hidden = !community;
   $("community-distance").textContent = community ?? "";
-  renderRoutes($("route-list"), routes, selected?.id ?? null, (id) => {
+  // Tabs split the cards by what you do there; the last route ridden is kept for the Ride tab.
+  if (activityOf(selected) === "ride" && selected) app.rideRouteId = selected.id;
+  const events = menuEventRows();
+  const tabs = activityTabs(routes, events);
+  const activity = shownActivity(tabs, app.activity, selected);
+  $("setup").dataset.activity = activity;
+  $("activity-tabs").hidden = tabs.length < 2;
+  renderActivityTabs($("activity-tabs"), tabs, activity, (id) => {
+    app.activity = id;
+    // Events are ridden on routes: that tab goes back to the last route, like the Ride tab.
+    const card = pickForActivity(routes, id === "events" ? "ride" : id, id === "ride" || id === "events" ? app.rideRouteId : app.routeId);
+    if (card) {
+      app.routeId = card.id;
+      writeSetting(ROUTE_KEY, card.id);
+    }
+    renderStartMenu();
+  });
+  $("stage-stats").textContent = activity === "events" ? "" : stageStats(selected);
+  const cards = routesFor(activity, routes);
+  $("route-list").hidden = !showsCards(activity, cards);
+  renderRoutes($("route-list"), cards, selected?.id ?? null, (id) => {
     app.routeId = id;
     writeSetting(ROUTE_KEY, id);
     renderStartMenu();
   });
   app.menu?.select(routes, selected?.id ?? null);
-  renderEvents();
+  renderEvents(events);
   renderUnfinished();
-  // Paddles ride the road: the studio's classes need a trainer (or the sim).
-  $("use-paddles").hidden = app.info?.paddle_mode === false || selected?.kind === "studio";
   // The workout needs no trainer: its preset picker replaces the devices, bar the heart-rate row.
   const workout = selected?.kind === "workout";
   $("profile-form").classList.toggle("workout", workout);
   $("workout-setup").hidden = !workout;
-  $("routes-title").textContent = stageHeadline(selected);
-  $("routes-lede").textContent = stageLede(selected);
+  $("routes-title").textContent = stageHeadline(selected, activity);
+  $("routes-lede").textContent = stageLede(selected, activity);
   $("devices").hidden = !devicesVisible(selected, isBluetoothAvailable());
+  renderRideModes();
   // Vehicles are on the roads: no boarding from the workout card.
   $("board-start").hidden = workout;
-  if (workout) $("start-vehicle").hidden = true;
   const join = $("join");
   const needsStrava = Boolean(app.info?.strava?.required) && !app.stravaAccount;
   if (!join.dataset.busy) {
     // A rider on a phone takes a phone seat, so the trainer seats being gone doesn't stop them.
     const full = deviceKind(app.trainer) === "paddle" ? status.phoneFull : status.full;
-    join.disabled = full || needsStrava;
-    join.textContent = full ? t("menu.join.full") : needsStrava ? t("menu.join.needsStrava") : workout ? t("menu.join.workout") : selected ? t("menu.join.route", { name: selected.name }) : t("menu.join");
+    const action = joinAction({ selected, full, needsStrava, boardCode: app.boardCode });
+    join.disabled = action.disabled;
+    join.textContent = action.label;
+    join.dataset.action = action.kind;
   }
 }
 
-/** The scheduled events from the last /api/info, in the start menu and the ride menu. */
-function renderEvents() {
+/** The scheduled events from the last /api/info, with the server's clock carried forward. */
+function menuEventRows() {
   const info = app.info;
-  const rows = info?.events?.length && Number.isFinite(info.now_s) ? eventRows({ ...info, now_s: info.now_s + (Date.now() - app.infoAt) / 1000 }, Date.now(), {}, enteredEventId()) : [];
+  return info?.events?.length && Number.isFinite(info.now_s) ? eventRows({ ...info, now_s: info.now_s + (Date.now() - app.infoAt) / 1000 }, Date.now(), {}, enteredEventId()) : [];
+}
+
+/** The scheduled events in the start menu's Events tab and the ride menu. */
+function renderEvents(rows = menuEventRows()) {
   const riding = Boolean(app.ride) && !$("ride").hidden;
-  $("events").hidden = rows.length === 0 || riding;
+  $("events").hidden = rows.length === 0 || riding || $("setup").dataset.activity !== "events";
   if (!$("events").hidden) renderEventList($("event-list"), rows, joinEventFromMenu);
   $("events-panel").hidden = rows.length === 0 || !riding;
   if (!$("events-panel").hidden) renderEventList($("ride-event-list"), rows, joinEventFromRide, leaveEventFromRide);
@@ -761,21 +861,27 @@ function joinEventFromRide(row) {
 }
 
 /** @returns {Promise<boolean>} true once connected */
-async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = t("devices.connecting") } = {}) {
+async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = t("devices.connecting"), deviceName = null } = {}) {
   const status = $(statusId);
   status.textContent = pending;
+  status.dataset.note = "pending";
   status.classList.remove("ok");
   try {
     const device = await connect();
     onConnected(device);
     // useTrainer() writes its own label (it knows about power-only trainers).
     if (!keepLabel) status.textContent = device.label;
+    delete status.dataset.note;
     status.classList.add("ok");
     return true;
   } catch (error) {
     // Given up quietly: the rider connected another device meanwhile.
-    if (error.name === "AbortError") return false;
-    status.textContent = error.name === "NotFoundError" ? t("devices.cancelled") : t("devices.failed", { message: error.message });
+    if (error.name === "AbortError") {
+      delete status.dataset.note;
+      return false;
+    }
+    status.textContent = connectErrorText(error, deviceName);
+    status.dataset.note = "error";
     if (error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
@@ -825,14 +931,101 @@ function connected(kind, device) {
   renderReconnectButtons();
 }
 
-/** "Reconnect KICKR CORE" next to each kind with a remembered device that isn't connected. */
+/** What the browser's device window should list, for the line's hint while it is open. */
+const CHOOSER_NAMES = () => ({ trainer: t("setup.chooser.trainer"), hr: t("setup.chooser.hr"), controller: t("setup.chooser.controller") });
+
+/** What each device line says while nothing is connected or remembered. */
+const IDLE_STATUS = () => ({ trainer: t("setup.idle.trainer"), hr: t("setup.idle.hr"), controller: t("setup.idle.controller") });
+
+/** "Reconnect" next to each kind with a remembered device that isn't connected. */
 function renderReconnectButtons() {
   for (const kind of Object.keys(DEVICES)) {
     const button = $(`reconnect-${kind}`);
     const names = [...new Set(missingDevices(kind).map((entry) => entry.name))];
     button.hidden = !isBluetoothAvailable() || names.length === 0;
-    button.textContent = t("devices.reconnect", { names: names.join(" + ") });
+    // The name goes in the status line, the button stays short: nothing gets squeezed to "N…".
+    button.textContent = t("devices.reconnectShort");
+    button.title = t("devices.reconnect", { names: names.join(" + ") });
+    const status = $(DEVICES[kind].statusId);
+    const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
+    if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS()[kind];
   }
+  // One main action per line: Reconnect a known device (the chooser then reads "Other"), else connect, change or add.
+  const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
+  for (const kind of Object.keys(DEVICES)) {
+    const reconnect = $(`reconnect-${kind}`);
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
+    reconnect.hidden = !actions.reconnect;
+    const connect = $(`connect-${kind}`);
+    connect.textContent = actions.other;
+    // The trainer's first connect is the main action of the card; add-ons stay quiet.
+    // The trainer's first connect is the card's main action; so is the missing half of a Click.
+    const main = (kind === "trainer" && actions.other === t("setup.action.connect")) || (kind === "controller" && lonelyHalfHint() !== null);
+    connect.className = main ? "primary-small" : "secondary small";
+    // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
+    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
+    // Both halves of a pair are in: nothing more to add.
+    connect.hidden = kind === "controller" && app.controllers.length >= 2;
+  }
+}
+
+/** The ride-mode cards and the panel of the chosen one; outside a ride the trainer follows the choice. */
+function renderRideModes() {
+  const picked = pickRoute(routesOf(app.info), app.routeId);
+  const bluetooth = isBluetoothAvailable();
+  const modes = rideModes({ info: app.info, picked });
+  const mode = chooseRideMode(app.rideMode, modes, bluetooth);
+  for (const card of document.querySelectorAll(".mode-card")) {
+    const entry = modes.find((m) => m.id === card.dataset.mode);
+    card.hidden = !entry;
+    card.setAttribute("aria-checked", String(card.dataset.mode === mode));
+    card.setAttribute("aria-disabled", String(!entry?.available));
+    card.title = entry?.reason ?? "";
+  }
+  const reason = modes.find((m) => m.id === app.rideMode && !m.available)?.reason ?? "";
+  $("ride-mode-reason").hidden = !reason;
+  $("ride-mode-reason").textContent = reason;
+  for (const panel of document.querySelectorAll(".mode-panel")) panel.hidden = panel.dataset.for !== mode;
+  const addons = addonsShown(mode, bluetooth, picked);
+  $("addon-hr").hidden = !addons.hr;
+  $("addon-controller").hidden = !addons.controller;
+  $("controller-live").hidden = !addons.controller || app.controllers.length === 0;
+  if (!app.ride && picked?.kind !== "workout") applyRideMode(mode);
+}
+
+/** Connects what the chosen mode rides with; switching back to the trainer looks for the known one. */
+function applyRideMode(mode) {
+  const kind = app.trainer ? deviceKind(app.trainer) : null;
+  if (mode === "paddles" && kind !== "paddle") useTrainer(new PaddleTrainer({ ftp: Number($("ftp").value) }));
+  else if (mode === "sim" && kind !== "sim") useTrainer(new SimulatedTrainer());
+  else if (mode === "trainer" && (kind === "paddle" || kind === "sim")) {
+    dropTrainer();
+    initKnownDevices(["trainer"]);
+  } else return;
+  renderReconnectButtons();
+}
+
+/** Under the trainer: waiting, still, the numbers, or no data any more (asleep, taken by another app). */
+function renderLiveCheck() {
+  const reading = $("live-reading");
+  if (reading.hidden || !app.trainer) return;
+  const sinceDataMs = app.lastTrainerDataAt === null ? null : (now() - app.lastTrainerDataAt) * 1000;
+  const check = liveCheck({ sinceDataMs, power: app.lastReading?.power, cadence: app.lastReading?.cadence });
+  reading.textContent = check.text;
+  reading.dataset.state = check.state;
+}
+
+/** No trainer: the smart trainer card waits for one. */
+function dropTrainer() {
+  app.trainer?.disconnect();
+  app.trainer = null;
+  $("trainer-status").textContent = t("setup.idle.trainer");
+  $("trainer-status").classList.remove("ok");
+  $("live-reading").hidden = true;
+  delete $("trainer-status").dataset.note;
+  $("power-only-note").hidden = true;
+  $("virtual-shifting-row").hidden = true;
+  $("gear-settings").hidden = true;
 }
 
 /**
@@ -840,9 +1033,9 @@ function renderReconnectButtons() {
  * connect on their own, once they are switched on (#43). Browsers without
  * `getDevices()` get the Reconnect buttons only.
  */
-async function initKnownDevices() {
+async function initKnownDevices(kinds = Object.keys(DEVICES)) {
   renderReconnectButtons();
-  const known = knownDevices.list();
+  const known = knownDevices.list().filter((entry) => kinds.includes(entry.kind));
   if (!isBluetoothAvailable() || !known.length) return;
   const found = await grantedDevices(known);
   const support = typeof navigator.bluetooth.getDevices === "function" ? `getDevices() found ${found.length}` : "no getDevices() in this browser"; // i18n-ok (log)
@@ -867,14 +1060,36 @@ async function autoConnect(entry, device) {
     },
     (opened) => connected(entry.kind, opened),
     spec.statusId,
-    { keepLabel: true, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
+    { keepLabel: true, deviceName: entry.name, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
   );
   // Two controllers share one status line: show the ones that made it.
   if (!ok && entry.kind === "controller" && app.controllers.length) renderControllerStatus();
 }
 
 function trainerLabel(trainer) {
+  if (trainer.controlBlocked) return t("devices.resistanceBlockedLabel", { label: trainer.label });
   return canControl(trainer) ? trainer.label : t("devices.powerOnlyLabel", { label: trainer.label });
+}
+
+
+/** What the trainer lets us do: label, the note, virtual shifting. Again whenever control changes. */
+function showTrainerControl(trainer) {
+  const controllable = canControl(trainer);
+  const paddles = trainer instanceof PaddleTrainer;
+  const blocked = Boolean(trainer.controlBlocked);
+  // Virtual shifting stays on offer while blocked: it works as soon as the trainer is free.
+  const could = couldControlResistance(trainer);
+  $("trainer-status").textContent = trainerLabel(trainer);
+  $("power-only-note").hidden = controllable || paddles;
+  $("power-only-note").textContent = blocked ? t("devices.blockedNote") : t("devices.powerOnlyNoteLong");
+  // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
+  $("virtual-shifting").disabled = !could;
+  $("virtual-shifting-row").hidden = !could;
+  if (!could) $("virtual-shifting").checked = false;
+  $("gear-settings").hidden = !could || !$("virtual-shifting").checked;
+  // In a ride, the HUD says it too.
+  $("power-only").hidden = controllable || paddles;
+  $("power-only").textContent = blocked ? t("hud.resistanceBlocked") : t("hud.powerOnly");
 }
 
 function useTrainer(trainer) {
@@ -882,26 +1097,18 @@ function useTrainer(trainer) {
   app.trainer = trainer;
   app.lastTrainerDataAt = null;
   $("trainer-status").classList.add("ok");
-
-  // Power-only trainers: no ERG, no virtual shifting.
-  const controllable = canControl(trainer);
-  const paddles = trainer instanceof PaddleTrainer;
-  $("power-only-note").hidden = controllable || paddles;
-  $("paddle-note").hidden = !paddles;
-  $("trainer-status").textContent = trainerLabel(trainer);
-  $("virtual-shifting").disabled = !controllable;
-  if (!controllable) {
-    $("virtual-shifting").checked = false;
-    $("gear-settings").hidden = true;
-  }
+  delete $("trainer-status").dataset.note;
+  showTrainerControl(trainer);
+  trainer.on("control", () => showTrainerControl(trainer));
 
   // Live check on the setup screen: the rider sees right away whether data arrives.
+  app.lastReading = null;
   $("live-reading").hidden = false;
-  trainer.on("data", ({ power, cadence }) => {
+  renderLiveCheck();
+  trainer.on("data", (reading) => {
     app.lastTrainerDataAt = now();
-    const watts = Number.isFinite(power) ? Math.round(power) : "–";
-    const rpm = Number.isFinite(cadence) ? Math.round(cadence) : "–";
-    $("live-values").textContent = `${watts} W · ${rpm} rpm`;
+    app.lastReading = reading;
+    renderLiveCheck();
   });
   trainer.on("disconnected", () => {
     $("trainer-status").textContent = t("devices.reconnecting");
@@ -909,7 +1116,7 @@ function useTrainer(trainer) {
     notify(t("devices.trainerDisconnected", { label: trainer.label }), "error");
   });
   trainer.on("reconnected", () => {
-    $("trainer-status").textContent = trainerLabel(trainer);
+    showTrainerControl(trainer);
     $("trainer-status").classList.add("ok");
     notify(t("devices.isBack", { label: trainer.label }));
   });
@@ -934,15 +1141,52 @@ function useHeartRateMonitor(monitor) {
 }
 
 function useController(controller) {
+  // Every button it ever sent: tells a Click half's side (+ or −) and confirms it works.
+  controller.seen = new Set();
+  controller.connectedAt = now();
   app.controllers.push(controller);
-  const input = new ControllerInput();
+  // A half that relays says so (battery, status) within a second; one that stays quiet sends only its own side.
+  setTimeout(() => {
+    renderControllerCheck();
+    renderReconnectButtons();
+  }, 3000);
+  // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
+  app.controllerInput ??= new MergedControllers(new ControllerInput());
   $("controller-live").hidden = false;
+  renderControllerCheck();
   controller.on("buttons", (pressed) => {
-    if (pressed.length) $("controller-buttons").textContent = `${controller.label}: ${pressed.join(" + ")}`;
-    for (const action of input.update(pressed, navigationRoot() !== null)) runAction(action);
+    if (pressed.length) {
+      const known = controller.seen.size;
+      for (const button of pressed) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      renderControllerCheck();
+      // The first shift tells the half's side: the line names it.
+      if (controller.seen.size !== known) {
+        renderControllerStatus();
+        renderReconnectButtons();
+      }
+    }
+    const found = navigationRoot();
+    const screen = !found ? null : found.id === "setup" || found.id === "finish" ? found.id : "drawer";
+    const root = controllerNavigates({ screen, openedByController: app.drawerByController }) ? found : null;
+    // Riding without an unlocked left Click half (locked, rebooting or not connected): B shifts down.
+    const buttons = remapForDown(pressed, root === null && needsDownButton(app.controllers));
+    const actions = app.controllerInput.update(controller.id, buttons, root !== null);
+    // The whole chain in the device report: what the press did, and where (menu or ride).
+    if (actions.length) deviceLog.info(`${controller.label} → ${actions.join(", ")} (${root ? `navigating ${root.id}` : "riding"})`);
+    for (const action of actions) runAction(action);
   });
   controller.on("battery", renderControllerStatus);
+  controller.on("locked", (locked) => {
+    renderControllerCheck();
+    // Once per ride: why − moved to B, and that the half comes back by itself.
+    if (locked && app.ride && !app.ride.clickLockNoted) {
+      app.ride.clickLockNoted = true;
+      notify(t("devices.clickLocked", { label: controller.label }));
+    }
+  });
   controller.on("disconnected", () => {
+    app.controllerInput.forget(controller.id);
     renderControllerStatus();
     notify(t("devices.controllerDisconnected", { label: controller.label }), "error");
   });
@@ -955,10 +1199,24 @@ function useController(controller) {
 
 function renderControllerStatus() {
   const status = $("controller-status");
-  status.textContent = app.controllers
-    .map((c) => (c.connected ? `${c.label}${c.battery !== null ? ` · ${c.battery} %` : ""}` : t("devices.labelReconnecting", { label: c.label })))
-    .join(", ");
+  status.textContent = controllerLine(app.controllers);
   status.classList.toggle("ok", app.controllers.every((c) => c.connected));
+}
+
+/** Under the controller line: + and − confirmed one by one, or which Click half is missing. */
+function renderControllerCheck() {
+  const check = $("controller-live");
+  const missing = lonelyHalfHint();
+  const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
+  check.textContent = missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null });
+  check.dataset.state = missing ? "silent" : seen.size ? "live" : "";
+  delete check.dataset.note;
+}
+
+/** A lone Click half that has had time to say it relays, and hasn't. */
+function lonelyHalfHint() {
+  const settled = app.controllers.every((c) => now() - c.connectedAt > 2.5);
+  return settled ? missingHalfHint(app.controllers) : null;
 }
 
 /** Whatever the rider navigates with a controller right now; null while riding. */
@@ -971,6 +1229,8 @@ function navigationRoot() {
 
 /** Runs an action from a controller: menu navigation here, the rest like the keyboard. */
 function runAction(action) {
+  // A menu the controller opens is navigated with it; one opened by mouse or touch is not.
+  if (action === "toggleMenu") app.drawerByController = true;
   const root = navigationRoot();
   if (action === "focusNext" || action === "focusPrev") {
     document.documentElement.classList.add("controller-nav");
@@ -1056,16 +1316,9 @@ function showSetupError(message) {
   renderStartMenu();
 }
 
-/** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
-async function joinRide(restored = null) {
-  // Codes count for this join attempt only, also when it fails early.
-  const vehicleCode = app.vehicleCode;
-  const boardCode = app.pendingBoardCode;
-  app.vehicleCode = null;
-  app.pendingBoardCode = null;
-  $("setup-error").textContent = "";
-  const profile = {
-    ...app.profile,
+/** The start menu's rider fields as profile values. */
+function formProfile() {
+  return {
     name: $("name").value.trim(),
     weightKg: displayToKg(Number($("weight").value)),
     ftp: Number($("ftp").value),
@@ -1076,6 +1329,24 @@ async function joinRide(restored = null) {
     chainring: Number($("chainring").value),
     cog: Number($("cog").value),
   };
+}
+
+/** Keeps what is typed in the start menu, before riding: the valid fields only. */
+function keepFormEdits() {
+  if (app.ride) return;
+  app.profile = profiles.save(keepValid(app.profile, formProfile()));
+  $("ftp-source").textContent = ftpProvenance(app.profile, { locale: getLocale() });
+}
+
+/** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
+async function joinRide(restored = null) {
+  // Codes count for this join attempt only, also when it fails early.
+  const vehicleCode = app.vehicleCode;
+  const boardCode = app.pendingBoardCode;
+  app.vehicleCode = null;
+  app.pendingBoardCode = null;
+  $("setup-error").textContent = "";
+  const profile = { ...app.profile, ...formProfile() };
   const errors = validateProfile(profile);
   if (pickRoute(routesOf(app.info), app.routeId)?.kind === "workout") return joinWorkout(profile, errors);
   if (!app.trainer) errors.push(t("join.error.noTrainer"));
@@ -1105,7 +1376,9 @@ async function joinRide(restored = null) {
   const saved = profiles.save(profile);
   app.profile = await profiles.ensureKeys(saved).catch(() => saved);
 
-  const controllable = canControl(app.trainer);
+  // Planned on what the trainer can do once it has control, not on control right now: a busy
+  // trainer gives control a few seconds late, and a ride without its gearbox would ignore every shift.
+  const controllable = couldControlResistance(app.trainer);
   if (route?.kind === "studio") {
     const response = await fetch("/api/studio");
     if (!response.ok) throw new Error(t("join.error.studio", { status: response.status }));
@@ -1434,6 +1707,7 @@ function startRide() {
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();
   $("power-only").hidden = canControl(app.trainer) || app.trainer instanceof PaddleTrainer;
+  $("power-only").textContent = app.trainer?.controlBlocked ? t("hud.resistanceBlocked") : t("hud.powerOnly");
   document.body.classList.add("riding");
   $("hud-route").textContent = app.route.name;
   app.rideStartedAt = now();
@@ -1551,18 +1825,25 @@ function startRoad({ simulated, setSimPower }) {
  * map when the studio is), then boards; a code on another route rejoins there (#55).
  */
 function initStartVehicle() {
-  const view = new VehicleView($("start-vehicle"), {
-    onBoard: (code) => {
-      if ($("join").dataset.busy) return;
-      const routeId = boardingRoute(routesOf(app.info), app.routeId);
-      if (routeId) app.routeId = routeId;
-      app.pendingBoardCode = code;
-      renderStartMenu();
-      joinRide().catch(joinFailed);
-    },
+  // A valid code turns Ride into Board (one main action); a wrong one says why on Ride.
+  $("board-code").addEventListener("input", (event) => {
+    app.boardCode = normaliseCode(event.target.value).code;
+    $("setup-error").textContent = "";
+    renderStartMenu();
   });
-  app.startVehicleView = view;
-  $("board-start").addEventListener("click", () => view.showBoard());
+}
+
+/** Start menu: ride onto the friend's vehicle with the typed code. */
+function boardFromMenu() {
+  if ($("join").dataset.busy || !app.boardCode) return;
+  const routeId = boardingRoute(routesOf(app.info), app.routeId);
+  if (routeId) app.routeId = routeId;
+  app.pendingBoardCode = app.boardCode;
+  // The code is used up by this join: back in the menu, Ride rides again.
+  app.boardCode = null;
+  $("board-code").value = "";
+  renderStartMenu();
+  joinRide().catch(joinFailed);
 }
 
 /** Ride menu: create or board a vehicle, see its seats, leave it. */
@@ -2265,7 +2546,11 @@ function initRecovery() {
   // The page may be gone in a moment (tab closed, phone locked): save now.
   window.addEventListener("pagehide", saveRide);
   window.addEventListener("pagehide", saveWorkoutRecord);
+  // Window and tab changes in the device report: devices misbehaving "after switching windows" leave a trace.
+  window.addEventListener("blur", () => deviceLog.info("Window lost focus"));
+  window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
+    deviceLog.info(`Page ${document.visibilityState}`);
     if (document.visibilityState !== "hidden") return;
     saveRide();
     saveWorkoutRecord();
@@ -2479,9 +2764,13 @@ function initShifting() {
 
 /** Shifts one gear; the same entry point serves keyboard, buttons and controllers. */
 function shift(direction) {
-  if (!app.gearbox || app.training.mode === "erg" || app.studio?.erg) return;
+  // Every ignored shift says why in the device report: "shifting stopped" is otherwise guesswork.
+  const ignored = !app.gearbox ? "no gears in this ride (virtual shifting off, or no trainer that can change resistance)" : app.training.mode === "erg" || app.studio?.erg ? "ERG holds the power" : null; // i18n-ok (device log)
+  if (ignored) return deviceLog.info(`Shift ignored: ${ignored}`);
+  const from = app.gearbox.gear;
   const changed = direction > 0 ? app.gearbox.shiftUp() : app.gearbox.shiftDown();
-  if (!changed) return;
+  if (!changed) return deviceLog.info(`Shift ignored: already in the ${direction > 0 ? "hardest" : "easiest"} gear (${from})`);
+  deviceLog.info(`Gear ${from} → ${app.gearbox.gear}`);
   renderGear();
   app.session.refreshResistance();
 }

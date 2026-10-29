@@ -77,8 +77,19 @@ export function fakeTrainer({ name = "Fake Trainer", id = "fake-device-1", servi
     },
     /** Set to make the next connect() calls fail, as for a sleeping device. */
     failConnect: false,
+    /** How many of the next connect() calls fail once, as Chrome's first connect often does. */
+    failConnectTimes: 0,
+    /** Set to make connect() never answer, as for a trainer busy with another app. */
+    hangConnect: false,
+    connectCalls: 0,
     gatt: {
       async connect() {
+        device.connectCalls += 1;
+        if (device.hangConnect) return new Promise(() => {});
+        if (device.failConnectTimes > 0) {
+          device.failConnectTimes -= 1;
+          throw Object.assign(new Error("Connection attempt failed."), { name: "NetworkError" });
+        }
         if (device.failConnect) throw Object.assign(new Error("Bluetooth Device is no longer in range."), { name: "NetworkError" });
         device.connected = true;
         return {

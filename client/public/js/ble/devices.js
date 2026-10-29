@@ -30,6 +30,19 @@ import { ReadingMerger } from "./readingMerger.js";
 import { Reconnector } from "./reconnector.js";
 import { HEART_RATE_MEASUREMENT, HEART_RATE_SERVICE, parseHeartRate } from "./heartRate.js";
 import { t } from "../i18n/i18n.js";
+import { FIRST_CONNECT_ATTEMPTS, connectGatt } from "./gattConnect.js";
+
+/** How often a trainer that refused control is asked again (another app may have let go). */
+export const CONTROL_RETRY_MS = 10_000;
+
+/**
+ * The trainer can follow the road, now or once it has control: true also while
+ * another app blocks it. A ride plans its gears and ERG on this, not on control
+ * at the moment of joining, which a busy trainer may give a few seconds late.
+ */
+export function couldControlResistance(trainer) {
+  return Boolean(trainer) && (trainer.canControlResistance !== false || Boolean(trainer.controlBlocked));
+}
 
 export function isBluetoothAvailable(nav = globalThis.navigator) {
   return Boolean(nav?.bluetooth);
@@ -54,6 +67,11 @@ export class SmartTrainer extends Emitter {
   #reconnector;
   /** The last grade or target command, sent again after a reconnect. */
   #lastCommand = null;
+  /** The trainer accepted our control request (not just: it has a control point). */
+  #controlled = false;
+  #controlRefused = false;
+  #lastControlAttempt = -Infinity;
+  #timers;
   connected = false;
 
   /**
@@ -64,6 +82,7 @@ export class SmartTrainer extends Emitter {
     this.#device = device;
     this.#merger = merger;
     this.#now = now;
+    this.#timers = { ...(setTimeout && { setTimeout }), ...(clearTimeout && { clearTimeout }) };
     this.log = log;
     this.label = device.name ?? t("devices.smartTrainer");
     this.id = device.id;
@@ -87,8 +106,18 @@ export class SmartTrainer extends Emitter {
     });
   }
 
+  /** Resistance follows the road: the trainer has a control point and gave us control. */
   get canControlResistance() {
-    return this.#controlPoint !== null;
+    return this.#controlPoint !== null && this.#controlled;
+  }
+
+  /**
+   * It could follow the road but refused control, usually because another app
+   * (Zwift, the trainer's own app) holds it. Unlike a power-only trainer, this
+   * can be fixed: close the other app; control is asked for again.
+   */
+  get controlBlocked() {
+    return this.#controlPoint !== null && !this.#controlled;
   }
 
   /**
@@ -113,7 +142,7 @@ export class SmartTrainer extends Emitter {
    */
   static async open(device, options = {}) {
     const trainer = new SmartTrainer({ device, ...options });
-    await trainer.#open();
+    await trainer.#open({ attempts: FIRST_CONNECT_ATTEMPTS });
     device.addEventListener("gattserverdisconnected", () => {
       trainer.connected = false;
       trainer.#reconnector.lost();
@@ -122,10 +151,10 @@ export class SmartTrainer extends Emitter {
   }
 
   /** Connects, subscribes to every data source and takes control; again after a drop. */
-  async #open() {
+  async #open({ attempts = 1 } = {}) {
     const device = this.#device;
     const log = this.log;
-    const server = await device.gatt.connect();
+    const server = await connectGatt(device, { attempts, log, ...this.#timers });
     log?.info("GATT connected");
 
     const ftms = await optionalService(server, FTMS_SERVICE, "FTMS", log);
@@ -188,18 +217,40 @@ export class SmartTrainer extends Emitter {
     const opcode = `0x${response.requestOpCode.toString(16).padStart(2, "0")}`;
     if (response.success) this.log?.info(`Control point: ${opcode} accepted`);
     else this.log?.error(`Control point: ${opcode} rejected with result code ${response.resultCode}`);
+    // The answer to "request control" decides; it may come after the write finished.
+    if (response.requestOpCode === 0x00) {
+      this.#controlRefused = !response.success;
+      if (!response.success) this.#setControlled(false);
+    }
   };
+
+  /** Asks for control again if it was refused, at most every CONTROL_RETRY_MS (nothing else asks in the menu). */
+  async retryControl() {
+    if (!this.controlBlocked || !this.connected || this.#writing) return;
+    if (this.#now() - this.#lastControlAttempt < CONTROL_RETRY_MS) return;
+    await this.#takeControl();
+  }
+
+  #setControlled(controlled) {
+    if (controlled === this.#controlled) return;
+    this.#controlled = controlled;
+    this.emit("control", controlled);
+  }
 
   async #takeControl() {
     const controlPoint = this.#controlPoint;
+    this.#lastControlAttempt = this.#now();
+    this.#controlRefused = false;
     try {
       controlPoint.addEventListener("characteristicvaluechanged", this.#onControlPointAnswer);
       await controlPoint.startNotifications();
       await controlPoint.writeValueWithResponse(encodeRequestControl());
       await controlPoint.writeValueWithResponse(encodeStartOrResume());
       this.log?.info("Requested control and started the trainer");
+      this.#setControlled(!this.#controlRefused);
     } catch (error) {
       this.log?.error(`Taking control failed (${error.message}); power data still works`);
+      this.#setControlled(false);
     }
   }
 
@@ -219,11 +270,13 @@ export class SmartTrainer extends Emitter {
    * operation at a time); if commands arrive faster than they can be written,
    * only the latest one is sent — older grades or targets are obsolete anyway.
    */
-  #send(bytes) {
-    if (!this.#controlPoint) return Promise.resolve();
+  async #send(bytes) {
+    if (!this.#controlPoint) return;
     this.#lastCommand = bytes;
     // While the trainer is away the command waits for the reconnect.
-    if (!this.connected) return Promise.resolve();
+    if (!this.connected) return;
+    // Refused before (another app held it): ask again now and then, it may be free.
+    if (!this.#controlled && !this.#writing && this.#now() - this.#lastControlAttempt >= CONTROL_RETRY_MS) await this.#takeControl();
     this.#pending = bytes;
     if (this.#writing) return this.#writing;
     this.#writing = (async () => {
@@ -284,12 +337,14 @@ async function subscribe(characteristic, name, log) {
 export class HeartRateMonitor extends Emitter {
   #device;
   #reconnector;
+  #timers;
   connected = false;
 
   /** @param {{device: object, log?: import("./deviceLog.js").DeviceLog | null, setTimeout?: Function, clearTimeout?: Function}} deps */
   constructor({ device, log = null, setTimeout, clearTimeout }) {
     super();
     this.#device = device;
+    this.#timers = { ...(setTimeout && { setTimeout }), ...(clearTimeout && { clearTimeout }) };
     this.label = device.name ?? t("devices.hrMonitor");
     this.id = device.id;
     this.#reconnector = new Reconnector({
@@ -323,7 +378,7 @@ export class HeartRateMonitor extends Emitter {
   /** Connects to a strap the browser already granted (no chooser). */
   static async open(device, options = {}) {
     const monitor = new HeartRateMonitor({ device, ...options });
-    await monitor.#open();
+    await monitor.#open({ attempts: FIRST_CONNECT_ATTEMPTS });
     device.addEventListener("gattserverdisconnected", () => {
       monitor.connected = false;
       monitor.#reconnector.lost();
@@ -331,8 +386,8 @@ export class HeartRateMonitor extends Emitter {
     return monitor;
   }
 
-  async #open() {
-    const server = await this.#device.gatt.connect();
+  async #open({ attempts = 1 } = {}) {
+    const server = await connectGatt(this.#device, { attempts, ...this.#timers });
     const service = await server.getPrimaryService(HEART_RATE_SERVICE);
     const measurement = await service.getCharacteristic(HEART_RATE_MEASUREMENT);
     measurement.addEventListener("characteristicvaluechanged", this.#onMeasurement);

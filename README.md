@@ -18,6 +18,7 @@ an app) with a 3D and a 2D view.
 
 <p align="center">
   <a href="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml"><img src="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Lethonium/OpenRadlr"><img src="https://api.scorecard.dev/projects/github.com/Lethonium/OpenRadlr/badge" alt="OpenSSF Scorecard"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
 </p>
 

@@ -25,6 +25,12 @@ export function serverStatus(info) {
   return { text, full, phoneFull, online: true };
 }
 
+/** The server's name for the status pill, empty for the default "OpenRadlr" (the logo says it already). */
+export function serverName(info) {
+  const name = info?.name;
+  return name && name !== "OpenRadlr" ? name : "";
+}
+
 /**
  * The small build label in the start menu: `v0.1.0 · 3f2a9c1`, the details for
  * a bug report, and whether a cached client is older than the server.
@@ -101,14 +107,19 @@ export function routeStats(route) {
   return t("menu.routeStats", { distance: formatDistanceWithUnit(route.length_m ?? 0, 1), gain: formatElevation(route.elevation_gain_m ?? 0) });
 }
 
-/** The stage headline: the workout card asks for a workout, the others for a place to ride. */
-export function stageHeadline(picked) {
-  return picked?.kind === "workout" ? t("menu.stage.pickWorkout") : t("menu.routes.title");
+/** The headline: the picked route's or class's name, a question for the workout, the events tab's title. */
+export function stageHeadline(picked, activity = activityOf(picked)) {
+  if (activity === "events") return t("events.title");
+  if (picked?.kind === "workout") return t("menu.stage.pickWorkout");
+  return picked?.name ?? t("menu.routes.title");
 }
 
-/** The line under the stage headline: where the workout happens, or how riding together works. */
-export function stageLede(picked) {
-  return picked?.kind === "workout" ? t("menu.workout.lede") : t("menu.routes.lede");
+/** The line under the headline: what the pick is like, or how riding together works. */
+export function stageLede(picked, activity = activityOf(picked)) {
+  if (activity === "events") return t("menu.stage.eventsLede");
+  if (picked?.kind === "workout") return t("menu.workout.lede");
+  if (picked?.kind === "studio") return t("menu.studio.description");
+  return picked?.description || t("menu.stage.rideLede");
 }
 
 /** The workout card keeps only the heart-rate row of the devices, so without Bluetooth the heading goes. */
@@ -116,12 +127,54 @@ export function devicesVisible(picked, bluetooth) {
   return picked?.kind !== "workout" || bluetooth;
 }
 
-/** The line under the menu stage's title for the picked card. */
-export function stageStats(picked) {
+/** The figures under the headline: "Rolling · 4.8 km · 64 m up · 2 riders", the class running, or the workouts. */
+export function stageStats(picked, nowS = Date.now() / 1000) {
   if (!picked) return "";
-  if (picked.kind === "studio") return t("menu.stage.spinClass");
+  if (picked.kind === "studio") return `${studioTagline(picked, nowS)} · ${routeRiders(picked)}`;
   if (picked.kind === "workout") return workoutTagline(PRESETS);
-  return routeStats(picked);
+  return `${routeCharacter(picked)} · ${routeStats(picked)} · ${routeRiders(picked)}`;
+}
+
+/** What a card is for: riding a route, a studio class or the workout. */
+export function activityOf(route) {
+  return route?.kind === "studio" || route?.kind === "workout" ? route.kind : "ride";
+}
+
+/** The cards on an activity's tab (none on the events tab: it lists events). */
+export function routesFor(activity, routes) {
+  return routes.filter((route) => activityOf(route) === activity);
+}
+
+/** The card to pick when switching to an activity: the preferred one if it belongs there, else the first. */
+export function pickForActivity(routes, activity, preferredId) {
+  const cards = routesFor(activity, routes);
+  return cards.find((route) => route.id === preferredId) ?? cards[0] ?? null;
+}
+
+const activityLabels = () => ({ ride: t("menu.tab.ride"), studio: t("menu.tab.studio"), workout: t("menu.workout"), events: t("events.title") });
+
+/**
+ * The tabs above the cards, only for what the server offers. Events count the
+ * scheduled ones and are `live` while one can be joined or is running.
+ * @param {object[]} routes from `routesOf`
+ * @param {{joinable: boolean, countdown: string}[]} events rows from `eventRows`
+ */
+export function activityTabs(routes, events) {
+  const tabs = ["ride", "studio", "workout"]
+    .map((id) => ({ id, label: activityLabels()[id], count: routesFor(id, routes).length, live: false }))
+    .filter((tab) => tab.count > 0);
+  if (events.length) tabs.push({ id: "events", label: activityLabels().events, count: events.length, live: events.some((row) => row.joinable || row.countdown === t("events.running")) });
+  return tabs;
+}
+
+/** The tab shown: the one chosen while the server still offers it, else the picked card's. */
+export function shownActivity(tabs, chosen, picked) {
+  return tabs.some((tab) => tab.id === chosen) ? chosen : activityOf(picked);
+}
+
+/** Cards are a picker: shown on route tabs with a choice to make. */
+export function showsCards(activity, cards) {
+  return activity !== "events" && cards.length > 1;
 }
 
 /** Rough character of a route from its climbing per kilometre. */
@@ -147,6 +200,40 @@ export function routeRiders(route) {
   return phones > 0 ? t("menu.riders.withPhones", { riders: text, phones }) : text;
 }
 
+/** The latest select handler per list: a list that isn't redrawn still calls the current one. */
+const handlers = new WeakMap();
+
+/**
+ * Rewrites `list` only when what it shows changed. The menu refreshes every few
+ * seconds; redrawing unchanged cards under the pointer drops their hover state and
+ * focus, which reads as a flicker.
+ * @param {(select: (id: string) => void) => void} draw
+ */
+function drawWhenChanged(list, key, onSelect, draw) {
+  handlers.set(list, onSelect);
+  if (list.dataset.drawn === key) return;
+  list.dataset.drawn = key;
+  draw((id) => handlers.get(list)(id));
+}
+
+/** What a route card shows. */
+export function routeCard(route) {
+  const studio = route.kind === "studio";
+  const workout = route.kind === "workout";
+  return {
+    id: route.id,
+    name: route.name,
+    tag: studio ? t("menu.route.class") : workout ? t("menu.workout") : routeCharacter(route),
+    // A route's description is under the headline once picked: the card stays compact.
+    description: studio ? t("menu.studio.description") : workout ? t("menu.workout.tagline") : null,
+    title: route.description ?? "",
+    stats: studio ? studioTagline(route) : workout ? workoutTagline(PRESETS) : routeStats(route),
+    riders: workout ? null : routeRiders(route),
+    active: (route.players ?? 0) > 0,
+    special: studio || workout,
+  };
+}
+
 /**
  * Renders route cards as radio-style buttons.
  * @param {HTMLElement} list
@@ -155,29 +242,97 @@ export function routeRiders(route) {
  * @param {(id: string) => void} onSelect
  */
 export function renderRoutes(list, routes, selectedId, onSelect) {
-  list.replaceChildren(
-    ...routes.map((route) => {
-      const item = element("li");
-      const button = element("button", "route-card");
-      button.type = "button";
-      button.setAttribute("aria-pressed", String(route.id === selectedId));
-      const studio = route.kind === "studio";
-      const workout = route.kind === "workout";
-      if (studio || workout) button.classList.add("studio-card");
-      const head = element("span", "route-head");
-      head.append(element("strong", "route-name", route.name), element("span", "route-tag", studio ? t("menu.route.class") : workout ? t("menu.workout") : routeCharacter(route)));
-      button.append(head);
-      const description = studio ? t("menu.studio.description") : workout ? t("menu.workout.tagline") : route.description;
-      if (description) button.append(element("span", "route-description", description));
-      const foot = element("span", "route-foot");
-      const riders = route.players ?? 0;
-      const stats = studio ? studioTagline(route) : workout ? workoutTagline(PRESETS) : routeStats(route);
-      foot.append(element("span", "route-stats", stats));
-      if (!workout) foot.append(element("span", riders > 0 ? "route-riders active" : "route-riders", routeRiders(route)));
-      button.append(foot);
-      button.addEventListener("click", () => onSelect(route.id));
-      item.append(button);
-      return item;
-    }),
+  const cards = routes.map(routeCard);
+  drawWhenChanged(list, JSON.stringify([selectedId, cards]), onSelect, (select) =>
+    list.replaceChildren(
+      ...cards.map((card) => {
+        const item = element("li");
+        const button = element("button", "route-card");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(card.id === selectedId));
+        if (card.special) button.classList.add("studio-card");
+        if (card.title) button.title = card.title;
+        const head = element("span", "route-head");
+        head.append(element("strong", "route-name", card.name), element("span", "route-tag", card.tag));
+        button.append(head);
+        if (card.description) button.append(element("span", "route-description", card.description));
+        const foot = element("span", "route-foot");
+        foot.append(element("span", "route-stats", card.stats));
+        if (card.riders !== null) foot.append(element("span", card.active ? "route-riders active" : "route-riders", card.riders));
+        button.append(foot);
+        button.addEventListener("click", () => select(card.id));
+        item.append(button);
+        return item;
+      }),
+    ),
   );
+}
+
+/**
+ * Renders the activity tabs: a tablist with arrow keys moving between tabs.
+ * @param {HTMLElement} list
+ * @param {{id: string, label: string, count: number, live: boolean}[]} tabs
+ * @param {string} current
+ * @param {(id: string) => void} onSelect
+ */
+export function renderActivityTabs(list, tabs, current, onSelect) {
+  drawWhenChanged(list, JSON.stringify([current, tabs]), onSelect, (select) => {
+    const buttons = tabs.map((tab) => {
+      const button = element("button", "activity-tab", tab.label);
+      button.type = "button";
+      button.setAttribute("role", "tab");
+      button.id = `tab-${tab.id}`;
+      button.setAttribute("aria-controls", "activity-panel");
+      const selected = tab.id === current;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      // A count only where there's a choice to make; a dot while an event can be joined.
+      if (tab.count > 1 || tab.id === "events") button.append(element("span", "tab-count", String(tab.count)));
+      if (tab.live) button.append(element("span", "tab-live", ""));
+      button.addEventListener("click", () => select(tab.id));
+      return button;
+    });
+    buttons.forEach((button, index) => {
+      button.addEventListener("keydown", (event) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+        if (!step) return;
+        event.preventDefault();
+        const next = buttons[(index + step + buttons.length) % buttons.length];
+        next.focus();
+        next.click();
+      });
+    });
+    // Redrawing replaces the buttons: keep the keyboard on the selected tab.
+    const focused = list.contains(list.ownerDocument?.activeElement);
+    list.replaceChildren(...buttons);
+    if (focused) buttons.find((button) => button.tabIndex === 0)?.focus();
+    list.parentElement?.querySelector("#activity-panel")?.setAttribute("aria-labelledby", `tab-${current}`);
+  });
+}
+
+/**
+ * The Strava line of the start menu. `required`: the server rides with Strava
+ * accounts only and this rider has none connected yet.
+ * @returns {{shown: boolean, connected: boolean, required: boolean, text: string}}
+ */
+export function stravaLine(info, account) {
+  const strava = info?.strava;
+  if (!strava?.enabled) return { shown: false, connected: false, required: false, text: "" };
+  if (account) return { shown: true, connected: true, required: false, text: account.name };
+  return strava.required
+    ? { shown: true, connected: false, required: true, text: t("strava.line.required") }
+    : { shown: true, connected: false, required: false, text: t("strava.line.optional") };
+}
+
+/**
+ * What the main button does: one action at a time. A typed vehicle code turns
+ * Ride into Board; a server that needs Strava sends the rider there first.
+ * @returns {{kind: "full" | "strava" | "board" | "workout" | "ride", label: string, disabled: boolean}}
+ */
+export function joinAction({ selected, full, needsStrava, boardCode }) {
+  if (full) return { kind: "full", label: t("menu.join.full"), disabled: true };
+  if (needsStrava) return { kind: "strava", label: t("menu.join.needsStrava"), disabled: false };
+  if (boardCode && selected?.kind !== "workout") return { kind: "board", label: t("menu.join.board", { code: boardCode }), disabled: false };
+  if (selected?.kind === "workout") return { kind: "workout", label: t("menu.join.workout"), disabled: false };
+  return { kind: "ride", label: selected ? t("menu.join.route", { name: selected.name }) : t("menu.join"), disabled: false };
 }

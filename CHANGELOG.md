@@ -8,3 +8,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - German translation and a language selector (start menu and Rider panel). The language follows the browser by default and the choice is remembered. Server content such as route names stays as the server sends it.
+
+### Fixed
+- Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
+- Both Click halves can be connected, whichever comes first: their presses are merged into one stream, so a press that one half relays for the other shifts once, and quick + then − is two shifts.
+- A Click that falls asleep is found again within seconds (it advertises only briefly when woken), and a reconnect attempt that hangs gives up after 15 s instead of ending all reconnects.
+- A menu opened with the mouse during a ride no longer turns the Click's shifters into menu navigation; a menu opened with the Click (+ and − together) is still navigated with it.
+- Controller navigation in the start menu goes on from where the focus is (e.g. the button just clicked to pair), and skips the build label and privacy link.
+- The device report traces each controller press to its result ("Zwift Click → shiftDown (riding)", "Gear 12 → 11", or why a shift was ignored), notes window and tab switches, and with `?debug=controller` keeps every controller packet.
+
+### Fixed
+- A trainer held by another app (Zwift, its own app) is shown as "resistance blocked" with what to do, instead of looking connected while resistance never follows the road; OpenRadlr asks for control again every 10 s.
+- Connecting no longer hangs on "Connecting…": every attempt gives up after 15 s, and Chrome's often failing first connect is retried.
+- Connect errors say what to try ("Is it awake, and free of other apps?") instead of the browser's message.
+- The trainer's live check says whether data arrives ("Connected · pedal to check", "✓ 182 W · 88 rpm", "No data for 7 s").
+- The reconnect line shows the remembered trainer's name instead of squeezing it to "N…"; the gear fields only show with a trainer that can shift.
+- The start menu's panel is solid (it could render see-through in Chrome).
+- Device lines have one main action (Reconnect a remembered device, else connect, change or add another) and no longer wrap; the controller check names the button pressed ("✓ Zwift Click: shift up (+)").
+- Virtual shifting no longer goes missing for a whole ride when the trainer gives control a few seconds after Ride was pressed: rides plan gears and ERG on what the trainer can do once it has control, and the HUD says "Resistance blocked" while it hasn't.
+- A two-piece Zwift Click pairs like a pair: after one half the button reads "Add other half", each half is named by its side ("Zwift Click − 70 % · + 68 %"), the check confirms + and − one by one, and picking the half that's already connected says to pick the other one.
+- Virtual shifting's gear is one line ("Chain on 34 × 14 teeth"); the device report counts a controller's idle messages, so it shows whether a controller sends anything at all.
+
+### Changed
+- "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.
+
+### Changed
+- Start screen: tabs for Ride, Studio, Workout and Events; the picked route is described once, above compact route cards.
+- Start screen: "How are you riding?" picks a smart trainer, phone paddles or the simulator; the choice is remembered. Heart rate and controllers are optional add-ons on their own lines.
+- Start screen: the Ride button is always in reach, at the bottom of the panel on wide screens and in a bar along the bottom on tablets and phones. Splits, auto-pause and units are folded into Settings.
+- Start screen opening: placeholders while the server answers, "Loading the island…" while it builds, then the island fades in and the camera descends from high above onto the picked route before the map docks in its corner.
+- Start screen: Strava is one line in the Rider section (connect, or who you're connected as); where a server requires Strava, the Ride button connects it. Boarding a friend's vehicle is a code field under Ride: a valid code turns Ride into Board.
+- `make dev` reads an optional `.env.dev` (see `.env.dev.example`), e.g. for all routes or to try Strava locally.
+- Name, weight, FTP and settings are kept in the browser as soon as they change, not only when a ride starts.
+
+### Fixed
+- The picked route's band no longer flickers orange and white where routes share a road (it lay at the same height as the other routes' bands).
+- The drone camera behind the start menu glides: it takes the road's bends in smooth arcs, flights ease in and out without a jolt, and a new world is swapped in only once the camera has landed.
+- The start menu no longer flickers: no live blur over the moving island, and route cards and tabs are only redrawn when they change.
+- "Weight (kg)" no longer breaks over three lines.
+- The start screen no longer widens past the screen on narrow phones (320 px).

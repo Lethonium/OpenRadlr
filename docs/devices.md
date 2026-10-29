@@ -5,7 +5,7 @@
 | Smart trainers (e.g. Wahoo KICKR Core, Van Rysel D500) | Bluetooth FTMS `0x1826` and/or Cycling Power `0x1818` | Supported: power, cadence, simulation mode |
 | Heart rate straps | Bluetooth Heart Rate `0x180D` | Supported, shown locally only |
 | Zwift Cog (single gear) | none — a passive sprocket | Supported via virtual shifting over FTMS |
-| Zwift Click v2 (two-piece), Ride, Play, Click v1 | proprietary Bluetooth protocol (unencrypted mode) | Supported: shifting, lanes, menus. Verified with a Click v2 on Android Chrome; Play and Click v1 are untested |
+| Zwift Click v2 (two-piece), Ride, Play, Click v1 | proprietary Bluetooth protocol (unencrypted mode) | Supported: shifting, lanes, menus. Verified with a Click v2 on Android and macOS Chrome (its left half locks after ~1 min: see below); Play and Click v1 are untested |
 | ANT+ FE-C | ANT+ USB stick | Planned for native clients |
 
 ## FTMS
@@ -132,9 +132,24 @@ and repeats the handshake; a button press wakes the controller. The status
 next to the button and a ride notification show it, and packets appear under
 *Device diagnostics* as source `zwift`.
 
-**Known limits.** Untested on encrypted-only firmware: if a controller never
-sends buttons after the handshake, the diagnostics report shows its answer.
-Junction choices (#15) will use the lane buttons once junctions exist.
+**Click v2: the left half locks.** The left half (manufacturer data type
+`0x0B`) relays the right half's presses and reports its status
+(`ff 05 00 ea 05 …`, protobuf field 2). About a minute after connecting it
+reports mode 1 and stops plain button messages, unless the Zwift app unlocked
+it within about a day (its `ff 03 …` crypto challenges are only answered by
+Zwift). OpenRadlr then reboots that half with a lone `0x18` (as
+[zwiftboard](https://github.com/thomaschampagne/zwiftboard) does) and
+reconnects; meanwhile and with the right half alone (type `0x0A`, never
+locked), B on the right half shifts down, as in BikeControl's right-side mode.
+Sending RideOn again, a 3 s RideOn keepalive, or zwiftboard's activation
+sequence did not unlock it on a rider's Click v2 (macOS Chrome, 2026-10).
+Both halves may be connected: `MergedControllers` merges them, so a relayed
+press acts once.
+
+**Known limits.** Zwift's encrypted mode isn't implemented: a locked left half
+only comes back by rebooting. `?debug=controller` keeps every controller
+packet in the diagnostics report. Junction choices (#15) will use the lane
+buttons once junctions exist.
 
 ## Browser support
 

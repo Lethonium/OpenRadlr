@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { coastOutline, islandOf, mapFrame } from "../public/js/view/mapPreview.js";
 import { MenuStage } from "../public/js/view/menuStage.js";
-import { HIGHLIGHT, buildHighlight, highlightColor } from "../public/js/view3d/highlight.js";
+import { HIGHLIGHT, HIGHLIGHT_LIFT, buildHighlight, highlightColor } from "../public/js/view3d/highlight.js";
+import { DRONE_LENS, depthStep } from "../public/js/view3d/view3d.js";
 import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose } from "../public/js/view3d/menuCamera.js";
 import { roadFrame } from "../public/js/view3d/world.js";
 
@@ -89,6 +90,73 @@ test("with reduced motion the camera cuts and stands still", () => {
   assert.deepEqual(camera.eye, still, "and stays there");
 });
 
+/**
+ * How abruptly the camera moves: the largest frame-to-frame change of the eye's
+ * per-frame velocity change (m/s) over `seconds` at 60 fps. Smooth acceleration,
+ * even a strong one, stays near zero; a snap or a jolt shows as a spike.
+ */
+function roughness(camera, seconds) {
+  const dt = 1 / 60;
+  let previous = camera.eye.slice();
+  let velocity = null;
+  let change = null;
+  let worst = 0;
+  for (let i = 0; i < seconds * 60; i += 1) {
+    camera.update(dt);
+    const v = camera.eye.map((x, k) => (x - previous[k]) / dt);
+    if (velocity) {
+      const dv = v.map((x, k) => x - velocity[k]);
+      if (change) worst = Math.max(worst, Math.hypot(...dv.map((x, k) => x - change[k])));
+      change = dv;
+    }
+    velocity = v;
+    previous = camera.eye.slice();
+  }
+  return worst;
+}
+
+test("following the road takes bends in smooth arcs, not snaps", () => {
+  const camera = new MenuCamera(overview());
+  camera.showRoute(col);
+  for (let i = 0; i < 100; i += 1) camera.update(0.05);
+  assert.ok(!camera.flying);
+  // The col's hairpins: placed straight from the road, the eye snaps round them.
+  const worst = roughness(camera, 90);
+  assert.ok(worst < 2, `a jolt of ${worst.toFixed(2)} m/s`);
+});
+
+test("a flight leaves at the speed the camera had and lands at the speed of the new shot", () => {
+  const camera = new MenuCamera(overview());
+  for (let i = 0; i < 30; i += 1) camera.update(1 / 60);
+  camera.showRoute(flats);
+  // From the circling drone, through the glide, onto the road: no jolt anywhere.
+  const worst = roughness(camera, 8);
+  assert.ok(worst < 2, `a jolt of ${worst.toFixed(2)} m/s`);
+});
+
+test("the opening: the camera starts high and wide over the island and descends onto the picked route", () => {
+  const o = overview();
+  const camera = new MenuCamera(o, { intro: true });
+  assert.equal(camera.view, "intro");
+  assert.ok(camera.eye[1] > orbitPose(o, 0).eye[1] * 1.5, "well above the usual orbit");
+  camera.showRoute(flats);
+  const worst = roughness(camera, MENU_CAMERA.introS + 1);
+  assert.ok(worst < 2, `a jolt of ${worst.toFixed(2)} m/s`);
+  assert.ok(!camera.flying, "arrived");
+  assert.equal(camera.view, "route");
+});
+
+test("the opening settles into the island orbit when no route is picked; with reduced motion there is none", () => {
+  const o = overview();
+  const camera = new MenuCamera(o, { intro: true });
+  camera.showIsland();
+  assert.ok(camera.flying);
+  for (let i = 0; i < 200; i += 1) camera.update(0.05);
+  assert.equal(camera.view, "island");
+  assert.ok(Math.abs(camera.eye[1] - orbitPose(o, 0).eye[1]) < 1e-6, "at the orbit's height");
+  assert.equal(new MenuCamera(o, { intro: true, reducedMotion: true }).view, "island");
+});
+
 const GYM = { center: [400, 30, -200], yaw: 0.7, spots: [] };
 const flatDistance = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 
@@ -157,6 +225,23 @@ test("the highlight shows climbs and sprints from the markers", () => {
   assert.deepEqual(highlightColor(col, climb.distance + 10), HIGHLIGHT.climb);
   assert.deepEqual(highlightColor(col, sprint.distance + 10), HIGHLIGHT.sprint);
   assert.deepEqual(highlightColor(col, climb.distance - 50), HIGHLIGHT.route);
+});
+
+test("where routes share a road, the picked band lies clearly over the others' bands: no flicker from the drone", () => {
+  const lowest = (mesh) => {
+    let low = Infinity;
+    for (let v = 0; v < mesh.vertexCount; v += 1) low = Math.min(low, mesh.positions[v * 3 + 1]);
+    return low;
+  };
+  const start = roadFrame(hills, 0).center[1];
+  // The same road under both: only the lift tells them apart.
+  const picked = buildHighlight(hills, { beacon: 0, step: 1e9 });
+  const other = buildHighlight(hills, { color: HIGHLIGHT.other, beacon: 0, step: 1e9 });
+  assert.ok(Math.abs(lowest(picked) - start - HIGHLIGHT_LIFT.picked) < 1e-3);
+  assert.ok(Math.abs(lowest(other) - start - HIGHLIGHT_LIFT.other) < 1e-3);
+  const gap = HIGHLIGHT_LIFT.picked - HIGHLIGHT_LIFT.other;
+  assert.ok(gap > depthStep(DRONE_LENS, 6000) * 2, `${gap} m apart flickers from the drone`);
+  assert.ok(HIGHLIGHT_LIFT.other > 0.2, "the other bands still clear the road and its markings");
 });
 
 test("the highlight band lies just above the road and faces up, with a beacon at the start", () => {
@@ -249,6 +334,11 @@ const gymAt = (route) => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
+/** Flies the stage's camera to where it is going: rebuilds wait for that. */
+const land = (log) => {
+  for (let i = 0; i < 100 && log.views[0].camera.flying; i += 1) log.views[0].camera.update(0.05);
+};
+
 test("the stage shows the pick at once and builds its world in the background", async () => {
   const { stage, log } = fakeStage();
   await stage.select(listed, "rolling-hills");
@@ -276,6 +366,7 @@ test("another pick is highlighted right away and its world rebuilt once the pick
   assert.equal(log.views[0].highlights[0].route, "col-de-la-forge", "highlighted on the world already there");
   assert.equal(log.builds.length, 1, "the rebuild waits");
   await stage.select(listed, "riverside-flats");
+  land(log);
   log.timers.at(-2)(); // the timer for the col: no longer picked
   log.timers.at(-1)();
   assert.deepEqual(
@@ -287,6 +378,38 @@ test("another pick is highlighted right away and its world rebuilt once the pick
   assert.ok(log.views[0].disposed, "the old world is released");
   assert.equal(stage.viewRouteId, "riverside-flats");
   assert.equal(log.views[1].camera, log.views[0].camera, "the camera flies on");
+});
+
+test("a rebuilt world waits until the camera has landed: no hitch in the middle of a glide", async () => {
+  const { stage, log } = fakeStage();
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  await stage.select(listed, "col-de-la-forge");
+  const camera = log.views[0].camera;
+  assert.ok(camera.flying);
+  log.timers.at(-1)();
+  assert.equal(log.builds.length, 1, "not while flying");
+  land(log);
+  log.timers.at(-1)();
+  assert.deepEqual(
+    log.builds.map((b) => b.id),
+    ["rolling-hills", "col-de-la-forge"],
+  );
+});
+
+test("the opening descends to whatever is picked: a route, or the island orbit for the studio", async () => {
+  for (const [pick, view] of [["col-de-la-forge", "route"], ["spin-studio", "island"]]) {
+    const { stage, log } = fakeStage();
+    stage.deps.createCamera = (o) => new MenuCamera(o, { intro: true });
+    await stage.select(listed, pick);
+    await settle();
+    log.builds[0].resolve();
+    await settle();
+    const camera = log.views[0].camera;
+    assert.equal(camera.view, view, pick);
+    assert.ok(camera.flying, `${pick}: descending`);
+  }
 });
 
 test("joining takes the view over only when it was built for the joined route", async () => {
@@ -413,6 +536,7 @@ test("the workout card builds the default route's world when the one on screen l
   await settle();
   await stage.select(withWorkout, "workout");
   assert.equal(log.views[0].camera.view, "island", "the island meanwhile");
+  land(log);
   log.timers.at(-1)();
   assert.equal(log.builds.at(-1).id, "riverside-flats", "rebuilt for the default route");
   log.builds.at(-1).resolve();

@@ -53,6 +53,21 @@ export function validateProfile({ name, weightKg, units = "metric", ftp = 200, s
   return errors;
 }
 
+/**
+ * The profile with the edited fields that are valid on their own: what is typed in the
+ * start menu is kept right away, a half-typed value ("7" on the way to "72") is not.
+ */
+export function keepValid(previous, edited) {
+  // A valid profile that checks every field, the gears included.
+  const base = { ...DEFAULT_PROFILE, name: "Rider", virtualShifting: true }; // i18n-ok (placeholder for validation only)
+  const kept = { ...previous };
+  for (const [key, raw] of Object.entries(edited)) {
+    const value = key === "name" ? String(raw ?? "").trim() : raw;
+    if (validateProfile({ ...base, [key]: value }).length === 0) kept[key] = value;
+  }
+  return kept;
+}
+
 export class ProfileStore {
   /**
    * @param {{storage?: Storage, subtle?: SubtleCrypto}} [deps]

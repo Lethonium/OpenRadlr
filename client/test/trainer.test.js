@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CadenceCalculator, parseCyclingPowerMeasurement } from "../public/js/ble/cyclingPower.js";
 import { DeviceLog } from "../public/js/ble/deviceLog.js";
-import { SmartTrainer } from "../public/js/ble/devices.js";
+import { PaddleTrainer, SimulatedTrainer, SmartTrainer, couldControlResistance } from "../public/js/ble/devices.js";
 import { ReadingMerger } from "../public/js/ble/readingMerger.js";
 import { dataView } from "./helpers.js";
 import { fakeTrainer } from "./fakeBluetooth.js";
@@ -199,4 +199,88 @@ test("reports a disconnect", async () => {
   trainer.on("disconnected", () => (disconnected = true));
   device.gatt.disconnect();
   assert.ok(disconnected);
+});
+
+// --- reliability ----------------------------------------------------------
+
+/** Timers that run at once (connect retries) and a clock the test moves. */
+const instantTimers = { setTimeout: (fn) => (Promise.resolve().then(fn), 1), clearTimeout: () => {} };
+
+test("a trainer that refuses control can't change resistance, and says so", async () => {
+  const { trainer } = await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: { failWrite: true } } } });
+  assert.equal(trainer.canControlResistance, false);
+  assert.equal(trainer.controlBlocked, true, "blocked, unlike a power-only trainer");
+});
+
+test("a trainer that answers 'control not permitted' can't change resistance either", async () => {
+  const refusing = { onWrite: (bytes, cp) => cp.notify([0x80, bytes[0], bytes[0] === 0x00 ? 0x05 : 0x01]) };
+  const { trainer } = await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: refusing } } });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(trainer.canControlResistance, false);
+  assert.equal(trainer.controlBlocked, true);
+});
+
+test("control is taken again once the other app lets go, at most every 10 s", async () => {
+  let t = 0;
+  const changes = [];
+  const { characteristics, trainer } = await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: { failWrite: true } } } }, { now: () => t });
+  trainer.on("control", (can) => changes.push(can));
+  characteristics[CONTROL].failWrite = false;
+  t = 5_000;
+  await trainer.setGrade(2);
+  assert.equal(trainer.canControlResistance, false, "too soon to ask again");
+  t = 11_000;
+  await trainer.setGrade(3);
+  assert.equal(trainer.canControlResistance, true);
+  assert.deepEqual(changes, [true]);
+  // The grade at 5 s went out on its own; at 11 s control came first, then the grade.
+  assert.deepEqual(characteristics[CONTROL].writes.slice(1, 3), [[0x00], [0x07]], "requested control, then started");
+});
+
+test("a power-only trainer is not 'blocked': it never could change resistance", async () => {
+  const { trainer } = await connect({ services: { [CPS]: { [POWER]: {} } } });
+  assert.equal(trainer.controlBlocked, false);
+});
+
+test("the first connect is retried when Chrome's first attempt fails", async () => {
+  const fake = fakeTrainer({ services: { [FTMS]: { [BIKE_DATA]: {} } } });
+  fake.device.failConnectTimes = 2;
+  const trainer = await SmartTrainer.connect(fake.bluetooth, instantTimers);
+  assert.ok(trainer.connected);
+  assert.equal(fake.device.connectCalls, 3);
+});
+
+test("a trainer that never answers gives up with a timeout instead of 'Connecting…' forever", async () => {
+  const fake = fakeTrainer({ services: { [FTMS]: { [BIKE_DATA]: {} } } });
+  fake.device.hangConnect = true;
+  const timers = [];
+  const opening = SmartTrainer.connect(fake.bluetooth, { setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout: () => {} });
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(timers.at(-1).ms, 15_000);
+  timers.at(-1).fn();
+  await assert.rejects(opening, { name: "TimeoutError" });
+  assert.equal(fake.device.connectCalls, 1, "a timeout is not retried: 15 s is long enough");
+});
+
+test("a blocked trainer can be asked again while nothing is sent yet (the start menu)", async () => {
+  let t = 0;
+  const { characteristics, trainer } = await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: { failWrite: true } } } }, { now: () => t });
+  characteristics[CONTROL].failWrite = false;
+  await trainer.retryControl();
+  assert.equal(trainer.canControlResistance, false, "not before 10 s");
+  t = 10_000;
+  await trainer.retryControl();
+  assert.equal(trainer.canControlResistance, true);
+});
+
+test("a blocked trainer could still follow the road once it has control: rides plan for it (gears, ERG)", async () => {
+  const blocked = (await connect({ services: { [FTMS]: { [BIKE_DATA]: {}, [CONTROL]: { failWrite: true } } } })).trainer;
+  assert.equal(couldControlResistance(blocked), true);
+  const powerOnly = (await connect({ services: { [CPS]: { [POWER]: {} } } })).trainer;
+  assert.equal(couldControlResistance(powerOnly), false);
+  // No real intervals: they would keep the test process alive.
+  const still = { setInterval: () => 0, clearInterval: () => {} };
+  assert.equal(couldControlResistance(new SimulatedTrainer(still)), true);
+  assert.equal(couldControlResistance(new PaddleTrainer(still)), false);
+  assert.equal(couldControlResistance(null), false);
 });

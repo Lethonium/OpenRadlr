@@ -22,7 +22,7 @@ function jsSource(dir) {
 const scripts = jsSource(JS_ROOT);
 const usedInJs = (key) => scripts.includes(`"${key}"`) || scripts.includes(`"${key.replace(/\.(one|other)$/, "")}"`);
 
-const ALLOWED_TEXT = new Set(["Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm", "rpm", "bpm", "W/kg", "W/kg ·", "ERG", "0 kJ"]);
+const ALLOWED_TEXT = new Set(["Strava ·", "Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm", "rpm", "bpm", "W/kg", "W/kg ·", "ERG", "0 kJ"]);
 const TEXT_ATTRS = ["title", "aria-label", "placeholder", "alt"];
 const VOID = new Set(["meta", "link", "input", "img", "br", "hr", "source"]);
 
