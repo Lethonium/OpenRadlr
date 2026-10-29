@@ -51,7 +51,7 @@ repeat it. Here is the operational knowledge on top of that.
 - **Protocol changes:** update `docs/protocol.md`, both sides, bump
   `PROTOCOL_VERSION` for breaking changes.
 - **Structural decisions:** add an ADR to `docs/adr/` (NNNN-short-name.md;
-  context, decision, consequences). There are 16 so far.
+  context, decision, consequences). There are 17 so far.
 - **Feature design:** significant features go through the superpowers workflow —
   a design spec and an implementation plan in `docs/superpowers/{specs,plans}/`
   (see the 2026-10-19 examples). Follow that pattern for new features.
@@ -59,7 +59,8 @@ repeat it. Here is the operational knowledge on top of that.
   `[Unreleased]` with the issue number.
 
 ## Key layout
-- `client/public/` — browser app (`js/` modules, `index.html`, `styles.css`);
+- `client/public/` — browser app (`js/` modules, `index.html`, `styles.css`;
+  UI text lives in `js/i18n/en.js` + `de.js`, see ADR 0017);
   `client/test/` — node tests; `main.js` is the only composition root
 - `server/crates/sim/` — pure simulation (no I/O, async or third-party deps);
   `server/crates/server/` — game core + WebSocket server; `tests/` — e2e

@@ -55,6 +55,15 @@ Dependencies are passed in, never reached for globally:
 - **Protocol changes:** update `docs/protocol.md`, both sides, and bump
   `PROTOCOL_VERSION` for breaking changes.
 
+## User-facing text
+
+New UI text goes through the i18n module: `data-i18n` / `data-i18n-attr` in
+`index.html`, `t()` / `tn()` in JS, with the key in both
+`client/public/js/i18n/en.js` and `de.js` (same `{params}`). Numbers shown to
+the rider use `formatNumber`, never `toFixed` into the page. The `i18nHtml`,
+`i18nSweep` and `i18nParity` tests fail on missing keys or stray English; mark
+a deliberate English literal (a log line, a file format) with `// i18n-ok`.
+
 ## Architecture decisions
 
 Significant decisions are recorded in `docs/adr/` as short markdown files
