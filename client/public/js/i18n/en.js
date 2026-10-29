@@ -640,4 +640,10 @@ export default {
   "panels.joinedYou": "You joined",
   "panels.boardedYou": "You boarded",
   "panels.leftYou": "You left",
+  "devices.error.noData": "This device offers neither FTMS Indoor Bike Data nor Cycling Power data.",
+  "devices.error.noSubscribe": "Could not subscribe to any power data from this trainer.",
+  "devices.error.connected": "{name} is already connected.",
+  "devices.error.thisController": "This controller",
+  "devices.error.notZwift": "This device is not a Zwift Click, Play or Ride controller.",
+  "training.fileTooLarge": "The file is larger than 512 KB.",
 };

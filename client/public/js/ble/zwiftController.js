@@ -85,7 +85,7 @@ export class ZwiftController extends Emitter {
   static async connect(bluetooth = globalThis.navigator.bluetooth, { isConnected = () => false, names, ...options } = {}) {
     const device = await bluetooth.requestDevice(requestOptions(names));
     options.log?.info(`Selected controller "${device.name ?? "unnamed"}"`);
-    if (isConnected(device)) throw new Error(`${device.name ?? "This controller"} is already connected.`);
+    if (isConnected(device)) throw new Error(t("devices.error.connected", { name: device.name ?? t("devices.error.thisController") }));
     return ZwiftController.open(device, options);
   }
 
@@ -109,7 +109,7 @@ export class ZwiftController extends Emitter {
   async #open() {
     const server = await this.#device.gatt.connect();
     const service = await firstService(server, [ZWIFT_SERVICE, ZWIFT_RIDE_SERVICE]);
-    if (!service) throw new Error("This device is not a Zwift Click, Play or Ride controller.");
+    if (!service) throw new Error(t("devices.error.notZwift"));
     const notifications = await service.getCharacteristic(ASYNC_CHARACTERISTIC);
     const commands = await service.getCharacteristic(SYNC_RX_CHARACTERISTIC);
     const answers = await service.getCharacteristic(SYNC_TX_CHARACTERISTIC);

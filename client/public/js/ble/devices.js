@@ -136,7 +136,7 @@ export class SmartTrainer extends Emitter {
 
     if (!bikeData && !powerMeasurement) {
       device.gatt.disconnect();
-      throw new Error("This device offers neither FTMS Indoor Bike Data nor Cycling Power data.");
+      throw new Error(t("devices.error.noData"));
     }
 
     // Subscribe to data first: data must flow even if taking control fails.
@@ -153,7 +153,7 @@ export class SmartTrainer extends Emitter {
     }
     if (this.sources.length === 0) {
       device.gatt.disconnect();
-      throw new Error("Could not subscribe to any power data from this trainer.");
+      throw new Error(t("devices.error.noSubscribe"));
     }
 
     this.#controlPoint = controlPoint || null;

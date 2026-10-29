@@ -1016,6 +1016,7 @@ function initDiagnostics() {
     const total = Object.values(deviceLog.packets).reduce((sum, n) => sum + n, 0);
     $("trainer-packets").textContent = total ? tn("diagnostics.packets", total) : "";
   };
+  relocaliseHooks.push(render);
   const schedule = () => {
     if (!scheduled) {
       scheduled = true;
@@ -1037,13 +1038,12 @@ function initDiagnostics() {
       $("diagnostics").open = true;
       button.textContent = t("diagnostics.selectText");
     }
-    setTimeout(() => (button.textContent = button.dataset.label), 2000);
+    setTimeout(() => (button.textContent = t(button.dataset.i18n)), 2000);
   };
   // Delegated: the ride's button is replaced with every new ride.
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("#copy-diagnostics, #ride-copy-diagnostics");
     if (!button) return;
-    button.dataset.label ??= button.textContent;
     copy(button);
   });
 }
@@ -1808,7 +1808,9 @@ function startStudio({ simulated, setSimPower }) {
 function speak(text) {
   if (!app.coachVoice || !("speechSynthesis" in globalThis)) return;
   speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = getLocale();
+  speechSynthesis.speak(utterance);
 }
 
 function updateStudioPanels() {
@@ -1888,9 +1890,9 @@ function studioFrame() {
   $("studio-cadence").textContent = Number.isFinite(cadence) ? Math.round(cadence) : "–";
   $("studio-cadence-cue").textContent = position?.cadence ? `${position.cadence[0]}–${position.cadence[1]}` : "";
   app.hud.set("hr", Number.isFinite(heartRate) ? Math.round(heartRate) : "–");
-  app.hud.set("time", formatDuration(t - app.rideStartedAt));
+  app.hud.set("time", formatDuration(time - app.rideStartedAt));
   app.hud.set("distance", formatDistance(me?.distance ?? 0));
-  app.hud.set("avg-speed", averageSpeed(me?.distance ?? 0, t - app.rideStartedAt));
+  app.hud.set("avg-speed", averageSpeed(me?.distance ?? 0, time - app.rideStartedAt));
   app.rideDistance = me ? app.distanceOffset + me.distance : app.rideDistance;
 
   // Offline the rider's last state is stale: they don't move until the server is back.
@@ -2729,7 +2731,7 @@ function initTraining({ simulated, setSimPower }) {
     event.target.value = "";
     if (!file) return;
     try {
-      if (file.size > 512 * 1024) throw new Error("The file is larger than 512 KB.");
+      if (file.size > 512 * 1024) throw new Error(t("training.fileTooLarge"));
       const workout = parseZwo(await file.text());
       app.workouts.push(workout);
       renderWorkoutOptions(app.workouts.length - 1);
