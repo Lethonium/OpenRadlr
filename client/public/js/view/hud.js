@@ -11,7 +11,7 @@
  */
 import { t } from "../i18n/i18n.js";
 import { zoneFor } from "../ride/workout.js";
-import { formatDistanceWithUnit, formatDuration, formatSpeed, speedUnit } from "../util/format.js";
+import { formatDistanceWithUnit, formatDuration, formatNumber, formatSpeed, speedUnit } from "../util/format.js";
 
 export const LAYOUTS = Object.freeze(["cockpit", "broadcast", "training", "race"]);
 export const LAYOUT_CHOICES = Object.freeze(["auto", ...LAYOUTS]);
@@ -149,7 +149,7 @@ export function formatTimeGap(seconds, { mine = false } = {}) {
   if (mine) return "—";
   const sign = seconds >= 0 ? "+" : "−";
   const abs = Math.abs(seconds);
-  if (abs < 10) return `${sign}${abs.toFixed(1)} s`;
+  if (abs < 10) return `${sign}${formatNumber(abs, 1)} s`;
   const whole = Math.round(abs);
   return `${sign}${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }

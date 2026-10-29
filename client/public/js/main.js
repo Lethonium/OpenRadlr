@@ -37,7 +37,7 @@ import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "./route/worl
 import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
-import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
+import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
 import { themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
@@ -2487,7 +2487,7 @@ function shift(direction) {
 function renderGear() {
   $("hud-gear").textContent = app.gearbox.gear;
   $("hud-gear-count").textContent = `/${app.gearbox.count}`;
-  $("hud-gear-sub").textContent = t("hud.ratio", { ratio: app.gearbox.ratio.toFixed(2) });
+  $("hud-gear-sub").textContent = t("hud.ratio", { ratio: formatNumber(app.gearbox.ratio, 2) });
 }
 
 // ------------------------------------------------------------------ hud ---
@@ -3331,7 +3331,7 @@ function frame() {
   hud.set("cadence", Number.isFinite(cadence) ? Math.round(cadence) : "–");
   hud.set("hr", Number.isFinite(heartRate) ? Math.round(heartRate) : "–");
   hud.set("speed", formatSpeed(me?.speed ?? 0));
-  hud.set("grade", `${me ? formatGrade(app.route.gradeAt(me.distance)) : "0.0"} %`);
+  hud.set("grade", `${me ? formatGrade(app.route.gradeAt(me.distance)) : formatGrade(0)} %`);
   hud.set("distance", formatDistance(app.rideDistance));
   // The ride time stands still while paused.
   const clock = app.pausedFrom ?? time;

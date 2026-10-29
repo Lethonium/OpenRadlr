@@ -1,4 +1,4 @@
-import { formatDistanceWithUnit, formatDuration } from "../util/format.js";
+import { formatDistanceWithUnit, formatDuration, formatNumber } from "../util/format.js";
 import { getLocale, t, tn } from "../i18n/i18n.js";
 
 /** Pure helpers for scheduled events: the menu list, lobby banner, power sharing and results. */
@@ -16,7 +16,7 @@ export const formatCountdown = (seconds) => formatDuration(seconds);
  * @param {{locale?: string, timeZone?: string}} format
  * @param {string | null} enteredId the event I'm entered in, if any
  */
-export function eventRows(info, nowMs = Date.now(), { locale, timeZone } = {}, enteredId = null) {
+export function eventRows(info, nowMs = Date.now(), { locale = getLocale(), timeZone } = {}, enteredId = null) {
   const clock = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false, hourCycle: "h23", timeZone });
   const skewMs = info.now_s * 1000 - nowMs;
   const label = (seconds) => clock.format(new Date(seconds * 1000 - skewMs));
@@ -69,7 +69,7 @@ export function eventRideName(kind, routeName) {
 export function eventResultRows(results, kind, myId) {
   return results.map((result) => {
     const name = result.rider_id === myId ? t("panels.you") : `${result.name}${result.is_bot ? ` ${t("panels.botSuffix")}` : ""}`;
-    const wkg = `${result.avg_wkg.toFixed(1)} W/kg`;
+    const wkg = `${formatNumber(result.avg_wkg, 1)} W/kg`;
     if (kind === "race") {
       return result.place === undefined || result.place === null ? t("events.dnf", { name }) : `#${result.place} ${name} · ${formatDuration(result.time_s)} · ${wkg}`;
     }

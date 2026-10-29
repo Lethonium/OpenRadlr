@@ -6,8 +6,8 @@
  * page is closed; the finish dialog lists them for download or sharing.
  */
 
-import { formatDistanceWithUnit, formatDuration, formatSpeed, speedUnit } from "../util/format.js";
-import { t } from "../i18n/i18n.js";
+import { formatDistanceWithUnit, formatDuration, formatNumber, formatSpeed, speedUnit } from "../util/format.js";
+import { getLocale, t } from "../i18n/i18n.js";
 
 export const MAX_PHOTOS = 30;
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'; // i18n-ok
@@ -87,7 +87,7 @@ export function photoStats({ distanceM, elapsedS, power, speed, gradePercent }) 
     [t("photos.stat.time"), formatDuration(elapsedS)],
     [t("photos.stat.power"), `${Math.round(power || 0)} W`],
     [t("photos.stat.speed"), `${formatSpeed(speed || 0)} ${speedUnit()}`],
-    [t("photos.stat.grade"), `${gradePercent >= 0 ? "" : "−"}${Math.abs(gradePercent || 0).toFixed(1)} %`],
+    [t("photos.stat.grade"), `${gradePercent >= 0 ? "" : "−"}${formatNumber(Math.abs(gradePercent || 0), 1)} %`],
   ];
 }
 
@@ -177,7 +177,7 @@ export function composePhoto(scene, { routeName, stats, when }, doc = document) 
   ctx.textAlign = "right";
   ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
   ctx.font = `500 ${13 * u}px ${SANS}`;
-  ctx.fillText(when.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }), w - pad, pad + 13 * u);
+  ctx.fillText(when.toLocaleString(getLocale(), { dateStyle: "medium", timeStyle: "short" }), w - pad, pad + 13 * u);
   ctx.textAlign = "left";
   return canvas;
 }
@@ -223,7 +223,7 @@ export function composeSummary({ routeName, serverName, when, stats, power, elev
   ctx.fillText(fit(ctx, routeName, 980), left, 172);
   ctx.fillStyle = "#aab3c0";
   ctx.font = `500 24px ${SANS}`;
-  ctx.fillText(fit(ctx, `${when.toLocaleString([], { dateStyle: "long", timeStyle: "short" })} · ${serverName}`, 980), left, 214);
+  ctx.fillText(fit(ctx, `${when.toLocaleString(getLocale(), { dateStyle: "long", timeStyle: "short" })} · ${serverName}`, 980), left, 214);
 
   // Totals in a grid of up to 4 columns.
   const columns = 4;

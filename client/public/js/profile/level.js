@@ -5,6 +5,7 @@
  */
 
 import { t } from "../i18n/i18n.js";
+import { formatNumber } from "../util/format.js";
 
 export const LEVEL_STEP = 0.05;
 const WINDOW_MS = 20 * 60 * 1000;
@@ -52,5 +53,5 @@ export function levelAfterRace(level, avgPower) {
 }
 
 export function levelLabel(levelW, weightKg) {
-  return t("rider.level", { wkg: (levelW / weightKg).toFixed(1) });
+  return t("rider.level", { wkg: formatNumber(levelW / weightKg, 1) });
 }

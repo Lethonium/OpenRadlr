@@ -7,7 +7,7 @@
 import { PRESETS } from "../workout/presets.js";
 import { planDuration } from "../workout/plan.js";
 import { distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation } from "../util/format.js";
-import { getLocale, t, tn } from "../i18n/i18n.js";
+import { t, tn } from "../i18n/i18n.js";
 
 /** "3 riding now · 50 max" style status, or a hint when the server is unreachable. */
 export function serverStatus(info) {
@@ -50,7 +50,7 @@ export function buildLabel(info, client) {
 export function communityDistance(info) {
   const totals = info?.distance_m;
   if (!totals || !Number.isFinite(totals.trainer) || !Number.isFinite(totals.paddle)) return null;
-  const amount = (metres) => `${Number(formatDistance(metres, 0)).toLocaleString(getLocale())} ${distanceUnit()}`;
+  const amount = (metres) => `${formatDistance(metres, 0)} ${distanceUnit()}`;
   return t("menu.community", { trainers: amount(totals.trainer), phones: amount(totals.paddle) });
 }
 
