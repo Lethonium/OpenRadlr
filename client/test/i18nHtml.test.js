@@ -9,12 +9,12 @@ import en from "../public/js/i18n/en.js";
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
 // Subtrees not converted yet ("#id" or ".class"); each conversion task shrinks this list.
-const PENDING_SECTIONS = ["#ride"];
+const PENDING_SECTIONS = ["#social", "#menu"];
 // Subtrees inside a pending one that are already converted and therefore checked.
 const CHECKED_WITHIN_PENDING = [".photos"];
 // en keys that HTML does not use (JS-built text added by later tasks, test seeds).
 const PENDING_KEY_PREFIXES = ["test."];
-const ALLOWED_TEXT = new Set(["Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm"]);
+const ALLOWED_TEXT = new Set(["Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm", "rpm", "bpm", "W/kg", "W/kg ·", "ERG", "0 kJ"]);
 const TEXT_ATTRS = ["title", "aria-label", "placeholder", "alt"];
 const VOID = new Set(["meta", "link", "input", "img", "br", "hr", "source"]);
 

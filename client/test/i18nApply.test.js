@@ -66,3 +66,13 @@ test("handles the root element itself", () => {
   applyTranslations(root);
   assert.equal(self.textContent, "Hello {name}");
 });
+
+test("translates a cloned subtree like the ride template", () => {
+  const el = fakeEl({ i18n: "test.hello" });
+  const template = fakeRoot([el]);
+  const clone = fakeRoot([{ ...el, attrs: {}, dataset: { ...el.dataset }, matches: el.matches, setAttribute() {} }]);
+  applyTranslations(template);
+  applyTranslations(clone);
+  const [cloned] = clone.querySelectorAll("[data-i18n]");
+  assert.equal(cloned.textContent, "Hello {name}");
+});
