@@ -1,5 +1,6 @@
 import { formatCountdown } from "./events.js";
 import { formatDuration, formatGap } from "../util/format.js";
+import { t, tn } from "../i18n/i18n.js";
 
 /**
  * Side panels (rider list, race status, event feed). Pure functions decide
@@ -50,15 +51,15 @@ export function inRace(race, me, myId) {
 export function raceStatus(race, myLap) {
   switch (race?.phase) {
     case "countdown":
-      return `Race starts in ${Math.ceil(race.remaining_s)} s · ${race.laps} ${race.laps === 1 ? "lap" : "laps"}`;
+      return t("panels.race.starts", { s: Math.ceil(race.remaining_s), laps: tn("panels.lap", race.laps) });
     case "running":
       return myLap
-        ? `Lap ${myLap}/${race.laps} · ${formatDuration(race.elapsed_s)}`
-        : `Race in progress · ${formatDuration(race.elapsed_s)} · you are free riding`;
+        ? t("panels.race.lap", { lap: myLap, laps: race.laps, time: formatDuration(race.elapsed_s) })
+        : t("panels.race.inProgress", { time: formatDuration(race.elapsed_s) });
     case "finished":
-      return "Race finished";
+      return t("panels.race.finished");
     default:
-      return "Free ride";
+      return t("panels.freeRide");
   }
 }
 
@@ -74,49 +75,48 @@ export function onlineSummary(serverPlayers, riders, routeRiders = null) {
   const humans = routeRiders?.humans ?? riders.filter((rider) => !rider.is_bot).length;
   const bots = routeRiders?.bots ?? riders.length - humans;
   const online = Math.max(serverPlayers ?? humans, humans);
-  const people = (n) => (n === 1 ? "1 rider" : `${n} riders`);
-  const parts = [`${people(online)} online`];
-  if (online !== humans) parts.push(`${humans} on this route`);
-  if (bots > 0) parts.push(bots === 1 ? "1 bot" : `${bots} bots`);
+  const parts = [t("panels.online", { riders: tn("menu.riders", online) })];
+  if (online !== humans) parts.push(t("panels.onRoute", { n: humans }));
+  if (bots > 0) parts.push(tn("panels.bots", bots));
   return { count: online, text: parts.join(" · ") };
 }
 
 /** `myVehicleId`: the vehicle I sit in, so only its changes are announced. */
 export function describeEvent(event, myId, myVehicleId = null) {
-  const who = (id, name, isBot) => (id === myId ? "You" : `${name}${isBot ? " (bot)" : ""}`);
+  const who = (id, name, isBot) => (id === myId ? t("panels.you") : `${name}${isBot ? ` ${t("panels.botSuffix")}` : ""}`);
   switch (event.kind) {
     case "rider_joined":
-      return event.is_bot ? null : `${who(event.rider_id, event.name, false)} joined`;
+      return event.is_bot ? null : t("panels.joined", { who: who(event.rider_id, event.name, false) });
     case "rider_left":
       return null;
     case "race_countdown":
-      return `Race over ${event.laps} ${event.laps === 1 ? "lap" : "laps"} starts in ${Math.round(event.seconds)} s`;
+      return t("panels.race.countdown", { laps: tn("panels.lap", event.laps), s: Math.round(event.seconds) });
     case "race_started":
-      return "Race started — go!";
+      return t("panels.race.started");
     case "rider_finished":
-      return `#${event.position} ${who(event.rider_id, event.name, event.is_bot)} · ${formatDuration(event.time_s)}`;
+      return t("panels.riderFinished", { position: event.position, who: who(event.rider_id, event.name, event.is_bot), time: formatDuration(event.time_s) });
     case "race_finished":
-      return "Race finished";
+      return t("panels.race.finished");
     case "event_lobby":
-      return `${event.name} starts in ${formatCountdown(event.starts_in_s)} · J to join`;
+      return t("panels.event.lobby", { name: event.name, time: formatCountdown(event.starts_in_s) });
     case "event_started":
       // A race already announces itself with race_started.
-      return event.event_kind === "race" ? null : "Event started — go!";
+      return event.event_kind === "race" ? null : t("panels.event.started");
     case "event_finished": {
       if (event.event_kind === "race") return null;
-      if (event.event_kind !== "group_ride") return "Event finished";
+      if (event.event_kind !== "group_ride") return t("panels.event.finished");
       const giver = event.results.reduce((top, r) => (r.given_kj > (top?.given_kj ?? 0) ? r : top), null);
       return giver && giver.given_kj >= 1
-        ? `Event finished · thanks ${giver.name} for sharing ${Math.round(giver.given_kj)} kJ`
-        : "Event finished";
+        ? t("panels.event.thanks", { name: giver.name, kj: Math.round(giver.given_kj) })
+        : t("panels.event.finished");
     }
     case "vehicle_boarded":
-      return myVehicleId !== null && event.vehicle_id === myVehicleId ? `${who(event.rider_id, event.name)} boarded` : null;
+      return myVehicleId !== null && event.vehicle_id === myVehicleId ? t("panels.boarded", { who: who(event.rider_id, event.name) }) : null;
     case "vehicle_left":
-      return myVehicleId !== null && event.vehicle_id === myVehicleId ? `${who(event.rider_id, event.name)} left` : null;
+      return myVehicleId !== null && event.vehicle_id === myVehicleId ? t("panels.left", { who: who(event.rider_id, event.name) }) : null;
     case "captain_changed":
       if (myVehicleId === null || event.vehicle_id !== myVehicleId) return null;
-      return event.rider_id === myId ? "You are now the captain" : `${event.name} is now the captain`;
+      return event.rider_id === myId ? t("panels.captain.you") : t("panels.captain.other", { name: event.name });
     default:
       return null;
   }
@@ -135,13 +135,13 @@ export const PADDLE_BADGE = "📱";
 
 function paddleBadge() {
   const badge = element("span", "badge badge-paddle", PADDLE_BADGE);
-  badge.title = "Rides with phone paddles";
+  badge.title = t("panels.paddleTitle");
   return badge;
 }
 
 /** "Anna (bot)", "Ben 📱" for plain-text lists. */
 export function riderName(rider) {
-  if (rider.is_bot) return `${rider.name} (bot)`;
+  if (rider.is_bot) return `${rider.name} ${t("panels.botSuffix")}`;
   return isPaddler(rider) ? `${rider.name} ${PADDLE_BADGE}` : rider.name;
 }
 
@@ -150,7 +150,7 @@ export function renderRiderList(list, entries, myId) {
     ...entries.map(({ rider, gap, routeName }) => {
       const item = element("li", rider.id === myId ? "rider me" : "rider");
       const name = element("span", "rider-name", rider.name);
-      if (rider.is_bot) name.append(element("span", "badge", "bot"));
+      if (rider.is_bot) name.append(element("span", "badge", t("panels.bot")));
       if (isPaddler(rider)) name.append(paddleBadge());
       item.append(name, element("span", "rider-power", `${Math.round(rider.power)} W`), element("span", "rider-gap", rider.id === myId ? "" : gap === null ? routeName : formatGap(gap)));
       return item;
@@ -164,7 +164,7 @@ export function renderResults(list, results, myId, riderOf = () => undefined) {
     ...results.map((result, index) => {
       const item = element("li", result.rider_id === myId ? "result me" : "result");
       const name = element("span", "rider-name", `${index + 1}. ${result.name}`);
-      if (result.is_bot) name.append(element("span", "badge", "bot"));
+      if (result.is_bot) name.append(element("span", "badge", t("panels.bot")));
       if (isPaddler(riderOf(result.rider_id))) name.append(paddleBadge());
       item.append(name, element("span", "result-time", formatDuration(result.time_s)));
       return item;

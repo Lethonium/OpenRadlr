@@ -3,13 +3,25 @@
 // markup's English fallback never drifts from the dictionary.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import en from "../public/js/i18n/en.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
-// en keys that HTML does not use (JS-built text added by later tasks, test seeds).
+// en keys neither HTML nor a JS string literal uses (keys built at run time, test seeds).
 const PENDING_KEY_PREFIXES = ["test."];
+const JS_ROOT = new URL("../public/js/", import.meta.url).pathname;
+function jsSource(dir) {
+  return readdirSync(dir).map((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return name === "i18n" ? "" : jsSource(path);
+    return name.endsWith(".js") ? readFileSync(path, "utf8") : "";
+  }).join("\n");
+}
+const scripts = jsSource(JS_ROOT);
+const usedInJs = (key) => scripts.includes(`"${key}"`) || scripts.includes(`"${key.replace(/\.(one|other)$/, "")}"`);
+
 const ALLOWED_TEXT = new Set(["Open", "Radlr", "OpenRadlr", "English", "Deutsch", "km · kg", "mi · lb", "– W · – rpm", "rpm", "bpm", "W/kg", "W/kg ·", "ERG", "0 kJ"]);
 const TEXT_ATTRS = ["title", "aria-label", "placeholder", "alt"];
 const VOID = new Set(["meta", "link", "input", "img", "br", "hr", "source"]);
@@ -102,9 +114,9 @@ test("index.html text and attributes are translatable and match en.js", () => {
   assert.deepEqual(problems, []);
 });
 
-test("every en key is used by index.html or reserved for JS", () => {
+test("every en key is used by index.html or the JS", () => {
   const unused = Object.keys(en).filter(
-    (k) => !used.has(k) && !PENDING_KEY_PREFIXES.some((p) => k.startsWith(p)),
+    (k) => !used.has(k) && !usedInJs(k) && !PENDING_KEY_PREFIXES.some((p) => k.startsWith(p)),
   );
   assert.deepEqual(unused, []);
 });

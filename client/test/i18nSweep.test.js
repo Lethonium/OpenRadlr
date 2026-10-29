@@ -16,9 +16,6 @@ const PENDING_FILES = [
   "main.js",
   "net/connection.js",
   "net/strava.js",
-  "profile/level.js",
-  "profile/profileStore.js",
-  "ride/ftpTest.js",
   "ride/junction.js",
   "ride/rideAutosave.js",
   "ride/rideHistory.js",
@@ -26,16 +23,10 @@ const PENDING_FILES = [
   "ride/vehicle.js",
   "ride/workout.js",
   "studio/classClock.js",
-  "view/events.js",
-  "view/ftpPrompt.js",
-  "view/ftpProvenance.js",
-  "view/ftpTestView.js",
   "view/hud.js",
   "view/paddleView.js",
-  "view/panels.js",
   "view/photos.js",
   "view/splitsView.js",
-  "view/startMenu.js",
   "view/vehicleView.js",
   "view/workoutStudioView.js",
   "view3d/chaseCamera.js",
@@ -48,6 +39,8 @@ const PENDING_FILES = [
 
 const SKIP_LINE = /^\s*(\/\/|\*|\/\*|import |export .* from )|console\.|throw new|i18n-ok|classList|className|querySelector|dataset|addEventListener|getAttribute|createElement|fillStyle|strokeStyle|\.font\b|gradient|rgba?\(|\bcase "/;
 const LITERAL = /(["'`])((?:\\.|(?!\1).)*?)\1/g;
+// "badge badge-paddle": lowercase words are CSS classes, not prose.
+const CLASS_LIST = /^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$/;
 const PLAIN_TOKEN = /^[\w./#:[\]=_%@&-]+$/;
 
 export function proseLiterals(source) {
@@ -56,6 +49,7 @@ export function proseLiterals(source) {
     if (SKIP_LINE.test(line)) return;
     for (const match of line.matchAll(LITERAL)) {
       const text = match[2].replace(/\$\{[^}]*\}/g, "");
+      if (CLASS_LIST.test(match[2])) continue;
       const capitalWord = /^[A-Z][a-z]{2,}[a-z….!?]*$/.test(text);
       const twoWords = !PLAIN_TOKEN.test(text) && /[A-Za-z]{2,} [A-Za-z]{2,}/.test(text);
       if (twoWords || capitalWord) found.push({ line: index + 1, text });
@@ -77,6 +71,7 @@ test("proseLiterals flags prose and ignores identifiers", () => {
   assert.deepEqual(proseLiterals('el.textContent = "No trainer";'), [{ line: 1, text: "No trainer" }]);
   assert.deepEqual(proseLiterals('el.textContent = "Menu";'), [{ line: 1, text: "Menu" }]);
   assert.deepEqual(proseLiterals('const k = "hud-info";'), []);
+  assert.deepEqual(proseLiterals('el.className = "badge badge-paddle";'), []);
   assert.deepEqual(proseLiterals('el.textContent = "Menu"; // i18n-ok'), []);
 });
 

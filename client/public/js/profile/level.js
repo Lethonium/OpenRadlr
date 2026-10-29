@@ -4,6 +4,8 @@
  * The server uses it to size bots and groups (`level_w` in "join").
  */
 
+import { t } from "../i18n/i18n.js";
+
 export const LEVEL_STEP = 0.05;
 const WINDOW_MS = 20 * 60 * 1000;
 const SAMPLE_MS = 1000;
@@ -50,5 +52,5 @@ export function levelAfterRace(level, avgPower) {
 }
 
 export function levelLabel(levelW, weightKg) {
-  return `Riding level ${(levelW / weightKg).toFixed(1)} W/kg (from your rides)`;
+  return t("rider.level", { wkg: (levelW / weightKg).toFixed(1) });
 }
