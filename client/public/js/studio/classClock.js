@@ -4,6 +4,8 @@
  * `/api/studio`. Targets are fractions of the rider's FTP.
  */
 
+import { t } from "../i18n/i18n.js";
+
 /**
  * @typedef {{duration_s: number, from: number, to: number, cadence: ?number[], cue: string}} ClassSegment
  * @typedef {{id: string, name: string, duration_s: number, segments: ClassSegment[]}} ClassPlan
@@ -18,9 +20,9 @@ const totalOf = (plan) => plan.segments.reduce((sum, s) => sum + s.duration_s, 0
 export function classPosition(plan, elapsedS) {
   const total = totalOf(plan);
   if (elapsedS < 0) {
-    return { phase: "lobby", startsInS: Math.ceil(-elapsedS), target: null, cadence: null, cue: "Free spin: the class starts soon", next: plan.segments[0] ?? null };
+    return { phase: "lobby", startsInS: Math.ceil(-elapsedS), target: null, cadence: null, cue: t("studio.cue.lobby"), next: plan.segments[0] ?? null };
   }
-  if (elapsedS >= total) return { phase: "done", target: null, cadence: null, cue: "Class over: well done!", next: null };
+  if (elapsedS >= total) return { phase: "done", target: null, cadence: null, cue: t("studio.cue.done"), next: null };
   let start = 0;
   for (let index = 0; index < plan.segments.length; index += 1) {
     const segment = plan.segments[index];
@@ -40,7 +42,7 @@ export function classPosition(plan, elapsedS) {
     }
     start += segment.duration_s;
   }
-  return { phase: "done", target: null, cadence: null, cue: "Class over: well done!", next: null };
+  return { phase: "done", target: null, cadence: null, cue: t("studio.cue.done"), next: null };
 }
 
 /** Target in watts, or null outside the class. */

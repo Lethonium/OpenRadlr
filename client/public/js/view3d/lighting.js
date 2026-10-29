@@ -8,7 +8,7 @@ import { lookAt, multiply, normalize, orthographic } from "./math.js";
 
 export const TIME_PRESETS = Object.freeze({
   day: {
-    label: "Day",
+    label: "Day", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.55, 0.62, 0.32]),
     sunColor: [1.0, 0.94, 0.82],
     zenith: [0.3, 0.52, 0.84],
@@ -19,7 +19,7 @@ export const TIME_PRESETS = Object.freeze({
     shadowStrength: 0.62,
   },
   golden: {
-    label: "Golden hour",
+    label: "Golden hour", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.8, 0.2, 0.3]),
     sunColor: [1.0, 0.72, 0.45],
     zenith: [0.33, 0.45, 0.72],
@@ -30,7 +30,7 @@ export const TIME_PRESETS = Object.freeze({
     shadowStrength: 0.68,
   },
   dusk: {
-    label: "Dusk",
+    label: "Dusk", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([-0.7, 0.16, 0.45]),
     sunColor: [1.0, 0.6, 0.42],
     zenith: [0.3, 0.33, 0.55],

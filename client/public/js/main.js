@@ -23,7 +23,7 @@ import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
-import { PRESET_WORKOUTS, parseZwo, totalDuration } from "./ride/workout.js";
+import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
 import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "./ride/virtualShifting.js";
 import { RiderSmoother } from "./ride/smoothing.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -81,13 +81,13 @@ import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { MenuCamera } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
-import { INSTRUCTOR, STUDIO_CAMERAS, STUDIO_CAMERA_LABELS, StudioView3D } from "./view3d/studioScene.js";
+import { INSTRUCTOR, STUDIO_CAMERAS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { PaddleView } from "./view/paddleView.js";
 import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
-import { getLocale, initLocale, saveLocale, setLocale } from "./i18n/i18n.js";
+import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageButtonStates } from "./i18n/selector.js";
 
 const $ = (id) => document.getElementById(id);
@@ -333,7 +333,7 @@ function renderUnits() {
   weight.max = kgToDisplay(200);
   weight.step = app.profile.units === "imperial" ? 1 : 0.5;
   for (const option of $("split-mode").options) {
-    if (Number(option.value)) option.textContent = `Every ${option.value} ${distanceUnit()}`;
+    if (Number(option.value)) option.textContent = t("rider.split.every", { n: option.value, unit: distanceUnit() });
   }
 }
 
@@ -356,7 +356,11 @@ function setUnitSystem(system) {
 /** Shows the profile's FTP in the setup form together with where it came from. */
 function refreshFtpFields() {
   $("ftp").value = app.profile.ftp;
-  $("ftp-source").textContent = ftpProvenance(app.profile, { locale: navigator.language });
+  renderFtpSource();
+}
+
+function renderFtpSource() {
+  $("ftp-source").textContent = ftpProvenance(app.profile, { locale: getLocale() });
 }
 
 /** Makes `ftp` the rider's FTP everywhere it is read: profile, trainer, workouts, studio and the form. */
@@ -394,7 +398,15 @@ async function offerFtp() {
   prompt.hidden = false;
 }
 
+/** Device status lines that applyTranslations resets to their initial text. */
+function renderDeviceStatuses() {
+  if (app.trainer) $("trainer-status").textContent = trainerLabel(app.trainer);
+  if (app.heartRateMonitor) $("hr-status").textContent = app.heartRateMonitor.label;
+  if (app.controllers.length) renderControllerStatus();
+}
+
 function initSetup() {
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -467,19 +479,30 @@ function initSetup() {
 /** The preset picker of the Workout card: the saved choice, a summary under it. */
 function initWorkoutSetup() {
   const select = $("workout-preset");
+  fillWorkoutPresets();
+  select.value = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  $("workout-cues").checked = app.profile.workoutCues !== false;
+  select.addEventListener("change", summariseWorkoutPreset);
+  summariseWorkoutPreset();
+}
+
+function summariseWorkoutPreset() {
+  $("workout-preset-summary").textContent = planSummary(PRESETS.find((plan) => plan.id === $("workout-preset").value));
+}
+
+/** The options with their names in the current language; the choice stays. */
+function fillWorkoutPresets() {
+  const select = $("workout-preset");
+  const chosen = select.value;
   select.replaceChildren(
     ...PRESETS.map((plan) => {
       const option = document.createElement("option");
       option.value = plan.id;
-      option.textContent = `${plan.name} · ${Math.round(planDuration(plan) / 60)} min`;
+      option.textContent = t("workout.option", { name: plan.name, min: Math.round(planDuration(plan) / 60) });
       return option;
     }),
   );
-  select.value = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
-  $("workout-cues").checked = app.profile.workoutCues !== false;
-  const summarise = () => ($("workout-preset-summary").textContent = planSummary(PRESETS.find((plan) => plan.id === select.value)));
-  select.addEventListener("change", summarise);
-  summarise();
+  if (PRESETS.some((plan) => plan.id === chosen)) select.value = chosen;
 }
 
 function setDifficultyInputs(difficulty) {
@@ -639,8 +662,8 @@ function renderAccount() {
   $("strava-disconnected").hidden = Boolean(account);
   if (account) $("strava-name").textContent = account.name;
   $("strava-hint").textContent = strava.required
-    ? "This server needs a Strava account to ride (it keeps bots out). Uploading stays your choice after each ride."
-    : "Optional: upload rides to Strava when you finish (rides with a real trainer).";
+    ? t("strava.hintRequired")
+    : t("strava.hintOptional");
 }
 
 function renderStartMenu() {
@@ -653,7 +676,7 @@ function renderStartMenu() {
   $("privacy-link").hidden = !privacy;
   if (privacy) $("privacy-link").href = privacy;
   $("build-label").textContent = build.text;
-  $("build-label").title = `${build.details} (tap to copy)`;
+  $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
   $("build-reload").hidden = !build.stale;
   $("server-dot").className = `status-dot${status.online ? (status.full ? " full" : " online") : ""}`;
 
@@ -692,7 +715,7 @@ function renderStartMenu() {
     // A rider on a phone takes a phone seat, so the trainer seats being gone doesn't stop them.
     const full = deviceKind(app.trainer) === "paddle" ? status.phoneFull : status.full;
     join.disabled = full || needsStrava;
-    join.textContent = full ? "Server is full" : needsStrava ? "Connect Strava to ride" : workout ? "Start workout" : selected ? `Ride ${selected.name}` : "Ride";
+    join.textContent = full ? t("menu.join.full") : needsStrava ? t("menu.join.needsStrava") : workout ? t("menu.join.workout") : selected ? t("menu.join.route", { name: selected.name }) : t("menu.join");
   }
 }
 
@@ -738,7 +761,7 @@ function joinEventFromRide(row) {
 }
 
 /** @returns {Promise<boolean>} true once connected */
-async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = "Connecting…" } = {}) {
+async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = t("devices.connecting") } = {}) {
   const status = $(statusId);
   status.textContent = pending;
   status.classList.remove("ok");
@@ -752,7 +775,7 @@ async function connectDevice(connect, onConnected, statusId, { keepLabel = false
   } catch (error) {
     // Given up quietly: the rider connected another device meanwhile.
     if (error.name === "AbortError") return false;
-    status.textContent = error.name === "NotFoundError" ? "Cancelled" : `Failed: ${error.message}`;
+    status.textContent = error.name === "NotFoundError" ? t("devices.cancelled") : t("devices.failed", { message: error.message });
     if (error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
@@ -808,7 +831,7 @@ function renderReconnectButtons() {
     const button = $(`reconnect-${kind}`);
     const names = [...new Set(missingDevices(kind).map((entry) => entry.name))];
     button.hidden = !isBluetoothAvailable() || names.length === 0;
-    button.textContent = `Reconnect ${names.join(" + ")}`;
+    button.textContent = t("devices.reconnect", { names: names.join(" + ") });
   }
 }
 
@@ -822,7 +845,7 @@ async function initKnownDevices() {
   const known = knownDevices.list();
   if (!isBluetoothAvailable() || !known.length) return;
   const found = await grantedDevices(known);
-  const support = typeof navigator.bluetooth.getDevices === "function" ? `getDevices() found ${found.length}` : "no getDevices() in this browser";
+  const support = typeof navigator.bluetooth.getDevices === "function" ? `getDevices() found ${found.length}` : "no getDevices() in this browser"; // i18n-ok (log)
   deviceLog.info(`Remembered devices: ${known.map((e) => e.name).join(", ")} (${support})`);
   for (const { entry, device } of found) autoConnect(entry, device);
 }
@@ -838,20 +861,20 @@ async function autoConnect(entry, device) {
       // Picked by hand meanwhile: that one stays.
       if (taken()) {
         opened.disconnect();
-        throw Object.assign(new Error("already connected"), { name: "AbortError" });
+        throw Object.assign(new Error("already connected"), { name: "AbortError" }); // i18n-ok
       }
       return opened;
     },
     (opened) => connected(entry.kind, opened),
     spec.statusId,
-    { keepLabel: true, pending: entry.kind === "controller" ? `Press a button on ${entry.name}…` : `Looking for ${entry.name}…` },
+    { keepLabel: true, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
   );
   // Two controllers share one status line: show the ones that made it.
   if (!ok && entry.kind === "controller" && app.controllers.length) renderControllerStatus();
 }
 
 function trainerLabel(trainer) {
-  return canControl(trainer) ? trainer.label : `${trainer.label} · power only`;
+  return canControl(trainer) ? trainer.label : t("devices.powerOnlyLabel", { label: trainer.label });
 }
 
 function useTrainer(trainer) {
@@ -881,14 +904,14 @@ function useTrainer(trainer) {
     $("live-values").textContent = `${watts} W · ${rpm} rpm`;
   });
   trainer.on("disconnected", () => {
-    $("trainer-status").textContent = "Reconnecting…";
+    $("trainer-status").textContent = t("devices.reconnecting");
     $("trainer-status").classList.remove("ok");
-    notify(`${trainer.label} disconnected. Reconnecting…`, "error");
+    notify(t("devices.trainerDisconnected", { label: trainer.label }), "error");
   });
   trainer.on("reconnected", () => {
     $("trainer-status").textContent = trainerLabel(trainer);
     $("trainer-status").classList.add("ok");
-    notify(`${trainer.label} is back.`);
+    notify(t("devices.isBack", { label: trainer.label }));
   });
 }
 
@@ -899,14 +922,14 @@ function useHeartRateMonitor(monitor) {
   status.textContent = monitor.label;
   status.classList.add("ok");
   monitor.on("disconnected", () => {
-    status.textContent = "Reconnecting…";
+    status.textContent = t("devices.reconnecting");
     status.classList.remove("ok");
-    notify(`${monitor.label} disconnected. Reconnecting…`, "error");
+    notify(t("devices.trainerDisconnected", { label: monitor.label }), "error");
   });
   monitor.on("reconnected", () => {
     status.textContent = monitor.label;
     status.classList.add("ok");
-    notify(`${monitor.label} is back.`);
+    notify(t("devices.isBack", { label: monitor.label }));
   });
 }
 
@@ -921,11 +944,11 @@ function useController(controller) {
   controller.on("battery", renderControllerStatus);
   controller.on("disconnected", () => {
     renderControllerStatus();
-    notify(`${controller.label} disconnected. Press a button to wake it; reconnecting…`, "error");
+    notify(t("devices.controllerDisconnected", { label: controller.label }), "error");
   });
   controller.on("reconnected", () => {
     renderControllerStatus();
-    notify(`${controller.label} is back.`);
+    notify(t("devices.isBack", { label: controller.label }));
   });
   renderControllerStatus();
 }
@@ -933,7 +956,7 @@ function useController(controller) {
 function renderControllerStatus() {
   const status = $("controller-status");
   status.textContent = app.controllers
-    .map((c) => (c.connected ? `${c.label}${c.battery !== null ? ` · ${c.battery} %` : ""}` : `${c.label} · reconnecting…`))
+    .map((c) => (c.connected ? `${c.label}${c.battery !== null ? ` · ${c.battery} %` : ""}` : t("devices.labelReconnecting", { label: c.label })))
     .join(", ");
   status.classList.toggle("ok", app.controllers.every((c) => c.connected));
 }
@@ -978,7 +1001,7 @@ function initDiagnostics() {
   $("build-label").addEventListener("click", () => {
     const details = buildLabel(app.info, BUILD).details;
     navigator.clipboard?.writeText(details).then(
-      () => notify(`Copied: ${details}`),
+      () => notify(t("diagnostics.copiedNotice", { details })),
       () => notify(details),
     );
   });
@@ -991,7 +1014,7 @@ function initDiagnostics() {
       build: buildLabel(app.info, BUILD).details,
     });
     const total = Object.values(deviceLog.packets).reduce((sum, n) => sum + n, 0);
-    $("trainer-packets").textContent = total ? `${total} packets` : "";
+    $("trainer-packets").textContent = total ? tn("diagnostics.packets", total) : "";
   };
   const schedule = () => {
     if (!scheduled) {
@@ -1009,10 +1032,10 @@ function initDiagnostics() {
     const text = deviceLog.report({ userAgent: navigator.userAgent });
     try {
       await navigator.clipboard.writeText(text);
-      button.textContent = "Copied";
+      button.textContent = t("diagnostics.copied");
     } catch {
       $("diagnostics").open = true;
-      button.textContent = "Select the text above to copy";
+      button.textContent = t("diagnostics.selectText");
     }
     setTimeout(() => (button.textContent = button.dataset.label), 2000);
   };
@@ -1055,18 +1078,18 @@ async function joinRide(restored = null) {
   };
   const errors = validateProfile(profile);
   if (pickRoute(routesOf(app.info), app.routeId)?.kind === "workout") return joinWorkout(profile, errors);
-  if (!app.trainer) errors.push("Connect a trainer or use the simulated trainer.");
+  if (!app.trainer) errors.push(t("join.error.noTrainer"));
   if (app.trainer instanceof SimulatedTrainer && app.info?.simulated_trainer === false) {
-    errors.push("This server only accepts real trainers.");
+    errors.push(t("join.error.realOnly"));
   }
   if (app.trainer instanceof PaddleTrainer) {
-    if (app.info?.paddle_mode === false) errors.push("This server doesn't allow phone paddles.");
-    if (pickRoute(routesOf(app.info), app.routeId)?.kind === "studio") errors.push("Phone paddles ride the routes: pick a road, or use the simulated trainer for the studio.");
+    if (app.info?.paddle_mode === false) errors.push(t("join.error.noPaddles"));
+    if (pickRoute(routesOf(app.info), app.routeId)?.kind === "studio") errors.push(t("join.error.paddleStudio"));
   }
   if (errors.length) return showSetupError(errors.join("\n"));
   // A new ride replaces the autosaved one (#73).
   if (!restored && app.unfinished) {
-    if (!confirm("Start a new ride? Your unfinished ride is discarded: save it first.")) return;
+    if (!confirm(t("join.confirmNew"))) return;
     await discardUnfinished();
   }
   app.restored = restored;
@@ -1078,14 +1101,14 @@ async function joinRide(restored = null) {
   app.menu?.pause();
   $("join").disabled = true;
   $("join").dataset.busy = "1";
-  $("join").textContent = "Joining…";
+  $("join").textContent = t("join.joining");
   const saved = profiles.save(profile);
   app.profile = await profiles.ensureKeys(saved).catch(() => saved);
 
   const controllable = canControl(app.trainer);
   if (route?.kind === "studio") {
     const response = await fetch("/api/studio");
-    if (!response.ok) throw new Error(`Could not load the studio (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(t("join.error.studio", { status: response.status }));
     app.studio = new StudioSession({ catalog: await response.json(), ftp: app.profile.ftp, canControl: controllable });
     // Names the ride (photos, files, Strava); the class name is added once it starts.
     app.route = { id: route.id, name: route.name };
@@ -1161,7 +1184,7 @@ async function joinRide(restored = null) {
       };
       return app.studio ? app.studio.command(road, now()) : app.training.command(road);
     },
-    onError: (error) => notify(`Trainer: ${error.message}`, "error"),
+    onError: (error) => notify(t("ride.trainerError", { message: error.message }), "error"),
   });
   app.session.start();
   startRide();
@@ -1170,7 +1193,7 @@ async function joinRide(restored = null) {
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
 async function joinWorkout(profile, errors) {
   const routeId = workoutRoute(app.info);
-  if (!routeId) errors.push("This server has no route to work out on.");
+  if (!routeId) errors.push(t("join.error.noRoute"));
   if (errors.length) return showSetupError(errors.join("\n"));
   const plan = PRESETS.find((preset) => preset.id === $("workout-preset").value) ?? PRESETS[0];
   // No "discard your unfinished ride?" prompt: a workout never touches the autosave
@@ -1181,7 +1204,7 @@ async function joinWorkout(profile, errors) {
   app.menu?.pause();
   $("join").disabled = true;
   $("join").dataset.busy = "1";
-  $("join").textContent = "Joining…";
+  $("join").textContent = t("join.joining");
   const saved = profiles.save({ ...profile, workoutPreset: plan.id, workoutCues: $("workout-cues").checked });
   app.profile = await profiles.ensureKeys(saved).catch(() => saved);
 
@@ -1372,7 +1395,7 @@ function wireConnection(connection) {
     // The server won't pause here (a race, an event or a vehicle): ride on (#89).
     if (code === "pause_rejected") {
       performPause(app.pause?.rejected() ?? [], now());
-      notify("You can't pause in a race, event or vehicle.", "error");
+      notify(t("ride.noPauseHere"), "error");
       return;
     }
     // The workout sends no riding messages; a stray refusal is nothing to show (the HUD is not the ride's).
@@ -1462,7 +1485,7 @@ function startRide() {
   initFinish();
   initPhotos();
   startAutosave();
-  notify(`Welcome to ${info.server_name}! Riders marked "bot" are computer-controlled.`);
+  notify(t("ride.welcome", { server: info.server_name }));
   // One loop per ride: it ends with the ride.
   const ride = app.ride;
   const draw = app.studio ? studioFrame : frame;
@@ -1564,7 +1587,7 @@ const notCaptain = () => Boolean(app.state?.vehicle) && !isCaptain(app.state.veh
 function captainSteersHint() {
   if (now() - app.lastCaptainHintAt < 3) return;
   app.lastCaptainHintAt = now();
-  notify("The captain steers");
+  notify(t("ride.captainSteers"));
 }
 
 /** Panels, HUD line and energy for the vehicle I'm on (null: none). */
@@ -1589,9 +1612,9 @@ function renderVehicle(vehicle) {
     app.lastVehicleAt = now();
   }
   app.vehicleKind = vehicle.kind;
-  const t = now();
-  app.seatEnergy.add(vehicle, Math.min(1, Math.max(0, t - app.lastVehicleAt)));
-  app.lastVehicleAt = t;
+  const time = now();
+  app.seatEnergy.add(vehicle, Math.min(1, Math.max(0, time - app.lastVehicleAt)));
+  app.lastVehicleAt = time;
 }
 
 /** The code I tried is on another route: restart there and board on joining. */
@@ -1599,7 +1622,7 @@ function boardElsewhere(routeId) {
   if (!routeId || !app.boardingCode || !app.connection) return false;
   const code = app.boardingCode;
   if (!leaveRide()) {
-    notify("Finish your ride to board that vehicle");
+    notify(t("ride.finishToBoard"));
     return true;
   }
   app.routeId = routeId;
@@ -1669,19 +1692,19 @@ function workoutFrame() {
   const workout = app.workout;
   if (!workout) return;
   runWorkoutActions(workout.tick());
-  const t = now();
+  const time = now();
   let blockStart = null;
   if (workout.state !== "done") {
     const position = workout.position();
     app.workoutView.render(workoutHudText(position, { state: workout.state, heartRate: app.workoutHeartRate }), blockProgress(position));
-    $("workout-pause").textContent = workout.state === "paused" ? "Resume" : "Pause";
+    $("workout-pause").textContent = workout.state === "paused" ? t("workout.resume") : t("workout.pause");
     // Paused, the plan clock is frozen: the avatar's idle clip keeps the server's start so it keeps moving.
-    if (position.block && workout.state !== "paused") blockStart = t - (position.block.seconds - position.blockRemainingS);
+    if (position.block && workout.state !== "paused") blockStart = time - (position.block.seconds - position.blockRemainingS);
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(t).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart } : rider));
-    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: t, colors: themeColors() });
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart } : rider));
+    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
   }
 }
 
@@ -1698,7 +1721,7 @@ function finishWorkout() {
   $("workout-summary-plan").textContent = app.workoutPlan.name;
   $("workout-summary-none").hidden = Boolean(record);
   $("workout-summary-list").hidden = !record;
-  $("workout-summary-title").textContent = "Workout ended";
+  $("workout-summary-title").textContent = t("workout.ended");
   if (record) {
     const text = summaryText(record, app.workoutPlan, { finished: app.workout.completed });
     $("workout-summary-title").textContent = text.title;
@@ -1723,7 +1746,7 @@ function startStudio({ simulated, setSimPower }) {
   const renderControls = () => {
     $("studio-erg").setAttribute("aria-pressed", String(studio.erg));
     $("studio-erg").disabled = !studio.canControl;
-    $("studio-erg").title = studio.canControl ? "ERG: the trainer holds the target" : "Your trainer only sends power: follow the targets yourself";
+    $("studio-erg").title = studio.canControl ? t("studio.ergTitle") : t("studio.powerOnlyTitle");
     $("studio-intensity").textContent = `${Math.round(studio.intensity * 100)} %`;
     $("studio-voice").setAttribute("aria-pressed", String(app.coachVoice));
     $("hud-gear-tile").hidden = !app.gearbox || studio.erg;
@@ -1761,7 +1784,7 @@ function startStudio({ simulated, setSimPower }) {
       if (STUDIO_CAMERAS.includes(camera)) app.studioView.cameraMode = camera;
     } catch (error) {
       console.error(error);
-      notify("The 3D studio is unavailable on this device; targets and the board still work.", "error");
+      notify(t("studio.unavailable3d"), "error");
     }
   }
 
@@ -1791,7 +1814,7 @@ function speak(text) {
 function updateStudioPanels() {
   const state = app.state;
   const me = state.riders.find((r) => r.id === app.riderId);
-  $("studio-room").textContent = state.rooms > 1 ? `Room ${state.room + 1} of ${state.rooms}` : "The room";
+  $("studio-room").textContent = state.rooms > 1 ? t("studio.room", { n: state.room + 1, total: state.rooms }) : t("studio.theRoom");
   const board = studioBoard(state.riders, app.riderId);
   for (const list of [$("studio-board"), $("rider-list")]) {
     list.replaceChildren(
@@ -1799,7 +1822,7 @@ function updateStudioPanels() {
         const item = document.createElement("li");
         if (row.me) item.className = "me";
         const name = Object.assign(document.createElement("span"), { className: "board-name", textContent: `${row.rank}. ${row.name}` });
-        if (row.isBot) name.append(Object.assign(document.createElement("span"), { className: "badge", textContent: "bot" }));
+        if (row.isBot) name.append(Object.assign(document.createElement("span"), { className: "badge", textContent: t("panels.bot") }));
         item.append(name, Object.assign(document.createElement("span"), { textContent: row.onTarget }));
         return item;
       }),
@@ -1809,16 +1832,16 @@ function updateStudioPanels() {
   $("studio-kj").textContent = `${Math.round(me?.class_kj ?? 0)} kJ`;
   renderOnline();
   // Files and Strava get the class name once it runs.
-  if (state.class.elapsed_s >= 0) app.route.name = `Spin Studio · ${state.class.name}`;
+  if (state.class.elapsed_s >= 0) app.route.name = `Spin Studio · ${state.class.name}`; // i18n-ok (names files and Strava)
 }
 
 function studioFrame() {
   const studio = app.studio;
   if (!studio.state) return;
-  const t = now();
+  const time = now();
   const riders = studio.state.riders;
   const me = riders.find((r) => r.id === app.riderId);
-  const position = studio.position(t);
+  const position = studio.position(time);
   const plan = studio.plan;
   const { power, cadence, heartRate } = app.session.latest;
 
@@ -1827,16 +1850,16 @@ function studioFrame() {
   if (app.studioView) {
     const colors = themeColors();
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
-    app.studioView.render({ riders, myId: app.riderId, myCadence: cadence, coachCadence, timeS: t, colors: { ...colors, accent } });
+    app.studioView.render({ riders, myId: app.riderId, myCadence: cadence, coachCadence, timeS: time, colors: { ...colors, accent } });
   }
   if (app.sceneRequests.length) {
     const scene = app.studioView ? grabScene($("studio3d")) : null;
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
-  const cue = studio.newCue(t);
+  const cue = studio.newCue(time);
   if (cue) {
-    const text = cue.phase === "lobby" ? `Welcome! ${plan.name} starts in ${formatDuration(cue.startsInS)}.` : cue.cue;
+    const text = cue.phase === "lobby" ? t("studio.welcome", { name: plan.name, time: formatDuration(cue.startsInS) }) : cue.cue;
     notify(`${INSTRUCTOR.name}: ${text}`, "chat");
     speak(text);
   }
@@ -1844,18 +1867,18 @@ function studioFrame() {
   if (position && plan) {
     const lobby = position.phase === "lobby";
     const countdown = lobby ? position.startsInS : (position.blockRemainingS ?? null);
-    $("studio-phase").textContent = lobby ? `Next class · ${plan.name}` : position.phase === "done" ? plan.name : `${plan.name} · block ${position.index + 1} of ${plan.segments.length}`;
+    $("studio-phase").textContent = lobby ? t("studio.nextClass", { name: plan.name }) : position.phase === "done" ? plan.name : t("studio.block", { name: plan.name, n: position.index + 1, total: plan.segments.length });
     $("studio-cue").textContent = position.cue;
     $("studio-countdown").textContent = countdown === null ? "–" : formatDuration(countdown);
     $("studio-countdown").classList.toggle("soon", countdown !== null && countdown <= 5);
     const next = position.next;
-    $("studio-next").textContent = next ? `Next: ${next.cue} · ${formatDuration(next.duration_s)} at ${Math.round(((next.from + next.to) / 2) * 100)} % FTP` : "";
+    $("studio-next").textContent = next ? t("studio.next", { cue: next.cue, time: formatDuration(next.duration_s), pct: Math.round(((next.from + next.to) / 2) * 100) }) : "";
     $("studio-class").textContent = plan.name;
-    $("studio-class-left").textContent = lobby ? `starts in ${formatDuration(position.startsInS)}` : position.classRemainingS ? `${formatDuration(position.classRemainingS)} left` : "";
-    drawWorkout($("studio-chart"), { workout: classWorkout(plan), elapsedS: Math.max(0, studio.elapsed(t)), colors: themeColors() });
+    $("studio-class-left").textContent = lobby ? t("studio.startsIn", { time: formatDuration(position.startsInS) }) : position.classRemainingS ? t("studio.left", { time: formatDuration(position.classRemainingS) }) : "";
+    drawWorkout($("studio-chart"), { workout: classWorkout(plan), elapsedS: Math.max(0, studio.elapsed(time)), colors: themeColors() });
   }
 
-  const target = studio.targetWatts(t);
+  const target = studio.targetWatts(time);
   const watts = Math.round(power || 0);
   $("studio-target").textContent = target ?? "–";
   $("studio-power").textContent = watts;
@@ -1872,7 +1895,7 @@ function studioFrame() {
 
   // Offline the rider's last state is stale: they don't move until the server is back.
   if (app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
-  const silentFor = t - (app.lastTrainerDataAt ?? app.rideStartedAt);
+  const silentFor = time - (app.lastTrainerDataAt ?? app.rideStartedAt);
   $("trainer-warning").hidden = silentFor < 5;
 }
 
@@ -1884,8 +1907,8 @@ function leaveRide() {
   const exportable = canExportRide(app.trainer);
   const unsaved = (exportable && !app.rideSaved && !app.recorder.empty) || app.album.size > 0;
   const question = exportable
-    ? "Back to the menu? This ride and its photos are not kept: download or upload them first."
-    : "Back to the menu? Your photos are not kept: save them first.";
+    ? t("ride.confirmBack.exportable")
+    : t("ride.confirmBack.photos");
   if (unsaved && !confirm(question)) return false;
   // Left on purpose: nothing to continue later.
   app.autosave.clear();
@@ -1922,17 +1945,17 @@ const rideName = () => (app.eventRide ? eventRideName(app.eventRide.kind, app.ev
 function finishStats() {
   const summary = app.recorder.summary();
   const stats = [
-    ["Time", formatDuration(summary.durationS)],
-    ["Distance", formatDistanceWithUnit(summary.distanceM)],
-    ["Avg power", `${summary.avgPower} W`],
-    ["Max power", `${summary.maxPower} W`],
-    ["Climbed", formatElevation(summary.elevationGainM)],
-    ["Work", `${summary.kilojoules} kJ`],
+    [t("finish.time"), formatDuration(summary.durationS)],
+    [t("finish.distance"), formatDistanceWithUnit(summary.distanceM)],
+    [t("finish.avgPower"), `${summary.avgPower} W`],
+    [t("finish.maxPower"), `${summary.maxPower} W`],
+    [t("finish.climbed"), formatElevation(summary.elevationGainM)],
+    [t("finish.work"), `${summary.kilojoules} kJ`],
   ];
-  if (summary.avgHeartRate) stats.push(["Avg heart rate", `${summary.avgHeartRate} bpm`]);
+  if (summary.avgHeartRate) stats.push([t("finish.avgHeartRate"), `${summary.avgHeartRate} bpm`]);
   if (app.seatEnergy && app.vehicleKind) {
-    stats.push(["Vehicle", app.seatEnergy.summaryLine(app.vehicleKind)]);
-    for (const seat of app.seatEnergy.perSeat()) stats.push([`${seat.name}${seat.isBot ? " (bot)" : ""}`, `${Math.round(seat.kj)} kJ`]);
+    stats.push([t("finish.vehicle"), app.seatEnergy.summaryLine(app.vehicleKind)]);
+    for (const seat of app.seatEnergy.perSeat()) stats.push([`${seat.name}${seat.isBot ? ` ${t("panels.botSuffix")}` : ""}`, `${Math.round(seat.kj)} kJ`]);
   }
   return stats;
 }
@@ -1987,13 +2010,13 @@ function openFinish() {
   $("upload-strava").hidden = !canUpload;
   $("upload-strava").disabled = empty;
   $("upload-status").textContent = empty
-    ? "Ride a little longer to save this ride."
+    ? t("finish.note.tooShort")
     : !exportable
-      ? "Phone paddle rides stay in OpenRadlr: no ride files and no Strava upload. Save your photos and the summary card below."
+      ? t("finish.note.paddle")
       : !measured
-        ? "Strava uploads need a real trainer: this ride's power came from the simulated trainer. You can still download it and save the photos."
+        ? t("finish.note.simulated")
       : app.stravaAccount && !canUpload
-      ? "Uploading needs the \"upload activities\" permission: disconnect and connect Strava again to allow it."
+      ? t("finish.note.permission")
       : "";
   $("finish").hidden = false;
 }
@@ -2009,29 +2032,29 @@ function uploadToStrava() {
  */
 async function uploadRide(recorder, name, { indoor, splits = [], button, status, onSaved }) {
   button.disabled = true;
-  status.textContent = "Uploading to Strava…";
+  status.textContent = t("strava.uploading");
   try {
     // FIT: the only format that tells Strava it was a virtual ride (and keeps its climbing).
     const upload = await app.strava.upload(recorder.toFit({ indoor, splits }), name);
-    status.textContent = "Uploaded. Strava is processing it…";
+    status.textContent = t("strava.processing");
     const done = await app.strava.waitForActivity(upload);
     if (done.error) {
-      status.textContent = `Strava: ${done.error}`;
+      status.textContent = t("strava.error", { message: done.error });
       button.disabled = false;
     } else if (done.activity_id) {
       onSaved();
       status.replaceChildren(
-        "Done! ",
-        Object.assign(document.createElement("a"), { href: activityUrl(done.activity_id), target: "_blank", rel: "noopener", textContent: "View on Strava" }),
+        t("strava.done"),
+        Object.assign(document.createElement("a"), { href: activityUrl(done.activity_id), target: "_blank", rel: "noopener", textContent: t("strava.view") }),
         // Strava only lets partner apps attach photos, so riders add them by hand.
-        " · Strava doesn't let apps add photos: save or share the images below and add them there.",
+        t("strava.noPhotos"),
       );
     } else {
       onSaved();
-      status.textContent = "Uploaded. It will appear on Strava in a minute.";
+      status.textContent = t("strava.uploaded");
     }
   } catch (error) {
-    status.textContent = `Upload failed: ${error.message}`;
+    status.textContent = t("strava.uploadFailed", { message: error.message });
     button.disabled = false;
   }
 }
@@ -2103,7 +2126,7 @@ function reconnected({ connection, riderId }, lost) {
   resyncWorkout(app.workout, connection);
   if (!fresh) return;
   const me = app.state?.riders?.find((rider) => rider.id === app.riderId);
-  const ended = [(me?.lap ?? null) !== null || app.eventRide ? " · your race ended" : "", app.vehicleId ? " · your seat ended" : ""].join("");
+  const ended = [(me?.lap ?? null) !== null || app.eventRide ? t("ride.raceEnded") : "", app.vehicleId ? t("ride.seatEnded") : ""].join("");
   // The new rider starts where the old one was: no distance for the jump.
   Object.assign(app, {
     riderId,
@@ -2123,7 +2146,7 @@ function reconnected({ connection, riderId }, lost) {
     eventResults: null,
   });
   if (!app.studio) app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route) });
-  notify(app.workout ? "Back at the gym" : `Back on the road as a free rider${ended}`);
+  notify(app.workout ? t("ride.backAtGym") : t("ride.backOnRoad", { ended }));
 }
 
 /** The splits of the recorded ride; `final: false` while it goes on (the last one is still open). */
@@ -2263,7 +2286,7 @@ function initRecovery() {
   });
   const recorderOf = (snapshot) => RideRecorder.from(snapshot.recorder);
   const kept = () => {
-    $("unfinished-status").textContent = "Saved. Your ride is no longer kept in this browser.";
+    $("unfinished-status").textContent = t("unfinished.saved");
     discardUnfinished();
   };
   $("unfinished-fit").addEventListener("click", () => {
@@ -2288,7 +2311,7 @@ function initRecovery() {
     });
   });
   $("discard-unfinished").addEventListener("click", () => {
-    if (confirm("Discard the unfinished ride? Its file and photos are gone for good.")) discardUnfinished();
+    if (confirm(t("unfinished.confirmDiscard"))) discardUnfinished();
   });
   refreshUnfinished();
 }
@@ -2337,10 +2360,10 @@ function takePhoto() {
       app.autosave.addPhoto({ name, blob, takenAt });
       $("photo-count").textContent = app.album.size;
       $("photo-count").hidden = false;
-      notify(`Photo ${app.album.size} saved · find your photos in the ride summary (Menu → Finish ride)`);
+      notify(t("photos.saved", { n: app.album.size }));
       if (!$("finish").hidden) renderPhotos();
     } catch (error) {
-      notify(`Photo failed: ${error.message}`, "error");
+      notify(t("photos.failed", { message: error.message }), "error");
     }
   });
 }
@@ -2351,22 +2374,22 @@ function renderPhotos() {
   $("photos-count").textContent = photos.length ? `(${photos.length})` : "";
   $("photos-hint").hidden = photos.length > 0;
   $("download-photos").hidden = images.length === 0;
-  $("download-photos").textContent = images.length === 1 ? "Download image" : "Download all images";
+  $("download-photos").textContent = images.length === 1 ? t("photos.downloadOne") : t("photos.downloadAll");
   $("share-photos").hidden = !canShareFiles() || images.length === 0;
   $("photo-list").replaceChildren(
     ...images.map((photo) => {
       const item = document.createElement("li");
-      const open = Object.assign(document.createElement("button"), { type: "button", className: "photo-thumb", title: `Download ${photo.name}` });
-      const alt = photo.summary ? "Ride summary card" : `Photo taken at ${new Date(photo.takenAt).toLocaleTimeString()}`;
+      const open = Object.assign(document.createElement("button"), { type: "button", className: "photo-thumb", title: t("photos.downloadTitle", { name: photo.name }) });
+      const alt = photo.summary ? t("photos.summaryCard") : t("photos.takenAt", { time: new Date(photo.takenAt).toLocaleTimeString(getLocale()) });
       open.append(Object.assign(document.createElement("img"), { src: photo.url, alt }));
       open.addEventListener("click", () => downloadBlob(photo.blob, photo.name));
       if (photo.summary) {
         item.classList.add("summary-thumb");
-        item.append(open, Object.assign(document.createElement("span"), { className: "summary-label", textContent: "Summary" }));
+        item.append(open, Object.assign(document.createElement("span"), { className: "summary-label", textContent: t("photos.summary") }));
         return item;
       }
-      const remove = Object.assign(document.createElement("button"), { type: "button", className: "photo-remove", textContent: "×", title: "Delete photo" });
-      remove.setAttribute("aria-label", "Delete photo");
+      const remove = Object.assign(document.createElement("button"), { type: "button", className: "photo-remove", textContent: "×", title: t("photos.delete") });
+      remove.setAttribute("aria-label", t("photos.delete"));
       remove.addEventListener("click", () => {
         app.album.remove(photo.id);
         $("photo-count").textContent = app.album.size;
@@ -2386,7 +2409,7 @@ async function refreshSummaryImage() {
     app.album.setSummary(blob, { name, takenAt: app.recorder.samples[0]?.t ?? Date.now() });
     if (!$("finish").hidden) renderPhotos();
   } catch (error) {
-    notify(`Summary image failed: ${error.message}`, "error");
+    notify(t("photos.summaryFailed", { message: error.message }), "error");
   }
 }
 
@@ -2411,7 +2434,7 @@ async function sharePhotos() {
     const files = app.album.images.map(({ blob, name }) => new File([blob], name, { type: "image/png" }));
     await navigator.share({ files, title: rideName() });
   } catch (error) {
-    if (error.name !== "AbortError") notify(`Sharing failed: ${error.message}`, "error");
+    if (error.name !== "AbortError") notify(t("photos.shareFailed", { message: error.message }), "error");
   }
 }
 
@@ -2435,8 +2458,8 @@ async function refreshServerPlayers() {
 function renderOnline() {
   const { count, text } = onlineSummary(app.serverPlayers, app.state.riders, app.state.route_riders);
   $("hud-online").textContent = count;
-  $("open-social").title = `Riders and chat · ${text}`;
-  $("open-social").setAttribute("aria-label", `Riders and chat, ${text}`);
+  $("open-social").title = t("social.titleWith", { text });
+  $("open-social").setAttribute("aria-label", t("social.labelWith", { text }));
   $("online-summary").textContent = text;
 }
 
@@ -2464,7 +2487,7 @@ function shift(direction) {
 function renderGear() {
   $("hud-gear").textContent = app.gearbox.gear;
   $("hud-gear-count").textContent = `/${app.gearbox.count}`;
-  $("hud-gear-sub").textContent = `ratio ${app.gearbox.ratio.toFixed(2)}`;
+  $("hud-gear-sub").textContent = t("hud.ratio", { ratio: app.gearbox.ratio.toFixed(2) });
 }
 
 // ------------------------------------------------------------------ hud ---
@@ -2528,7 +2551,7 @@ function updateLayout() {
     app.layout = layout;
     $("ride").dataset.layout = layout;
   }
-  const label = app.layoutChoice === "auto" ? `Auto · ${LAYOUT_LABELS[layout]}` : LAYOUT_LABELS[layout];
+  const label = app.layoutChoice === "auto" ? t("layout.autoWith", { layout: LAYOUT_LABELS[layout] }) : LAYOUT_LABELS[layout];
   if ($("hud-layout").textContent !== label) $("hud-layout").textContent = label;
 }
 
@@ -2571,7 +2594,7 @@ function eventFinished(event) {
   // Everyone on the route hears it; only entrants get the results.
   if (!app.eventRide && !mine) return;
   const lines = eventResultRows(event.results, event.event_kind, app.riderId);
-  app.eventResults = { title: event.event_kind === "race" ? "Race results" : "Group ride results", lines };
+  app.eventResults = { title: event.event_kind === "race" ? t("events.raceResults") : t("events.groupRideResults"), lines };
   showEventResults();
   $("menu").hidden = false;
   $("open-menu").setAttribute("aria-expanded", "true");
@@ -2608,15 +2631,15 @@ function renderRaceCall(race, me) {
   if (call.hidden) return;
   const others = (race.entrants ?? []).filter((id) => id !== app.riderId).length;
   call.classList.toggle("entered", entered);
-  $("race-call-title").textContent = entered ? "You're in!" : `Race · ${race.laps} ${race.laps === 1 ? "lap" : "laps"}`;
-  const field = entered ? `${others} ${others === 1 ? "other" : "others"} entered` : `${others} ${others === 1 ? "rider" : "riders"} entered`;
-  $("race-call-text").textContent = `starts in ${Math.ceil(race.remaining_s)} s · ${field}`;
-  $("race-call-button").textContent = entered ? "Leave (J)" : "Join race (J)";
+  $("race-call-title").textContent = entered ? t("race.call.youreIn") : t("race.call.title", { laps: tn("panels.lap", race.laps) });
+  const field = entered ? tn("race.call.othersEntered", others) : tn("race.call.ridersEntered", others);
+  $("race-call-text").textContent = t("race.call.startsIn", { s: Math.ceil(race.remaining_s), field });
+  $("race-call-button").textContent = entered ? t("race.call.leave") : t("race.call.join");
 }
 
 function markerText(marker) {
-  if (!marker) return "Road ahead";
-  return marker.inside ? `${marker.label}: ${formatLength(marker.inM)} to go` : `${marker.label} in ${formatLength(marker.inM)}`;
+  if (!marker) return t("ride.roadAhead");
+  return marker.inside ? t("ride.markerToGo", { label: marker.label, distance: formatLength(marker.inM) }) : t("ride.markerIn", { label: marker.label, distance: formatLength(marker.inM) });
 }
 
 /** Gauge arc and target tick for the cockpit. */
@@ -2658,7 +2681,7 @@ function renderRaceLists(standing) {
   groups.replaceChildren(
     ...standing.groups.slice(0, 5).map((group) =>
       row(group.mine ? "mine" : "", [
-        [`${group.label} · ${group.size} ${group.size === 1 ? "rider" : "riders"}`],
+        [t("race.group", { label: group.label, riders: tn("menu.riders", group.size) })],
         [formatTimeGap(group.gapS, { mine: group.mine }), "gap"],
       ]),
     ),
@@ -2696,7 +2719,7 @@ function initTraining({ simulated, setSimPower }) {
     const workout = app.workouts[Number($("workout-select").value)];
     if (!workout) return;
     training.startWorkout(workout);
-    notify(`Workout started: ${workout.name}`);
+    notify(t("training.started", { name: workoutName(workout) }));
   });
   $("workout-skip").addEventListener("click", () => training.skipSegment());
   $("workout-stop").addEventListener("click", () => training.stopWorkout());
@@ -2710,9 +2733,9 @@ function initTraining({ simulated, setSimPower }) {
       const workout = parseZwo(await file.text());
       app.workouts.push(workout);
       renderWorkoutOptions(app.workouts.length - 1);
-      $("training-note").textContent = `Imported "${workout.name}".`;
+      $("training-note").textContent = t("training.imported", { name: workout.name });
     } catch (error) {
-      $("training-note").textContent = `Import failed: ${error.message}`;
+      $("training-note").textContent = t("training.importFailed", { message: error.message });
     }
   });
 
@@ -2723,7 +2746,7 @@ function initTraining({ simulated, setSimPower }) {
     // The simulated trainer leaves ERG power behind when going back to the road.
     if (simulated && training.mode === "sim") setSimPower(app.trainer.power);
   });
-  training.on("workoutFinished", (workout) => notify(`Workout complete: ${workout.name}. Well done!`));
+  training.on("workoutFinished", (workout) => notify(t("training.finished", { name: workoutName(workout) })));
   renderTraining({ simulated });
 }
 
@@ -2753,7 +2776,7 @@ function initFtpTest({ simulated }) {
   });
   // The result sits in the training panel; point to it when that is closed
   session.on("result", () => {
-    if ($("menu").hidden) notify("Ramp test done: open the training panel for your FTP.");
+    if ($("menu").hidden) notify(t("training.rampDone"));
   });
   renderFtpTest();
 }
@@ -2796,7 +2819,7 @@ function renderWorkoutOptions(selected) {
     ...app.workouts.map((workout, index) => {
       const option = document.createElement("option");
       option.value = String(index);
-      option.textContent = `${workout.name} · ${Math.round(totalDuration(workout) / 60)} min`;
+      option.textContent = t("workout.option", { name: workoutName(workout), min: Math.round(totalDuration(workout) / 60) });
       return option;
     }),
   );
@@ -2805,7 +2828,8 @@ function renderWorkoutOptions(selected) {
 }
 
 function renderWorkoutDescription() {
-  $("workout-description").textContent = app.workouts[Number($("workout-select").value)]?.description ?? "";
+  const chosen = app.workouts[Number($("workout-select").value)];
+  $("workout-description").textContent = chosen ? workoutDescription(chosen) : "";
 }
 
 function renderTraining({ simulated }) {
@@ -2815,7 +2839,7 @@ function renderTraining({ simulated }) {
   $("mode-sim").setAttribute("aria-pressed", String(!erg));
   $("mode-erg").setAttribute("aria-pressed", String(erg));
   $("mode-erg").disabled = !training.canControl;
-  $("mode-erg").title = training.canControl ? "" : "Your trainer can't hold a target power";
+  $("mode-erg").title = training.canControl ? "" : t("training.noHold");
   // The ramp is its own workout: no picker or manual target while a test runs
   const testing = app.ftpTest?.state !== "idle";
   $("erg-manual").hidden = !erg || running || testing;
@@ -2826,9 +2850,9 @@ function renderTraining({ simulated }) {
   $("hud-intensity-down").parentElement.hidden = training.locked;
   $("workout-picker").hidden = running || testing;
   $("workout-running").hidden = !running;
-  $("workout-name").textContent = running ? training.workout.name : erg ? "ERG · manual target" : "No workout running";
+  $("workout-name").textContent = running ? workoutName(training.workout) : erg ? t("training.ergManual") : t("training.none");
   $("erg-badge").hidden = !erg && !training.guided;
-  $("erg-badge").textContent = training.guided ? "Guided" : "ERG";
+  $("erg-badge").textContent = training.guided ? t("training.guided") : "ERG";
   $("hud-gear-tile").hidden = !app.gearbox || erg;
   if (!running) resetWorkoutHud();
   $("erg-target").textContent = `${training.ergTarget} W`;
@@ -2839,14 +2863,14 @@ function renderTraining({ simulated }) {
   $("sim-stepper").hidden = !simulated || erg;
   if (app.gearbox) $("shift-hint").hidden = erg;
   $("training-note").textContent = !training.canControl
-    ? "Your trainer only sends power: workouts show targets to follow, resistance stays as it is."
+    ? t("training.powerOnlyNote")
     : erg && app.gearbox
-      ? "Virtual shifting is paused in ERG mode."
+      ? t("training.shiftPaused")
       : "";
 }
 
 function resetWorkoutHud() {
-  $("workout-block").textContent = "Start a workout from the menu (M)";
+  $("workout-block").textContent = t("training.startHint");
   $("workout-next").textContent = "";
   $("workout-block-time").textContent = "–";
   $("workout-elapsed").textContent = "0:00";
@@ -2856,10 +2880,10 @@ function resetWorkoutHud() {
   app.workoutPower = { joules: 0, seconds: 0, lastT: null };
 }
 
-function renderWorkoutProgress(t) {
-  const state = app.training.tick(t, app.session.latest);
+function renderWorkoutProgress(time) {
+  const state = app.training.tick(time, app.session.latest);
   // After the training clock, so the ramp's elapsed seconds are current
-  app.ftpTest?.tick(t, app.session.latest);
+  app.ftpTest?.tick(time, app.session.latest);
   if (app.ftpTest?.state === "warmup") renderFtpTest();
   const workout = app.training.workout;
   if (!state || state.finished || !workout) return;
@@ -2868,11 +2892,11 @@ function renderWorkoutProgress(t) {
   // Average power over the workout's riding time (pauses excluded).
   const stats = app.workoutPower;
   if (stats.lastT !== null && !paused) {
-    const dt = Math.min(1, t - stats.lastT);
+    const dt = Math.min(1, time - stats.lastT);
     stats.joules += (app.session.latest.power || 0) * dt;
     stats.seconds += dt;
   }
-  stats.lastT = t;
+  stats.lastT = time;
 
   if (app.layout === "training") {
     drawWorkout($("workout-chart"), { workout, elapsedS: state.elapsedS, colors: themeColors() });
@@ -2880,8 +2904,8 @@ function renderWorkoutProgress(t) {
   const total = state.elapsedS + state.remainingS;
   const next = workout.segments[state.index + 1];
   const nextWatts = next ? Math.round(((next.from + next.to) / 2) * (app.training.player?.ftp ?? app.profile.ftp) * app.training.intensity) : 0;
-  $("workout-block").textContent = `Block ${state.index + 1} of ${workout.segments.length} · ${state.segment.label}${paused ? " (paused)" : ""}`;
-  $("workout-next").textContent = next ? `Next: ${next.label} ${formatDuration(next.durationS)} · ${nextWatts} W` : "Last block";
+  $("workout-block").textContent = t("training.block", { n: state.index + 1, total: workout.segments.length, label: segmentLabel(state.segment.label) }) + (paused ? t("training.paused") : "");
+  $("workout-next").textContent = next ? t("training.next", { label: segmentLabel(next.label), time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
   $("workout-block-time").textContent = formatDuration(state.segmentRemainingS);
   $("workout-elapsed").textContent = formatDuration(state.elapsedS);
   $("workout-remaining").textContent = formatDuration(state.remainingS);
@@ -2901,7 +2925,7 @@ function initViews() {
   setViewMode("2d", { remember: false });
 
   if (!isWebGl2Available()) {
-    $("view-note").textContent = "3D needs WebGL 2";
+    $("view-note").textContent = t("view.needsWebgl");
     return;
   }
   // Built in the menu already: ready right away.
@@ -2914,7 +2938,7 @@ function initViews() {
   }
   // Building the world (with the other routes on its map) takes a moment,
   // off the main thread where possible; ride in 2D meanwhile.
-  $("view-note").textContent = "Building 3D world…";
+  $("view-note").textContent = t("view.building");
   const ride = app.ride;
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
     .then(([others, network]) => buildScene(app.routeFile, others, { network }))
@@ -2922,21 +2946,21 @@ function initViews() {
     .catch((error) => {
       if (app.ride !== ride) return;
       console.error(error);
-      $("view-note").textContent = "3D view unavailable on this device";
+      $("view-note").textContent = t("view.unavailable");
     });
 }
 
 /** A route file from the server (the default route without an id). */
 async function fetchRouteFile(id) {
   const response = await fetch(id ? `/api/route?id=${encodeURIComponent(id)}` : "/api/route");
-  if (!response.ok) throw new Error(`Could not load the route (HTTP ${response.status}).`);
+  if (!response.ok) throw new Error(t("join.error.route", { status: response.status }));
   return response.json();
 }
 
 /** A shared map's road network file (#26); fails for maps without one. */
 async function fetchNetworkFile(mapId) {
   const response = await fetch(`/api/map?id=${encodeURIComponent(mapId)}`);
-  if (!response.ok) throw new Error(`No road network for map ${mapId} (HTTP ${response.status}).`);
+  if (!response.ok) throw new Error(t("join.error.network", { mapId, status: response.status }));
   return response.json();
 }
 
@@ -2946,10 +2970,10 @@ function show3d(scene, view = null) {
     app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene);
   } catch (error) {
     console.error(error);
-    $("view-note").textContent = "3D view unavailable on this device";
+    $("view-note").textContent = t("view.unavailable");
     // The workout screen has no 2D view: say so where it is visible.
     if (app.workout) {
-      $("workout-note").textContent = "The gym needs 3D (WebGL2), which this device lacks. The timer and cues still work.";
+      $("workout-note").textContent = t("view.gymNeeds3d");
       $("workout-note").hidden = false;
     }
     return;
@@ -2975,7 +2999,7 @@ function cycleCamera() {
     if (!app.studioView) return;
     const mode = app.studioView.cycleCamera();
     writeSetting(STUDIO_CAMERA_KEY, mode);
-    notify(`Camera: ${STUDIO_CAMERA_LABELS[mode]}`);
+    notify(t("camera.label", { mode: { seat: t("camera.seat"), wide: t("camera.wide"), coach: t("camera.coach") }[mode] }));
     return;
   }
   if (!app.view3d) return;
@@ -2985,12 +3009,12 @@ function cycleCamera() {
 
 function renderCameraButton() {
   // The workout's gym camera is not one of the ride's modes and does not cycle.
-  $("camera-mode").textContent = `Camera: ${CAMERA_MODES[app.view3d.camera.mode]?.label ?? "Gym"}`;
+  $("camera-mode").textContent = t("camera.label", { mode: { chase: t("camera.chase"), close: t("camera.close"), drone: t("camera.drone"), side: t("camera.side") }[app.view3d.camera.mode] ?? t("camera.gym") });
 }
 
 function setQuality(quality) {
   app.view3d.setQuality(quality);
-  $("quality-mode").textContent = `Graphics: ${quality === "high" ? "High" : "Low"}`;
+  $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
   writeSetting(QUALITY_KEY, quality);
 }
 
@@ -3093,7 +3117,7 @@ function switchRoute(route, named = null) {
   app.view3d?.setRoute(route);
   // Distances on the new road don't continue the old one's.
   app.lastMyDistance = null;
-  $("hud-route").textContent = route.id !== OFF_ROUTE_ID ? route.name : named ? named.name : "Off route";
+  $("hud-route").textContent = route.id !== OFF_ROUTE_ID ? route.name : named ? named.name : t("ride.offRoute");
 }
 
 /** The roads at the junction ahead, while it's in reach (not for race or event entrants: the server locks their turns). */
@@ -3106,7 +3130,7 @@ function renderJunction(race, me) {
     $("junction-options").dataset.key = "";
     return;
   }
-  $("junction-title").textContent = `${junction.place?.name ?? "Junction"} in ${formatLength(junction.toGo)}`;
+  $("junction-title").textContent = t("junction.title", { place: junction.place?.name ?? t("junction.place"), distance: formatLength(junction.toGo) });
   const list = $("junction-options");
   // Same roads as before: only the pick changes (rebuilding would eat taps).
   const key = junction.options.map((o) => `${o.edge}:${o.dir}`).join();
@@ -3125,9 +3149,9 @@ function renderJunction(race, me) {
       arrow.className = "junction-arrow";
       arrow.textContent = { left: "←", straight: "↑", right: "→" }[option.side];
       const label = document.createElement("span");
-      label.textContent = option.route ? option.route.name : "Off route";
+      label.textContent = option.route ? option.route.name : t("ride.offRoute");
       const towards = document.createElement("small");
-      towards.textContent = option.towards ? `to ${option.towards}` : "";
+      towards.textContent = option.towards ? t("ride.towards", { name: option.towards }) : "";
       button.append(arrow, label, towards);
       button.addEventListener("click", () => chooseTurn(option));
       return button;
@@ -3175,7 +3199,7 @@ function updatePanels() {
   // The race banner covers the countdown; the pill shows the rest.
   $("race-status").hidden = !race.phase || race.phase === "idle" || race.phase === "countdown";
   if (event?.phase === "running" && event.entered && (!race.phase || race.phase === "idle")) {
-    $("race-status").textContent = `${event.name} · running`;
+    $("race-status").textContent = t("race.running", { name: event.name });
     $("race-status").hidden = false;
   }
   $("start-race").disabled = race.phase === "countdown" || race.phase === "running";
@@ -3183,7 +3207,7 @@ function updatePanels() {
   const blocked = eventBlocksRace(event);
   $("race-controls").hidden = blocked;
   $("race-blocked").hidden = !blocked;
-  $("race-blocked").textContent = blocked ? `A ${event.kind === "race" ? "race" : "group ride"} is on this route, so races are off until it ends.` : "";
+  $("race-blocked").textContent = blocked ? t("race.blocked", { kind: event.kind === "race" ? t("race.kindRace") : t("race.kindGroupRide") }) : "";
   renderRaceCall(race, me);
   renderVehicle(app.state.vehicle ?? null);
   renderJunction(race, me);
@@ -3198,41 +3222,41 @@ function updatePanels() {
   hud.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
   hud.set("lap", standing ? `${standing.lap}/${standing.laps}` : "–");
   hud.set("to-go", standing ? formatLength(standing.toGoM) : "–");
-  hud.set("race-caption", standing ? `${status} · ${formatLength(standing.toGoM)} to the finish` : race.phase === "countdown" ? status : "No race running · start one from the menu (M)");
+  hud.set("race-caption", standing ? t("race.caption.toFinish", { status, distance: formatLength(standing.toGoM) }) : race.phase === "countdown" ? status : t("race.caption.none"));
 }
 
 /**
  * Runs the pause (#89) for this frame and shows it. @returns {boolean} true
  * if the ride was left (paused for too long): the frame is over.
  */
-function updatePause(t, me) {
+function updatePause(time, me) {
   const pause = app.pause;
   if (!pause) return false;
   const race = app.state?.race;
   pause.allowed = !app.vehicleId && !app.state?.event?.entered && !inRace(race, me, app.riderId);
-  const left = performPause(pause.update({ now: t, speed: me?.speed ?? 0, power: app.session.latest.power || 0, offline: app.offline }), t);
+  const left = performPause(pause.update({ now: time, speed: me?.speed ?? 0, power: app.session.latest.power || 0, offline: app.offline }), time);
   if (left) return true;
   const button = $("pause-ride");
   button.hidden = !pause.allowed;
-  button.textContent = pause.state === "riding" ? "Pause" : "Resume";
+  button.textContent = pause.state === "riding" ? t("workout.pause") : t("workout.resume");
   const pill = $("pause-pill");
   pill.hidden = pause.state === "riding";
-  if (!pill.hidden) pill.textContent = `Paused · ${formatDuration(t - app.pausedFrom)}${pause.state === "parked" ? " · pedal to resume" : ""}`;
+  if (!pill.hidden) pill.textContent = t("ride.paused", { time: formatDuration(time - app.pausedFrom) }) + (pause.state === "parked" ? t("ride.pedalToResume") : "");
   return false;
 }
 
 /** Carries out what the pause state machine decided. @returns {boolean} true if the ride was left */
-function performPause(actions, t) {
+function performPause(actions, time) {
   for (const action of actions) {
     switch (action) {
       case "pauseTimer":
-        app.pausedFrom = t;
+        app.pausedFrom = time;
         app.recorder.pause(Date.now());
         app.training.held = true;
         break;
       case "resumeTimer":
         // The ride time skips the pause.
-        if (app.pausedFrom !== null) app.rideStartedAt += t - app.pausedFrom;
+        if (app.pausedFrom !== null) app.rideStartedAt += time - app.pausedFrom;
         app.pausedFrom = null;
         app.recorder.resume(Date.now());
         app.training.held = false;
@@ -3247,7 +3271,7 @@ function performPause(actions, t) {
         // Paused for too long: back to the menu; the autosave offers Continue.
         saveRide();
         endRide();
-        notify("Paused for 30 minutes: your ride is kept. Continue it from the menu.");
+        notify(t("ride.pausedLeave"));
         return true;
     }
   }
@@ -3257,12 +3281,12 @@ function performPause(actions, t) {
 function frame() {
   if (!app.state) return;
 
-  const t = now();
-  const everyone = app.smoother.sample(t);
+  const time = now();
+  const everyone = app.smoother.sample(time);
   const riders = everyone.filter(onMyRoute);
   const me = myRider(riders);
   const colors = themeColors();
-  if (updatePause(t, me)) return;
+  if (updatePause(time, me)) return;
 
   if (me) {
     if (app.lastMyDistance !== null) {
@@ -3273,7 +3297,7 @@ function frame() {
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: t, colors });
+    app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
     drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors });
   }
@@ -3294,7 +3318,7 @@ function frame() {
     drawRaceTimeline($("race-timeline"), { standing: app.standing, myId: app.riderId, colors });
   }
 
-  renderWorkoutProgress(t);
+  renderWorkoutProgress(time);
   const target = app.training.targetWatts();
   const { power, cadence, heartRate } = app.session.latest;
   const watts = Math.round(power || 0);
@@ -3303,14 +3327,14 @@ function frame() {
   hud.set("wkg", formatWkg(power || 0, app.profile.weightKg));
   hud.set("zone", `Z${Math.max(1, powerZone(power || 0, app.profile.ftp))}`);
   hud.set("target", target === null ? "–" : target);
-  hud.set("target-suffix", target === null ? "" : ` · target ${target} W`);
+  hud.set("target-suffix", target === null ? "" : t("hud.target", { watts: target }));
   hud.set("cadence", Number.isFinite(cadence) ? Math.round(cadence) : "–");
   hud.set("hr", Number.isFinite(heartRate) ? Math.round(heartRate) : "–");
   hud.set("speed", formatSpeed(me?.speed ?? 0));
   hud.set("grade", `${me ? formatGrade(app.route.gradeAt(me.distance)) : "0.0"} %`);
   hud.set("distance", formatDistance(app.rideDistance));
   // The ride time stands still while paused.
-  const clock = app.pausedFrom ?? t;
+  const clock = app.pausedFrom ?? time;
   hud.set("avg-speed", averageSpeed(app.rideDistance, clock - app.rideStartedAt));
   hud.set("time", formatDuration(clock - app.rideStartedAt));
   hud.set("intensity", `${Math.round(app.training.intensity * 100)} %`);
@@ -3327,7 +3351,7 @@ function frame() {
   banner.hidden = !showBanner;
   if (showBanner) {
     banner.classList.toggle("climb", marker.type === "climb");
-    hud.set("banner-label", marker.inside ? `${marker.label} · to go` : marker.label);
+    hud.set("banner-label", marker.inside ? t("ride.markerBanner", { label: marker.label }) : marker.label);
     hud.set("banner-distance", formatLength(marker.inM));
   }
 
@@ -3353,7 +3377,7 @@ function frame() {
   $("draft-status").hidden = !draft;
   if ($("draft-status").textContent !== draftText) $("draft-status").textContent = draftText;
 
-  const silentFor = t - (app.lastTrainerDataAt ?? app.rideStartedAt);
+  const silentFor = time - (app.lastTrainerDataAt ?? app.rideStartedAt);
   $("trainer-warning").hidden = silentFor < 5;
 }
 

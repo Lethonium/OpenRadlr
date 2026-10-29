@@ -4,6 +4,7 @@
  * rider names come from the server.
  */
 import { isPaddler } from "./panels.js";
+import { t } from "../i18n/i18n.js";
 import { VEHICLE_KINDS, kindName, normaliseCode, vehicleLabel } from "../ride/vehicle.js";
 
 export class VehicleView {
@@ -59,7 +60,7 @@ export class VehicleView {
     const n = this.#nodes;
     n.title.textContent = captain ? vehicleLabel(vehicleState.kind, captain.name) : kindName(vehicleState.kind);
     if (n.code) n.code.textContent = vehicleState.code;
-    n.captain.textContent = captain ? `Captain: ${captain.name} steers` : "";
+    n.captain.textContent = captain ? t("vehicle.captainSteers", { name: captain.name }) : "";
     n.seats.replaceChildren(...seats.map((seat, i) => this.#seatRow(seat, i, myId, riders)));
     this.#showOnly("aboard");
   }
@@ -68,7 +69,7 @@ export class VehicleView {
     const li = this.#el("li", "vehicle-seat");
     if (!seat) {
       li.classList.add("free");
-      li.append(this.#el("span", "vehicle-seat-no", String(index + 1)), this.#el("span", "vehicle-seat-name", "Free seat"));
+      li.append(this.#el("span", "vehicle-seat-no", String(index + 1)), this.#el("span", "vehicle-seat-name", t("vehicle.freeSeat")));
       return li;
     }
     const me = seat.rider_id === myId;
@@ -100,13 +101,13 @@ export class VehicleView {
   #buildCreate() {
     const form = this.#el("form", "vehicle-form");
     const kind = this.#el("select");
-    kind.setAttribute("aria-label", "Vehicle");
+    kind.setAttribute("aria-label", t("vehicle.createLabel"));
     for (const k of VEHICLE_KINDS) kind.append(this.#option(k.kind, kindName(k.kind)));
     const seats = this.#el("select");
-    seats.setAttribute("aria-label", "Seats");
+    seats.setAttribute("aria-label", t("vehicle.seatsLabel"));
     const fillSeats = () => {
       const options = VEHICLE_KINDS.find((k) => k.kind === kind.value)?.seats ?? [];
-      seats.replaceChildren(...options.map((count) => this.#option(String(count), `${count} seats`)));
+      seats.replaceChildren(...options.map((count) => this.#option(String(count), t("vehicle.seatsOption", { n: count }))));
       seats.value = String(options[0]);
     };
     kind.value = VEHICLE_KINDS[0].kind;
@@ -116,8 +117,8 @@ export class VehicleView {
     bots.type = "checkbox";
     bots.checked = true;
     const botsLabel = this.#el("label", "check");
-    botsLabel.append(bots, " Bots fill free seats");
-    const submit = this.#el("button", "primary", "Create");
+    botsLabel.append(bots, t("vehicle.botsFill"));
+    const submit = this.#el("button", "primary", t("vehicle.create"));
     submit.type = "submit";
     form.append(kind, seats, botsLabel, submit);
     form.addEventListener("submit", (event) => {
@@ -135,11 +136,11 @@ export class VehicleView {
     input.type = "text";
     input.maxLength = 12;
     input.autocomplete = "off";
-    input.placeholder = "Vehicle code";
-    input.setAttribute("aria-label", "Vehicle code");
+    input.placeholder = t("vehicle.codeLabel");
+    input.setAttribute("aria-label", t("vehicle.codeLabel"));
     const error = this.#el("p", "error");
     error.setAttribute("role", "alert");
-    const submit = this.#el("button", "primary", "Board with code");
+    const submit = this.#el("button", "primary", t("vehicle.boardWithCode"));
     submit.type = "submit";
     form.append(input, submit, error);
     form.addEventListener("submit", (event) => {
@@ -161,17 +162,17 @@ export class VehicleView {
     box.append(title);
     if (!this.#compact) {
       const code = this.#el("strong", "vehicle-code");
-      const copy = this.#el("button", "secondary", "Copy");
+      const copy = this.#el("button", "secondary", t("vehicle.copy"));
       copy.type = "button";
       copy.addEventListener("click", () => this.#copy());
       const row = this.#el("p", "vehicle-code-row");
-      row.append("Code ", code, " ", copy);
+      row.append(t("vehicle.codePrefix"), code, " ", copy);
       box.append(row);
       this.#nodes.code = code;
     }
     box.append(captain, seats);
     if (!this.#compact) {
-      const leave = this.#el("button", "secondary", "Leave");
+      const leave = this.#el("button", "secondary", t("vehicle.leave"));
       leave.type = "button";
       leave.addEventListener("click", () => this.#handlers.onLeave?.());
       box.append(leave);

@@ -9,17 +9,18 @@
  * - training  — workout chart and targets
  * - race      — position, gaps and race timeline
  */
+import { t } from "../i18n/i18n.js";
 import { zoneFor } from "../ride/workout.js";
 import { formatDistanceWithUnit, formatDuration, formatSpeed, speedUnit } from "../util/format.js";
 
 export const LAYOUTS = Object.freeze(["cockpit", "broadcast", "training", "race"]);
 export const LAYOUT_CHOICES = Object.freeze(["auto", ...LAYOUTS]);
 export const LAYOUT_LABELS = Object.freeze({
-  auto: "Auto",
-  cockpit: "Cockpit",
-  broadcast: "Broadcast",
-  training: "Training",
-  race: "Race",
+  get auto() { return t("layout.auto"); },
+  get cockpit() { return t("layout.cockpit"); },
+  get broadcast() { return t("layout.broadcast"); },
+  get training() { return t("layout.training"); },
+  get race() { return t("layout.race"); },
 });
 
 /**
@@ -53,7 +54,11 @@ export function gaugeFraction(watts, ftp) {
   return Math.min(1, Math.max(0, watts / (ftp * 1.6)));
 }
 
-const MARKER_LABELS = { climb: "KOM", sprint: "Sprint", start_finish: "Finish line" };
+const MARKER_LABELS = {
+  get climb() { return t("marker.kom"); },
+  get sprint() { return t("marker.sprint"); },
+  get start_finish() { return t("marker.finish"); },
+};
 
 /**
  * The next climb, sprint or start/finish line ahead of `distance` on the loop,
@@ -125,7 +130,7 @@ export function raceStanding(race, riders, myId, routeLength, { groupGapM = 15, 
     toGoM: Math.max(0, totalM - myProgress),
     others: racing.filter((entry) => entry.rider.id !== myId).map((entry) => ({ rider: entry.rider, fraction: Math.min(1, entry.progress / totalM) })),
     groups: groups.map((group, index) => ({
-      label: index === myGroup ? "Your group" : index === 0 ? "Leaders" : index < myGroup ? "Chase" : "Behind",
+      label: index === myGroup ? t("race.group.yours") : index === 0 ? t("race.group.leaders") : index < myGroup ? t("race.group.chase") : t("race.group.behind"),
       size: group.members.length,
       mine: index === myGroup,
       gapS: index === myGroup ? 0 : seconds(group.leadProgress - groups[myGroup].leadProgress),
@@ -184,8 +189,8 @@ export class MetricBinder {
 
 /** "Lap 3", "Km 10" / "Mi 5" (the kilometre or mile it ended at) or "6.2 km" for a free or partial split. */
 export function splitLabel(split, unitM = 1000) {
-  if (split.kind === "lap") return `Lap ${split.lap}`;
-  if (split.kind === "distance" && !split.partial) return `${unitM === 1000 ? "Km" : "Mi"} ${Math.round(split.toM / unitM)}`;
+  if (split.kind === "lap") return t("splits.lap", { n: split.lap });
+  if (split.kind === "distance" && !split.partial) return t(unitM === 1000 ? "splits.km" : "splits.mi", { n: Math.round(split.toM / unitM) });
   return formatDistanceWithUnit(split.distanceM, 1);
 }
 

@@ -5,22 +5,24 @@
  * pads changes lanes. Everything is written with textContent and classes.
  */
 
+import { t } from "../i18n/i18n.js";
+
 const SWIPE_MIN_PX = 50;
 const SWIPE_MAX_MS = 700;
 
 /** The hint under the meter for a paddle reading. */
 export function paddleHint(state) {
-  if (state.stumbling) return "Oops! Alternate left and right";
-  if (state.tired) return "Out of energy: tap slower to recharge";
+  if (state.stumbling) return t("paddle.stumble");
+  if (state.tired) return t("paddle.tired");
   switch (state.zone) {
     case "idle":
-      return "Tap left, then right · swipe for lanes";
+      return t("paddle.idle");
     case "easy":
-      return state.climbing ? "Climb: slow, steady taps" : "Tap a bit faster to reach the green";
+      return state.climbing ? t("paddle.climbEasy") : t("paddle.faster");
     case "sweet":
-      return state.climbing ? "Good climbing rhythm!" : state.combo >= 20 ? "Smooth! Keep it going" : "Nice rhythm!";
+      return state.climbing ? t("paddle.climbGood") : state.combo >= 20 ? t("paddle.smooth") : t("paddle.nice");
     case "sprint":
-      return state.energy < 0.3 ? "Sprint! Energy running low" : "Sprint! This uses energy";
+      return state.energy < 0.3 ? t("paddle.sprintLow") : t("paddle.sprint");
     default:
       return "";
   }

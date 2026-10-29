@@ -3,18 +3,19 @@
  * Pure logic; no DOM, no network.
  */
 
+import { t } from "../i18n/i18n.js";
 export const VEHICLE_KINDS = Object.freeze([
   { kind: "tandem", seats: [2] },
   { kind: "beer_bike", seats: [5, 7, 9] },
 ]);
 
-const KIND_NAMES = { tandem: "Tandem", beer_bike: "Beer bike" };
+const KIND_NAMES = { tandem: "vehicle.tandem", beer_bike: "vehicle.beerBike" };
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
 
 /** Display name of a vehicle kind. */
 export function kindName(kind) {
-  return KIND_NAMES[kind] ?? "Vehicle";
+  return t(KIND_NAMES[kind] ?? "vehicle.generic");
 }
 
 /**
@@ -24,10 +25,10 @@ export function kindName(kind) {
  */
 export function normaliseCode(text) {
   const code = String(text ?? "").replace(/\s+/g, "").toUpperCase();
-  if (/[01OI]/.test(code)) return { code: null, error: "Codes don't use 0, O, 1 or I" };
-  if (code.length !== CODE_LENGTH) return { code: null, error: "Codes have 6 characters" };
+  if (/[01OI]/.test(code)) return { code: null, error: t("vehicle.code.noAmbiguous") };
+  if (code.length !== CODE_LENGTH) return { code: null, error: t("vehicle.code.length") };
   if ([...code].some((c) => !CODE_ALPHABET.includes(c))) {
-    return { code: null, error: "Codes only use letters and digits 2–9" };
+    return { code: null, error: t("vehicle.code.alphabet") };
   }
   return { code, error: null };
 }
@@ -85,7 +86,7 @@ export function vehicleMarkers(riders, myId) {
 export const soloRiders = (riders) => riders.filter((r) => !r.vehicle);
 
 export function vehicleLabel(kind, captainName) {
-  return `${captainName}'s ${kindName(kind).toLowerCase()}`;
+  return t("vehicle.label", { name: captainName, kind: kindName(kind), kindLower: kindName(kind).toLowerCase() });
 }
 
 /** "Vehicle 980 W · you 20 %", or null when `myId` is not aboard. */
@@ -94,7 +95,7 @@ export function aboardLine(vehicleState, myId) {
   const mine = seats.find((s) => s.rider_id === myId);
   if (!mine) return null;
   const total = Math.round(seats.reduce((sum, s) => sum + s.power, 0));
-  return `Vehicle ${total} W · you ${Math.round(mine.share * 100)} %`;
+  return t("vehicle.aboardLine", { total, share: Math.round(mine.share * 100) });
 }
 
 export function isCaptain(vehicleState, myId) {
@@ -128,7 +129,7 @@ export class SeatEnergy {
   /** "Beer bike with Anna, Ben, Chris": humans only. */
   summaryLine(kind) {
     const humans = this.perSeat().filter((e) => !e.isBot).map((e) => e.name);
-    return humans.length ? `${kindName(kind)} with ${humans.join(", ")}` : kindName(kind);
+    return humans.length ? t("vehicle.summary", { kind: kindName(kind), names: humans.join(", ") }) : kindName(kind);
   }
 }
 
@@ -151,18 +152,18 @@ export function boardingRoute(routes, selectedId) {
 }
 
 const ERROR_LINES = {
-  unknown_vehicle: "No vehicle with that code",
-  vehicle_full: "Vehicle full",
-  vehicle_rate_limited: "Too many tries, wait a moment",
-  vehicle_elsewhere: "That vehicle is riding on another route",
-  not_captain: "Only the captain can do that",
-  in_event: "Leave the event first",
-  invalid_vehicle: "That vehicle isn't possible",
-  already_aboard: "You're already aboard",
-  in_vehicle: "Leave the vehicle first",
+  unknown_vehicle: "vehicle.error.unknown",
+  vehicle_full: "vehicle.error.full",
+  vehicle_rate_limited: "vehicle.error.rateLimited",
+  vehicle_elsewhere: "vehicle.error.elsewhere",
+  not_captain: "vehicle.error.notCaptain",
+  in_event: "vehicle.error.inEvent",
+  invalid_vehicle: "vehicle.error.invalid",
+  already_aboard: "vehicle.error.alreadyAboard",
+  in_vehicle: "vehicle.error.inVehicle",
 };
 
 /** A friendly line for a vehicle error code, or null for other codes. */
 export function vehicleErrorLine(code) {
-  return ERROR_LINES[code] ?? null;
+  return ERROR_LINES[code] ? t(ERROR_LINES[code]) : null;
 }

@@ -15,6 +15,7 @@
 import { Emitter } from "../util/emitter.js";
 import { toHex } from "./deviceLog.js";
 import { Reconnector } from "./reconnector.js";
+import { t } from "../i18n/i18n.js";
 import {
   ASYNC_CHARACTERISTIC,
   SYNC_RX_CHARACTERISTIC,
@@ -31,7 +32,7 @@ export { RECONNECT_DELAYS_MS } from "./reconnector.js";
 /** What the chooser lists: Zwift devices, or the remembered ones by name. */
 function requestOptions(names) {
   return {
-    filters: names?.length ? names.map((name) => ({ name })) : [{ manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }, { namePrefix: "Zwift" }],
+    filters: names?.length ? names.map((name) => ({ name })) : [{ manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }, { namePrefix: "Zwift" }], // i18n-ok
     optionalServices: [ZWIFT_SERVICE, ZWIFT_RIDE_SERVICE],
   };
 }
@@ -51,7 +52,7 @@ export class ZwiftController extends Emitter {
     super();
     this.#device = device;
     this.#log = log;
-    this.label = device.name ?? "Zwift controller";
+    this.label = device.name ?? t("devices.zwiftController");
     this.id = device.id;
     this.#reconnector = new Reconnector({
       open: () => this.#open(),

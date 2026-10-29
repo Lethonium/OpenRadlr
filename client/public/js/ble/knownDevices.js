@@ -5,6 +5,8 @@
  * only the remembered device.
  */
 
+import { t } from "../i18n/i18n.js";
+
 const STORAGE_KEY = "openradlr.devices";
 const KINDS = ["trainer", "hr", "controller"];
 /** A Zwift Play is two devices; a third controller pushes out the oldest. */
@@ -102,7 +104,7 @@ export function whenInRange(device, { timeoutMs = 120000, setTimeout = globalThi
       settle();
     };
     const onAdvertisement = () => done(resolve);
-    timer = setTimeout(() => done(() => reject(new Error(`${device.name ?? "The device"} was not found nearby.`))), timeoutMs);
+    timer = setTimeout(() => done(() => reject(new Error(t("devices.notFound", { name: device.name ?? t("devices.theDevice") })))), timeoutMs);
     device.addEventListener("advertisementreceived", onAdvertisement);
     // Watching unsupported or refused: just try to connect.
     Promise.resolve()

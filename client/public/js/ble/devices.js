@@ -29,6 +29,7 @@ import {
 import { ReadingMerger } from "./readingMerger.js";
 import { Reconnector } from "./reconnector.js";
 import { HEART_RATE_MEASUREMENT, HEART_RATE_SERVICE, parseHeartRate } from "./heartRate.js";
+import { t } from "../i18n/i18n.js";
 
 export function isBluetoothAvailable(nav = globalThis.navigator) {
   return Boolean(nav?.bluetooth);
@@ -64,7 +65,7 @@ export class SmartTrainer extends Emitter {
     this.#merger = merger;
     this.#now = now;
     this.log = log;
-    this.label = device.name ?? "Smart trainer";
+    this.label = device.name ?? t("devices.smartTrainer");
     this.id = device.id;
     this.sources = [];
     this.#reconnector = new Reconnector({
@@ -128,10 +129,10 @@ export class SmartTrainer extends Emitter {
     log?.info("GATT connected");
 
     const ftms = await optionalService(server, FTMS_SERVICE, "FTMS", log);
-    const cps = await optionalService(server, CYCLING_POWER_SERVICE, "Cycling Power", log);
-    const bikeData = ftms && (await optionalCharacteristic(ftms, INDOOR_BIKE_DATA, "Indoor Bike Data", log));
-    const controlPoint = ftms && (await optionalCharacteristic(ftms, CONTROL_POINT, "FTMS Control Point", log));
-    const powerMeasurement = cps && (await optionalCharacteristic(cps, CYCLING_POWER_MEASUREMENT, "Cycling Power Measurement", log));
+    const cps = await optionalService(server, CYCLING_POWER_SERVICE, "Cycling Power", log); // i18n-ok
+    const bikeData = ftms && (await optionalCharacteristic(ftms, INDOOR_BIKE_DATA, "Indoor Bike Data", log)); // i18n-ok
+    const controlPoint = ftms && (await optionalCharacteristic(ftms, CONTROL_POINT, "FTMS Control Point", log)); // i18n-ok
+    const powerMeasurement = cps && (await optionalCharacteristic(cps, CYCLING_POWER_MEASUREMENT, "Cycling Power Measurement", log)); // i18n-ok
 
     if (!bikeData && !powerMeasurement) {
       device.gatt.disconnect();
@@ -143,12 +144,12 @@ export class SmartTrainer extends Emitter {
     this.sources = [];
     if (bikeData) {
       bikeData.addEventListener("characteristicvaluechanged", this.#onBikeData);
-      if (await subscribe(bikeData, "Indoor Bike Data", log)) this.sources.push("ftms");
+      if (await subscribe(bikeData, "Indoor Bike Data", log)) this.sources.push("ftms"); // i18n-ok
     }
     if (powerMeasurement) {
       this.#cadence = new CadenceCalculator();
       powerMeasurement.addEventListener("characteristicvaluechanged", this.#onPowerMeasurement);
-      if (await subscribe(powerMeasurement, "Cycling Power Measurement", log)) this.sources.push("cps");
+      if (await subscribe(powerMeasurement, "Cycling Power Measurement", log)) this.sources.push("cps"); // i18n-ok
     }
     if (this.sources.length === 0) {
       device.gatt.disconnect();
@@ -289,7 +290,7 @@ export class HeartRateMonitor extends Emitter {
   constructor({ device, log = null, setTimeout, clearTimeout }) {
     super();
     this.#device = device;
-    this.label = device.name ?? "Heart rate monitor";
+    this.label = device.name ?? t("devices.hrMonitor");
     this.id = device.id;
     this.#reconnector = new Reconnector({
       open: () => this.#open(),
@@ -352,7 +353,7 @@ export class HeartRateMonitor extends Emitter {
  * grade changes are only recorded.
  */
 export class SimulatedTrainer extends Emitter {
-  label = "Simulated trainer";
+  label = t("devices.simulatedLabel");
   canControlResistance = true;
   power = 150;
   grade = 0;
@@ -396,7 +397,7 @@ export class SimulatedTrainer extends Emitter {
  * shifting stay off; the road's grade only moves the sweet spot.
  */
 export class PaddleTrainer extends Emitter {
-  label = "Phone paddles";
+  label = t("devices.paddlesLabel");
   canControlResistance = false;
   #timer = null;
 

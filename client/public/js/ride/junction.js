@@ -9,6 +9,7 @@
  */
 import { RouteGeometry } from "../route/geometry.js";
 import { NETWORK_LANES } from "../route/network.js";
+import { t } from "../i18n/i18n.js";
 
 /** The options show this far before a junction. */
 export const JUNCTION_WINDOW_M = 250;
@@ -196,6 +197,6 @@ export function offRouteRoad(network, steps, id = OFF_ROUTE_ID) {
     }
   });
   const cleaned = points.filter((p, i) => i === 0 || run2d(points[i - 1], p) > 0.05);
-  const geometry = new RouteGeometry({ id, name: "Off route", loop: false, lanes: NETWORK_LANES, seed: network.seed, points: cleaned, markers });
+  const geometry = new RouteGeometry({ id, name: t("ride.offRoute"), loop: false, lanes: NETWORK_LANES, seed: network.seed, points: cleaned, markers });
   return { geometry, bases };
 }

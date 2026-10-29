@@ -53,10 +53,10 @@ export class DeviceLog extends Emitter {
 
   report(extra = {}) {
     const header = [
-      `OpenRadlr device diagnostics`,
-      ...(extra.build ? [`Build: ${extra.build}`] : []),
-      `User agent: ${extra.userAgent ?? "unknown"}`,
-      `Packets: ${JSON.stringify(this.packets)}`,
+      `OpenRadlr device diagnostics`, // i18n-ok
+      ...(extra.build ? [`Build: ${extra.build}`] : []), // i18n-ok
+      `User agent: ${extra.userAgent ?? "unknown"}`, // i18n-ok
+      `Packets: ${JSON.stringify(this.packets)}`, // i18n-ok
       "",
     ];
     return [...header, ...this.entries.map((e) => `[${e.t}s] ${e.level.toUpperCase()} ${e.message}`)].join("\n");
