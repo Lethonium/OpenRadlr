@@ -137,6 +137,8 @@ pub struct Rider {
     pub parked: bool,
     /// Doing a workout (#77): permanently parked at the start, never entered in a race.
     pub workout: bool,
+    /// Seconds held behind a slower rider with no free lane to pass in (see [`SpacingParams::squeeze_after_s`]).
+    pub boxed_s: f64,
 }
 
 /// A rider off their route: the road they ride and how far into it.
@@ -568,6 +570,7 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -895,26 +898,39 @@ impl World {
             rider.speed = physics::step_speed(&self.config.physics, &input, dt);
             // Keep off the wheel ahead; pull out to pass when strong enough to
             // ride faster than it even out of its draft.
+            // Boxed in with every lane taken, it slips through after a while.
             if let Some((gap, ahead)) = ahead {
                 let spacing = &self.config.spacing;
-                rider.speed = rider.speed.min(spacing.speed_limit(gap, ahead.speed));
                 let settled = (rider.lane - f64::from(rider.target_lane)).abs() < 1e-9;
                 let at_their_speed = StepInput {
                     speed: ahead.speed,
                     cda_factor: 1.0,
                     ..input
                 };
-                if settled
-                    && gap < spacing.pass_look
-                    && physics::acceleration(&self.config.physics, &at_their_speed) > spacing.pass_accel
-                {
-                    if let Some(lane) = field.passing_lane(me, spacing) {
-                        rider.target_lane = lane;
-                        if let Controller::Bot(brain) = &mut rider.controller {
-                            brain.hold_lane();
+                let wants_past = gap < spacing.pass_look
+                    && physics::acceleration(&self.config.physics, &at_their_speed) > spacing.pass_accel;
+                let mut boxed = false;
+                if wants_past && settled {
+                    match field.passing_lane(me, spacing) {
+                        Some(lane) => {
+                            rider.target_lane = lane;
+                            if let Controller::Bot(brain) = &mut rider.controller {
+                                brain.hold_lane();
+                            }
                         }
+                        None => boxed = true,
                     }
                 }
+                rider.boxed_s = match (boxed, wants_past) {
+                    (true, _) => rider.boxed_s + dt,
+                    (false, true) => rider.boxed_s,
+                    (false, false) => 0.0,
+                };
+                if rider.boxed_s < spacing.squeeze_after_s {
+                    rider.speed = rider.speed.min(spacing.speed_limit(gap, ahead.speed));
+                }
+            } else {
+                rider.boxed_s = 0.0;
             }
             if rider.parked {
                 // The brake holds a parked rider at a stop, even on a descent.
@@ -1296,6 +1312,7 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -1823,20 +1840,33 @@ mod tests {
         assert!(gap_between(&world, leader, follower) > 10.0, "went past");
     }
 
-    #[test]
-    fn with_both_neighbouring_lanes_taken_a_stronger_rider_waits_behind() {
-        let mut world = empty_world(flat_loop(10_000.0));
+    /// A wall across all four lanes: `leader` in lane 1 ahead of `follower`,
+    /// riders alongside the follower in lanes 0 and 2 and one in lane 3.
+    fn boxed_in(world: &mut World) -> (RiderId, RiderId, [(RiderId, f64); 5]) {
         let leader = world.join_human("Leader", 75.0);
         let follower = world.join_human("Follower", 75.0);
-        let left = world.join_human("Left", 75.0);
-        let right = world.join_human("Right", 75.0);
-        put(&mut world, leader, 103.0, 1, 9.0);
-        put(&mut world, follower, 100.0, 1, 9.0);
-        put(&mut world, left, 100.5, 0, 9.0);
-        put(&mut world, right, 100.5, 2, 9.0);
+        let wall = [0u8, 2, 3].map(|lane| world.join_human(&format!("Lane {lane}"), 75.0));
+        put(world, leader, 103.0, 1, 9.0);
+        put(world, follower, 100.0, 1, 9.0);
+        for (id, lane) in wall.iter().zip([0u8, 2, 3]) {
+            put(world, *id, 100.5, lane, 9.0);
+        }
+        let riders = [
+            (leader, 150.0),
+            (follower, 400.0),
+            (wall[0], 150.0),
+            (wall[1], 150.0),
+            (wall[2], 150.0),
+        ];
+        (leader, follower, riders)
+    }
 
-        let riders = [(leader, 150.0), (follower, 400.0), (left, 150.0), (right, 150.0)];
-        let closest = closest_in_lane(&mut world, 20.0, &riders, follower, leader);
+    #[test]
+    fn boxed_in_a_stronger_rider_first_waits_behind() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower, riders) = boxed_in(&mut world);
+
+        let closest = closest_in_lane(&mut world, 2.5, &riders, follower, leader);
 
         assert!(
             closest > SpacingParams::default().min_gap - 0.1,
@@ -1844,6 +1874,16 @@ mod tests {
         );
         assert_eq!(world.rider(follower).unwrap().target_lane, 1, "nowhere to pull out to");
         assert!(gap_between(&world, follower, leader) > 0.0, "still behind");
+    }
+
+    #[test]
+    fn boxed_in_for_a_while_a_stronger_rider_slips_through() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower, riders) = boxed_in(&mut world);
+
+        ride(&mut world, 20.0, &riders);
+
+        assert!(gap_between(&world, leader, follower) > 5.0, "got past the wall");
     }
 
     #[test]

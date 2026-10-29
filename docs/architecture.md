@@ -68,7 +68,9 @@ that died after its rider was taken over by a new one can't touch the rider.
    Nobody rides through the wheel ahead: closing in, a rider slows to sit on
    it 2 m behind, and pulls out into a free neighbouring lane to pass when it
    would be faster than that rider even in clear air (humans too: the server
-   steers them out).
+   steers them out). With every neighbouring lane taken it waits, and after
+   3 s slips through. Riders going the other way on a shared road are not
+   part of this (nor of drafting).
    Seated riders are skipped: each shared vehicle ([ADR 14](adr/0014-shared-vehicles-as-linked-riders.md))
    takes one step with the summed power and mass of its seats along the
    captain's road, then copies speed, position and lane to every seat.
