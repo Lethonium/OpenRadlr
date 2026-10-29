@@ -409,6 +409,7 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {

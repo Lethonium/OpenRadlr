@@ -5,6 +5,7 @@
 //! sit on it (like adaptive cruise control: the closer, the nearer to the
 //! leader's speed), and pulls out into a free neighbouring lane to pass when
 //! it is strong enough to ride faster than the leader even out of its draft.
+//! With every lane taken it waits, and after a few seconds slips through.
 //! A start line-up puts the riders in rows instead of on one spot.
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +20,10 @@ pub struct SpacingParams {
     /// Pull out when the rider would still speed up by this much (m/s²) at the
     /// leader's speed in clear air: at equal power it would not speed up at all.
     pub pass_accel: f64,
+    /// Held behind with no free lane for this long (s), a rider that wants
+    /// past slips through: a gap the lanes can't show, and no wall of riders
+    /// across the road holds a stronger rider back for good.
+    pub squeeze_after_s: f64,
     /// Distance between the rows of a start line-up (m).
     pub grid_row: f64,
 }
@@ -30,6 +35,7 @@ impl Default for SpacingParams {
             close_s: 0.5,
             pass_look: 8.0,
             pass_accel: 0.03,
+            squeeze_after_s: 3.0,
             grid_row: 2.5,
         }
     }
