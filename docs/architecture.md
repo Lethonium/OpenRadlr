@@ -56,12 +56,21 @@ that died after its rider was taken over by a new one can't touch the rider.
 
 1. The race advances its countdown or clock. Races are opt-in: the rider who
    starts one, riders who join during the countdown and about 60 % of the
-   bots line up at the start; everyone else keeps riding and is never moved.
+   bots line up at the start, in rows of one rider per lane 2.5 m apart (the
+   race counts from the line for every row); everyone else keeps riding and is
+   never moved.
 2. Every rider gets power: humans from their latest telemetry (zero after 3 s
    without data), bots from their brain.
-3. Drafting: the nearest rider 0.5–5 m ahead in the same lane reduces CdA by up to 30 %
+3. Drafting: the nearest rider up to 6.5 m ahead in the same lane reduces CdA by up to 30 %,
+   most from 2 m (a bike length, middle to middle) in
    (on your route, or on the same road in the same direction on another route).
 4. Physics integrates speed; position advances and wraps around the loop.
+   Nobody rides through the wheel ahead: closing in, a rider slows to sit on
+   it 2 m behind, and pulls out into a free neighbouring lane to pass when it
+   would be faster than that rider even in clear air (humans too: the server
+   steers them out). With every neighbouring lane taken it waits, and after
+   3 s slips through. Riders going the other way on a shared road are not
+   part of this (nor of drafting).
    Seated riders are skipped: each shared vehicle ([ADR 14](adr/0014-shared-vehicles-as-linked-riders.md))
    takes one step with the summed power and mass of its seats along the
    captain's road, then copies speed, position and lane to every seat.

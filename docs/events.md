@@ -17,7 +17,8 @@ The start menu lists the coming events with their start time and how many
 have entered. Each event has a **lobby** that opens 10 minutes before the
 start (`OPENRADLR_EVENT_LOBBY_S`). Join from the menu, or press <kbd>J</kbd>
 while the banner `Group ride starts in 9:12 · J to join` is shown. In the
-lobby you ride around as usual; at the start the entrants are lined up. A
+lobby you ride around as usual; at the start the entrants are lined up in
+rows behind the line (distances count from the line for every row). A
 group ride can also be joined while it runs (you start behind the last
 rider). A race closes at its start. Turns are locked while you are in an
 event.

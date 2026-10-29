@@ -18,10 +18,17 @@ test("difficulty scales climbs and halves descents", () => {
 test("detects a draft only close behind in the same lane", () => {
   const route = squareRoute();
   const me = { id: 1, distance: 100, lane: 1 };
-  assert.equal(draftInfo(me, [me, { id: 2, distance: 102, lane: 1.1 }], route).savingPercent, 20);
-  assert.equal(draftInfo(me, [me, { id: 2, distance: 102, lane: 2 }], route), null);
-  assert.equal(draftInfo(me, [me, { id: 2, distance: 110, lane: 1 }], route), null);
+  assert.equal(draftInfo(me, [me, { id: 2, distance: 103.5, lane: 1.1 }], route).savingPercent, 20);
+  assert.equal(draftInfo(me, [me, { id: 2, distance: 103.5, lane: 2 }], route), null);
+  assert.equal(draftInfo(me, [me, { id: 2, distance: 107, lane: 1 }], route), null);
   assert.equal(draftInfo(me, [me, { id: 2, distance: 98, lane: 1 }], route), null);
+});
+
+test("the full draft starts a bike length behind, and holds closer in", () => {
+  const route = squareRoute();
+  const me = { id: 1, distance: 100, lane: 1 };
+  assert.equal(draftInfo(me, [me, { id: 2, distance: 102, lane: 1 }], route).savingPercent, 30);
+  assert.equal(draftInfo(me, [me, { id: 2, distance: 101.2, lane: 1 }], route).savingPercent, 30);
 });
 
 test("drafting works across the start line and picks the nearest leader", () => {

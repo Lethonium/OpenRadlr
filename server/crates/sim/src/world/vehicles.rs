@@ -409,6 +409,7 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -883,7 +884,7 @@ mod tests {
             world
                 .create_vehicle(captain, VehicleKind::BeerBike { seats: 5 }, false, &no_codes_taken)
                 .unwrap();
-            place(&mut world, captain, 102.0, 8.0);
+            place(&mut world, captain, 103.5, 8.0);
             let c = world.riders.get_mut(&captain).unwrap();
             c.lane = lane;
             c.target_lane = lane as u8;
@@ -898,11 +899,11 @@ mod tests {
 
     #[test]
     fn riders_draft_behind_a_beer_bike() {
-        // The expected factor comes from the draft curve: 2 m behind, between
-        // min_gap 0.5 and max_gap 5 -> t = 1/3 -> 1 - 0.5 * (1 - 1/3) = 2/3.
+        // The expected factor comes from the draft curve: 3.5 m behind, between
+        // min_gap 2 and max_gap 6.5 -> t = 1/3 -> 1 - 0.5 * (1 - 1/3) = 2/3.
         let config = SimConfig::default();
         let draft = config.vehicles.draft(VehicleKind::BeerBike { seats: 5 }, &config.draft);
-        let factor = draft.cda_factor(2.0);
+        let factor = draft.cda_factor(3.5);
         assert!((factor - 2.0 / 3.0).abs() < 1e-9);
         let expected = physics::step_speed(
             &config.physics,
@@ -1059,7 +1060,7 @@ mod tests {
             let me = human(&mut world, "Me", 3.0);
             let ahead = human(&mut world, "Ahead", 3.0);
             place(&mut world, me, 100.0, 8.0);
-            place(&mut world, ahead, 102.0, 8.0);
+            place(&mut world, ahead, 103.5, 8.0);
             world.riders.get_mut(&ahead).unwrap().lane = 1.0 + offset;
             let drafted = follower_speed(1.0, None);
             ride(&mut world, DT, &[(me, 200.0)]);

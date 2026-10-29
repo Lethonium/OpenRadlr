@@ -136,8 +136,8 @@ impl Default for BotTuning {
     fn default() -> Self {
         Self {
             noise_time_constant_s: 8.0,
-            draft_window: (0.5, 5.0),
-            join_window: (1.0, 15.0),
+            draft_window: (2.0, 6.5),
+            join_window: (2.5, 15.0),
             lane_change_cooldown_s: 5.0,
         }
     }
@@ -216,6 +216,11 @@ impl BotBrain {
     }
 
     /// Decides whether to move into a neighbouring lane to catch a draft.
+    /// Keeps the lane just picked for a while (after pulling out to pass).
+    pub fn hold_lane(&mut self) {
+        self.lane_cooldown_s = self.tuning.lane_change_cooldown_s;
+    }
+
     pub fn choose_lane(&mut self, view: &LaneView, dt: f64) -> Option<u8> {
         self.lane_cooldown_s = (self.lane_cooldown_s - dt).max(0.0);
         if self.lane_cooldown_s > 0.0 {
