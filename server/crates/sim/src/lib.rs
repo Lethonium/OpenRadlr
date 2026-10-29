@@ -21,6 +21,7 @@ pub mod rng;
 pub mod route;
 pub mod schedule;
 pub mod sharing;
+pub mod spacing;
 pub mod studio;
 pub mod vehicle;
 pub mod world;

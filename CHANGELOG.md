@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- Riders no longer ride through each other. Closing in on a wheel, a rider (bot or human) slows down to sit on it about a bike length behind, and pulls out into a free lane to pass when strong enough to be faster than that rider even out of its draft. Drafting is as strong as before, now measured from that closest spot (full draft from 2 m, fading out at 6.5 m) (#14).
+- Race and group ride starts line the riders up in rows behind the line instead of stacking a whole lane on one spot; distances and the race count from the line for every row (#14).
 - Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
 - Both Click halves can be connected, whichever comes first: their presses are merged into one stream, so a press that one half relays for the other shifts once, and quick + then − is two shifts.
 - A Click that falls asleep is found again within seconds (it advertises only briefly when woken), and a reconnect attempt that hangs gives up after 15 s instead of ending all reconnects.
