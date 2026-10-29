@@ -27,10 +27,10 @@ const TEXT_ATTRS = ["title", "aria-label", "placeholder", "alt"];
 const VOID = new Set(["meta", "link", "input", "img", "br", "hr", "source"]);
 
 const collapse = (s) => s.replace(/\s+/g, " ").trim();
+const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', hellip: "…", middot: "·" };
+// One pass, so "&amp;lt;" decodes to "&lt;" and never to "<".
 const decode = (s) =>
-  s.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&hellip;/g, "…").replace(/&middot;/g, "·");
+  s.replace(/&(?:#(\d+)|(\w+));/g, (all, n, name) => (n ? String.fromCharCode(Number(n)) : (ENTITIES[name] ?? all)));
 
 function parseAttrs(source) {
   const attrs = {};
