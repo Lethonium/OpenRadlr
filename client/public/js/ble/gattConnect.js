@@ -25,7 +25,7 @@ export async function connectGatt(device, { attempts = 1, timeoutMs = CONNECT_TI
   for (let attempt = 1; ; attempt += 1) {
     let timer = null;
     const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error(`No answer within ${Math.round(timeoutMs / 1000)} s`), { name: "TimeoutError" })), timeoutMs);
+      timer = setTimeout(() => reject(Object.assign(new Error(`No answer within ${Math.round(timeoutMs / 1000)} s`), { name: "TimeoutError" })), timeoutMs); // i18n-ok
     });
     try {
       return await Promise.race([device.gatt.connect(), timeout]);

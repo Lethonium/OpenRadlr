@@ -1,4 +1,5 @@
 /** The splits table of the finish screen (#83). */
+import { t } from "../i18n/i18n.js";
 import { compareSplits } from "../ride/splits.js";
 import { formatDistanceWithUnit, formatDuration, formatElevation, formatSpeed, speedUnit } from "../util/format.js";
 import { splitLabel } from "./hud.js";
@@ -27,14 +28,14 @@ export function splitRows(splits, unitM = 1000) {
   }));
 }
 
-const COLUMNS = [
-  ["label", "Split"],
-  ["time", "Time"],
-  ["distance", "Distance"],
-  ["speed", "Speed"],
-  ["power", "Power"],
-  ["heartRate", "Heart"],
-  ["gain", "Climb"],
+const columnsNow = () => [
+  ["label", t("splits.col.split")],
+  ["time", t("splits.col.time")],
+  ["distance", t("splits.col.distance")],
+  ["speed", t("splits.col.speed")],
+  ["power", t("splits.col.power")],
+  ["heartRate", t("splits.col.heart")],
+  ["gain", t("splits.col.climb")],
   ["hint", ""],
 ];
 
@@ -43,7 +44,7 @@ export function renderSplits(table, splits, unitM = 1000) {
   table.hidden = splits.length < 2;
   if (table.hidden) return table.replaceChildren();
   const rows = splitRows(splits, unitM);
-  const columns = COLUMNS.filter(([key]) => key !== "heartRate" || splits.some((split) => split.avgHeartRate !== null));
+  const columns = columnsNow().filter(([key]) => key !== "heartRate" || splits.some((split) => split.avgHeartRate !== null));
   const doc = table.ownerDocument;
   const cell = (tag, text) => Object.assign(doc.createElement(tag), { textContent: text });
   const head = doc.createElement("tr");

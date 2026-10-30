@@ -3,6 +3,7 @@
  * and the view that writes it into `#workout-hud`. Only textContent is used.
  */
 import { formatDuration } from "../util/format.js";
+import { t } from "../i18n/i18n.js";
 
 /** The planned exercise time (rests excluded): what a workout's active time is measured against. */
 const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (block.kind === "exercise" ? block.seconds : 0), 0);
@@ -25,10 +26,10 @@ export function workoutHudText(position, { state, heartRate }) {
   const next = position.next;
   return {
     exercise: position.block?.label ?? "",
-    paused: state === "paused" ? "Paused" : "",
+    paused: state === "paused" ? t("workout.hud.paused") : "",
     time: formatDuration(Math.ceil(position.blockRemainingS)),
-    next: next ? `Next: ${next.label} ${next.seconds} s` : "Last block",
-    block: `Block ${Math.min(position.index + 1, position.count)}/${position.count}`,
+    next: next ? t("workout.hud.next", { label: next.label, s: next.seconds }) : t("workout.hud.last"),
+    block: t("workout.hud.block", { n: Math.min(position.index + 1, position.count), count: position.count }),
     // Elapsed rounds down and remaining up, like the ring: the first frame reads 0:00 and the full length.
     elapsed: formatDuration(Math.floor(position.elapsedS)),
     remaining: formatDuration(Math.ceil(position.remainingS)),
@@ -45,11 +46,11 @@ export function blockProgress(position) {
 /** The summary card lines for a history record of a workout and the plan that was run; `finished` is true when the plan ran out. */
 export function summaryText(record, plan, { finished = false } = {}) {
   return {
-    title: finished ? "Workout complete" : "Workout ended",
+    title: finished ? t("workout.summary.complete") : t("workout.ended"),
     plan: record.planName,
-    worked: `${formatDuration(record.activeS)} of ${formatDuration(exerciseDuration(plan))}`,
-    blocks: record.blocksSkipped > 0 ? `${record.blocksDone} done · ${record.blocksSkipped} skipped` : `${record.blocksDone} done`,
-    hr: record.hr ? `Avg ${record.hr.avg} · max ${record.hr.max} bpm` : "",
+    worked: t("workout.summary.worked", { active: formatDuration(record.activeS), planned: formatDuration(exerciseDuration(plan)) }),
+    blocks: record.blocksSkipped > 0 ? t("workout.summary.blocksSkipped", { done: record.blocksDone, skipped: record.blocksSkipped }) : t("workout.summary.blocks", { done: record.blocksDone }),
+    hr: record.hr ? t("workout.summary.hr", { avg: record.hr.avg, max: record.hr.max }) : "",
   };
 }
 

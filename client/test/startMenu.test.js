@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction } from "../public/js/view/startMenu.js";
+import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction, routeDescription } from "../public/js/view/startMenu.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 const routes = [
@@ -208,8 +208,8 @@ test("the server pill names the server only when it isn't the default OpenRadlr"
 });
 
 test("a route card: name, character, figures and riders; its description waits under the headline", () => {
-  assert.deepEqual(routeCard({ ...routes[0], description: "Hills." }), {
-    id: "rolling-hills",
+  assert.deepEqual(routeCard({ ...routes[0], id: "local-hills", description: "Hills." }), {
+    id: "local-hills",
     name: "Rolling Hills",
     tag: "Rolling",
     description: null,
@@ -245,4 +245,10 @@ test("the main button does one thing: ride, start the workout, board a friend's 
   assert.deepEqual(joinAction({ ...base, needsStrava: true, boardCode: "K7XQ2M" }), { kind: "strava", label: "Connect with Strava to ride", disabled: false });
   assert.deepEqual(joinAction({ ...base, full: true }), { kind: "full", label: "Server is full", disabled: true });
   assert.equal(joinAction({ ...base, selected: null }).label, "Ride");
+});
+
+test("a bundled route's description comes from the dictionary, else the server's text", () => {
+  assert.equal(routeDescription({ id: "riverside-flats", description: "Server text." }), "Fast and flat down the river valley, made for drafting and sprints.");
+  assert.equal(routeDescription({ id: "someone-elses-route", description: "Server text." }), "Server text.");
+  assert.equal(routeDescription({ id: "someone-elses-route" }), "");
 });

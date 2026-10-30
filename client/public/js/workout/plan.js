@@ -4,14 +4,16 @@
  * Pure functions only; the client runs the clock and the server never sees a plan.
  */
 
+import { t } from "../i18n/i18n.js";
+
 /** The exercise ids the server and the 3D gym know about, with display names. */
 export const EXERCISES = Object.freeze({
-  squats: { name: "Squats" },
-  situps: { name: "Sit-ups" },
-  pushups: { name: "Push-ups" },
-  jumping_jacks: { name: "Jumping jacks" },
-  plank: { name: "Plank" },
-  burpees: { name: "Burpees" },
+  squats: { get name() { return t("workout.exercise.squats"); } },
+  situps: { get name() { return t("workout.exercise.situps"); } },
+  pushups: { get name() { return t("workout.exercise.pushups"); } },
+  jumping_jacks: { get name() { return t("workout.exercise.jumpingJacks"); } },
+  plank: { get name() { return t("workout.exercise.plank"); } },
+  burpees: { get name() { return t("workout.exercise.burpees"); } },
 });
 
 const MAX_BLOCKS = 200;
@@ -33,21 +35,21 @@ export function createPlan({ id, name, description = "", blocks }) {
     const n = index + 1;
     const seconds = Math.round(Number(block.seconds));
     if (!(seconds >= 1 && seconds <= MAX_BLOCK_S)) throw new Error(`Block ${n} must last between 1 and ${MAX_BLOCK_S} seconds.`);
-    if (block.kind === "rest") return { kind: "rest", seconds, label: "Rest" };
+    if (block.kind === "rest") return { kind: "rest", seconds, get label() { return t("workout.rest"); } };
     if (block.kind === "exercise") {
       if (!Object.hasOwn(EXERCISES, block.exercise)) throw new Error(`Block ${n} has an unknown exercise.`);
-      return { kind: "exercise", exercise: block.exercise, seconds, label: EXERCISES[block.exercise].name };
+      return { kind: "exercise", exercise: block.exercise, seconds, get label() { return EXERCISES[block.exercise].name; } };
     }
     throw new Error(`Block ${n} must be an exercise or a rest.`);
   });
   const total = clean.reduce((sum, b) => sum + b.seconds, 0);
   if (total > MAX_TOTAL_S) throw new Error("A plan may last at most 2 hours.");
-  return { id: String(id), name: String(name || "Workout").slice(0, 80), description: String(description).slice(0, 500), blocks: clean };
+  return { id: String(id), name: String(name || t("workout.defaultName")).slice(0, 80), description: String(description).slice(0, 500), blocks: clean };
 }
 
 /** A new plan with a 30 s "Get ready" rest in front; the original is untouched. */
 export function withGetReady(plan) {
-  return { ...plan, blocks: [{ kind: "rest", seconds: GET_READY_S, label: "Get ready" }, ...plan.blocks] };
+  return { ...plan, blocks: [{ kind: "rest", seconds: GET_READY_S, get label() { return t("workout.getReady"); } }, ...plan.blocks] };
 }
 
 export const planDuration = (plan) => plan.blocks.reduce((sum, b) => sum + b.seconds, 0);
@@ -85,7 +87,7 @@ export function planPositionAt(plan, elapsedS) {
 
 /** "Squats 40 s · Rest 20 s · …" for the first six blocks. */
 export function planSummary(plan) {
-  const parts = plan.blocks.slice(0, 6).map((b) => `${b.label} ${b.seconds} s`);
+  const parts = plan.blocks.slice(0, 6).map((b) => t("workout.summary.seconds", { label: b.label, s: b.seconds }));
   if (plan.blocks.length > 6) parts.push("…");
   return parts.join(" · ");
 }

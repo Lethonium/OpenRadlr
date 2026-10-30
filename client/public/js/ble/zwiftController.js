@@ -15,6 +15,7 @@
 import { Emitter } from "../util/emitter.js";
 import { toHex } from "./deviceLog.js";
 import { Reconnector } from "./reconnector.js";
+import { t } from "../i18n/i18n.js";
 import { FIRST_CONNECT_ATTEMPTS, connectGatt } from "./gattConnect.js";
 import {
   ASYNC_CHARACTERISTIC,
@@ -40,7 +41,7 @@ export const CONTROLLER_RECONNECT_DELAYS_MS = Object.freeze([500, 1000, 2000]);
 /** What the chooser lists: Zwift devices, or the remembered ones by name. */
 function requestOptions(names) {
   return {
-    filters: names?.length ? names.map((name) => ({ name })) : [{ manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }, { namePrefix: "Zwift" }],
+    filters: names?.length ? names.map((name) => ({ name })) : [{ manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }, { namePrefix: "Zwift" }], // i18n-ok
     optionalServices: [ZWIFT_SERVICE, ZWIFT_RIDE_SERVICE],
   };
 }
@@ -76,7 +77,7 @@ export class ZwiftController extends Emitter {
     super();
     this.#device = device;
     this.#log = log;
-    this.label = device.name ?? "Zwift controller";
+    this.label = device.name ?? t("devices.zwiftController");
     this.id = device.id;
     this.#timers = { setTimeout: schedule, clearTimeout: cancel };
     this.#reconnector = new Reconnector({
@@ -116,7 +117,7 @@ export class ZwiftController extends Emitter {
   static async connect(bluetooth = globalThis.navigator.bluetooth, { isConnected = () => false, names, ...options } = {}) {
     const device = await bluetooth.requestDevice(requestOptions(names));
     options.log?.info(`Selected controller "${device.name ?? "unnamed"}"`);
-    if (isConnected(device)) throw new Error(`${device.name ?? "This controller"} is already connected.`);
+    if (isConnected(device)) throw new Error(t("devices.error.connected", { name: device.name ?? t("devices.error.thisController") }));
     return ZwiftController.open(device, options);
   }
 
@@ -141,7 +142,7 @@ export class ZwiftController extends Emitter {
   async #open({ attempts = 1 } = {}) {
     const server = await connectGatt(this.#device, { attempts, log: this.#log, ...this.#timers });
     const service = await firstService(server, [ZWIFT_SERVICE, ZWIFT_RIDE_SERVICE]);
-    if (!service) throw new Error("This device is not a Zwift Click, Play or Ride controller.");
+    if (!service) throw new Error(t("devices.error.notZwift"));
     const notifications = await service.getCharacteristic(ASYNC_CHARACTERISTIC);
     const commands = await service.getCharacteristic(SYNC_RX_CHARACTERISTIC);
     const answers = await service.getCharacteristic(SYNC_TX_CHARACTERISTIC);

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="OpenRadlr — open-source indoor cycling with friends and bots." />
+    <meta name="description" content="OpenRadlr — open-source indoor cycling with friends and bots." data-i18n-attr="content:app.description" />
     <title>OpenRadlr</title>
     <meta name="theme-color" content="#0f1216" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -27,54 +27,58 @@
             <img class="brand-mark" src="icons/brand-mark.png" alt="" width="69" height="54" />
             <span class="brand-word">Open<span>Radlr</span></span>
           </div>
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
+            <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
+            <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
+          </div>
           <div class="server-status" aria-live="polite">
             <span id="server-dot" class="status-dot" aria-hidden="true"></span>
-            <strong id="server-label">Connecting…</strong>
+            <strong id="server-label" data-i18n="menu.server.connecting">Connecting…</strong>
             <span id="server-players" class="muted"></span>
           </div>
         </header>
 
         <div class="build-line">
-          <button type="button" id="build-label" class="build-label" title="Copy the build details" data-nav-skip></button>
-          <button type="button" id="build-reload" class="build-reload" hidden>Update available, reload</button>
-          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" data-nav-skip hidden>Privacy</a>
+          <button type="button" id="build-label" class="build-label" title="Copy the build details" data-nav-skip data-i18n-attr="title:menu.build.copy"></button>
+          <button type="button" id="build-reload" class="build-reload" hidden data-i18n="menu.build.update">Update available, reload</button>
+          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" data-nav-skip hidden data-i18n="menu.privacy">Privacy</a>
         </div>
 
         <div class="start-grid">
           <section class="start-routes" aria-labelledby="routes-title">
-            <div id="activity-tabs" class="activity-tabs" role="tablist" aria-label="What do you want to do?" hidden></div>
+            <div id="activity-tabs" class="activity-tabs" role="tablist" aria-label="What do you want to do?" hidden data-i18n-attr="aria-label:start.whatDoYouWant"></div>
             <div class="tabs-skeleton" aria-hidden="true"></div>
             <section id="unfinished" class="unfinished card" aria-live="polite" hidden>
               <p id="unfinished-label" class="unfinished-label"></p>
               <div class="unfinished-actions">
-                <button type="button" id="continue-ride" class="primary">Continue</button>
-                <button type="button" id="save-unfinished" class="secondary">Save</button>
-                <button type="button" id="discard-unfinished" class="secondary">Discard</button>
+                <button type="button" id="continue-ride" class="primary" data-i18n="unfinished.continue">Continue</button>
+                <button type="button" id="save-unfinished" class="secondary" data-i18n="unfinished.save">Save</button>
+                <button type="button" id="discard-unfinished" class="secondary" data-i18n="unfinished.discard">Discard</button>
               </div>
               <div id="unfinished-save" class="unfinished-actions" hidden>
-                <button type="button" id="unfinished-fit" class="secondary">Download FIT</button>
-                <button type="button" id="unfinished-photos" class="secondary" hidden>Download photos</button>
-                <button type="button" id="unfinished-strava" class="secondary" hidden>Upload to Strava</button>
+                <button type="button" id="unfinished-fit" class="secondary" data-i18n="unfinished.downloadFit">Download FIT</button>
+                <button type="button" id="unfinished-photos" class="secondary" hidden data-i18n="unfinished.downloadPhotos">Download photos</button>
+                <button type="button" id="unfinished-strava" class="secondary" hidden data-i18n="unfinished.uploadStrava">Upload to Strava</button>
               </div>
               <p id="unfinished-status" class="muted"></p>
             </section>
             <div id="activity-panel" class="activity-panel" role="tabpanel">
               <header class="stage-head">
-                <h1 id="routes-title">Where do you want to ride?</h1>
+                <h1 id="routes-title" data-i18n="menu.routes.title">Where do you want to ride?</h1>
                 <p id="stage-stats" class="stage-stats"></p>
-                <p id="routes-lede" class="lede">Everyone on the same route rides together — friends, strangers and bots.</p>
+                <p id="routes-lede" class="lede" data-i18n="menu.stage.rideLede">Everyone on the same route rides together — friends, strangers and bots.</p>
               </header>
               <!-- The window the drone camera looks through (and the map until the island is ready). -->
               <figure id="menu-stage" class="menu-stage">
-                <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route"></canvas>
-                <p class="stage-loading" aria-hidden="true">Loading the island…</p>
+                <canvas id="menu-map" class="menu-map" aria-label="Map of the island with the picked route" data-i18n-attr="aria-label:menu.map.label"></canvas>
+                <p class="stage-loading" aria-hidden="true" data-i18n="start.loadingTheIsland">Loading the island…</p>
               </figure>
-              <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden></canvas>
-              <ul id="route-list" class="route-list" aria-label="Routes"></ul>
+              <canvas id="menu-profile" class="menu-profile" aria-label="Elevation profile of the picked route" hidden data-i18n-attr="aria-label:menu.profile.label"></canvas>
+              <ul id="route-list" class="route-list" aria-label="Routes" data-i18n-attr="aria-label:start.routes"></ul>
               <ul class="route-skeleton" aria-hidden="true"><li></li><li></li><li></li></ul>
-              <p id="routes-empty" class="muted" hidden>Waiting for the server…</p>
+              <p id="routes-empty" class="muted" hidden data-i18n="menu.routes.empty">Waiting for the server…</p>
               <section id="events" class="events" aria-labelledby="events-title" hidden>
-                <h2 id="events-title" class="visually-hidden">Events</h2>
+                <h2 id="events-title" class="visually-hidden" data-i18n="events.title">Events</h2>
                 <ul id="event-list" class="event-list"></ul>
               </section>
               <p id="community-distance" class="muted community-distance" hidden></p>
@@ -83,50 +87,50 @@
 
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset>
-              <legend>Rider</legend>
+              <legend data-i18n="rider.title">Rider</legend>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
                   <svg class="strava-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.39 17.94l-2.09-4.12h-3.07L15.39 24l5.15-10.18h-3.08M10.2 0L3.16 13.82h4.15l2.89-5.48 2.88 5.48h4.12z" /></svg>
                   <span id="strava-connected" class="device-status ok" hidden>Strava · <strong id="strava-name">…</strong></span>
                   <span id="strava-disconnected" class="device-status" hidden></span>
-                  <button type="button" id="strava-logout" class="secondary small" hidden>Disconnect</button>
-                  <a id="strava-connect" class="strava-button small" href="/auth/strava" hidden>Connect</a>
+                  <button type="button" id="strava-logout" class="secondary small" hidden data-i18n="strava.disconnect">Disconnect</button>
+                  <a id="strava-connect" class="strava-button small" href="/auth/strava" hidden data-i18n="start.connect">Connect</a>
                 </div>
                 <p id="strava-hint" class="field-hint" hidden></p>
                 <p id="strava-message" class="warning" hidden></p>
               </div>
-              <label>Name <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
+              <label><span data-i18n="rider.name">Name</span> <input id="name" name="name" maxlength="24" autocomplete="nickname" required /></label>
               <div class="field-row">
-                <label><span class="label-text">Weight (<span data-unit="weight">kg</span>)</span> <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
-                <label class="ride-only">FTP (W) <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
+                <label><span class="label-text"><span data-i18n="rider.weight">Weight</span> (<span data-unit="weight">kg</span>)</span> <input id="weight" name="weight" type="number" min="30" max="200" step="0.5" required /></label>
+                <label class="ride-only"><span data-i18n="rider.ftp">FTP (W)</span> <input id="ftp" name="ftp" type="number" min="50" max="600" step="1" required /></label>
               </div>
               <p id="ftp-source" class="field-hint ride-only"></p>
               <p id="level-label" class="muted" hidden></p>
             </fieldset>
 
             <fieldset id="workout-setup" hidden>
-              <legend>Workout</legend>
-              <label>Circuit <select id="workout-preset" name="workout-preset"></select></label>
+              <legend data-i18n="workout.title">Workout</legend>
+              <label><span data-i18n="workout.circuit">Circuit</span> <select id="workout-preset" name="workout-preset"></select></label>
               <p id="workout-preset-summary" class="field-hint"></p>
-              <label class="check"><input id="workout-cues" type="checkbox" checked /> Beep in the last 3 seconds</label>
+              <label class="check"><input id="workout-cues" type="checkbox" checked /> <span data-i18n="workout.cues">Beep in the last 3 seconds</span></label>
             </fieldset>
 
             <fieldset id="devices">
-              <legend class="trainer-only">How are you riding?</legend>
-              <legend class="workout-only">Devices</legend>
-              <div id="ride-modes" class="ride-modes trainer-only" role="radiogroup" aria-label="How are you riding?">
+              <legend class="trainer-only" data-i18n="start.howAreYouRiding">How are you riding?</legend>
+              <legend class="workout-only" data-i18n="devices.title">Devices</legend>
+              <div id="ride-modes" class="ride-modes trainer-only" role="radiogroup" aria-label="How are you riding?" data-i18n-attr="aria-label:start.howAreYouRiding">
                 <button type="button" class="mode-card" data-mode="trainer" role="radio" aria-checked="true">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5" /><circle cx="18" cy="16" r="3.5" /><path d="M6 16l4-7h5l3 7M10 9l-1.5-3H6M14 9l1-3h2" /></svg>
-                  <strong>Smart trainer</strong><span>Bluetooth</span>
+                  <strong data-i18n="devices.smartTrainer">Smart trainer</strong><span data-i18n="start.bluetooth">Bluetooth</span>
                 </button>
                 <button type="button" id="use-paddles" class="mode-card" data-mode="paddles" role="radio" aria-checked="false">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>
-                  <strong>Phone paddles</strong><span>No bike needed</span>
+                  <strong data-i18n="devices.paddlesLabel">Phone paddles</strong><span data-i18n="start.noBikeNeeded">No bike needed</span>
                 </button>
                 <button type="button" id="use-simulated" class="mode-card" data-mode="sim" role="radio" aria-checked="false">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5" /><path d="M6 10h1M9 10h1M12 10h1M15 10h1M18 10h0M7 14h10" /></svg>
-                  <strong>Simulator</strong><span>Just try it</span>
+                  <strong data-i18n="start.simulator">Simulator</strong><span data-i18n="start.justTryIt">Just try it</span>
                 </button>
               </div>
               <p id="ride-mode-reason" class="field-hint trainer-only" hidden></p>
@@ -134,50 +138,50 @@
               <!-- Smart trainer: one action at a time (reconnect, connect, or what's connected and live) -->
               <div id="trainer-panel" class="mode-panel trainer-only" data-for="trainer">
                 <p id="bluetooth-warning" class="bluetooth-note" hidden>
-                  <strong>This browser can't reach Bluetooth trainers.</strong>
-                  Use Chrome or Edge on Android, Windows, macOS or ChromeOS. iPhone, iPad, Safari and Firefox can't, but phone paddles work everywhere.
+                  <strong data-i18n="start.thisBrowserCanT">This browser can't reach Bluetooth trainers.</strong>
+                  <span data-i18n="start.useChrome">Use Chrome or Edge on Android, Windows, macOS or ChromeOS. iPhone, iPad, Safari and Firefox can't, but phone paddles work everywhere.</span>
                 </p>
                 <div class="device-line bluetooth-only">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span id="trainer-status" class="device-status">No trainer connected</span>
+                  <span id="trainer-status" class="device-status" data-i18n="start.noTrainerConnected">No trainer connected</span>
                   <button type="button" id="reconnect-trainer" class="primary-small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-trainer" class="primary-small" data-gesture-only>Connect</button>
+                  <button type="button" id="connect-trainer" class="primary-small" data-gesture-only data-i18n="start.connect">Connect</button>
                 </div>
                 <p id="live-reading" class="live-reading" aria-live="polite" hidden></p>
                 <p id="power-only-note" class="field-hint" hidden></p>
-                <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> Virtual shifting <span class="check-hint">Zwift Cog or one fixed gear</span></label>
+                <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> <span data-i18n="start.virtualShifting">Virtual shifting</span> <span class="check-hint" data-i18n="start.zwiftCogOrOne">Zwift Cog or one fixed gear</span></label>
                 <!-- One line: the gear the chain really sits in; shifting happens in software from there -->
                 <div id="gear-settings" class="gear-line trainer-only" hidden>
-                  <span class="gear-line-label">Chain on</span>
-                  <input id="chainring" type="number" min="20" max="60" step="1" inputmode="numeric" aria-label="Chainring teeth" />
+                  <span class="gear-line-label" data-i18n="start.chainOn">Chain on</span>
+                  <input id="chainring" type="number" min="20" max="60" step="1" inputmode="numeric" aria-label="Chainring teeth" data-i18n-attr="aria-label:start.chainringTeeth" />
                   <span aria-hidden="true">×</span>
-                  <input id="cog" type="number" min="10" max="36" step="1" inputmode="numeric" aria-label="Rear cog teeth" />
-                  <span class="gear-line-label">teeth</span>
-                  <p class="field-hint">Shift with <kbd>+</kbd>/<kbd>−</kbd> on a Zwift Click, <kbd>E</kbd>/<kbd>Q</kbd> or the buttons on screen.</p>
+                  <input id="cog" type="number" min="10" max="36" step="1" inputmode="numeric" aria-label="Rear cog teeth" data-i18n-attr="aria-label:start.rearCogTeeth" />
+                  <span class="gear-line-label" data-i18n="start.teeth">teeth</span>
+                  <p class="field-hint" data-i18n="start.shiftWith">Shift with +/− on a Zwift Click, E/Q or the buttons on screen.</p>
                 </div>
               </div>
               <div class="mode-panel trainer-only" data-for="paddles" hidden>
-                <p id="paddle-note" class="field-hint">Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
+                <p id="paddle-note" class="field-hint" data-i18n="start.rideWithYourThumbs">Ride with your thumbs: tap the left and right paddles in turn, like pedal strokes. A steady rhythm keeps you rolling, sprinting drains your energy. Paddle rides stay in OpenRadlr: no Strava upload and no ride files.</p>
               </div>
               <div class="mode-panel trainer-only" data-for="sim" hidden>
-                <p class="field-hint">Set your power with <kbd>↑</kbd>/<kbd>↓</kbd> (or on-screen buttons). For trying OpenRadlr out: no Strava upload.</p>
+                <p class="field-hint" data-i18n="start.setPower">Set your power with ↑/↓ (or on-screen buttons). For trying OpenRadlr out: no Strava upload.</p>
               </div>
 
               <!-- Optional Bluetooth add-ons -->
               <div id="addons" class="addons">
                 <div id="addon-hr" class="device-line addon">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span class="addon-name">Heart rate</span>
-                  <span id="hr-status" class="device-status">Optional</span>
+                  <span class="addon-name" data-i18n="ride.heartRate">Heart rate</span>
+                  <span id="hr-status" class="device-status" data-i18n="devices.optional">Optional</span>
                   <button type="button" id="reconnect-hr" class="secondary small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-hr" class="secondary small" data-gesture-only>Add</button>
+                  <button type="button" id="connect-hr" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
                 </div>
                 <div id="addon-controller" class="device-line addon trainer-only">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span class="addon-name">Controller</span>
-                  <span id="controller-status" class="device-status">Zwift Click, Play or Ride</span>
+                  <span class="addon-name" data-i18n="start.controller">Controller</span>
+                  <span id="controller-status" class="device-status" data-i18n="start.zwiftClickPlayOr">Zwift Click, Play or Ride</span>
                   <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-controller" class="secondary small" data-gesture-only>Add</button>
+                  <button type="button" id="connect-controller" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
                 </div>
                 <p id="controller-live" class="live-reading trainer-only" aria-live="polite" hidden></p>
               </div>
@@ -186,44 +190,48 @@
             <!-- Always in reach: sticks to the bottom of the panel (or of the screen on phones). -->
             <div class="dock-actions">
               <p id="setup-error" class="error" role="alert"></p>
-              <button type="submit" id="join" class="primary">Ride</button>
+              <button type="submit" id="join" class="primary" data-i18n="menu.join">Ride</button>
               <!-- A friend's tandem or beer bike: a valid code turns Ride into Board -->
               <div id="board-start" class="board-line">
-                <label for="board-code">Joining a friend's tandem or beer bike?</label>
-                <input id="board-code" class="code-input" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code" />
+                <label for="board-code" data-i18n="start.joiningAFriendS">Joining a friend's tandem or beer bike?</label>
+                <input id="board-code" class="code-input" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code" data-i18n-attr="placeholder:start.code" />
               </div>
             </div>
 
             <details id="start-settings" class="start-settings">
-              <summary>Settings</summary>
+              <summary data-i18n="start.settings">Settings</summary>
               <fieldset>
-                <legend class="visually-hidden">Ride settings</legend>
-                <div class="unit-switch" role="group" aria-label="Units">
-                  <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
-                  <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+                <legend class="visually-hidden" data-i18n="start.rideSettings">Ride settings</legend>
+                <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
+                  <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+                  <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
                 </div>
-                <label class="ride-only">Splits
+                <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
+                  <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
+                  <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
+                </div>
+                <label class="ride-only"><span data-i18n="rider.splits">Splits</span>
                   <select id="split-mode" name="split-mode">
-                    <option value="auto">Auto</option>
-                    <option value="lap">Every lap</option>
-                    <option value="1">Every 1 km</option>
-                    <option value="5">Every 5 km</option>
-                    <option value="10">Every 10 km</option>
-                    <option value="off">Off</option>
+                    <option value="auto" data-i18n="layout.auto">Auto</option>
+                    <option value="lap" data-i18n="rider.split.lap">Every lap</option>
+                    <option value="1"></option>
+                    <option value="5"></option>
+                    <option value="10"></option>
+                    <option value="off" data-i18n="rider.split.off">Off</option>
                   </select>
                 </label>
-                <label class="check"><input id="auto-pause" type="checkbox" /> Auto-pause when I stop</label>
+                <label class="check"><input id="auto-pause" type="checkbox" /> <span data-i18n="rider.autoPause">Auto-pause when I stop</span></label>
                 <label class="ride-only">
-                  <span class="label-text">Climb feel <output id="difficulty-value">50 %</output></span>
+                  <span class="label-text"><span data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value">50 %</output></span>
                   <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
-                  <span id="difficulty-hint" class="field-hint">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.</span>
+                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.</span>
                 </label>
               </fieldset>
               <details id="diagnostics" class="diagnostics">
-              <summary>Device diagnostics</summary>
-              <p class="diagnostics-hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
-              <pre id="diagnostics-log" class="diagnostics-log">No device connected yet.</pre>
-              <button type="button" id="copy-diagnostics" class="secondary">Copy report</button>
+              <summary data-i18n="diagnostics.title">Device diagnostics</summary>
+              <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
+              <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
+              <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
             </details>
             </details>
           </form>
@@ -233,12 +241,12 @@
       <!-- Ride: the world fills the screen, the HUD floats on top. -->
       <section id="ride" class="ride" data-layout="cockpit" hidden>
         <div id="world-wrap" class="world-wrap" hidden>
-          <canvas id="world3d" class="canvas-world" aria-label="3D view of the road behind your rider"></canvas>
+          <canvas id="world3d" class="canvas-world" aria-label="3D view of the road behind your rider" data-i18n-attr="aria-label:ride.3dViewOfThe"></canvas>
           <div id="labels3d" class="labels3d" aria-hidden="true"></div>
         </div>
-        <canvas id="peloton" class="canvas-peloton" aria-label="Riders around you, one row per lane"></canvas>
+        <canvas id="peloton" class="canvas-peloton" aria-label="Riders around you, one row per lane" data-i18n-attr="aria-label:ride.ridersAroundYouOne"></canvas>
         <div id="studio-wrap" class="world-wrap studio-only" hidden>
-          <canvas id="studio3d" class="canvas-world" aria-label="3D view of the spin studio"></canvas>
+          <canvas id="studio3d" class="canvas-world" aria-label="3D view of the spin studio" data-i18n-attr="aria-label:ride.3dViewOfThe2"></canvas>
           <div id="studio-labels" class="labels3d" aria-hidden="true"></div>
         </div>
 
@@ -246,13 +254,13 @@
         <div id="paddles" class="paddles" data-zone="idle" hidden>
           <div class="paddle-swipe" aria-hidden="true"></div>
           <div class="paddle-meter glass" aria-live="polite">
-            <div class="paddle-meter-head"><span class="caption">Energy</span><span class="paddle-combo"></span><span class="paddle-spm"></span></div>
+            <div class="paddle-meter-head"><span class="caption" data-i18n="ride.energy">Energy</span><span class="paddle-combo"></span><span class="paddle-spm"></span></div>
             <div class="paddle-energy"><span class="paddle-energy-fill"></span></div>
             <div class="paddle-rhythm" aria-hidden="true"><span class="paddle-band"></span><span class="paddle-marker"></span></div>
-            <strong class="paddle-hint">Tap left, then right · swipe for lanes</strong>
+            <strong class="paddle-hint" data-i18n="ride.tapLeftThenRight">Tap left, then right · swipe for lanes</strong>
           </div>
-          <div class="paddle paddle-left" data-side="left" role="button" aria-label="Left paddle"><span class="paddle-label">L</span></div>
-          <div class="paddle paddle-right" data-side="right" role="button" aria-label="Right paddle"><span class="paddle-label">R</span></div>
+          <div class="paddle paddle-left" data-side="left" role="button" aria-label="Left paddle" data-i18n-attr="aria-label:ride.leftPaddle"><span class="paddle-label">L</span></div>
+          <div class="paddle paddle-right" data-side="right" role="button" aria-label="Right paddle" data-i18n-attr="aria-label:ride.rightPaddle"><span class="paddle-label">R</span></div>
         </div>
 
         <!-- Café workout (#77): replaces the ride HUD while body.working-out -->
@@ -260,7 +268,7 @@
           <div class="workout-main glass" role="status" aria-live="off">
             <div class="workout-ring">
               <div class="workout-ring-inner">
-                <strong class="workout-exercise" data-w="exercise">Get ready</strong>
+                <strong class="workout-exercise" data-w="exercise" data-i18n="ride.getReady">Get ready</strong>
                 <span class="workout-paused" data-w="paused"></span>
                 <span class="workout-time" data-w="time">0:30</span>
               </div>
@@ -268,29 +276,29 @@
             <span class="workout-next" data-w="next"></span>
           </div>
           <div class="workout-stats glass">
-            <div><span class="caption">Block</span><strong data-w="block">Block 1/1</strong></div>
-            <div><span class="caption">Elapsed</span><strong data-w="elapsed">0:00</strong></div>
-            <div><span class="caption">Remaining</span><strong data-w="remaining">0:00</strong></div>
-            <div hidden><span class="caption">Heart</span><strong data-w="hr"></strong></div>
+            <div><span class="caption" data-i18n="ride.block">Block</span><strong data-w="block" data-i18n="ride.block11">Block 1/1</strong></div>
+            <div><span class="caption" data-i18n="ride.elapsed">Elapsed</span><strong data-w="elapsed">0:00</strong></div>
+            <div><span class="caption" data-i18n="ride.remaining">Remaining</span><strong data-w="remaining">0:00</strong></div>
+            <div hidden><span class="caption" data-i18n="ride.heart">Heart</span><strong data-w="hr"></strong></div>
           </div>
           <div class="workout-buttons">
-            <button type="button" id="workout-pause" class="text-button glass">Pause</button>
-            <button type="button" id="workout-skip-block" class="text-button glass">Skip block</button>
-            <button type="button" id="workout-end" class="text-button glass">End workout</button>
+            <button type="button" id="workout-pause" class="text-button glass" data-i18n="ride.pause">Pause</button>
+            <button type="button" id="workout-skip-block" class="text-button glass" data-i18n="ride.skipBlock">Skip block</button>
+            <button type="button" id="workout-end" class="text-button glass" data-i18n="ride.endWorkout">End workout</button>
           </div>
         </div>
         <p id="workout-note" class="workout-note glass" role="alert" hidden></p>
         <div id="workout-summary" class="modal" role="dialog" aria-modal="true" aria-labelledby="workout-summary-title" hidden>
           <div class="modal-card">
-            <h2 id="workout-summary-title">Workout complete</h2>
+            <h2 id="workout-summary-title" data-i18n="ride.workoutComplete">Workout complete</h2>
             <p id="workout-summary-plan" class="muted"></p>
             <dl id="workout-summary-list" class="summary">
-              <div><dt>Worked</dt><dd id="workout-summary-worked">–</dd></div>
-              <div><dt>Blocks</dt><dd id="workout-summary-blocks">–</dd></div>
-              <div id="workout-summary-hr-row"><dt>Heart rate</dt><dd id="workout-summary-hr">–</dd></div>
+              <div><dt data-i18n="ride.worked">Worked</dt><dd id="workout-summary-worked">–</dd></div>
+              <div><dt data-i18n="ride.blocks">Blocks</dt><dd id="workout-summary-blocks">–</dd></div>
+              <div id="workout-summary-hr-row"><dt data-i18n="ride.heartRate">Heart rate</dt><dd id="workout-summary-hr">–</dd></div>
             </dl>
-            <p id="workout-summary-none" class="muted" hidden>No exercise block was finished, so nothing was saved.</p>
-            <div class="modal-actions"><button type="button" id="workout-back" class="primary-small">Back to menu</button></div>
+            <p id="workout-summary-none" class="muted" hidden data-i18n="ride.noExerciseBlockWas">No exercise block was finished, so nothing was saved.</p>
+            <div class="modal-actions"><button type="button" id="workout-back" class="primary-small" data-i18n="ride.backToMenu">Back to menu</button></div>
           </div>
         </div>
 
@@ -298,82 +306,82 @@
           <!-- Shared: route info, actions, gear, status, ticker -->
           <div class="hud-info glass">
             <span class="hud-brand">Open<span>Radlr</span></span>
-            <span class="hud-route" id="hud-route">Route</span>
-            <span class="hud-numbers"><span data-m="distance">0.00</span> <span data-unit="distance">km</span> · <span data-m="time">0:00</span> · <span data-m="avg-speed">–</span> <span data-unit="speed">km/h</span> avg</span>
+            <span class="hud-route" id="hud-route" data-i18n="ride.route">Route</span>
+            <span class="hud-numbers"><span data-m="distance">0.00</span> <span data-unit="distance">km</span> · <span data-m="time">0:00</span> · <span data-m="avg-speed">–</span> <span data-unit="speed">km/h</span> <span data-i18n="ride.avg">avg</span></span>
             <span class="hud-vehicle" id="hud-vehicle" data-m="vehicle" hidden></span>
           </div>
 
           <div class="hud-actions">
-            <button type="button" class="text-button glass" id="open-social" aria-label="Riders and chat" title="Riders and chat">
+            <button type="button" class="text-button glass" id="open-social" aria-label="Riders and chat" title="Riders and chat" data-i18n-attr="title:ride.ridersAndChat,aria-label:ride.ridersAndChat">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7" /><path d="M18 14.3c2.2.7 3.5 2.8 3.5 5.7" /></svg>
               <span id="hud-online" class="online-count">–</span>
             </button>
-            <button type="button" class="text-button glass" id="pause-ride" title="Pause (Space)" hidden>Pause</button>
-            <button type="button" class="icon-button glass photo-button" id="take-photo" aria-label="Take a photo (P)" title="Photo (P)">
+            <button type="button" class="text-button glass" id="pause-ride" title="Pause (Space)" hidden data-i18n="ride.pause" data-i18n-attr="title:ride.pauseSpace">Pause</button>
+            <button type="button" class="icon-button glass photo-button" id="take-photo" aria-label="Take a photo (P)" title="Photo (P)" data-i18n-attr="title:ride.photoP,aria-label:ride.takeAPhotoP">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M8.5 6l1.5-2.5h4L15.5 6" /><circle cx="12" cy="12.5" r="3.5" /></svg>
               <span id="photo-count" class="photo-badge" hidden>0</span>
             </button>
-            <button type="button" class="icon-button glass" id="hud-camera" aria-label="Change camera (C)" title="Camera (C)">
+            <button type="button" class="icon-button glass" id="hud-camera" aria-label="Change camera (C)" title="Camera (C)" data-i18n-attr="title:ride.cameraC,aria-label:ride.changeCameraC">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
             </button>
-            <button type="button" class="text-button glass route-only" id="hud-layout" title="Layout (L)">Auto · Cockpit</button>
-            <button type="button" class="text-button glass" id="open-menu" title="Menu (M)" aria-controls="menu" aria-expanded="false">
+            <button type="button" class="text-button glass route-only" id="hud-layout" title="Layout (L)" data-i18n="ride.autoCockpit" data-i18n-attr="title:ride.layoutL">Auto · Cockpit</button>
+            <button type="button" class="text-button glass" id="open-menu" title="Menu (M)" aria-controls="menu" aria-expanded="false" data-i18n-attr="title:ride.menuM">
               <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
-              Menu
+              <span data-i18n="ride.menu">Menu</span>
             </button>
           </div>
 
           <div class="hud-gear glass" id="hud-gear-tile" hidden>
-            <button type="button" id="shift-down" class="gear-button" aria-label="Easier gear (Q)">−</button>
+            <button type="button" id="shift-down" class="gear-button" aria-label="Easier gear (Q)" data-i18n-attr="aria-label:ride.easierGearQ">−</button>
             <div class="gear-readout">
-              <span class="caption">Gear</span>
+              <span class="caption" data-i18n="ride.gear">Gear</span>
               <span class="gear-value"><span id="hud-gear">12</span><small id="hud-gear-count">/24</small></span>
               <span class="gear-ratio" id="hud-gear-sub">1.00</span>
             </div>
-            <button type="button" id="shift-up" class="gear-button" aria-label="Harder gear (E)">+</button>
+            <button type="button" id="shift-up" class="gear-button" aria-label="Harder gear (E)" data-i18n-attr="aria-label:ride.harderGearE">+</button>
           </div>
 
           <div class="hud-status route-only">
-            <span id="race-status" class="pill glass">Free ride</span>
+            <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
             <span id="draft-status" class="pill pill-draft" hidden></span>
             <span id="group-gap" class="pill glass" hidden></span>
             <span id="sharing-line" class="pill glass" hidden></span>
-            <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden>Power only</span>
+            <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
           </div>
 
           <div id="junction" class="junction glass route-only" role="group" aria-labelledby="junction-title" hidden>
-            <span id="junction-title" class="junction-title">Junction</span>
+            <span id="junction-title" class="junction-title" data-i18n="ride.junction">Junction</span>
             <div id="junction-options" class="junction-options"></div>
-            <span class="junction-hint muted">← → to choose</span>
+            <span class="junction-hint muted" data-i18n="ride.toChoose">← → to choose</span>
           </div>
 
           <div id="race-call" class="race-call glass route-only" hidden>
-            <span><strong id="race-call-title">Race</strong> <span id="race-call-text" class="muted"></span></span>
-            <button type="button" id="race-call-button" class="primary-small">Join race</button>
+            <span><strong id="race-call-title" data-i18n="ride.race">Race</strong> <span id="race-call-text" class="muted"></span></span>
+            <button type="button" id="race-call-button" class="primary-small" data-i18n="ride.joinRace">Join race</button>
           </div>
 
           <div id="event-call" class="race-call event-call glass route-only" hidden>
             <span id="event-call-text"></span>
-            <button type="button" id="event-call-button" class="primary-small">Join (J)</button>
+            <button type="button" id="event-call-button" class="primary-small" data-i18n="ride.joinJ">Join (J)</button>
           </div>
 
           <ul id="hud-ticker" class="hud-ticker" aria-live="polite"></ul>
 
           <!-- Touch screens: lanes (and roads at a junction) without a keyboard -->
           <div class="lane-controls route-only" id="lane-controls">
-            <button type="button" id="lane-left" class="lane-button glass" aria-label="Lane left (←)">
+            <button type="button" id="lane-left" class="lane-button glass" aria-label="Lane left (←)" data-i18n-attr="aria-label:ride.laneLeft">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
             </button>
-            <button type="button" id="lane-right" class="lane-button glass" aria-label="Lane right (→)">
+            <button type="button" id="lane-right" class="lane-button glass" aria-label="Lane right (→)" data-i18n-attr="aria-label:ride.laneRight">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
 
           <!-- Simulated trainer on touch screens: power right on the HUD -->
           <div class="sim-stepper glass" id="sim-stepper" hidden>
-            <button type="button" id="sim-down" aria-label="Less power (↓)">−</button>
-            <span class="sim-readout"><span class="caption">Sim</span><output id="sim-stepper-value">150 W</output></span>
-            <button type="button" id="sim-up" aria-label="More power (↑)">+</button>
+            <button type="button" id="sim-down" aria-label="Less power (↓)" data-i18n-attr="aria-label:ride.lessPower">−</button>
+            <span class="sim-readout"><span class="caption" data-i18n="ride.sim">Sim</span><output id="sim-stepper-value">150 W</output></span>
+            <button type="button" id="sim-up" aria-label="More power (↑)" data-i18n-attr="aria-label:ride.morePower">+</button>
           </div>
 
           <!-- A · Cockpit -->
@@ -393,74 +401,74 @@
                 <span class="gauge-sub">W · <strong data-m="wkg">0.0</strong> W/kg · <span data-m="zone">Z1</span><span data-m="target-suffix"></span></span>
               </div>
               <div class="cluster-side">
-                <span class="num-l grade" data-m="grade">0.0 %</span><span class="caption">grade</span>
+                <span class="num-l grade" data-m="grade">0.0 %</span><span class="caption" data-i18n="ride.grade">grade</span>
                 <span class="num-m" data-m="hr">–</span><span class="caption">bpm</span>
               </div>
             </div>
             <div class="upcoming">
-              <span class="upcoming-label" data-m="next-marker">Road ahead</span>
-              <canvas id="upcoming" class="canvas-upcoming" aria-label="Elevation of the next 2 km"></canvas>
+              <span class="upcoming-label" data-m="next-marker" data-i18n="ride.roadAhead">Road ahead</span>
+              <canvas id="upcoming" class="canvas-upcoming" aria-label="Elevation of the next 2 km" data-i18n-attr="aria-label:ride.elevationOfTheNext"></canvas>
             </div>
           </div>
 
           <!-- B · Broadcast -->
           <div class="layout layout-broadcast">
             <div class="bar glass">
-              <div class="bar-power"><span class="caption">Power</span><span class="num-l" data-m="power">0</span><span class="bar-sub"><span data-m="wkg">0.0</span> W/kg<span data-m="target-suffix"></span></span></div>
-              <div><span class="caption">Speed</span><span class="num-m" data-m="speed">0.0</span><span class="unit" data-unit="speed">km/h</span></div>
-              <div><span class="caption">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
-              <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
-              <div class="bar-grade"><span class="caption">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
+              <div class="bar-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-l" data-m="power">0</span><span class="bar-sub"><span data-m="wkg">0.0</span> W/kg<span data-m="target-suffix"></span></span></div>
+              <div><span class="caption" data-i18n="ride.speed">Speed</span><span class="num-m" data-m="speed">0.0</span><span class="unit" data-unit="speed">km/h</span></div>
+              <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
+              <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
+              <div class="bar-grade"><span class="caption" data-i18n="ride.grade2">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
             </div>
             <div class="nearby glass">
-              <h2>Nearby</h2>
+              <h2 data-i18n="ride.nearby">Nearby</h2>
               <ol id="hud-nearby" class="rider-list"></ol>
               <div id="hud-seats" class="vehicle-view compact" hidden></div>
             </div>
-            <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route"></canvas>
+            <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route" data-i18n-attr="aria-label:ride.mapOfTheRoute"></canvas>
             <div class="strip glass">
-              <canvas id="profile" class="canvas-profile" aria-label="Elevation profile of the lap with all riders"></canvas>
-              <div class="strip-next"><span class="caption">Next</span><strong data-m="next-marker">–</strong><span class="muted" data-m="lap-info">Free ride</span><span class="caption">Last split</span><strong data-m="last-split">–</strong></div>
+              <canvas id="profile" class="canvas-profile" aria-label="Elevation profile of the lap with all riders" data-i18n-attr="aria-label:ride.elevationProfileOfThe"></canvas>
+              <div class="strip-next"><span class="caption" data-i18n="ride.next">Next</span><strong data-m="next-marker">–</strong><span class="muted" data-m="lap-info" data-i18n="ride.freeRide">Free ride</span><span class="caption" data-i18n="ride.lastSplit">Last split</span><strong data-m="last-split">–</strong></div>
             </div>
           </div>
 
           <!-- C · Training -->
           <div class="layout layout-training">
             <div class="workout-chip glass">
-              <span class="caption accent">Workout</span>
-              <strong id="workout-name">No workout running</strong>
+              <span class="caption accent" data-i18n="workout.title">Workout</span>
+              <strong id="workout-name" data-i18n="ride.noWorkoutRunning">No workout running</strong>
               <span id="erg-badge" class="erg-badge" hidden>ERG</span>
             </div>
             <div class="training-actions">
-              <button type="button" id="hud-skip" class="glass">Skip block</button>
+              <button type="button" id="hud-skip" class="glass" data-i18n="ride.skipBlock">Skip block</button>
               <span class="intensity glass">
-                <button type="button" id="hud-intensity-down" aria-label="Lower intensity">−</button>
+                <button type="button" id="hud-intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
                 <output data-m="intensity">100 %</output>
-                <button type="button" id="hud-intensity-up" aria-label="Raise intensity">+</button>
+                <button type="button" id="hud-intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
               </span>
-              <button type="button" id="hud-stop" class="glass">Stop</button>
+              <button type="button" id="hud-stop" class="glass" data-i18n="ride.stop">Stop</button>
             </div>
             <div class="targets glass">
-              <div><span class="caption">Target</span><span class="num-xl" data-m="target">–</span></div>
-              <div class="targets-power"><span class="caption">Power</span><span class="num-xl" data-m="power" id="training-power">0</span></div>
-              <div><span class="caption">Block left</span><span class="num-xl" id="workout-block-time">–</span></div>
+              <div><span class="caption" data-i18n="ride.target">Target</span><span class="num-xl" data-m="target">–</span></div>
+              <div class="targets-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-xl" data-m="power" id="training-power">0</span></div>
+              <div><span class="caption" data-i18n="ride.blockLeft">Block left</span><span class="num-xl" id="workout-block-time">–</span></div>
             </div>
             <div class="band">
               <div class="band-stats">
-                <div><span class="caption">Cadence</span><span class="num-m" data-m="cadence">–</span></div>
-                <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span></div>
-                <div><span class="caption">Speed</span><span class="num-s"><span data-m="speed">0.0</span> <span data-unit="speed">km/h</span></span></div>
-                <div><span class="caption">Last split</span><span class="num-s" data-m="last-split-short">–</span></div>
+                <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span></div>
+                <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span></div>
+                <div><span class="caption" data-i18n="ride.speed">Speed</span><span class="num-s"><span data-m="speed">0.0</span> <span data-unit="speed">km/h</span></span></div>
+                <div><span class="caption" data-i18n="ride.lastSplit">Last split</span><span class="num-s" data-m="last-split-short">–</span></div>
               </div>
               <div class="band-chart">
-                <div class="band-labels"><span id="workout-block">Start a workout from the menu (M)</span><span id="workout-next" class="muted"></span></div>
-                <canvas id="workout-chart" class="canvas-workout" aria-label="Workout blocks and progress"></canvas>
+                <div class="band-labels"><span id="workout-block" data-i18n="ride.startAWorkoutFrom">Start a workout from the menu (M)</span><span id="workout-next" class="muted"></span></div>
+                <canvas id="workout-chart" class="canvas-workout" aria-label="Workout blocks and progress" data-i18n-attr="aria-label:ride.workoutBlocksAndProgress"></canvas>
                 <div class="progress"><span id="workout-progress"></span></div>
               </div>
               <div class="band-stats">
-                <div><span class="caption">Elapsed</span><span class="num-m" id="workout-elapsed">0:00</span></div>
-                <div><span class="caption">Remaining</span><span class="num-m" id="workout-remaining">0:00</span></div>
-                <div><span class="caption">Avg power</span><span class="num-s" id="workout-avg">– W</span></div>
+                <div><span class="caption" data-i18n="ride.elapsed">Elapsed</span><span class="num-m" id="workout-elapsed">0:00</span></div>
+                <div><span class="caption" data-i18n="ride.remaining">Remaining</span><span class="num-m" id="workout-remaining">0:00</span></div>
+                <div><span class="caption" data-i18n="ride.avgPower">Avg power</span><span class="num-s" id="workout-avg">– W</span></div>
               </div>
             </div>
           </div>
@@ -468,41 +476,41 @@
           <!-- E · Spin studio (its own mode, not one of the road layouts) -->
           <div class="layout layout-studio studio-only">
             <div class="studio-cue glass" aria-live="polite">
-              <span class="caption accent" id="studio-phase">Lobby</span>
-              <strong id="studio-cue">Free spin: the class starts soon</strong>
+              <span class="caption accent" id="studio-phase" data-i18n="ride.lobby">Lobby</span>
+              <strong id="studio-cue" data-i18n="ride.freeSpinTheClass">Free spin: the class starts soon</strong>
               <span class="studio-countdown" id="studio-countdown">–</span>
               <span class="studio-next" id="studio-next"></span>
             </div>
 
             <div class="studio-board glass">
-              <h2><span id="studio-room">Room 1</span><span>On target</span></h2>
+              <h2><span id="studio-room" data-i18n="ride.room1">Room 1</span><span data-i18n="ride.onTarget">On target</span></h2>
               <ol id="studio-board" class="board-list"></ol>
             </div>
 
             <div class="studio-controls">
-              <button type="button" id="studio-erg" class="glass toggle" aria-pressed="true" title="ERG: the trainer holds the target">ERG</button>
-              <span class="intensity glass" title="Intensity (↑/↓)">
-                <button type="button" id="studio-intensity-down" aria-label="Lower intensity">−</button>
+              <button type="button" id="studio-erg" class="glass toggle" aria-pressed="true" title="ERG: the trainer holds the target" data-i18n-attr="title:ride.ergTheTrainerHolds">ERG</button>
+              <span class="intensity glass" title="Intensity (↑/↓)" data-i18n-attr="title:ride.intensity">
+                <button type="button" id="studio-intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
                 <output id="studio-intensity">100 %</output>
-                <button type="button" id="studio-intensity-up" aria-label="Raise intensity">+</button>
+                <button type="button" id="studio-intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
               </span>
-              <button type="button" id="studio-voice" class="glass toggle" aria-pressed="false" title="The coach reads the cues out loud">Coach voice</button>
+              <button type="button" id="studio-voice" class="glass toggle" aria-pressed="false" title="The coach reads the cues out loud" data-i18n="ride.coachVoice" data-i18n-attr="title:ride.theCoachReadsThe">Coach voice</button>
             </div>
 
             <div class="targets glass studio-targets">
-              <div><span class="caption">Target</span><span class="num-xl" id="studio-target">–</span></div>
-              <div class="targets-power"><span class="caption">Power</span><span class="num-xl" id="studio-power">0</span></div>
-              <div><span class="caption">Cadence <span id="studio-cadence-cue"></span></span><span class="num-xl" id="studio-cadence">–</span></div>
+              <div><span class="caption" data-i18n="ride.target">Target</span><span class="num-xl" id="studio-target">–</span></div>
+              <div class="targets-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-xl" id="studio-power">0</span></div>
+              <div><span class="caption"><span data-i18n="ride.cadence">Cadence</span> <span id="studio-cadence-cue"></span></span><span class="num-xl" id="studio-cadence">–</span></div>
             </div>
 
             <div class="studio-band glass">
-              <div class="studio-band-labels"><strong id="studio-class">Class</strong><span id="studio-class-left" class="muted"></span></div>
-              <canvas id="studio-chart" class="canvas-workout" aria-label="Blocks of the class and progress"></canvas>
+              <div class="studio-band-labels"><strong id="studio-class" data-i18n="ride.class">Class</strong><span id="studio-class-left" class="muted"></span></div>
+              <canvas id="studio-chart" class="canvas-workout" aria-label="Blocks of the class and progress" data-i18n-attr="aria-label:ride.blocksOfTheClass"></canvas>
               <div class="studio-band-stats">
-                <div><span class="caption">On target</span><span class="num-m" id="studio-on-target">–</span></div>
-                <div><span class="caption">Work</span><span class="num-m" id="studio-kj">0 kJ</span></div>
-                <div><span class="caption">Heart</span><span class="num-m" data-m="hr">–</span></div>
-                <div><span class="caption">Time</span><span class="num-m" data-m="time">0:00</span></div>
+                <div><span class="caption" data-i18n="ride.onTarget">On target</span><span class="num-m" id="studio-on-target">–</span></div>
+                <div><span class="caption" data-i18n="ride.work">Work</span><span class="num-m" id="studio-kj">0 kJ</span></div>
+                <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span></div>
+                <div><span class="caption" data-i18n="ride.time">Time</span><span class="num-m" data-m="time">0:00</span></div>
               </div>
             </div>
           </div>
@@ -510,27 +518,27 @@
           <!-- D · Race -->
           <div class="layout layout-race">
             <div class="race-top">
-              <div class="race-position"><span class="caption">Position</span><span class="num-l" data-m="position">–</span></div>
-              <div class="glass race-box"><span class="caption">Lap</span><span class="num-m" data-m="lap">–</span></div>
+              <div class="race-position"><span class="caption" data-i18n="ride.position">Position</span><span class="num-l" data-m="position">–</span></div>
+              <div class="glass race-box"><span class="caption" data-i18n="ride.lap">Lap</span><span class="num-m" data-m="lap">–</span></div>
               <div class="glass race-timeline">
-                <span class="caption" data-m="race-caption">No race running · start one from the menu (M)</span>
-                <canvas id="race-timeline" class="canvas-timeline" aria-label="Race progress of all racers"></canvas>
+                <span class="caption" data-m="race-caption" data-i18n="ride.noRaceRunningStart">No race running · start one from the menu (M)</span>
+                <canvas id="race-timeline" class="canvas-timeline" aria-label="Race progress of all racers" data-i18n-attr="aria-label:ride.raceProgressOfAll"></canvas>
               </div>
-              <div class="glass race-box"><span class="caption">To go</span><span class="num-m" data-m="to-go">–</span></div>
+              <div class="glass race-box"><span class="caption" data-i18n="ride.toGo">To go</span><span class="num-m" data-m="to-go">–</span></div>
             </div>
-            <div class="marker-banner" id="marker-banner" hidden><span class="caption" data-m="banner-label">Sprint</span><strong data-m="banner-distance">600 m</strong></div>
+            <div class="marker-banner" id="marker-banner" hidden><span class="caption" data-m="banner-label" data-i18n="ride.sprint">Sprint</span><strong data-m="banner-distance">600 m</strong></div>
             <div id="race-groups-panel" class="groups glass" hidden>
-              <h2>Groups <span>Gap</span></h2>
+              <h2><span data-i18n="ride.groups">Groups</span> <span data-i18n="ride.gap">Gap</span></h2>
               <ol id="race-groups" class="group-list"></ol>
-              <h2>Around you</h2>
+              <h2 data-i18n="ride.aroundYou">Around you</h2>
               <ol id="race-around" class="group-list around"></ol>
             </div>
             <div class="race-metrics">
-              <div class="glass race-power"><span class="caption">Power</span><span class="num-xl" data-m="power">0</span><span class="bar-sub accent"><span data-m="wkg">0.0</span> W/kg</span></div>
+              <div class="glass race-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-xl" data-m="power">0</span><span class="bar-sub accent"><span data-m="wkg">0.0</span> W/kg</span></div>
               <div class="glass race-grid">
-                <span class="caption">Speed</span><span class="caption">Cadence</span>
+                <span class="caption" data-i18n="ride.speed">Speed</span><span class="caption" data-i18n="ride.cadence">Cadence</span>
                 <span class="num-m" data-m="speed">0.0</span><span class="num-m" data-m="cadence">–</span>
-                <span class="caption">Heart</span><span class="caption">Grade</span>
+                <span class="caption" data-i18n="ride.heart">Heart</span><span class="caption" data-i18n="ride.grade2">Grade</span>
                 <span class="num-m" data-m="hr">–</span><span class="num-m" data-m="grade">0.0 %</span>
               </div>
             </div>
@@ -541,43 +549,43 @@
         <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
 
         <!-- Left drawer: riders and chat -->
-        <aside id="social" class="drawer drawer-left" aria-label="Riders and chat" hidden>
-          <div class="drawer-head"><h2>Riders</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
-          <p id="online-summary" class="field-hint">Counting riders…</p>
+        <aside id="social" class="drawer drawer-left" aria-label="Riders and chat" hidden data-i18n-attr="aria-label:ride.ridersAndChat">
+          <div class="drawer-head"><h2 data-i18n="drawer.riders">Riders</h2><button type="button" class="icon-button" data-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button></div>
+          <p id="online-summary" class="field-hint" data-i18n="drawer.countingRiders">Counting riders…</p>
           <ol id="rider-list" class="rider-list"></ol>
-          <h3 id="bot-heading" class="rider-subhead" hidden>Bots nearby</h3>
+          <h3 id="bot-heading" class="rider-subhead" hidden data-i18n="drawer.botsNearby">Bots nearby</h3>
           <ol id="bot-list" class="rider-list bots" hidden></ol>
-          <h2>Feed</h2>
+          <h2 data-i18n="drawer.feed">Feed</h2>
           <ul id="feed" class="feed"></ul>
-          <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" /><button type="submit" class="secondary">Send</button></form>
+          <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" data-i18n-attr="aria-label:drawer.chatMessage,placeholder:drawer.sayHello" /><button type="submit" class="secondary" data-i18n="drawer.send">Send</button></form>
         </aside>
 
         <!-- Right drawer: training, race, view and device settings -->
-        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden>
-          <div class="drawer-head"><h2>Menu</h2><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
+        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden data-i18n-attr="aria-label:ride.menu">
+          <div class="drawer-head"><h2 data-i18n="ride.menu">Menu</h2><button type="button" class="icon-button" data-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button></div>
 
           <div class="panel route-only" id="training-panel">
-            <h2>Training</h2>
-            <div class="mode-switch" role="group" aria-label="Trainer mode">
-              <button type="button" id="mode-sim" class="toggle" aria-pressed="true">Road (sim)</button>
+            <h2 data-i18n="drawer.training">Training</h2>
+            <div class="mode-switch" role="group" aria-label="Trainer mode" data-i18n-attr="aria-label:drawer.trainerMode">
+              <button type="button" id="mode-sim" class="toggle" aria-pressed="true" data-i18n="drawer.roadSim">Road (sim)</button>
               <button type="button" id="mode-erg" class="toggle" aria-pressed="false">ERG</button>
             </div>
             <div id="erg-manual" class="erg-row" hidden>
-              <button type="button" id="erg-down" aria-label="Lower target">−</button>
+              <button type="button" id="erg-down" aria-label="Lower target" data-i18n-attr="aria-label:drawer.lowerTarget">−</button>
               <output id="erg-target" class="erg-value">150 W</output>
-              <button type="button" id="erg-up" aria-label="Raise target">+</button>
+              <button type="button" id="erg-up" aria-label="Raise target" data-i18n-attr="aria-label:drawer.raiseTarget">+</button>
             </div>
             <div id="erg-intensity" class="erg-row" hidden>
-              <button type="button" id="intensity-down" aria-label="Lower intensity">−</button>
+              <button type="button" id="intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
               <output id="intensity-value" class="erg-value">100 %</output>
-              <button type="button" id="intensity-up" aria-label="Raise intensity">+</button>
+              <button type="button" id="intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
             </div>
             <div id="ftp-test" class="ftp-test">
-              <h3 id="ftp-test-heading">FTP test</h3>
+              <h3 id="ftp-test-heading" data-i18n="drawer.ftpTest">FTP test</h3>
               <p id="ftp-test-body" class="field-hint" aria-live="polite"></p>
               <div id="ftp-test-fields" class="gear-settings" hidden>
-                <label>Start (W)<input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
-                <label>Step per minute (W)<input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
+                <label><span data-i18n="drawer.startW">Start (W)</span><input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
+                <label><span data-i18n="drawer.stepPerMinuteW">Step per minute (W)</span><input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
               </div>
               <div class="workout-actions">
                 <button type="button" id="ftp-test-primary"></button>
@@ -585,124 +593,124 @@
               </div>
             </div>
             <div id="workout-picker" class="workout-picker">
-              <select id="workout-select" aria-label="Workout"></select>
+              <select id="workout-select" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></select>
               <input id="workout-file" type="file" accept=".zwo,.xml" hidden />
               <div class="workout-actions">
-                <button type="button" id="workout-start">Start workout</button>
-                <button type="button" id="workout-import" class="secondary">Import .zwo</button>
+                <button type="button" id="workout-start" data-i18n="drawer.startWorkout">Start workout</button>
+                <button type="button" id="workout-import" class="secondary" data-i18n="drawer.importZwo">Import .zwo</button>
               </div>
               <p id="workout-description" class="field-hint"></p>
             </div>
             <div id="workout-running" class="workout-actions" hidden>
-              <button type="button" id="workout-skip" class="secondary">Skip block</button>
-              <button type="button" id="workout-stop" class="secondary">Stop workout</button>
+              <button type="button" id="workout-skip" class="secondary" data-i18n="ride.skipBlock">Skip block</button>
+              <button type="button" id="workout-stop" class="secondary" data-i18n="drawer.stopWorkout">Stop workout</button>
             </div>
             <p id="training-note" class="field-hint"></p>
           </div>
 
           <div class="panel">
-            <h2>Ride</h2>
-            <button type="button" id="finish-ride" class="primary">Finish ride</button>
-            <p class="field-hint">Shows your summary and photos; download the ride or upload it to Strava.</p>
-            <button type="button" id="menu-photo" class="secondary">Take a photo (P)</button>
+            <h2 data-i18n="menu.join">Ride</h2>
+            <button type="button" id="finish-ride" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+            <p class="field-hint" data-i18n="drawer.showsYourSummaryAnd">Shows your summary and photos; download the ride or upload it to Strava.</p>
+            <button type="button" id="menu-photo" class="secondary" data-i18n="ride.takeAPhotoP">Take a photo (P)</button>
           </div>
 
           <div class="panel route-only" id="vehicle-panel">
-            <h2>Tandem and beer bike</h2>
+            <h2 data-i18n="drawer.tandemAndBeerBike">Tandem and beer bike</h2>
             <div id="vehicle-buttons" class="vehicle-buttons">
-              <button type="button" id="vehicle-create-open" class="secondary">Create a vehicle</button>
-              <button type="button" id="vehicle-board-open" class="secondary">Board with code</button>
+              <button type="button" id="vehicle-create-open" class="secondary" data-i18n="drawer.createAVehicle">Create a vehicle</button>
+              <button type="button" id="vehicle-board-open" class="secondary" data-i18n="menu.boardCode">Board with code</button>
             </div>
             <div id="vehicle-view" class="vehicle-view" hidden></div>
           </div>
 
           <div class="panel route-only">
-            <h2>Race</h2>
-            <p class="field-hint">Start a race and others can join during the countdown (<kbd>J</kbd>). Riders who don't join keep riding as before.</p>
+            <h2 data-i18n="ride.race">Race</h2>
+            <p class="field-hint" data-i18n="drawer.raceHint">Start a race and others can join during the countdown (J). Riders who don't join keep riding as before.</p>
             <p id="race-blocked" class="field-hint" hidden></p>
             <div id="race-controls" class="race-controls">
-              <label>Laps
+              <label><span data-i18n="drawer.laps">Laps</span>
                 <select id="race-laps">
                   <option>1</option><option selected>2</option><option>3</option><option>5</option>
                 </select>
               </label>
-              <button type="button" id="start-race">Start a race</button>
-              <button type="button" id="leave-race" class="secondary" hidden>Leave race</button>
+              <button type="button" id="start-race" data-i18n="drawer.startARace">Start a race</button>
+              <button type="button" id="leave-race" class="secondary" hidden data-i18n="drawer.leaveRace">Leave race</button>
             </div>
             <h3 id="results-title" hidden></h3>
             <ol id="race-results" class="results"></ol>
           </div>
 
           <div class="panel route-only" id="events-panel" hidden>
-            <h2>Events</h2>
+            <h2 data-i18n="events.title">Events</h2>
             <ul id="ride-event-list" class="event-list"></ul>
           </div>
 
           <div class="panel">
-            <h2>Units</h2>
-            <div class="unit-switch" role="group" aria-label="Units">
-              <button type="button" class="toggle" data-units="metric" aria-pressed="true">km · kg</button>
-              <button type="button" class="toggle" data-units="imperial" aria-pressed="false">mi · lb</button>
+            <h2 data-i18n="rider.units">Units</h2>
+            <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
+              <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+              <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
             </div>
           </div>
 
           <div class="panel route-only">
-            <h2>View</h2>
-            <label>Layout
+            <h2 data-i18n="drawer.view">View</h2>
+            <label><span data-i18n="drawer.layout">Layout</span>
               <select id="layout-mode">
-                <option value="auto">Auto (follows your ride)</option>
-                <option value="cockpit">Cockpit</option>
-                <option value="broadcast">Broadcast</option>
-                <option value="training">Training</option>
-                <option value="race">Race</option>
+                <option value="auto" data-i18n="drawer.layoutAuto">Auto (follows your ride)</option>
+                <option value="cockpit" data-i18n="drawer.layoutCockpit">Cockpit</option>
+                <option value="broadcast" data-i18n="drawer.layoutBroadcast">Broadcast</option>
+                <option value="training" data-i18n="drawer.layoutTraining">Training</option>
+                <option value="race" data-i18n="drawer.layoutRace">Race</option>
               </select>
             </label>
-            <div class="view-switch" role="group" aria-label="View">
+            <div class="view-switch" role="group" aria-label="View" data-i18n-attr="aria-label:drawer.view">
               <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
               <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
               <span id="view-note" class="view-note"></span>
             </div>
             <div id="scene-controls" class="scene-controls">
-              <button type="button" id="camera-mode" class="toggle" title="Camera (C)">Camera: Chase</button>
-              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters">Graphics: High</button>
-              <select id="time-mode" aria-label="Time of day" title="Time of day (T)">
-                <option value="auto">Time: auto</option>
-                <option value="day">Day</option>
-                <option value="golden">Golden hour</option>
-                <option value="dusk">Dusk</option>
+              <button type="button" id="camera-mode" class="toggle" title="Camera (C)" data-i18n="drawer.cameraChase" data-i18n-attr="title:ride.cameraC">Camera: Chase</button>
+              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters" data-i18n="drawer.graphicsHigh" data-i18n-attr="title:drawer.lowerThisIfThe">Graphics: High</button>
+              <select id="time-mode" aria-label="Time of day" title="Time of day (T)" data-i18n-attr="title:drawer.timeOfDayT,aria-label:drawer.timeOfDay">
+                <option value="auto" data-i18n="drawer.timeAuto">Time: auto</option>
+                <option value="day" data-i18n="drawer.timeDay">Day</option>
+                <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
+                <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
               </select>
             </div>
           </div>
 
           <div class="panel" id="sim-panel" hidden>
-            <h2>Simulated power <output id="sim-power-value">150 W</output></h2>
-            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" />
+            <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
+            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
           </div>
 
           <div class="panel">
-            <h2>Climb feel <output id="ride-difficulty-value">50 %</output></h2>
-            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" />
+            <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
+            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
           </div>
 
           <div class="panel">
-            <h2>Trainer <span id="trainer-packets" class="muted-count"></span></h2>
-            <button type="button" id="ride-copy-diagnostics" class="secondary">Copy diagnostics</button>
+            <h2><span data-i18n="drawer.trainer">Trainer</span> <span id="trainer-packets" class="muted-count"></span></h2>
+            <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
           </div>
 
           <div class="panel">
-            <h2>Keys</h2>
+            <h2 data-i18n="drawer.keys">Keys</h2>
             <p class="hint">
-              <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> change lane · <kbd>J</kbd> join/leave a race · <kbd>L</kbd> layout · <kbd>M</kbd> menu · <kbd>V</kbd> 3D/2D · <kbd>C</kbd> camera · <kbd>T</kbd> time of day · <kbd>P</kbd> photo
-              <span id="shift-hint" hidden> · <kbd>E</kbd>/<kbd>Q</kbd> or <kbd>+</kbd>/<kbd>−</kbd> shift</span>
-              <span id="power-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> simulated power</span>
-              <span id="erg-hint" hidden> · <kbd>↑</kbd>/<kbd>↓</kbd> ERG target</span>
+              <span data-i18n="drawer.keysHint">←/→ or A/D change lane · J join/leave a race · L layout · M menu · V 3D/2D · C camera · T time of day · P photo</span>
+              <span id="shift-hint" hidden> · <span data-i18n="drawer.shiftHint">E/Q or +/− shift</span></span>
+              <span id="power-hint" hidden> · <span data-i18n="drawer.powerHint">↑/↓ simulated power</span></span>
+              <span id="erg-hint" hidden> · <span data-i18n="drawer.ergHint">↑/↓ ERG target</span></span>
             </p>
           </div>
         </aside>
 
         <div id="finish" class="modal" role="dialog" aria-modal="true" aria-labelledby="finish-title" hidden>
           <div class="modal-card">
-            <h2 id="finish-title">Ride complete</h2>
+            <h2 id="finish-title" data-i18n="ride.rideComplete">Ride complete</h2>
             <p id="finish-route" class="muted"></p>
             <dl id="finish-summary" class="summary"></dl>
             <table id="finish-splits" class="splits" hidden></table>
@@ -710,44 +718,44 @@
               <p id="ftp-prompt-title" class="ftp-prompt-title"></p>
               <p id="ftp-prompt-detail" class="muted"></p>
               <div class="ftp-prompt-actions">
-                <button type="button" id="ftp-prompt-use" class="primary">Use it</button>
-                <button type="button" id="ftp-prompt-dismiss" class="secondary">Not now</button>
+                <button type="button" id="ftp-prompt-use" class="primary" data-i18n="ride.useIt">Use it</button>
+                <button type="button" id="ftp-prompt-dismiss" class="secondary" data-i18n="ride.notNow">Not now</button>
               </div>
             </section>
             <div class="modal-actions">
-              <button type="button" id="upload-strava" class="strava-button" hidden>Upload to Strava</button>
-              <button type="button" id="download-tcx" class="secondary">Download .tcx</button>
-              <button type="button" id="download-gpx" class="secondary">Download .gpx</button>
-              <button type="button" id="download-fit" class="secondary">Download .fit</button>
+              <button type="button" id="upload-strava" class="strava-button" hidden data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+              <button type="button" id="download-tcx" class="secondary" data-i18n="ride.downloadTcx">Download .tcx</button>
+              <button type="button" id="download-gpx" class="secondary" data-i18n="ride.downloadGpx">Download .gpx</button>
+              <button type="button" id="download-fit" class="secondary" data-i18n="ride.downloadFit">Download .fit</button>
             </div>
             <p id="upload-status" class="field-hint" aria-live="polite"></p>
 
             <section class="photos" aria-labelledby="photos-title">
-              <h3 id="photos-title">Photos <span id="photos-count" class="muted"></span></h3>
+              <h3 id="photos-title"><span data-i18n="photos.title">Photos</span> <span id="photos-count" class="muted"></span></h3>
               <ul id="photo-list" class="photo-list"></ul>
-              <p id="photos-hint" class="field-hint">Take photos while you ride with the camera button or <kbd>P</kbd>. The summary card comes with them; save them here and add them to your Strava activity.</p>
+              <p id="photos-hint" class="field-hint" data-i18n="photos.hint">Take photos while you ride with the camera button or P. The summary card comes with them; save them here and add them to your Strava activity.</p>
               <div class="modal-actions">
-                <button type="button" id="download-photos">Download all images</button>
-                <button type="button" id="share-photos" class="secondary" hidden>Share…</button>
+                <button type="button" id="download-photos" data-i18n="photos.downloadAll">Download all images</button>
+                <button type="button" id="share-photos" class="secondary" hidden data-i18n="photos.share">Share…</button>
               </div>
             </section>
 
             <div class="modal-actions modal-nav">
-              <button type="button" id="ride-on" class="secondary">Keep riding</button>
-              <button type="button" id="back-to-start" class="secondary">Back to menu</button>
+              <button type="button" id="ride-on" class="secondary" data-i18n="ride.keepRiding">Keep riding</button>
+              <button type="button" id="back-to-start" class="secondary" data-i18n="ride.backToMenu">Back to menu</button>
             </div>
           </div>
         </div>
 
         <div id="photo-flash" class="photo-flash" aria-hidden="true" hidden></div>
         <p id="split-toast" class="toast-split glass" role="status" hidden></p>
-        <p id="trainer-warning" class="warning toast-warning" hidden>No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
+        <p id="trainer-warning" class="warning toast-warning" hidden data-i18n="ride.noDataFromYour">No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
         <div id="pause-pill" class="pause-pill" role="status" hidden></div>
-        <div id="reconnecting" class="reconnecting" role="status" hidden>Reconnecting…</div>
+        <div id="reconnecting" class="reconnecting" role="status" hidden data-i18n="ride.reconnecting">Reconnecting…</div>
         <div id="disconnected" class="banner" hidden>
-          Connection lost.
-          <button type="button" id="finish-and-save">Finish and save</button>
-          <button type="button" id="keep-trying" class="secondary">Keep trying</button>
+          <span data-i18n="ride.connectionLost">Connection lost.</span>
+          <button type="button" id="finish-and-save" data-i18n="ride.finishAndSave">Finish and save</button>
+          <button type="button" id="keep-trying" class="secondary" data-i18n="ride.keepTrying">Keep trying</button>
         </div>
       </section>
     </main>

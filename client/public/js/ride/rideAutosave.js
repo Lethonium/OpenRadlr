@@ -5,6 +5,8 @@
  * data under "current", each photo under "photo:<name>".
  */
 
+import { t } from "../i18n/i18n.js";
+
 /** Older rides can still be saved, but not continued. */
 export const AUTOSAVE_MAX_AGE_MS = 12 * 3600 * 1000;
 
@@ -60,7 +62,7 @@ export class RideAutosave {
     } catch (error) {
       if (!this.#reported) {
         this.#reported = true;
-        this.log("Ride autosave unavailable:", error);
+        this.log("Ride autosave unavailable:", error); // i18n-ok
       }
       return fallback;
     }
@@ -106,6 +108,6 @@ export function continueAllowed(snapshot, { now, serverUrl }) {
 /** "Unfinished ride · Rolling Hills · 23.4 km · 41 min ago" */
 export function unfinishedLabel(snapshot, { now, formatDistance }) {
   const minutes = Math.max(0, Math.round((now - snapshot.savedAt) / 60000));
-  const age = minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
-  return `Unfinished ride · ${snapshot.routeName} · ${formatDistance(snapshot.distance)} · ${age} ago`;
+  const age = minutes < 60 ? t("unfinished.ageMin", { n: minutes }) : t("unfinished.ageHour", { n: Math.round(minutes / 60) });
+  return t("unfinished.label", { route: snapshot.routeName, distance: formatDistance(snapshot.distance), age });
 }

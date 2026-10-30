@@ -53,7 +53,7 @@ export class RideHistory {
     } catch (error) {
       if (!this.#reported) {
         this.#reported = true;
-        this.log("Ride history unavailable:", error);
+        this.log("Ride history unavailable:", error); // i18n-ok
       }
       return fallback;
     }

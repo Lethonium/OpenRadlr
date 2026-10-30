@@ -3,17 +3,19 @@
  * browser only has an HttpOnly session cookie). `fetch` is injected for tests.
  */
 
+import { t } from "../i18n/i18n.js";
+
 export const activityUrl = (id) => `https://www.strava.com/activities/${id}`;
 
 /** Text for `?strava=…` after coming back from Strava, or null. */
 export function stravaMessage(param) {
   switch (param) {
     case "denied":
-      return "Strava wasn't connected (you cancelled on Strava).";
+      return t("strava.msg.denied");
     case "expired":
-      return "The Strava login took too long or came from another tab. Please try again.";
+      return t("strava.msg.expired");
     case "failed":
-      return "Strava didn't answer as expected. Please try again in a moment.";
+      return t("strava.msg.failed");
     default:
       return null;
   }

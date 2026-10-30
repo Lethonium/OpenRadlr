@@ -182,9 +182,9 @@ export class RideRecorder {
     const laps = splits.length
       ? splits.map((split, i) => {
           const end = i === splits.length - 1 ? split.endIndex + 1 : split.endIndex;
-          return lapXml(iso(split.startT), split.durationS, split.distanceM, Math.round((split.avgPower * split.durationS) / 1000), split.kind === "distance" ? "Distance" : "Location", this.samples.slice(split.startIndex, end));
+          return lapXml(iso(split.startT), split.durationS, split.distanceM, Math.round((split.avgPower * split.durationS) / 1000), split.kind === "distance" ? "Distance" : "Location", this.samples.slice(split.startIndex, end)); // i18n-ok
         })
-      : [lapXml(start, summary.durationS, summary.distanceM, summary.kilojoules, "Manual", this.samples)];
+      : [lapXml(start, summary.durationS, summary.distanceM, summary.kilojoules, "Manual", this.samples)]; // i18n-ok
     return `<?xml version="1.0" encoding="UTF-8"?>
 <TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
 <Activities><Activity Sport="Biking"><Id>${start}</Id>

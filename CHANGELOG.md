@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- German translation and a language selector (start menu and Rider panel). The language follows the browser by default and the choice is remembered. Server content such as route names stays as the server sends it.
+
 ### Fixed
 - Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
 - Both Click halves can be connected, whichever comes first: their presses are merged into one stream, so a press that one half relays for the other shifts once, and quick + then − is two shifts.

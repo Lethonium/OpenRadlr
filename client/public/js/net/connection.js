@@ -1,5 +1,6 @@
 import { Emitter } from "../util/emitter.js";
 import { ClientMessages, parseServerMessage } from "./protocol.js";
+import { t } from "../i18n/i18n.js";
 
 /**
  * One connection to a game server.
@@ -58,11 +59,11 @@ export class GameConnection extends Emitter {
         }
       });
       socket.addEventListener("close", () => {
-        if (!joined) reject(new Error("connection closed before joining"));
+        if (!joined) reject(new Error(t("net.closedBeforeJoin")));
         this.emit("close");
       });
       socket.addEventListener("error", () => {
-        if (!joined) reject(new Error(`could not connect to ${this.url}`));
+        if (!joined) reject(new Error(t("net.cannotConnect", { url: this.url })));
       });
     });
   }

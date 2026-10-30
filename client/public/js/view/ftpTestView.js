@@ -1,7 +1,5 @@
 import { RAMP_TO_FTP } from "../ride/ftpTest.js";
-
-/** Hint on the entry while the FTP is still the built-in default. */
-const DEFAULT_HINT = "No measured FTP yet. Take the ramp test.";
+import { t } from "../i18n/i18n.js";
 
 /**
  * The FTP test panel's text for a session state. Watts only, so no unit switch.
@@ -13,21 +11,21 @@ export function ftpTestState({ state, startW, stepW, liveMinuteW = null, result 
   switch (state) {
     case "warmup": {
       const best = liveMinuteW === null ? "–" : `${Math.round(liveMinuteW)} W`;
-      return view("Warm up", `Ride freely at your own level. Your best minute so far: ${best}.`, { id: "proceed", label: "I'm warm, set up the ramp" });
+      return view(t("ftp.test.warmup.title"), t("ftp.test.warmup.body", { best }), { id: "proceed", label: t("ftp.test.warmup.proceed") });
     }
     case "settings":
-      return view("Ramp setup", `Starts at ${startW} W and adds ${stepW} W every minute until you can't hold the target.`, { id: "start", label: "Start ramp" }, { id: "back", label: "Back to warmup" }, true);
+      return view(t("ftp.test.settings.title"), t("ftp.test.settings.body", { start: startW, step: stepW }), { id: "start", label: t("ftp.test.settings.start") }, { id: "back", label: t("ftp.test.settings.back") }, true);
     case "countdown":
-      return view("Get ready", "The ramp starts in a moment.");
+      return view(t("ftp.test.countdown.title"), t("ftp.test.countdown.body"));
     case "ramp":
-      return view("Ramp test", "Hold the target as long as you can.", { id: "done", label: "I'm done" });
+      return view(t("ftp.test.ramp.title"), t("ftp.test.ramp.body"), { id: "done", label: t("ftp.test.ramp.done") });
     case "result": {
-      const keep = { id: "keep", label: `Keep ${ftp} W` };
-      if (result?.tooShort) return view("That ramp was too short to trust.", "", { id: "retry", label: "Try again" }, keep);
+      const keep = { id: "keep", label: t("ftp.test.result.keep", { ftp }) };
+      if (result?.tooShort) return view(t("ftp.test.result.tooShort"), "", { id: "retry", label: t("ftp.test.result.retry") }, keep);
       const percent = Math.round(RAMP_TO_FTP * 100);
-      return view(`Your FTP ≈ ${result.ftp} W`, `${percent} % of your best minute (${result.bestMinuteW} W). It is an estimate.`, { id: "use", label: `Use ${result.ftp} W` }, keep);
+      return view(t("ftp.test.result.title", { ftp: result.ftp }), t("ftp.test.result.body", { percent, best: result.bestMinuteW }), { id: "use", label: t("ftp.test.result.use", { ftp: result.ftp }) }, keep);
     }
     default:
-      return view("FTP test", source === "default" ? DEFAULT_HINT : "", { id: "begin", label: "FTP test" });
+      return view(t("ftp.test.entry"), source === "default" ? t("ftp.test.defaultHint") : "", { id: "begin", label: t("ftp.test.entry") });
   }
 }

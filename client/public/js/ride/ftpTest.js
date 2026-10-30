@@ -7,6 +7,7 @@
 import { bestEfforts } from "./powerAnalysis.js";
 import { createWorkout, steady } from "./workout.js";
 import { ERG_LIMITS } from "./trainingControl.js";
+import { t } from "../i18n/i18n.js";
 
 export const RAMP_TO_FTP = 0.75;
 export const FAIL_BELOW = 0.85;
@@ -45,7 +46,7 @@ export function buildRamp({ startW, stepW, ftp }) {
     segments.push(steady(STEP_S, watts / ftp, `${watts} W`));
   }
   for (const segment of segments) segment.kind = "test";
-  return createWorkout({ name: "FTP ramp test", segments });
+  return createWorkout({ name: t("ftp.ramp.name"), segments });
 }
 
 /** The ERG target `elapsedS` seconds into the ramp. */
