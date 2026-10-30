@@ -1,10 +1,12 @@
 // Page model of the in-game menu: which pages exist, their one-line status,
-// and which one is open. Pure: no DOM; callers pass already-translated labels.
+// and which one is open. Pure: no DOM; callers pass already-translated labels
+// (camera, vehicle, workout names) and the raw training state.
 import { t, tn } from "../i18n/i18n.js";
 
 export const MENU_PAGES = ["overview", "view", "vehicle", "race", "events", "training", "settings"];
 
-const STUDIO_HIDDEN = new Set(["vehicle", "race", "events"]);
+// The studio's View page would hold only road controls.
+const STUDIO_HIDDEN = new Set(["view", "vehicle", "race", "events"]);
 
 export function visiblePages({ studio, hasEvents }) {
   return MENU_PAGES.filter((id) => {
@@ -35,7 +37,7 @@ export function pageStatus(id, ctx) {
     case "race":
       return RACE_PHASES[ctx.racePhase] ? t(RACE_PHASES[ctx.racePhase]) : t("menuPage.status.noRace");
     case "training":
-      return ctx.trainingLabel;
+      return trainingStatus(ctx);
     case "events":
       return tn("menuPage.status.events", ctx.eventCount);
     case "settings":
@@ -43,6 +45,14 @@ export function pageStatus(id, ctx) {
     default:
       return "";
   }
+}
+
+/** Studio trainer mode, else the running workout, else ERG with its target, else the road simulation. */
+function trainingStatus({ studio, studioErg, workoutName, trainingMode, ergTarget }) {
+  if (studio) return studioErg ? "ERG" : t("drawer.roadSim"); // i18n-ok: a mode name, as on the toggle
+  if (workoutName) return workoutName;
+  if (trainingMode === "erg") return t("menuPage.status.erg", { watts: ergTarget });
+  return t("drawer.roadSim");
 }
 
 /** `page` is null on a phone's list screen. */

@@ -9,7 +9,7 @@ afterEach(() => setLocale("en"));
 
 const ctx = {
   viewMode: "3d", cameraLabel: "Chase", vehicleLabel: null, racePhase: null,
-  trainingLabel: "Road (sim)", eventCount: 2, units: "metric",
+  eventCount: 2, units: "metric",
 };
 
 test("overview is first", () => {
@@ -17,9 +17,9 @@ test("overview is first", () => {
   assert.deepEqual(MENU_PAGES, ["overview", "view", "vehicle", "race", "events", "training", "settings"]);
 });
 
-test("studio drops vehicle race events and keeps training", () => {
+test("studio drops view vehicle race events and keeps training", () => {
   assert.deepEqual(visiblePages({ studio: true, hasEvents: true }),
-    ["overview", "view", "training", "settings"]);
+    ["overview", "training", "settings"]);
 });
 
 test("events only with events", () => {
@@ -75,4 +75,21 @@ test("status and titles follow the locale", () => {
 test("page titles", () => {
   assert.equal(pageTitle("overview"), "Overview");
   assert.equal(pageTitle("training"), "Training");
+});
+
+test("training status without any training state is the road simulation", () => {
+  assert.equal(pageStatus("training", {}), "Road (sim)");
+});
+
+test("training status names a running workout", () => {
+  assert.equal(pageStatus("training", { ...ctx, workoutName: "Sweet spot", trainingMode: "erg", ergTarget: 220 }), "Sweet spot");
+});
+
+test("training status shows the ERG target", () => {
+  assert.equal(pageStatus("training", { ...ctx, trainingMode: "erg", ergTarget: 220 }), "ERG 220 W");
+});
+
+test("training status in the studio is its trainer mode", () => {
+  assert.equal(pageStatus("training", { ...ctx, studio: true, studioErg: true, trainingMode: "erg", ergTarget: 220 }), "ERG");
+  assert.equal(pageStatus("training", { ...ctx, studio: true, studioErg: false }), "Road (sim)");
 });

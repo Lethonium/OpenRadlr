@@ -2996,10 +2996,9 @@ function initMenu() {
   });
 }
 
-/** The menu's pages: the studio's View page holds only road controls, so it goes too. */
+/** The menu's pages for this ride. */
 function menuPages(rows = menuEventRows()) {
-  return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0 })
-    .filter((id) => !(app.studio && id === "view"));
+  return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0 });
 }
 
 /** What the Overview page shows: the recording so far and the live figures of the HUD. */
@@ -3027,17 +3026,16 @@ const overviewFormat = {
 /** What the page list's second lines show, from the ride's current state. */
 function menuStatusContext() {
   const training = app.training;
-  const trainingLabel = app.studio
-    ? (app.studio.erg ? "ERG" : t("drawer.roadSim")) // i18n-ok: a mode name, as on the toggle
-    : training?.workout ? workoutName(training.workout)
-      : training?.mode === "erg" ? t("menuPage.status.erg", { watts: training.ergTarget })
-        : t("drawer.roadSim");
   return {
     viewMode: app.viewMode,
     cameraLabel: app.view3d ? cameraName(app.view3d.camera.mode) : "",
     vehicleLabel: app.vehicleId ? kindName(app.vehicleKind) : null,
     racePhase: app.state?.race?.phase ?? null,
-    trainingLabel,
+    studio: Boolean(app.studio),
+    studioErg: Boolean(app.studio?.erg),
+    workoutName: training?.workout ? workoutName(training.workout) : null,
+    trainingMode: training?.mode,
+    ergTarget: training?.ergTarget,
     eventCount: menuEventRows().length,
     units: app.profile.units,
   };
