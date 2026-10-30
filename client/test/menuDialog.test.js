@@ -212,3 +212,22 @@ test("Tab cycles inside the dialog", () => {
   root.fire("keydown", { key: "Tab", shiftKey: false, ...middle });
   assert.equal(first.focused, 2, "a Tab from the middle is left to the browser");
 });
+
+test("onChange reports opening, the confirm step and closing", () => {
+  const changes = [];
+  const stack = createPanelStack();
+  const dialog = createMenuDialog({
+    root: fakeRoot(), stack, matchNarrow: fakeNarrow(false), pages: ALL,
+    onChange: (state) => changes.push(state), getActiveElement: () => null, focusables: () => [],
+  });
+  dialog.open();
+  dialog.showConfirm();
+  stack.closeTop();
+  dialog.close();
+  assert.deepEqual(changes, [
+    { open: true, confirming: false },
+    { open: true, confirming: true },
+    { open: true, confirming: false },
+    { open: false, confirming: false },
+  ]);
+});

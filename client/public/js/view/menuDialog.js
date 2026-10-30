@@ -8,6 +8,9 @@
 //   [data-menu-close]         close button
 // State is exposed on root for CSS: `hidden`, `aria-modal`, `data-screen`
 // ("list" | "page"), `data-page` (open page id) and `data-confirm`.
+// `onChange({ open, confirming })` reports every open/close and confirm step,
+// however it happened (Esc, backdrop, close button), so callers can sync
+// their own state (the opener's aria-expanded, the confirm card).
 import { createMenuNav } from "./menuPages.js";
 
 const FOCUSABLE = "button, input, select, textarea, a[href]";
@@ -18,7 +21,7 @@ function defaultFocusables(root) {
 }
 
 export function createMenuDialog({
-  root, stack, matchNarrow, onPage = () => {}, pages = [],
+  root, stack, matchNarrow, onPage = () => {}, onChange = () => {}, pages = [],
   getActiveElement = () => document.activeElement,
   focusables = defaultFocusables(root),
 }) {
@@ -59,6 +62,7 @@ export function createMenuDialog({
     removeConfirm?.();
     removeConfirm = null;
     root.removeAttribute("data-confirm");
+    onChange({ open, confirming });
   }
 
   function close() {
@@ -68,6 +72,7 @@ export function createMenuDialog({
     removeDialog?.();
     removeDialog = null;
     render();
+    onChange({ open, confirming });
     opener?.focus?.();
     opener = null;
   }
@@ -78,6 +83,8 @@ export function createMenuDialog({
       opener = getActiveElement();
       removeDialog = stack.push({ close });
       if (!narrow()) nav.open(pageIds[0]); else nav.back();
+      render();
+      onChange({ open, confirming });
     }
     if (pageId !== undefined) nav.open(pageId);
     render();
@@ -89,6 +96,7 @@ export function createMenuDialog({
     confirming = true;
     root.setAttribute("data-confirm", "");
     removeConfirm = stack.push({ close: cancelConfirm });
+    onChange({ open, confirming });
   }
 
   function onNarrowChange() {
