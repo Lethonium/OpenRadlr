@@ -3326,6 +3326,11 @@ body.riding {
   margin: 0;
 }
 
+/* Focused by script so the summary starts there; not a control, so no ring. */
+.modal-card h2[tabindex="-1"]:focus {
+  outline: none;
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

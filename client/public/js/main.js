@@ -2390,6 +2390,9 @@ function openFinish() {
       ? t("finish.note.permission")
       : "";
   $("finish").hidden = false;
+  // Nothing behind the summary can be reached or opened any more; the next ride gets a fresh ride screen.
+  for (const element of $("ride").children) element.inert = element.id !== "finish";
+  $("finish-title").focus();
   $("finish-chart").hidden = empty;
   if (!empty) drawPowerChart($("finish-chart"), { samples: app.recorder.samples, ftp: app.profile.ftp, colors: themeColors(), windowS: null });
 }
@@ -2943,6 +2946,7 @@ function toggleDrawer(id) {
 
 /** Opens the left drawer (closing the menu) and registers it so Esc closes it. */
 function openDrawer(id, { backdrop = true } = {}) {
+  if (app.finished) return;
   closeDrawers();
   $(id).hidden = false;
   $("drawer-backdrop").hidden = !backdrop;
@@ -3050,11 +3054,12 @@ function renderMenuStatus() {
   }
 }
 
-/** Opens the menu (on `pageId` if given), closing the left drawer. */
+/** Opens the menu (on `pageId` if given), closing the left drawer and the View popover; not once finished. */
 function openMenu(pageId) {
   const dialog = app.menuDialog;
-  if (!dialog) return;
+  if (!dialog || app.finished) return;
   if (!dialog.isOpen) closeDrawers();
+  app.viewPopover?.close();
   renderMenuStatus();
   dialog.open(pageId);
 }
