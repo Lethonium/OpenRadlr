@@ -1,6 +1,6 @@
 # In-game menu overhaul — design
 
-Date: 2026-10-30 · Issue: to be filed · Status: agreed in discussion, awaiting spec review
+Date: 2026-10-30 · Issue: #19 · Status: implemented
 
 ## Goal
 
