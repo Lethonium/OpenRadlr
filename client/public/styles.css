@@ -4563,3 +4563,12 @@ body.working-out #paddles {
   text-align: center;
   z-index: 5;
 }
+
+.finish-confirm {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.finish-confirm p {
+  margin: 0;
+}

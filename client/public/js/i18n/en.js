@@ -157,6 +157,8 @@ export default {
   "drawer.importZwo": "Import .zwo",
   "drawer.stopWorkout": "Stop workout",
   "drawer.finishRide": "Finish ride",
+  "drawer.finishConfirm": "Finish this ride? You can't continue it afterwards.",
+  "drawer.finishCancel": "Cancel",
   "drawer.showsYourSummaryAnd": "Shows your summary and photos; download the ride or upload it to Strava.",
   "drawer.tandemAndBeerBike": "Tandem and beer bike",
   "drawer.createAVehicle": "Create a vehicle",

@@ -611,6 +611,13 @@
           <div class="panel">
             <h2 data-i18n="menu.join">Ride</h2>
             <button type="button" id="finish-ride" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+            <div id="finish-confirm" class="finish-confirm" role="alertdialog" aria-labelledby="finish-confirm-text" hidden>
+              <p id="finish-confirm-text" data-i18n="drawer.finishConfirm">Finish this ride? You can't continue it afterwards.</p>
+              <div class="workout-actions">
+                <button type="button" id="finish-confirm-cancel" class="secondary" data-i18n="drawer.finishCancel">Cancel</button>
+                <button type="button" id="finish-confirm-ok" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+              </div>
+            </div>
             <p class="field-hint" data-i18n="drawer.showsYourSummaryAnd">Shows your summary and photos; download the ride or upload it to Strava.</p>
             <button type="button" id="menu-photo" class="secondary" data-i18n="ride.takeAPhotoP">Take a photo (P)</button>
           </div>

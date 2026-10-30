@@ -130,6 +130,7 @@ const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
 let removeDrawerPanel = null;
+let removeConfirmPanel = null;
 
 const app = {
   profile: profiles.load(),
@@ -1534,6 +1535,8 @@ function endRide() {
   if (!ride) return;
   app.ride = null;
   closeDrawers();
+  $("reconnecting").hidden = true;
+  $("disconnected").hidden = true;
   learnLevel();
   saveWorkoutRecord();
   app.workoutUnsubscribe?.();
@@ -2202,13 +2205,32 @@ function leaveRide() {
   const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size });
   if (question && !confirm(question)) return false;
   // Left on purpose: nothing to continue later.
-  app.autosave.clear();
-  endRide();
+  // endRide reloads the start menu from the autosave: let the clear finish first.
+  app.autosave.clear().catch((error) => console.error("autosave:", error)).finally(() => endRide());
   return true;
 }
 
+/** Asks before finishing; a panel on the stack, so Esc closes the card before the drawer. */
+function showFinishConfirm() {
+  if (app.finished) return;
+  $("finish-confirm").hidden = false;
+  $("finish-ride").hidden = true;
+  removeConfirmPanel?.();
+  removeConfirmPanel = panels.push({ close: hideFinishConfirm });
+  $("finish-confirm-cancel").focus();
+}
+
+function hideFinishConfirm() {
+  removeConfirmPanel?.();
+  removeConfirmPanel = null;
+  $("finish-confirm").hidden = true;
+  $("finish-ride").hidden = false;
+}
+
 function initFinish() {
-  $("finish-ride").addEventListener("click", () => finishRide());
+  $("finish-ride").addEventListener("click", () => showFinishConfirm());
+  $("finish-confirm-cancel").addEventListener("click", () => hideFinishConfirm());
+  $("finish-confirm-ok").addEventListener("click", () => finishRide());
   $("back-to-start").addEventListener("click", () => leaveRide());
   $("download-tcx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
@@ -2258,6 +2280,9 @@ function finishStats() {
  */
 function finishRide() {
   if (!app.ride || app.finished) return;
+  hideFinishConfirm();
+  $("reconnecting").hidden = true;
+  $("disconnected").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
   const connection = app.connection;
   app.finishController ??= createFinishController({
@@ -2887,6 +2912,7 @@ function closeTopPanel() {
 }
 
 function closeDrawers() {
+  hideFinishConfirm();
   removeDrawerPanel?.();
   removeDrawerPanel = null;
   $("menu").hidden = true;
