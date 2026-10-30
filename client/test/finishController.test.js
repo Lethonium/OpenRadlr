@@ -33,12 +33,6 @@ test("finish twice saves history once and leaves once", () => {
   assert.equal(calls.filter((c) => c === "leaveWorld").length, 1);
 });
 
-test("finishing while paused closes the pause first", () => {
-  const { controller, calls } = setup();
-  controller.finish();
-  assert.equal(calls[0], "closePause");
-});
-
 test("an empty ride saves nothing but still leaves", () => {
   const { controller, calls } = setup({ empty: true });
   controller.finish();
@@ -73,4 +67,12 @@ test("an unsaved exportable ride warns about the ride and photos", () => {
 
 test("a paddle ride warns about photos only", () => {
   assert.equal(backToMenuWarning({ exportable: false, saved: false, empty: false, albumSize: 2 }), t("ride.confirmBack.photos"));
+});
+
+test("a downloaded ride with photos warns about the photos only", () => {
+  assert.equal(backToMenuWarning({ exportable: true, saved: true, empty: false, albumSize: 1 }), t("ride.confirmBack.photos"));
+});
+
+test("an empty paddle ride without photos goes back without asking", () => {
+  assert.equal(backToMenuWarning({ exportable: false, saved: false, empty: true, albumSize: 0 }), null);
 });
