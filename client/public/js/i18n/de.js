@@ -137,7 +137,6 @@ export default {
   "ride.downloadTcx": ".tcx herunterladen",
   "ride.downloadGpx": ".gpx herunterladen",
   "ride.downloadFit": ".fit herunterladen",
-  "ride.keepRiding": "Weiterfahren",
   "ride.noDataFromYour": "Keine Daten von deiner Rolle. Prüfe, ob keine andere App (Zwift, Handy-App) mit ihr verbunden ist, und lade dann neu.",
   "ride.reconnecting": "Verbinde neu …",
   "ride.finishAndSave": "Beenden und speichern",

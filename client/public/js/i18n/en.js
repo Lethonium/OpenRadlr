@@ -137,7 +137,6 @@ export default {
   "ride.downloadTcx": "Download .tcx",
   "ride.downloadGpx": "Download .gpx",
   "ride.downloadFit": "Download .fit",
-  "ride.keepRiding": "Keep riding",
   "ride.noDataFromYour": "No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.",
   "ride.reconnecting": "Reconnecting…",
   "ride.finishAndSave": "Finish and save",

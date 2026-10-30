@@ -30,6 +30,7 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
+import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
@@ -160,6 +161,10 @@ const app = {
   junction: null,
   /** The ride is over: Esc, M, lanes, J and junction turns do nothing. */
   finished: false,
+  /** Finishes this ride exactly once; made by the first finishRide(). */
+  finishController: null,
+  /** The server the finished ride was on, kept once its connection is gone. */
+  finishedServerName: null,
   /** Shared vehicles (#55): panels, energy per seat for the summary, code to board on joining. */
   vehicleView: null,
   seatsView: null,
@@ -1569,6 +1574,8 @@ function endRide() {
     offRoute: null,
     junction: null,
     finished: false,
+    finishController: null,
+    finishedServerName: null,
     vehicleId: null,
     vehicleKind: null,
     seatEnergy: null,
@@ -1746,7 +1753,7 @@ function startRide() {
   $("ride-difficulty").addEventListener("input", (e) => {
     setDifficultyInputs(Number(e.target.value) / 100);
     profiles.save(app.profile);
-    app.session.refreshResistance();
+    refreshResistance();
   });
   $("chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1754,7 +1761,7 @@ function startRide() {
     $("chat-input").value = "";
   });
   // After the reconnector gave up: end the ride with its file, or try again.
-  $("finish-and-save").addEventListener("click", () => openFinish());
+  $("finish-and-save").addEventListener("click", () => finishRide());
   $("keep-trying").addEventListener("click", () => connectionLost(app.connection));
 
   initShifting();
@@ -1809,7 +1816,8 @@ function startRoad({ simulated, setSimPower }) {
     toggleRace: () => app.finished || toggleRace(),
     toggleMenu: () => app.finished || toggleDrawer("menu"),
     takePhoto: () => takePhoto(),
-    togglePause: () => performPause(app.pause?.toggle(now()) ?? [], now()),
+    // A finished ride's recorder stays as it was.
+    togglePause: () => app.finished || performPause(app.pause?.toggle(now()) ?? [], now()),
     closePanels: () => closeTopPanel(),
   };
   app.ride.unbindKeyboard = bindKeyboard(window, app.actions);
@@ -2051,7 +2059,7 @@ function startStudio({ simulated, setSimPower }) {
   $("studio-erg").addEventListener("click", () => {
     studio.setErg(!studio.erg);
     renderControls();
-    app.session.refreshResistance();
+    refreshResistance();
     if (simulated && !studio.erg) setSimPower(app.trainer.power);
   });
   $("studio-intensity-up").addEventListener("click", () => adjust(+1));
@@ -2143,7 +2151,8 @@ function studioFrame() {
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
-  const cue = studio.newCue(time);
+  // The coach is quiet once the ride is finished.
+  const cue = app.finished ? null : studio.newCue(time);
   if (cue) {
     const text = cue.phase === "lobby" ? t("studio.welcome", { name: plan.name, time: formatDuration(cue.startsInS) }) : cue.cue;
     notify(`${INSTRUCTOR.name}: ${text}`, "chat");
@@ -2180,7 +2189,7 @@ function studioFrame() {
   app.rideDistance = me ? app.distanceOffset + me.distance : app.rideDistance;
 
   // Offline the rider's last state is stale: they don't move until the server is back.
-  if (app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
+  if (!app.finished && app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
   const silentFor = time - (app.lastTrainerDataAt ?? app.rideStartedAt);
   $("trainer-warning").hidden = silentFor < 5;
 }
@@ -2190,12 +2199,8 @@ function studioFrame() {
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
 function leaveRide() {
   // The ride and its photos only live in this page until it is left.
-  const exportable = canExportRide(app.trainer);
-  const unsaved = (exportable && !app.rideSaved && !app.recorder.empty) || app.album.size > 0;
-  const question = exportable
-    ? t("ride.confirmBack.exportable")
-    : t("ride.confirmBack.photos");
-  if (unsaved && !confirm(question)) return false;
+  const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size });
+  if (question && !confirm(question)) return false;
   // Left on purpose: nothing to continue later.
   app.autosave.clear();
   endRide();
@@ -2203,8 +2208,7 @@ function leaveRide() {
 }
 
 function initFinish() {
-  $("finish-ride").addEventListener("click", () => openFinish());
-  $("ride-on").addEventListener("click", () => ($("finish").hidden = true));
+  $("finish-ride").addEventListener("click", () => finishRide());
   $("back-to-start").addEventListener("click", () => leaveRide());
   $("download-tcx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
@@ -2246,6 +2250,60 @@ function finishStats() {
   return stats;
 }
 
+/**
+ * Finishes the ride for real, once: recording stops, the rider leaves the
+ * world, the trainer goes flat, the ride is kept; then the summary shows.
+ * The frame loop keeps drawing (the summary image needs the scene); the
+ * teardown waits for Back to menu.
+ */
+function finishRide() {
+  if (!app.ride || app.finished) return;
+  // Captured before detachConnection clears app.connection: leaving goes through this one.
+  const connection = app.connection;
+  app.finishController ??= createFinishController({
+    recorder: app.recorder,
+    closePause: () => app.recorder.resume(Date.now()),
+    saveHistory: () => saveFinishedRide(),
+    markAutosaveFinished: () => app.autosave.save({ ...rideSnapshot(), finished: true }).catch((error) => console.error("autosave:", error)),
+    detachConnection: () => {
+      app.finishedServerName = connection?.serverInfo.server_name ?? "";
+      // Cleared before leave(): its close is then no lost connection, so nothing reconnects.
+      app.connection = null;
+    },
+    leaveWorld: () => {
+      connection?.leave();
+      app.reconnector?.stop();
+      app.session?.stop();
+      app.wakeLock.release();
+    },
+    releaseTrainer: () => {
+      if (app.session && canControl(app.trainer)) Promise.resolve(app.trainer.setGrade(0)).catch(() => {});
+    },
+    exportable: canExportRide(app.trainer),
+  });
+  app.finishController.finish();
+  app.finished = true;
+  openFinish();
+}
+
+/** Keeps the finished ride in the history, then maybe offers a higher FTP. */
+function saveFinishedRide() {
+  const record = rideRecord({
+    recorder: app.recorder,
+    splits: rideSplits(true),
+    splitMode: app.splitMode,
+    routeId: app.studio ? null : app.rideRoute.id,
+    measured: hasRealPowerSource(app.trainer),
+    profile: app.profile,
+    test: app.ftpTest?.testFlag ?? null,
+  });
+  return app.history
+    .save(record)
+    .then(offerFtp)
+    .catch((error) => console.error("ride history:", error));
+}
+
+/** Shows the summary of the finished ride; saves nothing. */
 function openFinish() {
   closeDrawers();
   const stats = finishStats();
@@ -2264,7 +2322,7 @@ function openFinish() {
       return item;
     }),
   );
-  $("finish-route").textContent = `${app.rideRoute.name} · ${app.connection.serverInfo.server_name}`;
+  $("finish-route").textContent = `${app.rideRoute.name} · ${app.finishedServerName}`;
   const empty = app.recorder.empty;
   app.finishSplits = empty ? [] : rideSplits(true);
   renderSplits($("finish-splits"), app.finishSplits, app.splitUnitM);
@@ -2279,19 +2337,6 @@ function openFinish() {
   // Strava gets rides measured by a real trainer only, not taps or keys.
   const measured = hasRealPowerSource(app.trainer);
   $("ftp-prompt").hidden = true;
-  if (!empty) {
-    app.history.save(
-      rideRecord({
-        recorder: app.recorder,
-        splits: app.finishSplits,
-        splitMode: app.splitMode,
-        routeId: app.studio ? null : app.rideRoute.id,
-        measured,
-        profile: app.profile,
-        test: app.ftpTest?.testFlag ?? null,
-      }),
-    ).then(offerFtp);
-  }
   const canUpload = measured && Boolean(app.stravaAccount?.can_upload);
   $("upload-strava").hidden = !canUpload;
   $("upload-strava").disabled = empty;
@@ -2506,7 +2551,8 @@ function startAutosave() {
 
 /** Writes the ride to the browser (phone paddle rides have no file to keep). */
 function saveRide() {
-  if (!app.ride || !app.recorder?.samples.length || app.rideSaved || !canExportRide(app.trainer)) return;
+  // A finished ride's autosave carries the finished mark: never overwrite it.
+  if (!app.ride || app.finished || !app.recorder?.samples.length || app.rideSaved || !canExportRide(app.trainer)) return;
   app.autosave.save(rideSnapshot());
 }
 
@@ -2697,7 +2743,7 @@ function renderPhotos() {
   );
 }
 
-/** Redraws the summary card (totals change while "Keep riding") and shows it with the photos. */
+/** Draws the summary card and shows it with the photos. */
 async function refreshSummaryImage() {
   try {
     const { blob, name } = await summaryImage();
@@ -2712,7 +2758,7 @@ async function summaryImage() {
   const samples = app.recorder.samples;
   const canvas = composeSummary({
     routeName: app.rideRoute.name,
-    serverName: app.connection.serverInfo.server_name,
+    serverName: app.finishedServerName,
     when: new Date(samples[0]?.t ?? Date.now()),
     stats: finishStats(),
     power: samples.map((s) => s.power),
@@ -2780,7 +2826,12 @@ function shift(direction) {
   if (!changed) return deviceLog.info(`Shift ignored: already in the ${direction > 0 ? "hardest" : "easiest"} gear (${from})`);
   deviceLog.info(`Gear ${from} → ${app.gearbox.gear}`);
   renderGear();
-  app.session.refreshResistance();
+  refreshResistance();
+}
+
+/** Sends the trainer its resistance now; a finished ride left it on a flat road. */
+function refreshResistance() {
+  if (!app.finished) app.session.refreshResistance();
 }
 
 function renderGear() {
@@ -3055,7 +3106,7 @@ function initTraining({ simulated, setSimPower }) {
   initFtpTest({ simulated });
   training.on("change", () => {
     renderTraining({ simulated });
-    app.session.refreshResistance();
+    refreshResistance();
     // The simulated trainer leaves ERG power behind when going back to the road.
     if (simulated && training.mode === "sim") setSimPower(app.trainer.power);
   });
@@ -3600,7 +3651,8 @@ function frame() {
   const riders = everyone.filter(onMyRoute);
   const me = myRider(riders);
   const colors = themeColors();
-  if (updatePause(time, me)) return;
+  // Finished: the pause must not touch the recorder, nor leave the ride under the summary.
+  if (!app.finished && updatePause(time, me)) return;
 
   if (me) {
     if (app.lastMyDistance !== null) {
@@ -3632,7 +3684,8 @@ function frame() {
     drawRaceTimeline($("race-timeline"), { standing: app.standing, myId: app.riderId, colors });
   }
 
-  renderWorkoutProgress(time);
+  // A finished ride's workout stands still: its end would send the trainer a new target.
+  if (!app.finished) renderWorkoutProgress(time);
   const target = app.training.targetWatts();
   const { power, cadence, heartRate } = app.session.latest;
   const watts = Math.round(power || 0);
@@ -3672,7 +3725,7 @@ function frame() {
   const position = me ? app.route.positionAt(me.distance) : null;
   const onRoad = me && me.route !== OFF_ROUTE_ID;
   // No samples while paused: the ride file holds the pause instead (#89).
-  const kept = !app.pause?.pausedAt && app.recorder.add({
+  const kept = !app.finished && !app.pause?.pausedAt && app.recorder.add({
     t: Date.now(),
     ...(position ? toLatLon(position.x, position.y, app.route.geo) : {}),
     route: onRoad ? (me.route ?? app.route.id) : null,
