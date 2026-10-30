@@ -2205,8 +2205,9 @@ function leaveRide() {
   const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size });
   if (question && !confirm(question)) return false;
   // Left on purpose: nothing to continue later.
-  // endRide reloads the start menu from the autosave: let the clear finish first.
-  app.autosave.clear().catch((error) => console.error("autosave:", error)).finally(() => endRide());
+  // refreshUnfinished (run by endRide) waits for this clear before it reads the autosave.
+  app.autosaveClearing = app.autosave.clear();
+  endRide();
   return true;
 }
 
@@ -2216,20 +2217,24 @@ function showFinishConfirm() {
   $("finish-confirm").hidden = false;
   $("finish-ride").hidden = true;
   removeConfirmPanel?.();
-  removeConfirmPanel = panels.push({ close: hideFinishConfirm });
+  removeConfirmPanel = panels.push({ close: () => hideFinishConfirm({ refocus: true }) });
   $("finish-confirm-cancel").focus();
 }
 
-function hideFinishConfirm() {
+function hideFinishConfirm({ refocus = false } = {}) {
   removeConfirmPanel?.();
   removeConfirmPanel = null;
-  $("finish-confirm").hidden = true;
+  const card = $("finish-confirm");
+  if (card.hidden) return;
+  const hadFocus = card.contains(document.activeElement);
+  card.hidden = true;
   $("finish-ride").hidden = false;
+  if (refocus && hadFocus) $("finish-ride").focus();
 }
 
 function initFinish() {
   $("finish-ride").addEventListener("click", () => showFinishConfirm());
-  $("finish-confirm-cancel").addEventListener("click", () => hideFinishConfirm());
+  $("finish-confirm-cancel").addEventListener("click", () => hideFinishConfirm({ refocus: true }));
   $("finish-confirm-ok").addEventListener("click", () => finishRide());
   $("back-to-start").addEventListener("click", () => leaveRide());
   $("download-tcx").addEventListener("click", () => {
@@ -2603,6 +2608,9 @@ function rideSnapshot() {
 }
 
 async function refreshUnfinished() {
+  const clearing = app.autosaveClearing;
+  app.autosaveClearing = null;
+  await clearing?.catch(() => {});
   app.unfinished = await app.autosave.load();
   renderUnfinished();
 }
