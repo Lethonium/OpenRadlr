@@ -508,6 +508,7 @@ export default {
   "strava.msg.expired": "The Strava login took too long or came from another tab. Please try again.",
   "strava.msg.failed": "Strava didn't answer as expected. Please try again in a moment.",
   "unfinished.label": "Unfinished ride · {route} · {distance} · {age} ago",
+  "unfinished.finishedLabel": "Finished ride · {route} · {distance} · {age} ago",
   "unfinished.ageMin": "{n} min",
   "unfinished.ageHour": "{n} h",
   "vehicle.tandem": "Tandem",
