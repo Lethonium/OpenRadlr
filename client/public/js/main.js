@@ -1839,8 +1839,8 @@ function startRoad({ simulated, setSimPower }) {
       setTimeMode(next);
     },
     cycleLayout: () => setLayoutChoice(nextLayoutChoice(app.layoutChoice)),
-    toggleRace: () => app.finished || toggleRace(),
-    toggleMenu: () => app.finished || toggleMenu(),
+    toggleRace: () => toggleRace(),
+    toggleMenu: () => toggleMenu(),
     takePhoto: () => takePhoto(),
     // A finished ride's recorder stays as it was.
     togglePause: () => app.finished || performPause(app.pause?.toggle(now()) ?? [], now()),
@@ -2115,7 +2115,7 @@ function startStudio({ simulated, setSimPower }) {
     shiftUp: () => shift(+1),
     shiftDown: () => shift(-1),
     cycleCamera: () => cycleCamera(),
-    toggleMenu: () => app.finished || toggleMenu(),
+    toggleMenu: () => toggleMenu(),
     takePhoto: () => takePhoto(),
     closePanels: () => closeTopPanel(),
   };
@@ -2300,7 +2300,7 @@ function finishRide() {
   $("disconnected").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
   const connection = app.connection;
-  app.finishController ??= createFinishController({
+  app.finishController = createFinishController({
     recorder: app.recorder,
     closePause: () => app.recorder.resume(Date.now()),
     saveHistory: () => saveFinishedRide(),
@@ -2945,11 +2945,11 @@ function toggleDrawer(id) {
 }
 
 /** Opens the left drawer (closing the menu) and registers it so Esc closes it. */
-function openDrawer(id, { backdrop = true } = {}) {
+function openDrawer(id) {
   if (app.finished) return;
   closeDrawers();
   $(id).hidden = false;
-  $("drawer-backdrop").hidden = !backdrop;
+  $("drawer-backdrop").hidden = false;
   removeDrawerPanel = panels.push({ close: closeDrawers });
 }
 
@@ -3049,8 +3049,8 @@ function renderMenuStatus() {
   const ctx = menuStatusContext();
   for (const item of $("menu").querySelectorAll("[data-menu-nav]")) {
     const id = item.dataset.menuNav;
-    item.querySelector(".menu-nav-title").textContent = pageTitle(id);
-    item.querySelector(".menu-nav-status").textContent = pageStatus(id, ctx);
+    setText(item.querySelector(".menu-nav-title"), pageTitle(id));
+    setText(item.querySelector(".menu-nav-status"), pageStatus(id, ctx));
   }
 }
 
