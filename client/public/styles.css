@@ -921,20 +921,37 @@ label output {
 }
 
 .label3d {
+  --label-bg: rgba(15, 18, 22, 0.72);
   position: absolute;
   left: 0;
   top: 0;
+  /* Room for the tail: its tip is the anchor over the rider's head. */
+  margin-top: -5px;
   padding: 2px 7px;
   border-radius: 6px;
-  background: rgba(15, 18, 22, 0.72);
+  background: var(--label-bg);
   color: #fff;
   font-size: 12px;
   white-space: nowrap;
+  /* Labels shrink with distance towards the rider they point at. */
+  transform-origin: 50% calc(100% + 5px);
   will-change: transform;
 }
 
+/* The tail pointing down at the rider. */
+.label3d::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-bottom-width: 0;
+  border-top-color: var(--label-bg);
+}
+
 .label3d.me {
-  background: var(--accent);
+  --label-bg: var(--accent);
   color: var(--accent-text);
   font-weight: 600;
 }
@@ -3179,7 +3196,7 @@ body.riding {
 }
 
 .label3d.coach {
-  background: #ffd23a;
+  --label-bg: #ffd23a;
   color: #1a1400;
   font-weight: 700;
 }

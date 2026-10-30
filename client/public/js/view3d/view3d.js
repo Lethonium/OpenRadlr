@@ -16,6 +16,7 @@ import {
   buildBike,
   buildCrankset,
   buildFoot,
+  buildLabelProbe,
   buildRiderShadow,
   buildShin,
   buildShoe,
@@ -35,6 +36,7 @@ import { VEHICLE_KINDS } from "../ride/vehicle.js";
 import { buildBeerBike, buildSeatedBody, buildTandemFrame } from "./vehicleModel.js";
 import { buildWorld, riderPosition } from "./world.js";
 import { sceneOf } from "./worldScene.js";
+import { LabelVisibility, labelLook } from "./labels.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -206,6 +208,7 @@ export class GymCamera {
 
 export class View3D {
   #labels = new Map();
+  #labelVisibility = new LabelVisibility();
   #highlights = [];
   #pedalPhase = new Map();
   #wheelPhase = new Map();
@@ -277,6 +280,7 @@ export class View3D {
     this.crankset = this.renderer.upload(buildCrankset());
     this.wheel = this.renderer.upload(buildWheel());
     this.riderShadow = this.renderer.upload(buildRiderShadow());
+    this.labelProbe = this.renderer.upload(buildLabelProbe());
     this.identity = placement([0, 0, 0]);
   }
 
@@ -639,6 +643,12 @@ export class View3D {
       for (const wheel of v.wheels) this.renderer.draw(this.wheel, wheel);
     }
 
+    // Which riders that could get a label are in sight, for the next frames' labels.
+    const probes = this.#labelProbes(placed, myId, seatHeads);
+    if (this.renderer.queryOcclusion) {
+      for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
+    }
+
     // Pass 3: blended — sea and soft contact shadows under the bikes.
     this.renderer.drawTransparent(this.water, this.identity, { alpha: 0.82 });
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: 0.85 });
@@ -647,7 +657,7 @@ export class View3D {
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
     }
 
-    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads);
+    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
     const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
@@ -655,21 +665,43 @@ export class View3D {
     }
   }
 
-  /** `seatHeads`: the point over each seated rider's head (riders in vehicles are labelled over their seat). */
-  #updateLabels(placed, myId, viewProjection, width, height, seatHeads = new Map()) {
+  /** Riders near enough for a label (not mine), with where their probe stands: at the bike, or below a seated rider's head. */
+  #labelProbes(placed, myId, seatHeads) {
+    const probes = new Map();
+    for (const { rider, position } of placed) {
+      if (rider.id === myId) continue;
+      if (Math.hypot(...position.map((v, i) => v - this.camera.eye[i])) > SCENE.labelDistance) continue;
+      const head = seatHeads.get(rider.id);
+      probes.set(rider.id, head ? [head[0], head[1] - 1.6, head[2]] : position);
+    }
+    return probes;
+  }
+
+  /**
+   * `seatHeads`: the point over each seated rider's head (riders in vehicles are labelled over their seat).
+   * A rider out of sight (behind a house or a hill) gets no label; without
+   * occlusion queries every rider counts as in sight.
+   */
+  #updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS) {
     const candidates = [];
     for (const { rider, position } of placed) {
+      if (!probes.has(rider.id)) continue;
+      const seen = this.renderer.occlusion ? this.renderer.occlusion(rider.id) : true;
+      if (!this.#labelVisibility.update(rider.id, seen, timeS)) continue;
       const distance = Math.hypot(...position.map((v, i) => v - this.camera.eye[i]));
-      if (distance > SCENE.labelDistance) continue;
       const head = seatHeads.get(rider.id) ?? [position[0], position[1] + RIDER_GEOMETRY.headHeight + 0.55, position[2]];
       const screen = projectToScreen(viewProjection, head, width, height);
       if (screen) candidates.push({ rider, distance, screen });
     }
+    const ids = new Set(probes.keys());
+    this.#labelVisibility.keep(ids);
+    this.renderer.keepOcclusion?.(ids);
     const shown = visibleLabels(candidates, myId);
     for (const { rider, distance, screen } of shown) {
       const label = this.#label(rider, myId);
-      label.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -100%)`;
-      label.style.opacity = String(Math.max(0.45, 1 - distance / SCENE.labelDistance));
+      const look = labelLook(distance, SCENE.labelDistance);
+      label.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -100%) scale(${look.scale.toFixed(3)})`;
+      label.style.opacity = look.opacity.toFixed(2);
       label.style.zIndex = String(1000 - Math.round(distance));
     }
     const shownIds = new Set(shown.map((c) => c.rider.id));
@@ -713,7 +745,7 @@ export class View3D {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     this.#highlights = [];
-    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
+    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);
     }
     this.#labels.forEach((element) => element.remove());
