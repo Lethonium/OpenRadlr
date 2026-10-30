@@ -12,6 +12,8 @@ import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { viewControls } from "./view/viewControls.js";
+import { createViewPopover } from "./view/viewPopover.js";
 import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
@@ -181,6 +183,8 @@ const app = {
   vehicleKind: null,
   /** The in-game menu dialog; created per ride (the ride screen is fresh each ride). */
   menuDialog: null,
+  /** The top bar's View popover; created per ride like the menu. */
+  viewPopover: null,
   vehicleCode: null,
   boardingCode: null,
   pendingBoardCode: null,
@@ -1545,6 +1549,8 @@ function endRide() {
   closeDrawers();
   app.menuDialog?.dispose();
   app.menuDialog = null;
+  app.viewPopover?.dispose();
+  app.viewPopover = null;
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
   learnLevel();
@@ -2282,6 +2288,7 @@ function finishStats() {
 function finishRide() {
   if (!app.ride || app.finished) return;
   app.menuDialog?.cancelConfirm();
+  app.viewPopover?.close();
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
@@ -2882,11 +2889,34 @@ function initHudCommon() {
     button.addEventListener("click", () => closeDrawers());
   }
   $("drawer-backdrop").addEventListener("click", () => closeDrawers());
-  $("hud-camera").addEventListener("click", () => cycleCamera());
+  initViewPopover();
+}
+
+/** The View popover: camera, layout, 3D/2D and time of day, for roads and the studio. */
+function initViewPopover() {
+  app.viewPopover = createViewPopover({
+    root: $("view-popover"),
+    button: $("hud-view"),
+    controls: viewControls({ studio: Boolean(app.studio) }),
+    stack: panels,
+    matchNarrow: matchMedia(MENU_NARROW_QUERY),
+    selected: () => ({
+      camera: app.studio ? app.studioView?.cameraMode : app.view3d?.camera.mode,
+      layout: app.layoutChoice,
+      mode: app.viewMode,
+      time: $("time-mode").value,
+      has3d: Boolean(app.view3d),
+    }),
+    onPick: (kind, id) => {
+      if (kind === "camera") setCamera(id);
+      else if (kind === "layout") setLayoutChoice(id);
+      else if (kind === "mode") setViewMode(id);
+      else if (kind === "time") setTimeMode(id);
+    },
+  });
 }
 
 function initHud() {
-  $("hud-layout").addEventListener("click", () => setLayoutChoice(nextLayoutChoice(app.layoutChoice)));
   $("layout-mode").addEventListener("change", (e) => setLayoutChoice(e.target.value));
   $("hud-skip").addEventListener("click", () => app.training.skipSegment());
   $("hud-stop").addEventListener("click", () => app.training.stopWorkout());
@@ -3007,6 +3037,7 @@ function setLayoutChoice(choice, { remember = true } = {}) {
   $("layout-mode").value = app.layoutChoice;
   if (remember) writeSetting(LAYOUT_KEY, app.layoutChoice);
   updateLayout();
+  app.viewPopover?.refresh();
 }
 
 /** Applies the layout for the current choice and ride state. */
@@ -3022,8 +3053,6 @@ function updateLayout() {
     app.layout = layout;
     $("ride").dataset.layout = layout;
   }
-  const label = app.layoutChoice === "auto" ? t("layout.autoWith", { layout: LAYOUT_LABELS[layout] }) : LAYOUT_LABELS[layout];
-  if ($("hud-layout").textContent !== label) $("hud-layout").textContent = label;
 }
 
 /** Join during the countdown, leave any time before the finish. */
@@ -3465,17 +3494,30 @@ function show3d(scene, view = null) {
   if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
 }
 
+/** C: the next camera of this ride's View controls (the workout's gym camera does not cycle). */
 function cycleCamera() {
+  const current = app.studio ? app.studioView?.cameraMode : app.view3d?.camera.mode;
+  const cameras = viewControls({ studio: Boolean(app.studio) }).cameras;
+  const index = cameras.findIndex((camera) => camera.id === current);
+  if (index < 0) return;
+  const next = cameras[(index + 1) % cameras.length];
+  setCamera(next.id);
+  if (app.studio) notify(t("camera.label", { mode: next.label }));
+}
+
+/** Switches the road's or the studio's camera and remembers it. */
+function setCamera(id) {
   if (app.studio) {
-    if (!app.studioView) return;
-    const mode = app.studioView.cycleCamera();
-    writeSetting(STUDIO_CAMERA_KEY, mode);
-    notify(t("camera.label", { mode: { seat: t("camera.seat"), wide: t("camera.wide"), coach: t("camera.coach") }[mode] }));
-    return;
+    if (!app.studioView || !STUDIO_CAMERAS.includes(id)) return;
+    app.studioView.cameraMode = id;
+    writeSetting(STUDIO_CAMERA_KEY, id);
+  } else {
+    if (!app.view3d || !CAMERA_MODES[id]) return;
+    app.view3d.setCameraMode(id);
+    if (CAMERA_MODES[app.view3d.camera.mode]) writeSetting(CAMERA_KEY, app.view3d.camera.mode);
+    renderCameraButton();
   }
-  if (!app.view3d) return;
-  writeSetting(CAMERA_KEY, app.view3d.cycleCamera());
-  renderCameraButton();
+  app.viewPopover?.refresh();
 }
 
 /** A road camera mode's name; the workout's gym camera is not one of the ride's modes. */
@@ -3499,6 +3541,7 @@ function setTimeMode(mode) {
   app.view3d.setTimeMode(mode);
   $("time-mode").value = mode;
   writeSetting(TIME_KEY, mode);
+  app.viewPopover?.refresh();
 }
 
 function setViewMode(mode, { remember = true } = {}) {
@@ -3510,6 +3553,7 @@ function setViewMode(mode, { remember = true } = {}) {
   $("view-2d").setAttribute("aria-pressed", String(!use3d));
   $("scene-controls").hidden = !use3d;
   if (remember) writeSetting(VIEW_KEY, app.viewMode);
+  app.viewPopover?.refresh();
 }
 
 function myRider(riders) {
