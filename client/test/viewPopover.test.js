@@ -17,7 +17,7 @@ function fakeEl(tag = "div") {
     append(...kids) { for (const kid of kids) { kid.parent = el; el.children.push(kid); } },
     replaceChildren(...kids) { el.children = []; el.append(...kids); },
     contains(other) { for (let node = other; node; node = node.parent) if (node === el) return true; return false; },
-    focus() {},
+    focus() { el.focused = (el.focused ?? 0) + 1; el.ownerDoc && (el.ownerDoc.activeElement = el); },
     fire(type, event = {}) { for (const fn of [...(listeners.get(type) ?? [])]) fn({ target: el, ...event }); },
     listenerCount(type) { return listeners.get(type)?.size ?? 0; },
     all() { return el.children.flatMap((kid) => [kid, ...kid.all()]); },
@@ -34,7 +34,7 @@ function fakeDoc() {
 
 const fakeNarrow = (matches) => ({ matches, addEventListener() {}, removeEventListener() {} });
 
-function setup({ studio = false } = {}) {
+function setup({ studio = false, selected } = {}) {
   const doc = fakeDoc();
   const root = fakeEl();
   const button = fakeEl("button");
@@ -42,7 +42,7 @@ function setup({ studio = false } = {}) {
   const picks = [];
   const popover = createViewPopover({
     root, button, controls: viewControls({ studio }), stack, matchNarrow: fakeNarrow(false),
-    onPick: (kind, id) => picks.push([kind, id]), doc,
+    onPick: (kind, id) => picks.push([kind, id]), doc, ...(selected ? { selected } : {}),
   });
   const option = (kind, id) => root.all().find((el) => el.dataset.kind === kind && el.dataset.id === id);
   return { doc, root, button, stack, picks, popover, option };
@@ -119,4 +119,40 @@ test("a narrow screen shows it as a bottom sheet", () => {
   });
   popover.open();
   assert.equal(root.getAttribute("data-sheet"), "true");
+});
+
+const rowHidden = (root, kind) => root.children.find((section) => section.all().some((el) => el.dataset.kind === kind)).hidden;
+
+test("closing with focus inside returns it to the View button", () => {
+  const { popover, doc, button, root } = setup();
+  popover.open();
+  doc.activeElement = root.all().find((el) => el.dataset.kind === "layout");
+  popover.close();
+  assert.equal(button.focused, 1);
+});
+
+test("closing with focus elsewhere leaves focus alone", () => {
+  const { popover, doc, button } = setup();
+  popover.open();
+  doc.activeElement = doc.body;
+  popover.close();
+  assert.equal(button.focused ?? 0, 0);
+});
+
+test("2D hides the camera and time rows", () => {
+  const { popover, root } = setup({ selected: () => ({ camera: "chase", mode: "2d" }) });
+  popover.open();
+  assert.deepEqual([rowHidden(root, "camera"), rowHidden(root, "time"), rowHidden(root, "layout")], [true, true, false]);
+});
+
+test("without a 3D view the 3D option is disabled", () => {
+  const { popover, option } = setup({ selected: () => ({ mode: "2d", has3d: false }) });
+  popover.open();
+  assert.deepEqual([option("mode", "3d").disabled, Boolean(option("mode", "2d").disabled)], [true, false]);
+});
+
+test("a camera the popover does not offer hides the camera row", () => {
+  const { popover, root } = setup({ selected: () => ({ camera: "gym", mode: "3d" }) });
+  popover.open();
+  assert.equal(rowHidden(root, "camera"), true);
 });

@@ -3945,6 +3945,34 @@ body.riding {
   }
 }
 
+/* Short screens: the cue moves into the top bar's row, left of the buttons,
+   so Riders, Photo, View and Menu stay tappable. */
+@media (max-height: 559px) {
+  .studio-cue {
+    top: var(--gap);
+    left: var(--gap);
+    transform: none;
+    width: max(200px, calc(100% - 3 * var(--gap) - 420px));
+    padding: 6px 12px;
+    column-gap: 10px;
+  }
+
+  .studio-cue strong {
+    font-size: 15px;
+  }
+
+  .studio-countdown {
+    font-size: 30px;
+  }
+
+  .studio-cue strong,
+  .studio-next {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* --- phones and touch screens --------------------------------------- */
 
 /* Notches and home indicators: the HUD, drawers and dialogs stay clear of them. */

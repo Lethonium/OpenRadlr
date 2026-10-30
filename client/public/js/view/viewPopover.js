@@ -80,9 +80,11 @@ export function createViewPopover({
     for (const option of options) {
       option.setAttribute("aria-pressed", String(current[option.dataset.kind] === option.dataset.id));
     }
-    // Camera and time of day belong to the 3D view.
+    // Camera and time of day belong to the 3D view; a camera not offered here
+    // (the workout's gym camera) cannot be changed, so the row goes.
     const flat = current.mode === "2d";
-    if (rows.camera && controls.modes.length > 0) rows.camera.hidden = flat;
+    const offered = controls.cameras.some((camera) => camera.id === current.camera);
+    if (rows.camera) rows.camera.hidden = (flat && controls.modes.length > 0) || !offered;
     if (rows.time) rows.time.hidden = flat;
     for (const option of options) {
       if (option.dataset.kind === "mode" && option.dataset.id === "3d") option.disabled = current.has3d === false;
@@ -113,6 +115,7 @@ export function createViewPopover({
     if (!removePanel) return;
     removePanel();
     removePanel = null;
+    if (root.contains(doc.activeElement)) button.focus();
     root.hidden = true;
     button.setAttribute("aria-expanded", "false");
     doc.removeEventListener("pointerdown", onOutside);
