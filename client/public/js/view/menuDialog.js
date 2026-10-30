@@ -128,9 +128,22 @@ export function createMenuDialog({
   }
   on(root, "keydown", onKeydown);
   on(backdrop, "click", (event) => { if (event.target === backdrop) close(); });
-  on(backEl, "click", () => { nav.back(); render(); });
+  // On a phone the list and the page swap places, so the tapped entry (or the
+  // back button) disappears: focus moves to what is shown in its place.
+  on(backEl, "click", () => {
+    const left = nav.page;
+    nav.back();
+    render();
+    navEls.find((el) => el.dataset.menuNav === left)?.focus();
+  });
   on(closeEl, "click", () => close());
-  for (const el of navEls) on(el, "click", () => { nav.open(el.dataset.menuNav); render(); });
+  for (const el of navEls) {
+    on(el, "click", () => {
+      nav.open(el.dataset.menuNav);
+      render();
+      if (narrow()) backEl?.focus();
+    });
+  }
   matchNarrow.addEventListener("change", onNarrowChange);
 
   render();

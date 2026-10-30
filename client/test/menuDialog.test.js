@@ -231,3 +231,28 @@ test("onChange reports opening, the confirm step and closing", () => {
     { open: false, confirming: false },
   ]);
 });
+
+test("on a narrow screen a nav entry moves focus to the page's back button", () => {
+  const { dialog, root } = setup({ narrow: true });
+  dialog.open();
+  root.navs.find((n) => n.dataset.menuNav === "race").fire("click");
+  assert.equal(fakeEl.active, root.back);
+});
+
+test("back to the list focuses the entry of the page that was open", () => {
+  const { dialog, root } = setup({ narrow: true });
+  dialog.open();
+  const race = root.navs.find((n) => n.dataset.menuNav === "race");
+  race.fire("click");
+  root.back.fire("click");
+  assert.equal(fakeEl.active, race);
+});
+
+test("on a wide screen a nav entry keeps the focus on itself", () => {
+  const { dialog, root } = setup();
+  dialog.open();
+  const race = root.navs.find((n) => n.dataset.menuNav === "race");
+  fakeEl.active = race;
+  race.fire("click");
+  assert.equal(fakeEl.active, race);
+});
