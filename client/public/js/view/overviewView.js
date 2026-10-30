@@ -17,9 +17,26 @@ const GAP_S = 5;
 const EFFORT_KEYS = { 5: "overview.effort.5s", 60: "overview.effort.1min", 300: "overview.effort.5min", 1200: "overview.effort.20min" };
 const DASH = "–";
 
-/** Whether the view should run: the Overview page is open, or a phone's menu (its strip) is. */
-export function overviewActive({ open, page, narrow }) {
-  return Boolean(open) && (page === "overview" || Boolean(narrow));
+/**
+ * What should run: "page" on the Overview page, "strip" on a phone's other
+ * menu screens (the strip stays live there), null otherwise.
+ */
+export function overviewMode({ open, page, narrow }) {
+  if (!open) return null;
+  if (page === "overview") return "page";
+  return narrow ? "strip" : null;
+}
+
+/**
+ * Power, speed and grade for the strip. The studio's route has no geometry
+ * (`gradeAt`), so its grade is 0.
+ */
+export function liveReading({ me, route, power }) {
+  return {
+    power: Number.isFinite(power) ? power : 0,
+    speed: me?.speed ?? 0,
+    grade: me && typeof route?.gradeAt === "function" ? route.gradeAt(me.distance) : 0,
+  };
 }
 
 /**
@@ -129,14 +146,18 @@ export function createOverviewView({
   doc = globalThis.document, colors = () => themeColors(),
 }) {
   let timer = null;
+  /** Whether the figures and chart render too, not just the strip. */
+  let full = true;
 
   function render() {
     const recording = read();
-    const { stats, efforts } = overviewFigures(recording, format);
-    const heading = doc.createElement("h3");
-    heading.textContent = t("overview.bestEfforts");
-    root.replaceChildren(figureList(doc, stats), heading, figureList(doc, efforts));
-    drawPowerChart(canvas, { samples: recording.samples, ftp: recording.ftp, colors: colors() });
+    if (full) {
+      const { stats, efforts } = overviewFigures(recording, format);
+      const heading = doc.createElement("h3");
+      heading.textContent = t("overview.bestEfforts");
+      root.replaceChildren(figureList(doc, stats), heading, figureList(doc, efforts));
+      drawPowerChart(canvas, { samples: recording.samples, ftp: recording.ftp, colors: colors() });
+    }
     const { power, speed, grade } = recording.live;
     strip.replaceChildren(...[
       Number.isFinite(power) ? format.power(Math.round(power)) : DASH,
@@ -156,11 +177,17 @@ export function createOverviewView({
     timer = null;
   }
 
+  function start(withPage) {
+    full = withPage;
+    render();
+    if (timer === null) timer = setInterval(render, OVERVIEW_REFRESH_MS);
+  }
+
   return {
-    show() {
-      render();
-      if (timer === null) timer = setInterval(render, OVERVIEW_REFRESH_MS);
-    },
+    /** The whole page: figures, chart and strip, now and once a second. */
+    show: () => start(true),
+    /** Only the strip (a phone's other menu screens). */
+    showStrip: () => start(false),
     hide,
     dispose: hide,
   };

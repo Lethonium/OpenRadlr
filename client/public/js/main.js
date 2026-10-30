@@ -14,7 +14,7 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
-import { createOverviewView, drawPowerChart, overviewActive } from "./view/overviewView.js";
+import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
 import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
@@ -186,6 +186,8 @@ const app = {
   viewPopover: null,
   /** The menu's Overview page and phone stat strip; created per ride like the menu. */
   overviewView: null,
+  /** Stops the Overview following the phone/wide layout switch. */
+  overviewUnwatch: null,
   vehicleCode: null,
   boardingCode: null,
   pendingBoardCode: null,
@@ -1552,6 +1554,8 @@ function endRide() {
   app.menuDialog = null;
   app.overviewView?.dispose();
   app.overviewView = null;
+  app.overviewUnwatch?.();
+  app.overviewUnwatch = null;
   app.viewPopover?.dispose();
   app.viewPopover = null;
   $("reconnecting").hidden = true;
@@ -2960,9 +2964,15 @@ function initMenu() {
     format: overviewFormat,
   });
   const syncOverview = (page) => {
-    if (overviewActive({ open: app.menuDialog?.isOpen ?? false, page, narrow: matchNarrow.matches })) app.overviewView.show();
+    const mode = overviewMode({ open: app.menuDialog?.isOpen ?? false, page, narrow: matchNarrow.matches });
+    if (mode === "page") app.overviewView.show();
+    else if (mode === "strip") app.overviewView.showStrip();
     else app.overviewView.hide();
   };
+  // A rotation can swap phone and wide layout on the same page: the strip appears or goes.
+  const onNarrowChange = () => syncOverview(app.menuDialog?.page ?? null);
+  matchNarrow.addEventListener("change", onNarrowChange);
+  app.overviewUnwatch = () => matchNarrow.removeEventListener("change", onNarrowChange);
   app.menuDialog = createMenuDialog({
     root: $("menu"),
     stack: panels,
@@ -3000,7 +3010,7 @@ function overviewRecording() {
     samples: app.recorder.samples,
     pauses: app.recorder.pauses,
     ftp: app.profile.ftp,
-    live: { power: app.session?.latest.power ?? 0, speed: me?.speed ?? 0, grade: me ? app.route.gradeAt(me.distance) : 0 },
+    live: liveReading({ me, route: app.route, power: app.session?.latest.power }),
   };
 }
 

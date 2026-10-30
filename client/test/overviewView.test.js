@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RideRecorder } from "../public/js/ride/rideRecorder.js";
-import { createOverviewView, overviewActive } from "../public/js/view/overviewView.js";
+import { createOverviewView, liveReading, overviewMode } from "../public/js/view/overviewView.js";
 
 function fakeEl(tag = "div") {
   const el = {
@@ -40,9 +40,9 @@ const T0 = Date.UTC(2026, 9, 30, 10, 0, 0);
 const steadyRide = (watts, seconds) =>
   Array.from({ length: seconds }, (_, i) => ({ t: T0 + i * 1000, power: watts, heartRate: null, distance: i * 10, elevation: i * 0.1, speed: 10, cadence: 90 }));
 
-function recording(samples, live = { power: 210, speed: 9.5, grade: 3.2 }) {
+function recording(samples, live = { power: 210, speed: 9.5, grade: 3.2 }, ftp = 200) {
   const recorder = RideRecorder.from({ samples, pauses: [] });
-  return { summary: recorder.summary(), samples, pauses: [], ftp: 200, live };
+  return { summary: recorder.summary(), samples, pauses: [], ftp, live };
 }
 
 const tagged = {
@@ -55,7 +55,7 @@ const tagged = {
   number: (v) => `N${v}`,
 };
 
-function setup({ samples = steadyRide(200, 61), live } = {}) {
+function setup({ samples = steadyRide(200, 61), live, ftp } = {}) {
   const root = fakeEl();
   const strip = fakeEl();
   const canvas = fakeCanvas();
@@ -63,7 +63,7 @@ function setup({ samples = steadyRide(200, 61), live } = {}) {
   let reads = 0;
   const view = createOverviewView({
     root, canvas, strip, format: tagged, doc: fakeDoc(), colors: () => ({ text: "#fff", muted: "#888", grid: "#333" }),
-    read: () => { reads += 1; return recording(samples, live); },
+    read: () => { reads += 1; return recording(samples, live, ftp); },
     setInterval: timers.setInterval, clearInterval: timers.clearInterval,
   });
   return { view, root, strip, canvas, timers, reads: () => reads };
@@ -124,19 +124,49 @@ test("the strip shows live power speed and grade", () => {
 });
 
 test("the chart draws the power line", () => {
-  const { view, canvas } = setup();
+  // Without an FTP there is no reference line, so the one stroke is the power line.
+  const { view, canvas } = setup({ ftp: 0 });
   view.show();
-  assert.ok(canvas.ctx.strokes > 0);
+  assert.equal(canvas.ctx.strokes, 1);
 });
 
-test("it runs on the Overview page, and on a phone whenever the menu is open", () => {
+test("the whole page runs on Overview, only the strip on a phone's other screens", () => {
   const cases = [
-    overviewActive({ open: true, page: "overview", narrow: false }),
-    overviewActive({ open: true, page: "view", narrow: false }),
-    overviewActive({ open: true, page: null, narrow: true }),
-    overviewActive({ open: false, page: null, narrow: true }),
+    overviewMode({ open: true, page: "overview", narrow: false }),
+    overviewMode({ open: true, page: "view", narrow: false }),
+    overviewMode({ open: true, page: null, narrow: true }),
+    overviewMode({ open: true, page: "overview", narrow: true }),
+    overviewMode({ open: false, page: null, narrow: true }),
   ];
-  assert.deepEqual(cases, [true, false, true, false]);
+  assert.deepEqual(cases, ["page", null, "strip", "page", null]);
+});
+
+test("showing only the strip leaves the figures alone", () => {
+  const { view, root, strip, timers } = setup();
+  view.showStrip();
+  timers.fire();
+  assert.deepEqual({ figures: root.children.length, strip: strip.children.length, timers: timers.delays.length }, { figures: 0, strip: 3, timers: 1 });
+});
+
+test("switching from the strip to the page keeps one timer and renders the page", () => {
+  const { view, root, timers } = setup();
+  view.showStrip();
+  view.show();
+  assert.deepEqual({ figures: root.children.length > 0, timers: timers.delays.length }, { figures: true, timers: 1 });
+});
+
+test("the live reading of a studio rider has no grade", () => {
+  const studioRoute = { id: "studio", name: "Studio" };
+  assert.deepEqual(liveReading({ me: { speed: 8, distance: 120 }, route: studioRoute, power: 180 }), { power: 180, speed: 8, grade: 0 });
+});
+
+test("the live reading on a road takes the grade under the rider", () => {
+  const route = { gradeAt: (distance) => distance / 100 };
+  assert.deepEqual(liveReading({ me: { speed: 8, distance: 300 }, route, power: 180 }), { power: 180, speed: 8, grade: 3 });
+});
+
+test("the live reading before the first state is all zero", () => {
+  assert.deepEqual(liveReading({ me: null, route: null, power: undefined }), { power: 0, speed: 0, grade: 0 });
 });
 
 test("weighted power shows a dash until there is half a minute of riding", () => {
