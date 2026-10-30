@@ -2260,11 +2260,6 @@ body.riding {
   border-right: 1px solid var(--border);
 }
 
-.drawer-right {
-  right: 0;
-  border-left: 1px solid var(--border);
-}
-
 .drawer-head {
   display: flex;
   justify-content: space-between;
@@ -2281,29 +2276,9 @@ body.riding {
   background: transparent;
 }
 
-.drawer .view-switch,
-.drawer .scene-controls,
-.menu-dialog .view-switch,
-.menu-dialog .scene-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 10px;
-  align-items: center;
-}
-
-.drawer .scene-controls select,
-.menu-dialog .scene-controls select {
-  padding: 4px 8px;
-  font-size: 13px;
-}
-
-.drawer label,
-.menu-dialog label {
-  margin-bottom: 4px;
-}
-
-/* --- in-game menu dialog (rough; Task 9 styles it) ------------------ */
+/* --- in-game menu dialog --------------------------------------------- */
+/* A card centred over the dimmed ride (page list left, page right); below
+   1000 px wide or 560 px tall it fills the screen and shows the list first. */
 
 .menu-dialog[hidden] {
   display: none;
@@ -2316,24 +2291,27 @@ body.riding {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: rgba(8, 10, 13, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: rgba(8, 10, 13, 0.5);
+  -webkit-backdrop-filter: blur(6px) saturate(0.8);
+  backdrop-filter: blur(6px) saturate(0.8);
+  animation: menu-fade 0.16s ease-out;
 }
 
 .menu-card {
   width: min(860px, 100%);
   height: min(560px, 100%);
   display: grid;
-  grid-template-columns: 220px 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 212px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas: "head head" "nav page" "foot foot";
-  background: var(--glass-strong);
-  border: 1px solid var(--border);
-  border-radius: 18px;
+  background: rgba(17, 20, 25, 0.97);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   color: var(--text);
   overflow: hidden;
+  animation: menu-in 0.18s ease-out;
 }
 
 .menu-head {
@@ -2341,81 +2319,242 @@ body.riding {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 10px 16px;
+  min-height: 52px;
+  padding: 8px 10px 8px 18px;
   border-bottom: 1px solid var(--border);
 }
 
 .menu-head h2 {
-  margin: 0;
-  font-size: 15px;
   flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .menu-head .icon-button {
-  font-size: 24px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 8px;
+  border-color: transparent;
   background: transparent;
+  color: var(--muted);
 }
 
+.menu-head .icon-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.menu-back {
+  font-size: 28px;
+}
+
+/* Task 12 fills it: power, speed and grade at the top of a phone's menu. */
+.menu-strip {
+  grid-area: strip;
+}
+
+/* Page list: icon, name and the page's live state as a second line. */
 .menu-nav {
   grid-area: nav;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px;
+  gap: 2px;
+  padding: 10px 8px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .menu-nav-item {
   display: grid;
-  justify-items: start;
-  gap: 2px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-areas: "icon title" ". status";
+  column-gap: 12px;
+  row-gap: 1px;
+  align-items: center;
+  width: 100%;
   padding: 8px 12px;
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--text);
+  --menu-icon: none;
+}
+
+.menu-nav-item::before {
+  content: "";
+  grid-area: icon;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  opacity: 0.75;
+  -webkit-mask: var(--menu-icon) center / contain no-repeat;
+  mask: var(--menu-icon) center / contain no-repeat;
+}
+
+.menu-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: transparent;
 }
 
 .menu-nav-item[aria-current="true"] {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border);
+  background: rgba(255, 122, 26, 0.14);
+  border-color: rgba(255, 122, 26, 0.28);
+  color: var(--accent);
+}
+
+.menu-nav-item[aria-current="true"]::before {
+  opacity: 1;
+}
+
+.menu-nav-title {
+  grid-area: title;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menu-nav-status {
+  grid-area: status;
   color: var(--muted);
   font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.menu-nav-status:empty {
+  display: none;
+}
+
+[data-menu-nav="overview"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><path d='M3 20h18M6 16v-5M11 16V5M16 16v-8M21 16v-3'/></svg>");
+}
+
+[data-menu-nav="view"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'><path d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/></svg>");
+}
+
+[data-menu-nav="vehicle"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='5.5' cy='16.5' r='3.5'/><circle cx='18.5' cy='16.5' r='3.5'/><path d='M5.5 16.5 9 9h7l2.5 7.5M12 16.5 16 9M7.5 6h3'/></svg>");
+}
+
+[data-menu-nav="race"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 21V4h12l-2.5 4.5L17 13H5'/></svg>");
+}
+
+[data-menu-nav="events"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 10h18M8 3v4M16 3v4'/></svg>");
+}
+
+[data-menu-nav="training"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'><path d='M13 2 4 14h7l-1 8 9-12h-7l1-8z'/></svg>");
+}
+
+[data-menu-nav="settings"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><path d='M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1'/><circle cx='15' cy='6' r='2'/><circle cx='9' cy='12' r='2'/><circle cx='17' cy='18' r='2'/></svg>");
+}
+
+/* The page: its panels read as sections of one sheet, not cards in a card. */
 .menu-pages {
   grid-area: page;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px 16px;
+  padding: 18px 22px;
 }
 
 .menu-page {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 18px;
 }
 
 .menu-page[hidden] {
   display: none;
 }
 
+.menu-page > .panel {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.menu-page > .panel + .panel {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.menu-page h2 {
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.menu-page h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+
+.menu-dialog label {
+  margin-bottom: 4px;
+}
+
+.menu-dialog .view-switch,
+.menu-dialog .scene-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.menu-dialog .toggle {
+  padding: 6px 14px;
+}
+
+.menu-dialog .scene-controls select {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* Footer: Photo and Finish ride, always in view; the confirmation card above them. */
 .menu-foot {
   grid-area: foot;
   display: grid;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 12px 16px 12px 18px;
   border-top: 1px solid var(--border);
+}
+
+.menu-foot .finish-confirm {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 122, 26, 0.35);
+  border-radius: var(--radius);
+  background: rgba(255, 122, 26, 0.08);
+}
+
+.menu-foot .finish-confirm[hidden] {
+  display: none;
 }
 
 .menu-foot-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -2423,10 +2562,42 @@ body.riding {
   width: auto;
 }
 
-/* Wide screens show list and page side by side: no back arrow. */
+.menu-foot-actions #finish-ride {
+  margin-left: auto;
+  min-width: 160px;
+  padding: 10px 18px;
+}
+
+@keyframes menu-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* Wide screens show list and page side by side: no back arrow, no strip. */
 @media (min-width: 1000px) and (min-height: 560px) {
-  .menu-back {
+  .menu-head .menu-back,
+  .menu-strip {
     display: none;
+  }
+
+  /* The ride's notifications stay readable beside the card where there is room. */
+  .ride:has(> #menu:not([hidden])) .hud-ticker {
+    z-index: 8;
+    width: min(320px, calc((100vw - 860px) / 2 - 2 * var(--gap)));
+  }
+}
+
+@media (min-width: 1000px) and (max-width: 1299px) and (min-height: 560px) {
+  .ride:has(> #menu:not([hidden])) .hud-ticker {
+    z-index: auto;
   }
 }
 
@@ -2441,23 +2612,104 @@ body.riding {
     height: 100%;
     border: 0;
     border-radius: 0;
-    grid-template-columns: 1fr;
-    grid-template-areas: "head" "nav" "foot";
+    box-shadow: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "head" "strip" "nav" "foot";
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   .menu-dialog[data-screen="page"] .menu-card {
-    grid-template-areas: "head" "page" "foot";
+    grid-template-areas: "head" "strip" "page" "foot";
   }
 
   .menu-dialog[data-screen="list"] .menu-pages,
   .menu-dialog[data-screen="page"] .menu-nav,
-  .menu-dialog[data-screen="list"] .menu-back {
+  .menu-dialog[data-screen="list"] .menu-head .menu-back {
     display: none;
   }
 
+  .menu-head {
+    padding-left: 16px;
+  }
+
+  .menu-dialog[data-screen="page"] .menu-head {
+    padding-left: 6px;
+  }
+
   .menu-nav {
+    gap: 8px;
+    padding: 14px 16px;
     border-right: 0;
+    background: none;
+  }
+
+  /* One row per page: icon and name left, state and a chevron right. */
+  .menu-nav-item {
+    grid-template-columns: 18px auto minmax(0, 1fr) 10px;
+    grid-template-areas: "icon title status chev";
+    min-height: 52px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border);
+    border-radius: 12px;
+  }
+
+  .menu-nav-item::after {
+    content: "›";
+    grid-area: chev;
+    justify-self: end;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .menu-nav-item[aria-current="true"] {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .menu-nav-item[aria-current="true"]::before {
+    opacity: 0.75;
+  }
+
+  .menu-nav-status {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .menu-nav-status:empty {
+    display: block;
+  }
+
+  .menu-pages {
+    padding: 16px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+  }
+
+  .menu-foot {
+    padding: 10px 16px;
+  }
+
+  .menu-foot-actions #finish-ride {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Phones held sideways: two columns of rows, so the whole list fits. */
+@media (max-height: 559px) and (min-width: 600px) {
+  .menu-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-content: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-backdrop,
+  .menu-card {
+    animation: none;
   }
 }
 
@@ -3730,6 +3982,11 @@ body {
   .menu-dialog input:not([type="range"]):not([type="checkbox"]),
   .modal button:not(.photo-remove) {
     min-height: 44px;
+  }
+
+  .menu-head .icon-button {
+    width: 44px;
+    height: 44px;
   }
 
   .check input[type="checkbox"] {

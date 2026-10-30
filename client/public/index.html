@@ -570,15 +570,15 @@
                 <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
               </div>
               <nav class="menu-nav" aria-label="Menu pages" data-i18n-attr="aria-label:menuDialog.pages">
-                <button type="button" id="menu-nav-view" class="menu-nav-item" data-menu-nav="view"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
-                <button type="button" id="menu-nav-vehicle" class="menu-nav-item" data-menu-nav="vehicle"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
-                <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
-                <button type="button" id="menu-nav-events" class="menu-nav-item" data-menu-nav="events"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
-                <button type="button" id="menu-nav-training" class="menu-nav-item" data-menu-nav="training"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
-                <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-view" class="menu-nav-item" data-menu-nav="view"><span id="menu-nav-view-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-vehicle" class="menu-nav-item" data-menu-nav="vehicle"><span id="menu-nav-vehicle-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span id="menu-nav-race-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-events" class="menu-nav-item" data-menu-nav="events"><span id="menu-nav-events-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-training" class="menu-nav-item" data-menu-nav="training"><span id="menu-nav-training-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span id="menu-nav-settings-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
               </nav>
               <div class="menu-pages">
-                <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view" hidden>
+                <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view-title" hidden>
                   <div class="panel route-only">
                     <h2 data-i18n="drawer.view">View</h2>
                     <label><span data-i18n="drawer.layout">Layout</span>
@@ -607,7 +607,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="menu-page" data-menu-page="vehicle" role="region" aria-labelledby="menu-nav-vehicle" hidden>
+                <div class="menu-page" data-menu-page="vehicle" role="region" aria-labelledby="menu-nav-vehicle-title" hidden>
                   <div class="panel route-only" id="vehicle-panel">
                     <h2 data-i18n="drawer.tandemAndBeerBike">Tandem and beer bike</h2>
                     <div id="vehicle-buttons" class="vehicle-buttons">
@@ -617,7 +617,7 @@
                     <div id="vehicle-view" class="vehicle-view" hidden></div>
                   </div>
                 </div>
-                <div class="menu-page" data-menu-page="race" role="region" aria-labelledby="menu-nav-race" hidden>
+                <div class="menu-page" data-menu-page="race" role="region" aria-labelledby="menu-nav-race-title" hidden>
                   <div class="panel route-only">
                     <h2 data-i18n="ride.race">Race</h2>
                     <p class="field-hint" data-i18n="drawer.raceHint">Start a race and others can join during the countdown (J). Riders who don't join keep riding as before.</p>
@@ -635,13 +635,13 @@
                     <ol id="race-results" class="results"></ol>
                   </div>
                 </div>
-                <div class="menu-page" data-menu-page="events" role="region" aria-labelledby="menu-nav-events" hidden>
+                <div class="menu-page" data-menu-page="events" role="region" aria-labelledby="menu-nav-events-title" hidden>
                   <div class="panel route-only" id="events-panel" hidden>
                     <h2 data-i18n="events.title">Events</h2>
                     <ul id="ride-event-list" class="event-list"></ul>
                   </div>
                 </div>
-                <div class="menu-page" data-menu-page="training" role="region" aria-labelledby="menu-nav-training" hidden>
+                <div class="menu-page" data-menu-page="training" role="region" aria-labelledby="menu-nav-training-title" hidden>
                   <div class="panel route-only" id="training-panel">
                     <h2 data-i18n="drawer.training">Training</h2>
                     <div class="mode-switch" role="group" aria-label="Trainer mode" data-i18n-attr="aria-label:drawer.trainerMode">
@@ -694,7 +694,7 @@
                     <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
                   </div>
                 </div>
-                <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings" hidden>
+                <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
                   <div class="panel">
                     <h2 data-i18n="rider.units">Units</h2>
                     <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
