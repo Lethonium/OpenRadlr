@@ -14,6 +14,7 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
+import { createOverviewView, drawPowerChart, overviewActive } from "./view/overviewView.js";
 import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
@@ -134,8 +135,6 @@ const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
 let removeDrawerPanel = null;
-/** The Overview page arrives with its live stats; until then the menu opens on View. */
-const OVERVIEW_READY = false;
 /** Below this the menu fills the screen and shows its page list first. */
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
@@ -185,6 +184,8 @@ const app = {
   menuDialog: null,
   /** The top bar's View popover; created per ride like the menu. */
   viewPopover: null,
+  /** The menu's Overview page and phone stat strip; created per ride like the menu. */
+  overviewView: null,
   vehicleCode: null,
   boardingCode: null,
   pendingBoardCode: null,
@@ -1549,6 +1550,8 @@ function endRide() {
   closeDrawers();
   app.menuDialog?.dispose();
   app.menuDialog = null;
+  app.overviewView?.dispose();
+  app.overviewView = null;
   app.viewPopover?.dispose();
   app.viewPopover = null;
   $("reconnecting").hidden = true;
@@ -2383,6 +2386,8 @@ function openFinish() {
       ? t("finish.note.permission")
       : "";
   $("finish").hidden = false;
+  $("finish-chart").hidden = empty;
+  if (!empty) drawPowerChart($("finish-chart"), { samples: app.recorder.samples, ftp: app.profile.ftp, colors: themeColors(), windowS: null });
 }
 
 function uploadToStrava() {
@@ -2944,16 +2949,32 @@ function openDrawer(id, { backdrop = true } = {}) {
 
 /** The in-game menu dialog of this ride; the ride screen (and so its markup) is fresh each ride. */
 function initMenu() {
+  const matchNarrow = matchMedia(MENU_NARROW_QUERY);
+  app.overviewView = createOverviewView({
+    root: $("overview-figures"),
+    canvas: $("overview-chart"),
+    strip: $("menu-strip"),
+    read: overviewRecording,
+    setInterval: (fn, ms) => setInterval(fn, ms),
+    clearInterval: (id) => clearInterval(id),
+    format: overviewFormat,
+  });
+  const syncOverview = (page) => {
+    if (overviewActive({ open: app.menuDialog?.isOpen ?? false, page, narrow: matchNarrow.matches })) app.overviewView.show();
+    else app.overviewView.hide();
+  };
   app.menuDialog = createMenuDialog({
     root: $("menu"),
     stack: panels,
-    matchNarrow: matchMedia(MENU_NARROW_QUERY),
+    matchNarrow,
     pages: menuPages(),
     focusables: () => focusableIn($("menu")),
     onPage: (page) => {
       for (const item of $("menu").querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
+      syncOverview(page);
     },
     onChange: ({ open, confirming }) => {
+      syncOverview(app.menuDialog?.page ?? null);
       $("open-menu").setAttribute("aria-expanded", String(open));
       const card = $("finish-confirm");
       const hadFocus = card.contains(document.activeElement);
@@ -2968,8 +2989,30 @@ function initMenu() {
 /** The menu's pages: the studio's View page holds only road controls, so it goes too. */
 function menuPages(rows = menuEventRows()) {
   return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0 })
-    .filter((id) => (id !== "overview" || OVERVIEW_READY) && !(app.studio && id === "view"));
+    .filter((id) => !(app.studio && id === "view"));
 }
+
+/** What the Overview page shows: the recording so far and the live figures of the HUD. */
+function overviewRecording() {
+  const me = app.state ? myRider(app.state.riders) : null;
+  return {
+    summary: app.recorder.summary(),
+    samples: app.recorder.samples,
+    pauses: app.recorder.pauses,
+    ftp: app.profile.ftp,
+    live: { power: app.session?.latest.power ?? 0, speed: me?.speed ?? 0, grade: me ? app.route.gradeAt(me.distance) : 0 },
+  };
+}
+
+const overviewFormat = {
+  duration: formatDuration,
+  distance: (metres) => formatDistanceWithUnit(metres),
+  elevation: formatElevation,
+  power: (watts) => `${watts} W`,
+  speed: (metresPerSecond) => `${formatSpeed(metresPerSecond)} ${speedUnit()}`,
+  grade: (percent) => `${formatGrade(percent)} %`,
+  number: formatNumber,
+};
 
 /** What the page list's second lines show, from the ride's current state. */
 function menuStatusContext() {

@@ -2356,9 +2356,23 @@ body.riding {
   font-size: 28px;
 }
 
-/* Task 12 fills it: power, speed and grade at the top of a phone's menu. */
+/* Power, speed and grade at the top of a phone's menu: the ride stays in view. */
 .menu-strip {
   grid-area: strip;
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.menu-strip-item {
+  font-family: var(--num);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Page list: icon, name and the page's live state as a second line. */
@@ -3338,6 +3352,57 @@ body.riding {
   font-family: var(--num);
   font-size: 26px;
   font-weight: 700;
+}
+
+/* Power over time (Overview page and finish summary): zone bands, FTP line, power line. */
+.power-chart {
+  display: block;
+  width: 100%;
+  height: 140px;
+  margin: 4px 0 14px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.power-chart[hidden] {
+  display: none;
+}
+
+#finish-chart {
+  margin-top: 14px;
+}
+
+/* Short landscape phones: the strip and the chart leave room for the figures. */
+@media (max-height: 559px) {
+  .power-chart {
+    height: 96px;
+  }
+
+  .menu-strip {
+    padding: 4px 16px;
+  }
+
+  .menu-strip-item {
+    font-size: 15px;
+  }
+}
+
+/* Overview figures: smaller tiles than the finish summary, they share the page. */
+.overview .summary {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.overview .summary div {
+  padding: 8px 10px;
+}
+
+.overview .summary dt {
+  font-size: 11px;
+}
+
+.overview .summary dd {
+  font-size: 20px;
 }
 
 /* The workout summary: tiles share the row, so two tiles fill it and a missing heart-rate tile leaves no gap. */

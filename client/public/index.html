@@ -571,7 +571,9 @@
                 <h2 data-i18n="ride.menu">Menu</h2>
                 <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
               </div>
+              <div id="menu-strip" class="menu-strip" role="group" aria-label="Live power, speed and grade" data-i18n-attr="aria-label:overview.strip"></div>
               <nav class="menu-nav" aria-label="Menu pages" data-i18n-attr="aria-label:menuDialog.pages">
+                <button type="button" id="menu-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span id="menu-nav-overview-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-view" class="menu-nav-item" data-menu-nav="view"><span id="menu-nav-view-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-vehicle" class="menu-nav-item" data-menu-nav="vehicle"><span id="menu-nav-vehicle-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span id="menu-nav-race-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
@@ -580,6 +582,14 @@
                 <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span id="menu-nav-settings-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
               </nav>
               <div class="menu-pages">
+                <div class="menu-page" data-menu-page="overview" role="region" aria-labelledby="menu-nav-overview-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="menuPage.overview">Overview</h2>
+                    <h3 data-i18n="overview.chart">Power, last 10 minutes</h3>
+                    <canvas id="overview-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
+                    <div id="overview-figures" class="overview"></div>
+                  </div>
+                </div>
                 <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view-title" hidden>
                   <div class="panel route-only">
                     <h2 data-i18n="drawer.view">View</h2>
@@ -742,6 +752,7 @@
             <h2 id="finish-title" data-i18n="ride.rideComplete">Ride complete</h2>
             <p id="finish-route" class="muted"></p>
             <dl id="finish-summary" class="summary"></dl>
+            <canvas id="finish-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
             <table id="finish-splits" class="splits" hidden></table>
             <section id="ftp-prompt" class="ftp-prompt" aria-live="polite" hidden>
               <p id="ftp-prompt-title" class="ftp-prompt-title"></p>
