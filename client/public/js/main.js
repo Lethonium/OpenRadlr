@@ -27,6 +27,7 @@ import { TrainingControl } from "./ride/trainingControl.js";
 import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
 import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "./ride/virtualShifting.js";
 import { RiderSmoother } from "./ride/smoothing.js";
+import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
@@ -125,6 +126,10 @@ const writeSetting = (key, value) => {
 
 const profiles = new ProfileStore();
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
+/** Every open panel, so Esc closes the top one. */
+const panels = createPanelStack();
+let removeDrawerPanel = null;
+
 const app = {
   profile: profiles.load(),
   redrawStage: null,
@@ -153,6 +158,8 @@ const app = {
   offRoute: null,
   /** The junction ahead with its options, while it is in reach. */
   junction: null,
+  /** The ride is over: Esc, M, lanes, J and junction turns do nothing. */
+  finished: false,
   /** Shared vehicles (#55): panels, energy per seat for the summary, code to board on joining. */
   vehicleView: null,
   seatsView: null,
@@ -1560,6 +1567,7 @@ function endRide() {
     lastRoad: null,
     offRoute: null,
     junction: null,
+    finished: false,
     vehicleId: null,
     vehicleKind: null,
     seatEnergy: null,
@@ -1783,8 +1791,8 @@ function startRoad({ simulated, setSimPower }) {
 
   app.actions = {
     // Before a junction the lane keys pick the road instead (#15); on a vehicle only the captain steers.
-    laneLeft: () => (notCaptain() ? captainSteersHint() : app.junction ? chooseTurn(stepOption(app.junction, -1)) : app.connection.laneLeft()),
-    laneRight: () => (notCaptain() ? captainSteersHint() : app.junction ? chooseTurn(stepOption(app.junction, +1)) : app.connection.laneRight()),
+    laneLeft: () => (app.finished ? undefined : notCaptain() ? captainSteersHint() : app.junction ? chooseTurn(stepOption(app.junction, -1)) : app.connection.laneLeft()),
+    laneRight: () => (app.finished ? undefined : notCaptain() ? captainSteersHint() : app.junction ? chooseTurn(stepOption(app.junction, +1)) : app.connection.laneRight()),
     // ERG target or workout intensity; otherwise the simulated trainer's power.
     powerUp: () => (app.training.mode === "erg" || app.training.guided ? adjustErg(+1) : simulated && setSimPower(app.trainer.power + 10)),
     powerDown: () => (app.training.mode === "erg" || app.training.guided ? adjustErg(-1) : simulated && setSimPower(app.trainer.power - 10)),
@@ -1797,14 +1805,11 @@ function startRoad({ simulated, setSimPower }) {
       setTimeMode(next);
     },
     cycleLayout: () => setLayoutChoice(nextLayoutChoice(app.layoutChoice)),
-    toggleRace: () => toggleRace(),
-    toggleMenu: () => toggleDrawer("menu"),
+    toggleRace: () => app.finished || toggleRace(),
+    toggleMenu: () => app.finished || toggleDrawer("menu"),
     takePhoto: () => takePhoto(),
     togglePause: () => performPause(app.pause?.toggle(now()) ?? [], now()),
-    closePanels: () => {
-      closeDrawers();
-      $("finish").hidden = true;
-    },
+    closePanels: () => closeTopPanel(),
   };
   app.ride.unbindKeyboard = bindKeyboard(window, app.actions);
   $("pause-ride").addEventListener("click", () => app.actions?.togglePause());
@@ -2075,12 +2080,9 @@ function startStudio({ simulated, setSimPower }) {
     shiftUp: () => shift(+1),
     shiftDown: () => shift(-1),
     cycleCamera: () => cycleCamera(),
-    toggleMenu: () => toggleDrawer("menu"),
+    toggleMenu: () => app.finished || toggleDrawer("menu"),
     takePhoto: () => takePhoto(),
-    closePanels: () => {
-      closeDrawers();
-      $("finish").hidden = true;
-    },
+    closePanels: () => closeTopPanel(),
   };
   app.ride.unbindKeyboard = bindKeyboard(window, app.actions);
 }
@@ -2812,10 +2814,19 @@ function toggleDrawer(id) {
   closeDrawers();
   drawer.hidden = !open;
   $("drawer-backdrop").hidden = !open;
+  if (open) removeDrawerPanel = panels.push({ close: closeDrawers });
   if (id === "menu") $("open-menu").setAttribute("aria-expanded", String(open));
 }
 
+/** Esc: closes the newest open panel. */
+function closeTopPanel() {
+  if (app.finished) return;
+  panels.closeTop();
+}
+
 function closeDrawers() {
+  removeDrawerPanel?.();
+  removeDrawerPanel = null;
   $("menu").hidden = true;
   $("social").hidden = true;
   $("drawer-backdrop").hidden = true;
@@ -2848,6 +2859,7 @@ function updateLayout() {
 
 /** Join during the countdown, leave any time before the finish. */
 function toggleRace() {
+  if (app.finished) return;
   if (app.state?.vehicle) return;
   const event = app.state?.event;
   if (event) {
@@ -3452,6 +3464,7 @@ function renderJunction(race, me) {
 
 /** Takes `option` at the junction ahead (the server confirms with the next state). */
 function chooseTurn(option) {
+  if (app.finished) return;
   if (!option || !app.junction || !app.myRoad) return;
   app.connection.turn(option.edge);
   app.myRoad = { ...app.myRoad, next: { edge: option.edge, dir: option.dir } };
