@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-30-ingame-menu-design.md`
 
+**Base:** this branch is stacked on `feat/i18n-german` (PR #18), which must merge first. Open the PR with that branch as its base, then retarget it to `main` once #18 is merged (rebase with `git rebase --onto main <last #18 commit>` if #18 is squashed). Existing moved markup keeps its `data-i18n` attributes.
+
 ## Global Constraints
 
 - Dialog card about 860×560, centred, ride dimmed and blurred behind; full screen below 1000 px wide or below 560 px tall; on a phone the page list is the first screen and a page opens with a back arrow.
@@ -21,6 +23,7 @@
 - Overview: whole-ride figures (elapsed, distance, climbed, kJ, avg HR if present from `RideRecorder.summary()`; avg power, weighted power, load if FTP known, best efforts 5 s / 1 min / 5 min / 20 min when long enough from `powerAnalysis`). On a phone a live strip (power, speed, grade) sits at the top of the dialog; chart of the last 10 minutes; refresh once a second, only while the Overview is visible.
 - Finish confirmation text: "Finish this ride? You can't continue it afterwards." with **Cancel** / **Finish ride**. No "Keep riding" anywhere.
 - Finishing happens once: recorder stops, history saved once, `app.connection` cleared before `leave()`, trainer to flat road, autosave kept and marked `finished` (never continuable). Phone paddle rides have no autosave.
+- **Translations (PR #18):** every new user-visible string goes through `t()` / `tn()` in JS or `data-i18n` / `data-i18n-attr` in `index.html`, with the key in both `client/public/js/i18n/en.js` and `de.js` (same `{params}`; German uses the informal "du"). Numbers use `formatNumber`. Moved markup keeps its existing keys. The `i18nHtml`, `i18nSweep` and `i18nParity` tests must stay green; a deliberate English literal is marked `// i18n-ok`. This covers the confirm card text, the page names and status lines, the Overview labels, the View popover, the camera/layout names and the "Finished ride" label.
 - Every existing element id and handler the spec lists keeps working; no protocol or server changes.
 - Project rules: TDD, one reason to fail per test, no sleeps, time/RNG/I/O injected, `main.js` holds no logic (`CONTRIBUTING.md`). `make check` before claiming done. CHANGELOG entry under `[Unreleased]` with the issue number.
 
@@ -56,7 +59,7 @@
 ### Task 2: Autosave knows a finished ride
 
 **Files:**
-- Modify: `client/public/js/ride/rideAutosave.js` (`continueAllowed`, `unfinishedLabel`)
+- Modify: `client/public/js/ride/rideAutosave.js` (`continueAllowed`, `unfinishedLabel`; the label text comes from a new `t()` key `unfinished.finishedLabel` in `en.js` and `de.js`, next to the existing unfinished label key)
 - Test: `client/test/autosave.test.js`
 
 **Interfaces:**
