@@ -2706,7 +2706,7 @@ function initRecovery() {
 
 function initPhotos() {
   $("take-photo").addEventListener("click", () => takePhoto());
-  $("menu-photo").addEventListener("click", () => {
+  $("menu-foot-photo").addEventListener("click", () => {
     closeDrawers();
     // Let the menu close before the next frame is captured.
     requestAnimationFrame(() => takePhoto());

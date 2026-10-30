@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - German translation and a language selector (start menu and Rider panel). The language follows the browser by default and the choice is remembered. Server content such as route names stays as the server sends it.
+- The in-game menu is a dialog centred over the dimmed ride: a page list (Overview, View, Vehicle, Race, Events, Training, Settings) next to the open page, full screen with the list first on a phone. Photo and Finish ride stay pinned at its foot (#19).
+- The menu's Overview shows the ride so far: power over the last 10 minutes, weighted power, load and best efforts, with a live power, speed and grade strip on top (#19).
+- A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
+
+### Changed
+- Finishing a ride is final: Finish ride asks first, then shows the summary with its chart; there is no "Keep riding" any more, and the ride can't be continued from the start menu afterwards (#19).
 
 ### Fixed
 - Name labels no longer float over houses and hills: a rider out of sight (the GPU checks each one) has no label, with a short delay so labels don't flicker at an edge. Labels point at their rider with a small tail and get smaller and fainter with distance (#15).
