@@ -2507,7 +2507,12 @@ function startAutosave() {
 /** Writes the ride to the browser (phone paddle rides have no file to keep). */
 function saveRide() {
   if (!app.ride || !app.recorder?.samples.length || app.rideSaved || !canExportRide(app.trainer)) return;
-  app.autosave.save({
+  app.autosave.save(rideSnapshot());
+}
+
+/** The ride as the autosave keeps it. */
+function rideSnapshot() {
+  return {
     version: 1,
     savedAt: Date.now(),
     serverUrl: defaultServerUrl(),
@@ -2523,7 +2528,7 @@ function saveRide() {
     graceS: app.connection?.graceS ?? 0,
     resumePoint: app.studio ? null : app.lastOnRoute,
     recorder: app.recorder.toJSON(),
-  });
+  };
 }
 
 async function refreshUnfinished() {
