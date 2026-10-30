@@ -1528,6 +1528,7 @@ function endRide() {
   const ride = app.ride;
   if (!ride) return;
   app.ride = null;
+  closeDrawers();
   learnLevel();
   saveWorkoutRecord();
   app.workoutUnsubscribe?.();
@@ -2810,12 +2811,17 @@ function initHud() {
 
 function toggleDrawer(id) {
   const drawer = $(id);
-  const open = drawer.hidden;
+  if (drawer.hidden) openDrawer(id);
+  else closeDrawers();
+}
+
+/** Opens one drawer (closing the other) and registers it so Esc closes it. */
+function openDrawer(id, { backdrop = true } = {}) {
   closeDrawers();
-  drawer.hidden = !open;
-  $("drawer-backdrop").hidden = !open;
-  if (open) removeDrawerPanel = panels.push({ close: closeDrawers });
-  if (id === "menu") $("open-menu").setAttribute("aria-expanded", String(open));
+  $(id).hidden = false;
+  $("drawer-backdrop").hidden = !backdrop;
+  removeDrawerPanel = panels.push({ close: closeDrawers });
+  if (id === "menu") $("open-menu").setAttribute("aria-expanded", "true");
 }
 
 /** Esc: closes the newest open panel. */
@@ -2899,8 +2905,7 @@ function eventFinished(event) {
   const lines = eventResultRows(event.results, event.event_kind, app.riderId);
   app.eventResults = { title: event.event_kind === "race" ? t("events.raceResults") : t("events.groupRideResults"), lines };
   showEventResults();
-  $("menu").hidden = false;
-  $("open-menu").setAttribute("aria-expanded", "true");
+  openDrawer("menu", { backdrop: false });
   const startedAt = app.eventStartedAt;
   app.eventStartedAt = null;
   if (event.event_kind !== "race" || mine?.place === undefined || mine?.place === null || !startedAt) return;
