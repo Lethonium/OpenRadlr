@@ -2282,7 +2282,9 @@ body.riding {
 }
 
 .drawer .view-switch,
-.drawer .scene-controls {
+.drawer .scene-controls,
+.menu-dialog .view-switch,
+.menu-dialog .scene-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -2290,13 +2292,173 @@ body.riding {
   align-items: center;
 }
 
-.drawer .scene-controls select {
+.drawer .scene-controls select,
+.menu-dialog .scene-controls select {
   padding: 4px 8px;
   font-size: 13px;
 }
 
-.drawer label {
+.drawer label,
+.menu-dialog label {
   margin-bottom: 4px;
+}
+
+/* --- in-game menu dialog (rough; Task 9 styles it) ------------------ */
+
+.menu-dialog[hidden] {
+  display: none;
+}
+
+.menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(8, 10, 13, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.menu-card {
+  width: min(860px, 100%);
+  height: min(560px, 100%);
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "head head" "nav page" "foot foot";
+  background: var(--glass-strong);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.menu-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.menu-head h2 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+
+.menu-head .icon-button {
+  font-size: 24px;
+  background: transparent;
+}
+
+.menu-nav {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.menu-nav-item {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: 8px 12px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text);
+}
+
+.menu-nav-item[aria-current="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border);
+}
+
+.menu-nav-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menu-pages {
+  grid-area: page;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px;
+}
+
+.menu-page {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.menu-page[hidden] {
+  display: none;
+}
+
+.menu-foot {
+  grid-area: foot;
+  display: grid;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.menu-foot-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.menu-foot-actions button {
+  width: auto;
+}
+
+/* Wide screens show list and page side by side: no back arrow. */
+@media (min-width: 1000px) and (min-height: 560px) {
+  .menu-back {
+    display: none;
+  }
+}
+
+/* Narrow or short: the card fills the screen, the list first, a page with a back arrow. */
+@media (max-width: 999px), (max-height: 559px) {
+  .menu-backdrop {
+    padding: 0;
+  }
+
+  .menu-card {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    grid-template-columns: 1fr;
+    grid-template-areas: "head" "nav" "foot";
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .menu-dialog[data-screen="page"] .menu-card {
+    grid-template-areas: "head" "page" "foot";
+  }
+
+  .menu-dialog[data-screen="list"] .menu-pages,
+  .menu-dialog[data-screen="page"] .menu-nav,
+  .menu-dialog[data-screen="list"] .menu-back {
+    display: none;
+  }
+
+  .menu-nav {
+    border-right: 0;
+  }
 }
 
 .panel {
@@ -3563,6 +3725,9 @@ body {
   .drawer button,
   .drawer select,
   .drawer input:not([type="range"]):not([type="checkbox"]),
+  .menu-dialog button,
+  .menu-dialog select,
+  .menu-dialog input:not([type="range"]):not([type="checkbox"]),
   .modal button:not(.photo-remove) {
     min-height: 44px;
   }

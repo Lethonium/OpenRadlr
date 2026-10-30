@@ -10,7 +10,9 @@ import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { ZwiftController } from "./ble/zwiftController.js";
 import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
-import { activateFocused, moveFocus } from "./input/focusNav.js";
+import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
+import { createMenuDialog } from "./view/menuDialog.js";
+import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
 import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
@@ -87,7 +89,7 @@ import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, STUDIO_CAMERAS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { PaddleView } from "./view/paddleView.js";
-import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, normaliseCode, vehicleErrorLine } from "./ride/vehicle.js";
+import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, kindName, normaliseCode, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
@@ -130,7 +132,10 @@ const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
 let removeDrawerPanel = null;
-let removeConfirmPanel = null;
+/** The Overview page arrives with its live stats; until then the menu opens on View. */
+const OVERVIEW_READY = false;
+/** Below this the menu fills the screen and shows its page list first. */
+const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
   profile: profiles.load(),
@@ -174,6 +179,8 @@ const app = {
   seatEnergy: null,
   vehicleId: null,
   vehicleKind: null,
+  /** The in-game menu dialog; created per ride (the ride screen is fresh each ride). */
+  menuDialog: null,
   vehicleCode: null,
   boardingCode: null,
   pendingBoardCode: null,
@@ -841,6 +848,7 @@ function renderEvents(rows = menuEventRows()) {
   if (!$("events").hidden) renderEventList($("event-list"), rows, joinEventFromMenu);
   $("events-panel").hidden = rows.length === 0 || !riding;
   if (!$("events-panel").hidden) renderEventList($("ride-event-list"), rows, joinEventFromRide, leaveEventFromRide);
+  app.menuDialog?.refreshPages(menuPages(rows));
 }
 
 /** True while a scheduled event holds my route (lobby or running). */
@@ -1535,6 +1543,8 @@ function endRide() {
   if (!ride) return;
   app.ride = null;
   closeDrawers();
+  app.menuDialog?.dispose();
+  app.menuDialog = null;
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
   learnLevel();
@@ -1817,7 +1827,7 @@ function startRoad({ simulated, setSimPower }) {
     },
     cycleLayout: () => setLayoutChoice(nextLayoutChoice(app.layoutChoice)),
     toggleRace: () => app.finished || toggleRace(),
-    toggleMenu: () => app.finished || toggleDrawer("menu"),
+    toggleMenu: () => app.finished || toggleMenu(),
     takePhoto: () => takePhoto(),
     // A finished ride's recorder stays as it was.
     togglePause: () => app.finished || performPause(app.pause?.toggle(now()) ?? [], now()),
@@ -2092,7 +2102,7 @@ function startStudio({ simulated, setSimPower }) {
     shiftUp: () => shift(+1),
     shiftDown: () => shift(-1),
     cycleCamera: () => cycleCamera(),
-    toggleMenu: () => app.finished || toggleDrawer("menu"),
+    toggleMenu: () => app.finished || toggleMenu(),
     takePhoto: () => takePhoto(),
     closePanels: () => closeTopPanel(),
   };
@@ -2128,6 +2138,7 @@ function updateStudioPanels() {
   $("studio-on-target").textContent = me?.on_target_pct === null || me?.on_target_pct === undefined ? "–" : `${Math.round(me.on_target_pct)} %`;
   $("studio-kj").textContent = `${Math.round(me?.class_kj ?? 0)} kJ`;
   renderOnline();
+  if (app.menuDialog?.isOpen) renderMenuStatus();
   // Files and Strava get the class name once it runs.
   if (state.class.elapsed_s >= 0) app.route.name = `Spin Studio · ${state.class.name}`; // i18n-ok (names files and Strava)
 }
@@ -2211,30 +2222,15 @@ function leaveRide() {
   return true;
 }
 
-/** Asks before finishing; a panel on the stack, so Esc closes the card before the drawer. */
+/** Asks before finishing: the dialog's confirm step, so Esc cancels the card before the menu. */
 function showFinishConfirm() {
   if (app.finished) return;
-  $("finish-confirm").hidden = false;
-  $("finish-ride").hidden = true;
-  removeConfirmPanel?.();
-  removeConfirmPanel = panels.push({ close: () => hideFinishConfirm({ refocus: true }) });
-  $("finish-confirm-cancel").focus();
-}
-
-function hideFinishConfirm({ refocus = false } = {}) {
-  removeConfirmPanel?.();
-  removeConfirmPanel = null;
-  const card = $("finish-confirm");
-  if (card.hidden) return;
-  const hadFocus = card.contains(document.activeElement);
-  card.hidden = true;
-  $("finish-ride").hidden = false;
-  if (refocus && hadFocus) $("finish-ride").focus();
+  app.menuDialog?.showConfirm();
 }
 
 function initFinish() {
   $("finish-ride").addEventListener("click", () => showFinishConfirm());
-  $("finish-confirm-cancel").addEventListener("click", () => hideFinishConfirm({ refocus: true }));
+  $("finish-confirm-cancel").addEventListener("click", () => app.menuDialog?.cancelConfirm());
   $("finish-confirm-ok").addEventListener("click", () => finishRide());
   $("back-to-start").addEventListener("click", () => leaveRide());
   $("download-tcx").addEventListener("click", () => {
@@ -2285,7 +2281,7 @@ function finishStats() {
  */
 function finishRide() {
   if (!app.ride || app.finished) return;
-  hideFinishConfirm();
+  app.menuDialog?.cancelConfirm();
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
@@ -2696,7 +2692,7 @@ function initPhotos() {
   $("take-photo").addEventListener("click", () => takePhoto());
   $("menu-photo").addEventListener("click", () => {
     closeDrawers();
-    // Let the drawer close before the next frame is captured.
+    // Let the menu close before the next frame is captured.
     requestAnimationFrame(() => takePhoto());
   });
   $("download-photos").addEventListener("click", () => {
@@ -2879,7 +2875,8 @@ function renderGear() {
 function initHudCommon() {
   app.hud = new MetricBinder($("hud"));
   renderUnits();
-  $("open-menu").addEventListener("click", () => toggleDrawer("menu"));
+  initMenu();
+  $("open-menu").addEventListener("click", () => toggleMenu());
   $("open-social").addEventListener("click", () => toggleDrawer("social"));
   for (const button of document.querySelectorAll(".drawer [data-close]")) {
     button.addEventListener("click", () => closeDrawers());
@@ -2898,19 +2895,96 @@ function initHud() {
   setLayoutChoice(readSetting(LAYOUT_KEY) ?? "auto", { remember: false });
 }
 
+/** The left drawer (riders and chat); the menu is a dialog, see toggleMenu. */
 function toggleDrawer(id) {
   const drawer = $(id);
   if (drawer.hidden) openDrawer(id);
   else closeDrawers();
 }
 
-/** Opens one drawer (closing the other) and registers it so Esc closes it. */
+/** Opens the left drawer (closing the menu) and registers it so Esc closes it. */
 function openDrawer(id, { backdrop = true } = {}) {
   closeDrawers();
   $(id).hidden = false;
   $("drawer-backdrop").hidden = !backdrop;
   removeDrawerPanel = panels.push({ close: closeDrawers });
-  if (id === "menu") $("open-menu").setAttribute("aria-expanded", "true");
+}
+
+// ----------------------------------------------------------------- menu ---
+
+/** The in-game menu dialog of this ride; the ride screen (and so its markup) is fresh each ride. */
+function initMenu() {
+  app.menuDialog = createMenuDialog({
+    root: $("menu"),
+    stack: panels,
+    matchNarrow: matchMedia(MENU_NARROW_QUERY),
+    pages: menuPages(),
+    focusables: () => focusableIn($("menu")),
+    onPage: (page) => {
+      for (const item of $("menu").querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
+    },
+    onChange: ({ open, confirming }) => {
+      $("open-menu").setAttribute("aria-expanded", String(open));
+      const card = $("finish-confirm");
+      const hadFocus = card.contains(document.activeElement);
+      card.hidden = !confirming;
+      $("finish-ride").hidden = confirming;
+      if (confirming) $("finish-confirm-cancel").focus();
+      else if (hadFocus) $("finish-ride").focus();
+    },
+  });
+}
+
+/** The menu's pages: the studio's View page holds only road controls, so it goes too. */
+function menuPages(rows = menuEventRows()) {
+  return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0 })
+    .filter((id) => (id !== "overview" || OVERVIEW_READY) && !(app.studio && id === "view"));
+}
+
+/** What the page list's second lines show, from the ride's current state. */
+function menuStatusContext() {
+  const training = app.training;
+  const trainingLabel = app.studio
+    ? (app.studio.erg ? "ERG" : t("drawer.roadSim")) // i18n-ok: a mode name, as on the toggle
+    : training?.workout ? workoutName(training.workout)
+      : training?.mode === "erg" ? t("menuPage.status.erg", { watts: training.ergTarget })
+        : t("drawer.roadSim");
+  return {
+    viewMode: app.viewMode,
+    cameraLabel: app.view3d ? cameraName(app.view3d.camera.mode) : "",
+    vehicleLabel: app.vehicleId ? kindName(app.vehicleKind) : null,
+    racePhase: app.state?.race?.phase ?? null,
+    trainingLabel,
+    eventCount: menuEventRows().length,
+    units: app.profile.units,
+  };
+}
+
+function renderMenuStatus() {
+  const ctx = menuStatusContext();
+  for (const item of $("menu").querySelectorAll("[data-menu-nav]")) {
+    const id = item.dataset.menuNav;
+    item.querySelector(".menu-nav-title").textContent = pageTitle(id);
+    item.querySelector(".menu-nav-status").textContent = pageStatus(id, ctx);
+  }
+}
+
+/** Opens the menu (on `pageId` if given), closing the left drawer. */
+function openMenu(pageId) {
+  const dialog = app.menuDialog;
+  if (!dialog) return;
+  if (!dialog.isOpen) closeDrawers();
+  renderMenuStatus();
+  dialog.open(pageId);
+}
+
+function closeMenu() {
+  app.menuDialog?.close();
+}
+
+function toggleMenu() {
+  if (app.menuDialog?.isOpen) closeMenu();
+  else openMenu();
 }
 
 /** Esc: closes the newest open panel. */
@@ -2919,14 +2993,13 @@ function closeTopPanel() {
   panels.closeTop();
 }
 
+/** Closes the left drawer and the menu. */
 function closeDrawers() {
-  hideFinishConfirm();
+  closeMenu();
   removeDrawerPanel?.();
   removeDrawerPanel = null;
-  $("menu").hidden = true;
   $("social").hidden = true;
   $("drawer-backdrop").hidden = true;
-  $("open-menu").setAttribute("aria-expanded", "false");
 }
 
 function setLayoutChoice(choice, { remember = true } = {}) {
@@ -2995,7 +3068,7 @@ function eventFinished(event) {
   const lines = eventResultRows(event.results, event.event_kind, app.riderId);
   app.eventResults = { title: event.event_kind === "race" ? t("events.raceResults") : t("events.groupRideResults"), lines };
   showEventResults();
-  openDrawer("menu", { backdrop: false });
+  openMenu("race");
   const startedAt = app.eventStartedAt;
   app.eventStartedAt = null;
   if (event.event_kind !== "race" || mine?.place === undefined || mine?.place === null || !startedAt) return;
@@ -3172,9 +3245,9 @@ function initFtpTest({ simulated }) {
     renderFtpTest();
     renderTraining({ simulated });
   });
-  // The result sits in the training panel; point to it when that is closed
+  // The result sits on the menu's Training page; point to it when that is not showing
   session.on("result", () => {
-    if ($("menu").hidden) notify(t("training.rampDone"));
+    if (app.menuDialog?.page !== "training") notify(t("training.rampDone"));
   });
   renderFtpTest();
 }
@@ -3405,9 +3478,14 @@ function cycleCamera() {
   renderCameraButton();
 }
 
+/** A road camera mode's name; the workout's gym camera is not one of the ride's modes. */
+function cameraName(mode) {
+  return { chase: t("camera.chase"), close: t("camera.close"), drone: t("camera.drone"), side: t("camera.side") }[mode] ?? t("camera.gym");
+}
+
 function renderCameraButton() {
-  // The workout's gym camera is not one of the ride's modes and does not cycle.
-  $("camera-mode").textContent = t("camera.label", { mode: { chase: t("camera.chase"), close: t("camera.close"), drone: t("camera.drone"), side: t("camera.side") }[app.view3d.camera.mode] ?? t("camera.gym") });
+  // The gym camera does not cycle.
+  $("camera-mode").textContent = t("camera.label", { mode: cameraName(app.view3d.camera.mode) });
 }
 
 function setQuality(quality) {
@@ -3574,6 +3652,7 @@ function onMyRoute(rider) {
 function updatePanels() {
   const me = myRider(app.state.riders);
   if (!me) return;
+  if (app.menuDialog?.isOpen) renderMenuStatus();
   const routes = routesOf(app.info);
   const routeName = (id) => routes.find((route) => route.id === id)?.name ?? id;
   const elsewhere = (app.state.elsewhere ?? []).map((rider) => ({ rider, routeName: routeName(rider.route) }));

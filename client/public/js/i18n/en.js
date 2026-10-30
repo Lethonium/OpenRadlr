@@ -740,4 +740,7 @@ export default {
   "menuPage.status.events.other": "{n} happening",
   "menuPage.status.metric": "km · kg",
   "menuPage.status.imperial": "mi · lb",
+  "menuPage.status.erg": "ERG {watts} W",
+  "menuDialog.back": "Back to the menu pages",
+  "menuDialog.pages": "Menu pages",
 };
