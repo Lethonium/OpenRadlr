@@ -321,15 +321,17 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M8.5 6l1.5-2.5h4L15.5 6" /><circle cx="12" cy="12.5" r="3.5" /></svg>
               <span id="photo-count" class="photo-badge" hidden>0</span>
             </button>
-            <button type="button" class="icon-button glass" id="hud-camera" aria-label="Change camera (C)" title="Camera (C)" data-i18n-attr="title:ride.cameraC,aria-label:ride.changeCameraC">
+            <button type="button" class="text-button glass" id="hud-view" title="View: camera, layout, time of day" aria-haspopup="dialog" aria-controls="view-popover" aria-expanded="false" data-i18n-attr="title:ride.viewTitle">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+              <span data-i18n="ride.view">View</span>
             </button>
-            <button type="button" class="text-button glass route-only" id="hud-layout" title="Layout (L)" data-i18n="ride.autoCockpit" data-i18n-attr="title:ride.layoutL">Auto · Cockpit</button>
             <button type="button" class="text-button glass" id="open-menu" title="Menu (M)" aria-controls="menu" aria-expanded="false" data-i18n-attr="title:ride.menuM">
               <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
               <span data-i18n="ride.menu">Menu</span>
             </button>
           </div>
+
+          <div class="view-popover glass" id="view-popover" role="dialog" aria-label="View" data-i18n-attr="aria-label:drawer.view" hidden></div>
 
           <div class="hud-gear glass" id="hud-gear-tile" hidden>
             <button type="button" id="shift-down" class="gear-button" aria-label="Easier gear (Q)" data-i18n-attr="aria-label:ride.easierGearQ">−</button>
@@ -560,159 +562,197 @@
           <form id="chat-form" class="chat"><input id="chat-input" maxlength="200" placeholder="Say hello…" autocomplete="off" aria-label="Chat message" data-i18n-attr="aria-label:drawer.chatMessage,placeholder:drawer.sayHello" /><button type="submit" class="secondary" data-i18n="drawer.send">Send</button></form>
         </aside>
 
-        <!-- Right drawer: training, race, view and device settings -->
-        <aside id="menu" class="drawer drawer-right" aria-label="Menu" hidden data-i18n-attr="aria-label:ride.menu">
-          <div class="drawer-head"><h2 data-i18n="ride.menu">Menu</h2><button type="button" class="icon-button" data-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button></div>
-
-          <div class="panel route-only" id="training-panel">
-            <h2 data-i18n="drawer.training">Training</h2>
-            <div class="mode-switch" role="group" aria-label="Trainer mode" data-i18n-attr="aria-label:drawer.trainerMode">
-              <button type="button" id="mode-sim" class="toggle" aria-pressed="true" data-i18n="drawer.roadSim">Road (sim)</button>
-              <button type="button" id="mode-erg" class="toggle" aria-pressed="false">ERG</button>
-            </div>
-            <div id="erg-manual" class="erg-row" hidden>
-              <button type="button" id="erg-down" aria-label="Lower target" data-i18n-attr="aria-label:drawer.lowerTarget">−</button>
-              <output id="erg-target" class="erg-value">150 W</output>
-              <button type="button" id="erg-up" aria-label="Raise target" data-i18n-attr="aria-label:drawer.raiseTarget">+</button>
-            </div>
-            <div id="erg-intensity" class="erg-row" hidden>
-              <button type="button" id="intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
-              <output id="intensity-value" class="erg-value">100 %</output>
-              <button type="button" id="intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
-            </div>
-            <div id="ftp-test" class="ftp-test">
-              <h3 id="ftp-test-heading" data-i18n="drawer.ftpTest">FTP test</h3>
-              <p id="ftp-test-body" class="field-hint" aria-live="polite"></p>
-              <div id="ftp-test-fields" class="gear-settings" hidden>
-                <label><span data-i18n="drawer.startW">Start (W)</span><input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
-                <label><span data-i18n="drawer.stepPerMinuteW">Step per minute (W)</span><input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
+        <!-- In-game menu: a dialog over the dimmed ride; page list left, page right (a phone shows the list first) -->
+        <div id="menu" class="menu-dialog" role="dialog" aria-label="Menu" hidden data-i18n-attr="aria-label:ride.menu">
+          <div id="menu-backdrop" class="menu-backdrop" data-menu-backdrop>
+            <div class="menu-card">
+              <div class="menu-head">
+                <button type="button" class="icon-button menu-back" data-menu-back aria-label="Back to the menu pages" data-i18n-attr="aria-label:menuDialog.back">‹</button>
+                <h2 data-i18n="ride.menu">Menu</h2>
+                <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
               </div>
-              <div class="workout-actions">
-                <button type="button" id="ftp-test-primary"></button>
-                <button type="button" id="ftp-test-secondary" class="secondary"></button>
+              <div id="menu-strip" class="menu-strip" role="group" aria-label="Live power, speed and grade" data-i18n-attr="aria-label:overview.strip"></div>
+              <nav class="menu-nav" aria-label="Menu pages" data-i18n-attr="aria-label:menuDialog.pages">
+                <button type="button" id="menu-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span id="menu-nav-overview-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-view" class="menu-nav-item" data-menu-nav="view"><span id="menu-nav-view-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-vehicle" class="menu-nav-item" data-menu-nav="vehicle"><span id="menu-nav-vehicle-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span id="menu-nav-race-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-events" class="menu-nav-item" data-menu-nav="events"><span id="menu-nav-events-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-training" class="menu-nav-item" data-menu-nav="training"><span id="menu-nav-training-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span id="menu-nav-settings-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+              </nav>
+              <div class="menu-pages">
+                <div class="menu-page" data-menu-page="overview" role="region" aria-labelledby="menu-nav-overview-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="menuPage.overview">Overview</h2>
+                    <h3 data-i18n="overview.chart">Power, last 10 minutes</h3>
+                    <canvas id="overview-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
+                    <div id="overview-figures" class="overview"></div>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view-title" hidden>
+                  <div class="panel route-only">
+                    <h2 data-i18n="drawer.view">View</h2>
+                    <label><span data-i18n="drawer.layout">Layout</span>
+                      <select id="layout-mode">
+                        <option value="auto" data-i18n="drawer.layoutAuto">Auto (follows your ride)</option>
+                        <option value="cockpit" data-i18n="drawer.layoutCockpit">Cockpit</option>
+                        <option value="broadcast" data-i18n="drawer.layoutBroadcast">Broadcast</option>
+                        <option value="training" data-i18n="drawer.layoutTraining">Training</option>
+                        <option value="race" data-i18n="drawer.layoutRace">Race</option>
+                      </select>
+                    </label>
+                    <div class="view-switch" role="group" aria-label="View" data-i18n-attr="aria-label:drawer.view">
+                      <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
+                      <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
+                      <span id="view-note" class="view-note"></span>
+                    </div>
+                    <div id="scene-controls" class="scene-controls">
+                      <button type="button" id="camera-mode" class="toggle" title="Camera (C)" data-i18n="drawer.cameraChase" data-i18n-attr="title:ride.cameraC">Camera: Chase</button>
+                      <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters" data-i18n="drawer.graphicsHigh" data-i18n-attr="title:drawer.lowerThisIfThe">Graphics: High</button>
+                      <select id="time-mode" aria-label="Time of day" title="Time of day (T)" data-i18n-attr="title:drawer.timeOfDayT,aria-label:drawer.timeOfDay">
+                        <option value="auto" data-i18n="drawer.timeAuto">Time: auto</option>
+                        <option value="day" data-i18n="drawer.timeDay">Day</option>
+                        <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
+                        <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="vehicle" role="region" aria-labelledby="menu-nav-vehicle-title" hidden>
+                  <div class="panel route-only" id="vehicle-panel">
+                    <h2 data-i18n="drawer.tandemAndBeerBike">Tandem and beer bike</h2>
+                    <div id="vehicle-buttons" class="vehicle-buttons">
+                      <button type="button" id="vehicle-create-open" class="secondary" data-i18n="drawer.createAVehicle">Create a vehicle</button>
+                      <button type="button" id="vehicle-board-open" class="secondary" data-i18n="menu.boardCode">Board with code</button>
+                    </div>
+                    <div id="vehicle-view" class="vehicle-view" hidden></div>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="race" role="region" aria-labelledby="menu-nav-race-title" hidden>
+                  <div class="panel route-only">
+                    <h2 data-i18n="ride.race">Race</h2>
+                    <p class="field-hint" data-i18n="drawer.raceHint">Start a race and others can join during the countdown (J). Riders who don't join keep riding as before.</p>
+                    <p id="race-blocked" class="field-hint" hidden></p>
+                    <div id="race-controls" class="race-controls">
+                      <label><span data-i18n="drawer.laps">Laps</span>
+                        <select id="race-laps">
+                          <option>1</option><option selected>2</option><option>3</option><option>5</option>
+                        </select>
+                      </label>
+                      <button type="button" id="start-race" data-i18n="drawer.startARace">Start a race</button>
+                      <button type="button" id="leave-race" class="secondary" hidden data-i18n="drawer.leaveRace">Leave race</button>
+                    </div>
+                    <h3 id="results-title" hidden></h3>
+                    <ol id="race-results" class="results"></ol>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="events" role="region" aria-labelledby="menu-nav-events-title" hidden>
+                  <div class="panel route-only" id="events-panel" hidden>
+                    <h2 data-i18n="events.title">Events</h2>
+                    <ul id="ride-event-list" class="event-list"></ul>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="training" role="region" aria-labelledby="menu-nav-training-title" hidden>
+                  <div class="panel route-only" id="training-panel">
+                    <h2 data-i18n="drawer.training">Training</h2>
+                    <div class="mode-switch" role="group" aria-label="Trainer mode" data-i18n-attr="aria-label:drawer.trainerMode">
+                      <button type="button" id="mode-sim" class="toggle" aria-pressed="true" data-i18n="drawer.roadSim">Road (sim)</button>
+                      <button type="button" id="mode-erg" class="toggle" aria-pressed="false">ERG</button>
+                    </div>
+                    <div id="erg-manual" class="erg-row" hidden>
+                      <button type="button" id="erg-down" aria-label="Lower target" data-i18n-attr="aria-label:drawer.lowerTarget">−</button>
+                      <output id="erg-target" class="erg-value">150 W</output>
+                      <button type="button" id="erg-up" aria-label="Raise target" data-i18n-attr="aria-label:drawer.raiseTarget">+</button>
+                    </div>
+                    <div id="erg-intensity" class="erg-row" hidden>
+                      <button type="button" id="intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
+                      <output id="intensity-value" class="erg-value">100 %</output>
+                      <button type="button" id="intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
+                    </div>
+                    <div id="ftp-test" class="ftp-test">
+                      <h3 id="ftp-test-heading" data-i18n="drawer.ftpTest">FTP test</h3>
+                      <p id="ftp-test-body" class="field-hint" aria-live="polite"></p>
+                      <div id="ftp-test-fields" class="gear-settings" hidden>
+                        <label><span data-i18n="drawer.startW">Start (W)</span><input id="ftp-test-start" type="number" inputmode="numeric" min="50" max="400" step="5" /></label>
+                        <label><span data-i18n="drawer.stepPerMinuteW">Step per minute (W)</span><input id="ftp-test-step" type="number" inputmode="numeric" min="5" max="40" step="5" /></label>
+                      </div>
+                      <div class="workout-actions">
+                        <button type="button" id="ftp-test-primary"></button>
+                        <button type="button" id="ftp-test-secondary" class="secondary"></button>
+                      </div>
+                    </div>
+                    <div id="workout-picker" class="workout-picker">
+                      <select id="workout-select" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></select>
+                      <input id="workout-file" type="file" accept=".zwo,.xml" hidden />
+                      <div class="workout-actions">
+                        <button type="button" id="workout-start" data-i18n="drawer.startWorkout">Start workout</button>
+                        <button type="button" id="workout-import" class="secondary" data-i18n="drawer.importZwo">Import .zwo</button>
+                      </div>
+                      <p id="workout-description" class="field-hint"></p>
+                    </div>
+                    <div id="workout-running" class="workout-actions" hidden>
+                      <button type="button" id="workout-skip" class="secondary" data-i18n="ride.skipBlock">Skip block</button>
+                      <button type="button" id="workout-stop" class="secondary" data-i18n="drawer.stopWorkout">Stop workout</button>
+                    </div>
+                    <p id="training-note" class="field-hint"></p>
+                  </div>
+                  <div class="panel" id="sim-panel" hidden>
+                    <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
+                    <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
+                  </div>
+                  <div class="panel">
+                    <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
+                    <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="rider.units">Units</h2>
+                    <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
+                      <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+                      <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
+                    </div>
+                  </div>
+                  <div class="panel">
+                    <h2><span data-i18n="drawer.trainer">Trainer</span> <span id="trainer-packets" class="muted-count"></span></h2>
+                    <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
+                  </div>
+                  <div class="panel">
+                    <h2 data-i18n="drawer.keys">Keys</h2>
+                    <p class="hint">
+                      <span data-i18n="drawer.keysHint">←/→ or A/D change lane · J join/leave a race · L layout · M menu · V 3D/2D · C camera · T time of day · P photo</span>
+                      <span id="shift-hint" hidden> · <span data-i18n="drawer.shiftHint">E/Q or +/− shift</span></span>
+                      <span id="power-hint" hidden> · <span data-i18n="drawer.powerHint">↑/↓ simulated power</span></span>
+                      <span id="erg-hint" hidden> · <span data-i18n="drawer.ergHint">↑/↓ ERG target</span></span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="menu-foot">
+                <div id="finish-confirm" class="finish-confirm" role="alertdialog" aria-labelledby="finish-confirm-text" hidden>
+                  <p id="finish-confirm-text" data-i18n="drawer.finishConfirm">Finish this ride? You can't continue it afterwards.</p>
+                  <p class="field-hint" data-i18n="drawer.showsYourSummaryAnd">Shows your summary and photos; download the ride or upload it to Strava.</p>
+                  <div class="workout-actions">
+                    <button type="button" id="finish-confirm-cancel" class="secondary" data-i18n="drawer.finishCancel">Cancel</button>
+                    <button type="button" id="finish-confirm-ok" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+                  </div>
+                </div>
+                <div class="menu-foot-actions">
+                  <button type="button" id="menu-foot-photo" class="secondary" data-i18n="ride.takeAPhotoP">Take a photo (P)</button>
+                  <button type="button" id="finish-ride" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
+                </div>
               </div>
             </div>
-            <div id="workout-picker" class="workout-picker">
-              <select id="workout-select" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></select>
-              <input id="workout-file" type="file" accept=".zwo,.xml" hidden />
-              <div class="workout-actions">
-                <button type="button" id="workout-start" data-i18n="drawer.startWorkout">Start workout</button>
-                <button type="button" id="workout-import" class="secondary" data-i18n="drawer.importZwo">Import .zwo</button>
-              </div>
-              <p id="workout-description" class="field-hint"></p>
-            </div>
-            <div id="workout-running" class="workout-actions" hidden>
-              <button type="button" id="workout-skip" class="secondary" data-i18n="ride.skipBlock">Skip block</button>
-              <button type="button" id="workout-stop" class="secondary" data-i18n="drawer.stopWorkout">Stop workout</button>
-            </div>
-            <p id="training-note" class="field-hint"></p>
           </div>
-
-          <div class="panel">
-            <h2 data-i18n="menu.join">Ride</h2>
-            <button type="button" id="finish-ride" class="primary" data-i18n="drawer.finishRide">Finish ride</button>
-            <p class="field-hint" data-i18n="drawer.showsYourSummaryAnd">Shows your summary and photos; download the ride or upload it to Strava.</p>
-            <button type="button" id="menu-photo" class="secondary" data-i18n="ride.takeAPhotoP">Take a photo (P)</button>
-          </div>
-
-          <div class="panel route-only" id="vehicle-panel">
-            <h2 data-i18n="drawer.tandemAndBeerBike">Tandem and beer bike</h2>
-            <div id="vehicle-buttons" class="vehicle-buttons">
-              <button type="button" id="vehicle-create-open" class="secondary" data-i18n="drawer.createAVehicle">Create a vehicle</button>
-              <button type="button" id="vehicle-board-open" class="secondary" data-i18n="menu.boardCode">Board with code</button>
-            </div>
-            <div id="vehicle-view" class="vehicle-view" hidden></div>
-          </div>
-
-          <div class="panel route-only">
-            <h2 data-i18n="ride.race">Race</h2>
-            <p class="field-hint" data-i18n="drawer.raceHint">Start a race and others can join during the countdown (J). Riders who don't join keep riding as before.</p>
-            <p id="race-blocked" class="field-hint" hidden></p>
-            <div id="race-controls" class="race-controls">
-              <label><span data-i18n="drawer.laps">Laps</span>
-                <select id="race-laps">
-                  <option>1</option><option selected>2</option><option>3</option><option>5</option>
-                </select>
-              </label>
-              <button type="button" id="start-race" data-i18n="drawer.startARace">Start a race</button>
-              <button type="button" id="leave-race" class="secondary" hidden data-i18n="drawer.leaveRace">Leave race</button>
-            </div>
-            <h3 id="results-title" hidden></h3>
-            <ol id="race-results" class="results"></ol>
-          </div>
-
-          <div class="panel route-only" id="events-panel" hidden>
-            <h2 data-i18n="events.title">Events</h2>
-            <ul id="ride-event-list" class="event-list"></ul>
-          </div>
-
-          <div class="panel">
-            <h2 data-i18n="rider.units">Units</h2>
-            <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
-              <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
-              <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
-            </div>
-          </div>
-
-          <div class="panel route-only">
-            <h2 data-i18n="drawer.view">View</h2>
-            <label><span data-i18n="drawer.layout">Layout</span>
-              <select id="layout-mode">
-                <option value="auto" data-i18n="drawer.layoutAuto">Auto (follows your ride)</option>
-                <option value="cockpit" data-i18n="drawer.layoutCockpit">Cockpit</option>
-                <option value="broadcast" data-i18n="drawer.layoutBroadcast">Broadcast</option>
-                <option value="training" data-i18n="drawer.layoutTraining">Training</option>
-                <option value="race" data-i18n="drawer.layoutRace">Race</option>
-              </select>
-            </label>
-            <div class="view-switch" role="group" aria-label="View" data-i18n-attr="aria-label:drawer.view">
-              <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
-              <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
-              <span id="view-note" class="view-note"></span>
-            </div>
-            <div id="scene-controls" class="scene-controls">
-              <button type="button" id="camera-mode" class="toggle" title="Camera (C)" data-i18n="drawer.cameraChase" data-i18n-attr="title:ride.cameraC">Camera: Chase</button>
-              <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters" data-i18n="drawer.graphicsHigh" data-i18n-attr="title:drawer.lowerThisIfThe">Graphics: High</button>
-              <select id="time-mode" aria-label="Time of day" title="Time of day (T)" data-i18n-attr="title:drawer.timeOfDayT,aria-label:drawer.timeOfDay">
-                <option value="auto" data-i18n="drawer.timeAuto">Time: auto</option>
-                <option value="day" data-i18n="drawer.timeDay">Day</option>
-                <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
-                <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="panel" id="sim-panel" hidden>
-            <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
-            <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
-          </div>
-
-          <div class="panel">
-            <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
-            <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
-          </div>
-
-          <div class="panel">
-            <h2><span data-i18n="drawer.trainer">Trainer</span> <span id="trainer-packets" class="muted-count"></span></h2>
-            <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
-          </div>
-
-          <div class="panel">
-            <h2 data-i18n="drawer.keys">Keys</h2>
-            <p class="hint">
-              <span data-i18n="drawer.keysHint">←/→ or A/D change lane · J join/leave a race · L layout · M menu · V 3D/2D · C camera · T time of day · P photo</span>
-              <span id="shift-hint" hidden> · <span data-i18n="drawer.shiftHint">E/Q or +/− shift</span></span>
-              <span id="power-hint" hidden> · <span data-i18n="drawer.powerHint">↑/↓ simulated power</span></span>
-              <span id="erg-hint" hidden> · <span data-i18n="drawer.ergHint">↑/↓ ERG target</span></span>
-            </p>
-          </div>
-        </aside>
+        </div>
 
         <div id="finish" class="modal" role="dialog" aria-modal="true" aria-labelledby="finish-title" hidden>
           <div class="modal-card">
-            <h2 id="finish-title" data-i18n="ride.rideComplete">Ride complete</h2>
+            <h2 id="finish-title" tabindex="-1" data-i18n="ride.rideComplete">Ride complete</h2>
             <p id="finish-route" class="muted"></p>
             <dl id="finish-summary" class="summary"></dl>
+            <canvas id="finish-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
             <table id="finish-splits" class="splits" hidden></table>
             <section id="ftp-prompt" class="ftp-prompt" aria-live="polite" hidden>
               <p id="ftp-prompt-title" class="ftp-prompt-title"></p>
@@ -741,7 +781,6 @@
             </section>
 
             <div class="modal-actions modal-nav">
-              <button type="button" id="ride-on" class="secondary" data-i18n="ride.keepRiding">Keep riding</button>
               <button type="button" id="back-to-start" class="secondary" data-i18n="ride.backToMenu">Back to menu</button>
             </div>
           </div>

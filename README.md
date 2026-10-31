@@ -50,7 +50,7 @@ trainer (or pick *Simulated trainer*) and join. The first `make up` copies
 | `E` / `Q` or `+` / `−` | shift up / down (virtual shifting) |
 | `J` | join a race during its countdown / leave it |
 | `L` | cycle the HUD layout: auto, cockpit, broadcast, training, race |
-| `M` / `Esc` | open the menu (training, race, view, devices) / close panels |
+| `M` / `Esc` | open the menu (overview, view, race, training, settings) / close panels |
 | `V` | switch between 3D and 2D view |
 | `C` / `T` | cycle camera (chase, close, drone, TV side) / time of day |
 | `P` | take a photo (find them under *Menu → Finish ride*) |

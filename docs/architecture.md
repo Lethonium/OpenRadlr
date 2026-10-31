@@ -160,8 +160,13 @@ groups split at 15 m gaps, time gaps from my speed), `nextMarker` and the
 gauge maths. Each layout has its own copy of a metric; elements are marked
 `data-m="power"` and `MetricBinder` writes all copies, skipping unchanged
 values. Only the canvases of the visible layout are drawn each frame.
-Controls that aren't needed while riding live in two drawers: the menu
-(training, race, view, difficulty, diagnostics, keys) and riders/chat.
+Controls that aren't needed while riding live off the HUD. The menu (M) is a
+dialog over the dimmed ride: a page list (Overview with live ride stats, View,
+Vehicle, Race, Events, Training, Settings) next to the open page, full screen
+with the list first on a phone; `view/menuPages.js` models the pages and
+`view/menuDialog.js` handles opening, focus and the Finish-ride confirm step.
+The top bar's View popover holds the quick view switches. Riders and chat stay
+in the left drawer.
 
 ### Start menu, ride export and app install
 

@@ -91,3 +91,23 @@ test("label reads well", () => {
   );
   assert.ok(unfinishedLabel(snapshot({ savedAt: NOW - 3 * 3600_000 }), { now: NOW, formatDistance }).endsWith("· 3 h ago"));
 });
+
+test("a finished snapshot is never continuable even when recent and from this server", () => {
+  const options = { now: NOW, serverUrl: "wss://ride.example/ws" };
+  assert.equal(continueAllowed(snapshot({ finished: true }), options), false);
+});
+
+test("the label of a finished ride says Finished ride", () => {
+  const formatDistance = (m) => `${(m / 1000).toFixed(1)} km`;
+  assert.equal(
+    unfinishedLabel(snapshot({ finished: true, savedAt: NOW - 41 * 60_000 }), { now: NOW, formatDistance }),
+    "Finished ride · Rolling Hills · 23.4 km · 41 min ago",
+  );
+});
+
+test("an unfinished snapshot behaves as before", () => {
+  const options = { now: NOW, serverUrl: "wss://ride.example/ws" };
+  const formatDistance = (m) => `${(m / 1000).toFixed(1)} km`;
+  assert.equal(continueAllowed(snapshot({ finished: false }), options), true);
+  assert.ok(unfinishedLabel(snapshot({ finished: false }), { now: NOW, formatDistance }).startsWith("Unfinished ride · "));
+});
