@@ -329,11 +329,6 @@ export class View3D {
     this.camera.setMode(mode);
   }
 
-  /** Switches to the next camera and returns its mode name. */
-  cycleCamera() {
-    return this.camera.cycle();
-  }
-
   /** Model matrices for one rider: body, cranks, two pedalling legs (thigh, shin, foot), two wheels. */
   /** A rider on a route: mine, or another route of the map. */
   #onRoute(rider) {

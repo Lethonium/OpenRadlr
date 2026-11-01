@@ -193,12 +193,6 @@ export class StudioView3D {
     if (quality === "high" || quality === "low") this.quality = quality;
   }
 
-  /** Switches to the next camera and returns its mode name. */
-  cycleCamera() {
-    this.cameraMode = STUDIO_CAMERAS[(STUDIO_CAMERAS.indexOf(this.cameraMode) + 1) % STUDIO_CAMERAS.length];
-    return this.cameraMode;
-  }
-
   /** Upper-body parts of a rider in the riding pose, hung off `model` (the bike frame). */
   #torso(model, look) {
     return ridingBodyParts(look).map(({ mesh, model: local }) => ({ mesh: this.bodyParts[look.variant].get(mesh), model: multiply(model, local) }));

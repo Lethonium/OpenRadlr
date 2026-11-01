@@ -100,14 +100,14 @@ export class RideAutosave {
   }
 }
 
-/** Whether the saved ride can still be continued: recent, and from this server. */
+/** Whether the saved ride can still be continued: not finished, recent, and from this server. */
 export function continueAllowed(snapshot, { now, serverUrl }) {
-  return now - snapshot.savedAt < AUTOSAVE_MAX_AGE_MS && snapshot.serverUrl === serverUrl;
+  return !snapshot.finished && now - snapshot.savedAt < AUTOSAVE_MAX_AGE_MS && snapshot.serverUrl === serverUrl;
 }
 
-/** "Unfinished ride · Rolling Hills · 23.4 km · 41 min ago" */
+/** "Unfinished ride · Rolling Hills · 23.4 km · 41 min ago" ("Finished ride · ..." once the ride is over) */
 export function unfinishedLabel(snapshot, { now, formatDistance }) {
   const minutes = Math.max(0, Math.round((now - snapshot.savedAt) / 60000));
   const age = minutes < 60 ? t("unfinished.ageMin", { n: minutes }) : t("unfinished.ageHour", { n: Math.round(minutes / 60) });
-  return t("unfinished.label", { route: snapshot.routeName, distance: formatDistance(snapshot.distance), age });
+  return t(snapshot.finished ? "unfinished.finishedLabel" : "unfinished.label", { route: snapshot.routeName, distance: formatDistance(snapshot.distance), age });
 }
