@@ -163,9 +163,9 @@ export function buildWinterWoodpile() {
 }
 
 /**
- * A village lantern: a tapered wooden post with an iron bracket, a snow-capped
- * lantern roof and warm panes. The panes are the glowing `head`; everything
- * structural stays in `pole`.
+ * A village lantern: a tapered wooden post with an iron bracket and a lantern
+ * that reads as one solid object — dark body, four warm panes, a dark rim and
+ * a snow-covered roof. The panes are the glowing `head`.
  */
 export function buildWinterLamp() {
   const pole = new MeshBuilder();
@@ -173,19 +173,27 @@ export function buildWinterLamp() {
   const wood = [0.36, 0.25, 0.17];
   const iron = [0.18, 0.19, 0.21];
   const warm = [1.0, 0.86, 0.55];
+  const height = 3.1;
 
-  pole.cylinder([0, 0, 0], 0.1, 3.3, wood, 6, 0.075);
-  pole.cone([0, 3.29, 0], 0.12, 0.12, SNOW, 6); // snow on the post cap
-  pole.segment([0, 3.15, 0], [0, 3.35, -0.7], 0.07, 0.07, iron); // bracket over the road
-  pole.segment([0, 3.3, -0.72], [0, 3.12, -0.72], 0.035, 0.035, iron); // chain
-  pole.cone([0, 3.18, -0.72], 0.3, 0.22, SNOW, 4, Math.PI / 4); // snow-covered lantern roof
-  pole.box([0, 3.02, -0.72], [0.42, 0.04, 0.42], iron);
-  for (const x of [-0.18, 0.18]) {
-    for (const z of [-0.18, 0.18]) pole.box([x, 2.85, -0.72 + z], [0.04, 0.34, 0.04], iron);
-  }
-  pole.box([0, 2.68, -0.72], [0.42, 0.05, 0.42], iron);
-  pole.box([0, 2.63, -0.72], [0.3, 0.08, 0.3], SNOW);
-  head.box([0, 2.85, -0.72], [0.28, 0.3, 0.28], warm);
+  pole.cylinder([0, 0, 0], 0.1, height, wood, 6, 0.075);
+  pole.cone([0, height - 0.01, 0], 0.11, 0.12, SNOW, 6); // snow on the post cap
+  const z = -0.5;
+  pole.segment([0, height - 0.2, 0], [0, height, z], 0.07, 0.07, iron); // bracket over the kerb
+  pole.segment([0, height - 0.02, z], [0, height - 0.18, z], 0.035, 0.035, iron); // chain
+
+  // The lantern body: dark shell, rim, base and snow roof all touch.
+  const y = height - 0.55;
+  pole.box([0, y, z], [0.34, 0.46, 0.34], iron);
+  pole.box([0, y - 0.25, z], [0.4, 0.06, 0.4], iron);
+  pole.box([0, y + 0.25, z], [0.44, 0.06, 0.44], iron);
+  pole.cone([0, y + 0.29, z], 0.3, 0.2, SNOW, 4, Math.PI / 4);
+
+  // Glowing panes just proud of the dark shell, one on each side.
+  const p = 0.176;
+  head.box([0, y + 0.02, z - p], [0.26, 0.3, 0.03], warm);
+  head.box([0, y + 0.02, z + p], [0.26, 0.3, 0.03], warm);
+  head.box([-p, y + 0.02, z], [0.03, 0.3, 0.26], warm);
+  head.box([p, y + 0.02, z], [0.03, 0.3, 0.26], warm);
   return { pole: pole.build(), head: head.build() };
 }
 

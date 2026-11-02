@@ -12,6 +12,7 @@ export const TIMBER_DARK = Object.freeze([0.3, 0.21, 0.15]);
 export const STONE = Object.freeze([0.56, 0.58, 0.62]);
 export const STONE_DARK = Object.freeze([0.43, 0.45, 0.49]);
 export const PINE = Object.freeze([0.12, 0.23, 0.17]);
+export const ROCK = Object.freeze([0.55, 0.57, 0.6]);
 export const WINDOW = Object.freeze([0.24, 0.29, 0.35]);
 
 export const WINTER_PALETTE = Object.freeze({

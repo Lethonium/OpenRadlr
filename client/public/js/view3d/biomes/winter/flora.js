@@ -3,7 +3,7 @@
  * grass poking through. Same placements as every other season — only the
  * shapes change.
  */
-import { PINE, SNOW, SNOW_SHADE, STONE_DARK, TIMBER_DARK } from "./palette.js";
+import { PINE, ROCK, SNOW, SNOW_SHADE, TIMBER_DARK } from "./palette.js";
 
 const BARK = [0.55, 0.54, 0.5];
 const GRASS = Object.freeze([
@@ -32,25 +32,27 @@ function plantSpruce({ mesh, x, y, z, random }) {
   mesh.disc([x, y + 0.05, z], [height * 0.15, height * 0.15], SNOW_SHADE, 6, random() * Math.PI);
 }
 
-/** A birch without leaves: pale trunk, a few dark branches, snow on the crown. */
+/** A birch without leaves: pale trunk, two dark limbs and snow on the crown. */
 function plantBirch({ mesh, x, y, z, random }) {
   const height = 5 + random() * 4.5;
-  mesh.box([x, y + height * 0.32, z], [0.3, height * 0.64, 0.3], BARK);
-  for (let b = 0; b < 3; b += 1) {
+  const trunk = height * 0.7;
+  mesh.box([x, y + trunk / 2, z], [0.24, trunk, 0.24], BARK);
+  // Two limbs reach up into the snow crown, so the tree reads as one shape.
+  for (let b = 0; b < 2; b += 1) {
     const angle = random() * Math.PI * 2;
-    const start = [x, y + height * (0.42 + random() * 0.32), z];
-    const length = height * (0.18 + random() * 0.16);
-    const end = [start[0] + Math.cos(angle) * length, start[1] + length * 0.7, start[2] + Math.sin(angle) * length];
+    const start = [x, y + height * (0.42 + random() * 0.14), z];
+    const length = height * (0.2 + random() * 0.1);
+    const end = [start[0] + Math.cos(angle) * length, y + height * (0.7 + random() * 0.08), start[2] + Math.sin(angle) * length];
     mesh.segment(start, end, 0.06, 0.06, TIMBER_DARK);
   }
-  mesh.ellipsoid([x, y + height * 0.82, z], [height * 0.11, height * 0.07, height * 0.11], SNOW, 2, 6, random() * Math.PI);
+  mesh.ellipsoid([x, y + height * 0.76, z], [height * 0.1, height * 0.1, height * 0.1], SNOW, 2, 6, random() * Math.PI);
 }
 
 /** One tree, drift or rock at `[x, y, z]`; `kind` is the placement's random draw. */
 export function plantTree({ mesh, x, y, z, kind, random }) {
   if (kind < 0.08) {
     const size = 0.8 + random() * 1.8;
-    mesh.cone([x, y, z], size, size * 0.8, STONE_DARK, 5, random() * Math.PI);
+    mesh.cone([x, y - 0.05, z], size, size * 0.55, ROCK, 6, random() * Math.PI);
   } else if (kind < 0.24) {
     const size = 1 + random() * 1.6;
     mesh.ellipsoid([x, y + size * 0.35, z], [size, size * 0.5, size], SNOW, 3, 7, random() * Math.PI);
