@@ -225,8 +225,8 @@ export const temperate = Object.freeze({
     /** The light and dark squares of the start/finish strip. */
     chequer: Object.freeze([Object.freeze([0.95, 0.95, 0.95]), Object.freeze([0.1, 0.1, 0.1])]),
   }),
-  water: COLORS.water,
-  river: COLORS.river,
+  water: Object.freeze({ color: COLORS.water, alpha: 0.82 }),
+  river: Object.freeze({ color: COLORS.river, alpha: 0.85 }),
   cloud: COLORS.cloud,
   farIsland: COLORS.farIsland,
   farIslandDark: COLORS.farIslandDark,

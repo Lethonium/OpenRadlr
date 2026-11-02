@@ -209,8 +209,61 @@ export function withRivers(base, rivers, floor = -Infinity) {
   };
 }
 
+const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
+
+/** Snow patches and cracks lying on top of a frozen river. */
+function addRiverIce(river, into, ice) {
+  const random = seededRandom((Math.round((river.at ?? 0) * 1000) ^ 0x1ce) >>> 0);
+  const w = RIVER.halfWidth + 1.5;
+  for (let i = 0; i + 1 < river.points.length; i += 1) {
+    if (random() >= ice.cover) continue;
+    const a = river.points[i];
+    const b = river.points[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 1) continue;
+    const dir = [dx / length, 0, dz / length];
+    const side = [-dir[2], 0, dir[0]];
+    const half = RIVER.halfWidth * (0.35 + random() * 0.35);
+    const maxOffset = Math.max(0, w - half - 0.5);
+    const offset = (random() - 0.5) * 2 * maxOffset;
+    const t0 = 0.1 + random() * 0.15;
+    const t1 = 0.68 + random() * 0.22;
+    const at = (t, lateral) => {
+      const y = a.surface + (b.surface - a.surface) * t + 0.04;
+      return [a.x + dx * t + side[0] * (offset + lateral), y, a.z + dz * t + side[2] * (offset + lateral)];
+    };
+    const q0 = at(t0, -half);
+    const q1 = at(t1, -half);
+    const q2 = at(t1, half);
+    const q3 = at(t0, half);
+    into.triangleFacing(q0, q1, q2, ice.color, [0, 1, 0]);
+    into.triangleFacing(q0, q2, q3, ice.color, [0, 1, 0]);
+    if (ice.crack && random() < 0.45) {
+      const c0 = at(t0 + (t1 - t0) * 0.15, -half * 0.35);
+      const c1 = at(t1 - (t1 - t0) * 0.15, half * 0.25);
+      const cw = 0.08;
+      into.triangleFacing(add(c0, scale(side, -cw)), add(c0, scale(side, cw)), add(c1, scale(side, cw)), ice.crack, [0, 1, 0]);
+      into.triangleFacing(add(c0, scale(side, -cw)), add(c1, scale(side, cw)), add(c1, scale(side, -cw)), ice.crack, [0, 1, 0]);
+    }
+  }
+  // A few wind-blown snow patches on each frozen pond.
+  for (const pond of river.ponds) {
+    for (let k = 0; k < 2; k += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = random() * pond.radius * 0.45;
+      const x = pond.x + Math.cos(angle) * distance;
+      const z = pond.z + Math.sin(angle) * distance;
+      const radius = pond.radius * (0.16 + random() * 0.18);
+      into.disc([x, pond.surface + 0.04, z], [radius, radius], ice.color, 8);
+    }
+  }
+}
+
 /** Water ribbon along the river plus a disc for each pond. */
-export function buildRiverWater(river, into = new MeshBuilder(), color = [0.22, 0.45, 0.6]) {
+export function buildRiverWater(river, into = new MeshBuilder(), style = null) {
+  const color = Array.isArray(style) ? style : (style?.color ?? DEFAULT_RIVER);
   const w = RIVER.halfWidth + 1.5;
   for (let i = 0; i + 1 < river.points.length; i += 1) {
     const a = river.points[i];
@@ -223,6 +276,7 @@ export function buildRiverWater(river, into = new MeshBuilder(), color = [0.22, 
     into.triangleFacing(sub(pa, side), add(pb, side), sub(pb, side), color, [0, 1, 0]);
   }
   for (const pond of river.ponds) into.disc([pond.x, pond.surface, pond.z], [pond.radius + 2, pond.radius + 2], color, 16);
+  if (style?.ice) addRiverIce(river, into, style.ice);
   return into;
 }
 

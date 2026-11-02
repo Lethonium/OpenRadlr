@@ -51,8 +51,10 @@ roads.
   model, so the view animates plain data across the worker boundary.
 - **Palette details stay with the season.** Crowd shirt colours
   (`people.shirts`), barrier posts/stripes (`road.barrier`), the start-line
-  chequer (`arch.chequer`) and the river colour (`river`) are biome data, not
-  shared feature code.
+  chequer (`arch.chequer`) and the water surfaces (`water`, `river`) are biome
+  data, not shared feature code. Water also carries its own opacity; winter's
+  river is opaque ice and may add snow patches and cracks on the same course,
+  while the river path, width and banks still come from the terrain.
 - **The air can change without moving the sun.** `biome.light.<time>` may
   override any part of the shared time-of-day preset (zenith, horizon, ground
   bounce, sun colour, cloud tint, fog, shadow strength). The scene carries the

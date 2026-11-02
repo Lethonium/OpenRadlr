@@ -49,8 +49,13 @@ export const winter = Object.freeze({
     sprint: Object.freeze([0.35, 0.65, 0.95]),
     chequer: Object.freeze([SNOW, WINTER_PALETTE.dark]),
   }),
-  water: Object.freeze([0.2, 0.31, 0.42]),
-  river: ICE,
+  water: Object.freeze({ color: Object.freeze([0.2, 0.31, 0.42]), alpha: 0.82 }),
+  /** Opaque ice, with wind-blown snow patches on top (see buildRiverWater). */
+  river: Object.freeze({
+    color: ICE,
+    alpha: 1,
+    ice: Object.freeze({ color: SNOW, cover: 0.34, crack: Object.freeze([0.56, 0.68, 0.8]) }),
+  }),
   cloud: Object.freeze([0.9, 0.92, 0.96, 1]),
   farIsland: Object.freeze([0.6, 0.65, 0.7]),
   farIslandDark: Object.freeze([0.48, 0.53, 0.58]),

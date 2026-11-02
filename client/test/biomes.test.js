@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
+import { buildRiverWater } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
@@ -36,6 +37,10 @@ test("a biome brings everything the world draws with", () => {
     assert.ok(biome.people.shirts.length > 0, `${id} has crowd colours`);
     assert.equal(biome.road.barrier.stripes.length, 2, `${id} has two barrier stripes`);
     assert.equal(biome.arch.chequer.length, 2, `${id} has two chequer squares`);
+    assert.equal(biome.water.color.length, 3, `${id} has a sea colour`);
+    assert.ok(biome.water.alpha > 0 && biome.water.alpha <= 1, `${id} has a sea opacity`);
+    assert.equal(biome.river.color.length, 3, `${id} has a river colour`);
+    assert.ok(biome.river.alpha > 0 && biome.river.alpha <= 1, `${id} has a river opacity`);
     const spot = { x: 10, z: 20, height: 30, steep: 0.2, seed: 7, water: 0, riverDistance: Infinity, riverHalfWidth: 9 };
     const color = biome.terrainColor(spot);
     assert.equal(color.length, 3, `${id} returns an RGB colour`);
@@ -52,8 +57,21 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.ok(winter.road.bank.height >= 0.2, "snow is ploughed to the verge");
   assert.ok(winter.road.rut.width > 0, "lanes show worn ruts");
   assert.ok(winter.road.postCap, "posts wear a cap of snow");
-  assert.notDeepEqual(winter.river, resolveBiome("temperate").water, "the river freezes over");
+  assert.notDeepEqual(winter.river.color, resolveBiome("temperate").river.color, "the river freezes over");
+  assert.equal(winter.river.alpha, 1, "ice is opaque");
+  assert.ok(winter.river.ice, "the ice carries snow patches");
   assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
+});
+
+test("winter's river grows a surface, not a new course", () => {
+  const points = Array.from({ length: 40 }, (_, i) => ({ x: i * 15, z: Math.sin(i / 5) * 10, surface: 10 + i * 0.01, s: i * 15 - 300 }));
+  const river = { at: 123, points, ponds: [{ x: 300, z: 0, surface: 10.4, radius: 20 }] };
+  const temperate = resolveBiome("temperate").river;
+  const winter = resolveBiome("winter").river;
+  const calm = buildRiverWater(river, new MeshBuilder(), temperate).build();
+  const frozen = buildRiverWater(river, new MeshBuilder(), winter).build();
+  assert.ok(calm.vertexCount > 0 && frozen.vertexCount > calm.vertexCount, "the frozen river adds ice patches");
+  assert.deepEqual(Array.from(frozen.positions.slice(0, calm.positions.length)), Array.from(calm.positions), "the ice sits on the same course");
 });
 
 test("winter changes the air, not the sun's direction", async () => {

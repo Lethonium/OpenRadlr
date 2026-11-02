@@ -854,7 +854,8 @@ export function buildWater(terrain, level, size = 40000, biome = temperate) {
   const mesh = new MeshBuilder();
   const [cx, cz] = terrain.island?.center ?? terrain.index.center;
   const h = size / 2;
-  mesh.quad([cx - h, level, cz - h], [cx - h, level, cz + h], [cx + h, level, cz + h], [cx + h, level, cz - h], biome.water);
+  const color = biome.water.color ?? biome.water;
+  mesh.quad([cx - h, level, cz - h], [cx - h, level, cz + h], [cx + h, level, cz + h], [cx + h, level, cz - h], color);
   return mesh.build();
 }
 
