@@ -28,16 +28,18 @@ const ENTRIES = [
   ["warning", (b) => b.models.warning()],
   ["village-sign", (b) => b.models.villageSign()],
   ["bale", (b) => b.models.bale()],
-  ["cow", (b) => b.models.cow()],
-  ["cow-brown", (b) => b.models.cowBrown()],
-  ["sheep", (b) => b.models.sheep()],
+  ["animal-1", (b) => b.models.animal1()],
+  ["animal-2", (b) => b.models.animal2()],
+  ["animal-3", (b) => b.models.animal3()],
 ];
 
 const LABELS = {
   "house-3": "house (3 floors)",
   cafe: "bike café", // i18n-ok: dev gallery label, never shipped in the app
   "village-sign": "village sign",
-  "cow-brown": "cow (brown)",
+  "animal-1": "animal 1",
+  "animal-2": "animal 2",
+  "animal-3": "animal 3",
   gym: "outdoor gym",
 };
 

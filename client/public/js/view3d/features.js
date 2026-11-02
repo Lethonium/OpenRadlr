@@ -326,9 +326,9 @@ function sharedModels(biome) {
       lamp: biome.models.lamp(),
       warning: biome.models.warning(),
       villageSign: biome.models.villageSign(),
-      cow: biome.models.cow(),
-      cowBrown: biome.models.cowBrown(),
-      sheep: biome.models.sheep(),
+      animal1: biome.models.animal1(),
+      animal2: biome.models.animal2(),
+      animal3: biome.models.animal3(),
     };
     modelsByBiome.set(biome.id, models);
   }
@@ -474,17 +474,18 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
       place(m.bale, 4 + random() * 14, -9 - random() * 8, random() * Math.PI, 1.3, 1.5);
     }
 
-    // A herd in a field further from the road.
+    // A herd in a field further from the road: usually the first two animals
+    // in small groups, sometimes a larger herd of the third.
     const field = local((random() - 0.5) * 30, 45 + random() * 20);
-    const sheep = random() < 0.4;
-    const animals = sheep ? 7 + Math.floor(random() * 6) : 4 + Math.floor(random() * 5);
+    const third = random() < 0.4;
+    const animals = third ? 7 + Math.floor(random() * 6) : 4 + Math.floor(random() * 5);
     for (let a = 0; a < animals; a += 1) {
       const angle = random() * Math.PI * 2;
       const r = random() * 16;
       const x = field[0] + Math.cos(angle) * r;
       const z = field[2] + Math.sin(angle) * r;
       if (avoid(x, z, 2) || terrain.height(x, z) < lakeLevel + 1) continue;
-      const mesh = sheep ? m.sheep : random() < 0.5 ? m.cow : m.cowBrown;
+      const mesh = third ? m.animal3 : random() < 0.5 ? m.animal1 : m.animal2;
       structures.append(mesh, placement([x, terrain.height(x, z) - 0.05, z], random() * Math.PI * 2));
     }
     occupancy.add(pos[0], pos[2], 30);

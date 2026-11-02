@@ -7,9 +7,7 @@ import { MeshBuilder } from "../../meshBuilder.js";
 import { placement } from "../../math.js";
 import {
   GYM_SIGN,
-  buildCow,
   buildOutdoorGymModel,
-  buildSheep,
   buildStreetLamp,
   buildTurbineTower,
   buildVillageSign,
@@ -17,7 +15,7 @@ import {
   gableRoof,
   roofSlab,
 } from "../../structures.js";
-import { frost } from "../helpers.js";
+import { buildCaribou, buildPolarBear, buildWalrus } from "./animals.js";
 import { SNOW, STONE, STONE_DARK, TIMBER, TIMBER_DARK, WINDOW, WINTER_PALETTE } from "./palette.js";
 
 const IDENTITY = placement([0, 0, 0]);
@@ -328,9 +326,9 @@ export const winterModels = Object.freeze({
   post: buildWinterPost,
   warning: buildWarningSign,
   villageSign: buildVillageSign,
-  cow: () => frost(buildCow(false), { from: 0.45, amount: 0.6 }),
-  cowBrown: () => frost(buildCow(true), { from: 0.45, amount: 0.6 }),
-  sheep: () => frost(buildSheep(), { from: 0.3, amount: 0.5 }),
+  animal1: buildCaribou,
+  animal2: buildPolarBear,
+  animal3: buildWalrus,
   cafe: buildWinterCafe,
   gym: buildOutdoorGymModel,
   gymSign: GYM_SIGN,
