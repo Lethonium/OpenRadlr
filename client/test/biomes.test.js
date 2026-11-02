@@ -5,7 +5,8 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { buildRiverWater } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
-import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
+import { buildWeather } from "../public/js/view3d/weather.js";
+import { buildClouds, buildRoad, buildWorld, terrainModel } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
@@ -22,14 +23,14 @@ test("the registry knows every biome and falls back to the default", () => {
   assert.equal(resolveBiome(undefined), BIOMES[DEFAULT_BIOME]);
   assert.deepEqual(
     biomeChoices(),
-    BIOME_IDS.map((id) => ({ id, label: BIOMES[id].label })),
+    BIOME_IDS.map((id) => ({ id, label: BIOMES[id].label, preview: BIOMES[id].preview })),
   );
 });
 
 test("a biome brings everything the world draws with", () => {
   for (const id of BIOME_IDS) {
     const biome = resolveBiome(id);
-    for (const key of ["id", "label", "road", "arch", "water", "river", "cloud", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
+    for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "weather", "preview", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
     assert.equal(typeof biome.people.model, "function", `${id} draws its own crowd`);
@@ -41,6 +42,13 @@ test("a biome brings everything the world draws with", () => {
     assert.ok(biome.water.alpha > 0 && biome.water.alpha <= 1, `${id} has a sea opacity`);
     assert.equal(biome.river.color.length, 3, `${id} has a river colour`);
     assert.ok(biome.river.alpha > 0 && biome.river.alpha <= 1, `${id} has a river opacity`);
+    assert.ok(biome.sky.clouds.count > 0, `${id} has clouds`);
+    assert.equal(biome.sky.clouds.color.length, 4, `${id} has a cloud colour`);
+    assert.equal(biome.preview.sky.length, 3, `${id} has a picker swatch`);
+    if (biome.weather) {
+      assert.ok(biome.weather.count > 0, `${id} has weather particles`);
+      assert.equal(biome.weather.color.length, 4, `${id} has a weather colour`);
+    }
     const spot = { x: 10, z: 20, height: 30, steep: 0.2, seed: 7, water: 0, riverDistance: Infinity, riverHalfWidth: 9 };
     const color = biome.terrainColor(spot);
     assert.equal(color.length, 3, `${id} returns an RGB colour`);
@@ -72,6 +80,31 @@ test("winter's river grows a surface, not a new course", () => {
   const frozen = buildRiverWater(river, new MeshBuilder(), winter).build();
   assert.ok(calm.vertexCount > 0 && frozen.vertexCount > calm.vertexCount, "the frozen river adds ice patches");
   assert.deepEqual(Array.from(frozen.positions.slice(0, calm.positions.length)), Array.from(calm.positions), "the ice sits on the same course");
+});
+
+test("winter's sky is a lower, broader ceiling", () => {
+  const terrain = terrainModel(new RouteGeometry(route));
+  const temperate = resolveBiome("temperate");
+  const winter = resolveBiome("winter");
+  assert.ok(winter.sky.clouds.count > temperate.sky.clouds.count, "more cloud cover");
+  assert.ok(winter.sky.clouds.altitude[0] < temperate.sky.clouds.altitude[0], "the ceiling sits lower");
+  assert.ok(winter.sky.clouds.squash[0] < temperate.sky.clouds.squash[0], "and the puffs are flatter");
+  const warm = buildClouds(new RouteGeometry(route), terrain, { count: 4, biome: temperate });
+  const cold = buildClouds(new RouteGeometry(route), terrain, { count: 4, biome: winter });
+  assert.ok(cold.vertexCount > warm.vertexCount, "winter builds more cloud shapes");
+});
+
+test("only a biome with weather grows a particle field", () => {
+  const terrain = terrainModel(new RouteGeometry(route));
+  const temperate = resolveBiome("temperate");
+  const winter = resolveBiome("winter");
+  assert.equal(buildWeather(terrain, { biome: temperate }), null, "summer air is clear");
+  const snow = buildWeather(terrain, { biome: winter });
+  assert.equal(snow.kind, "snow");
+  assert.equal(snow.count, winter.weather.count);
+  assert.equal(snow.data.length, winter.weather.count * 6 * 6, "six vertices per flake");
+  const again = buildWeather(terrain, { biome: winter });
+  assert.deepEqual(again.data, snow.data, "the same air on every client");
 });
 
 test("winter changes the air, not the sun's direction", async () => {
@@ -167,12 +200,35 @@ test("winter changes the look, not the layout", () => {
   assert.equal(winter.spectators[0].motion, "clap", "the winter crowd claps");
   assert.notDeepEqual(winter.spectatorMeshes[0].positions, temperate.spectatorMeshes[0].positions, "winter's crowd is penguins");
   assert.notDeepEqual(winter.spectatorMeshes[1].positions, winter.spectatorMeshes[0].positions, "the clapping pose moves");
+  assert.equal(temperate.weather, null, "summer has no particle field");
+  assert.equal(winter.weather.kind, "snow", "winter air carries snow");
 
-  const total = (scene) => Object.values(triangles(scene)).reduce((a, b) => a + b, 0);
+  const total = (scene) =>
+    Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
+    scene.clouds.positions.length / 9 +
+    (scene.weather ? scene.weather.count * 2 : 0) +
+    scene.water.positions.length / 9 +
+    scene.rivers.positions.length / 9 +
+    Object.values(scene.meshes).reduce((a, mesh) => a + mesh.positions.length / 9, 0);
   const t = total(temperate);
   const w = total(winter);
   assert.notEqual(winter.chunks.road[0].mesh.positions.length, temperate.chunks.road[0].mesh.positions.length, "the road itself is reshaped");
   assert.ok(Math.abs(w - t) / t < 0.1, `winter stays within 10 % of temperate (${t} → ${w})`);
+});
+
+test("every biome keeps the world's places", () => {
+  const base = buildWorld(new RouteGeometry(route), { biome: DEFAULT_BIOME });
+  for (const id of BIOME_IDS) {
+    const world = buildWorld(new RouteGeometry(route), { biome: id });
+    assert.deepEqual(world.gyms, base.gyms, `${id} keeps the gym`);
+    assert.deepEqual(world.cafes, base.cafes, `${id} keeps the café`);
+    assert.deepEqual(world.overview, base.overview, `${id} keeps the menu camera`);
+    assert.deepEqual(world.zones, base.zones, `${id} keeps the zones`);
+    assert.equal(world.waterLevel, base.waterLevel, `${id} keeps the sea level`);
+    for (const [x, z] of [[0, 0], [1200, -400], [-800, 900]]) {
+      assert.equal(world.terrain.height(x, z), base.terrain.height(x, z), `${id} terrain at ${x},${z}`);
+    }
+  }
 });
 
 test("a season changes the look, not the layout", () => {

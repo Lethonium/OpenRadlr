@@ -61,6 +61,13 @@ roads.
   biome id, and the view applies the override at render time, so riders keep
   their own time-of-day setting while winter still looks cold. The sun's
   direction itself stays the time-of-day preset's.
+- **Sky shape and weather are biome hooks too.** `sky.clouds` controls cloud
+  count, spread, altitude, puff shape and colour; winter builds a lower,
+  broader ceiling instead of summer's separate puffs. `biome.weather` is a
+  camera-local particle field (winter: snow), uploaded once and animated in a
+  separate shader pass, so it adds no world geometry and rewrites no buffer
+  per frame. `preview` supplies the three-colour swatch shown beside each
+  season picker.
 - **Rebuild in the worker.** Changing the season rebuilds the scene through
   `buildScene(route, others, { network, biome })`; the old world keeps
   rendering until the new one arrives, then the old view is disposed before

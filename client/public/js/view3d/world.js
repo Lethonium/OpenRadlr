@@ -34,6 +34,7 @@ import { inStretch, resolveZones } from "./zones.js";
 import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
+import { buildWeather } from "./weather.js";
 
 export const LANE_WIDTH = 1.4;
 export const SHOULDER = 0.9;
@@ -859,21 +860,24 @@ export function buildWater(terrain, level, size = 40000, biome = temperate) {
   return mesh.build();
 }
 
-/** Puffy low-poly clouds high above the route. */
-export function buildClouds(route, terrain, { count = 18, spread = 3500, biome = temperate } = {}) {
+/** Puffy low-poly clouds high above the route, shaped by the biome's sky. */
+export function buildClouds(route, terrain, { count, spread, biome = temperate } = {}) {
+  const style = biome.sky?.clouds ?? temperate.sky.clouds;
   const random = seededRandom((terrain.seed ?? route.seed >>> 0) ^ 0xc10d);
   const mesh = new MeshBuilder();
   const [cx, cz] = terrain.index.center;
-  for (let i = 0; i < count; i += 1) {
-    const x = cx + (random() - 0.5) * 2 * spread;
-    const z = cz + (random() - 0.5) * 2 * spread;
-    const y = terrain.index.meanElevation + 420 + random() * 300;
-    const puffs = 3 + Math.floor(random() * 4);
-    const size = 60 + random() * 70;
+  const total = count ?? style.count;
+  const span = spread ?? style.spread;
+  for (let i = 0; i < total; i += 1) {
+    const x = cx + (random() - 0.5) * 2 * span;
+    const z = cz + (random() - 0.5) * 2 * span;
+    const y = terrain.index.meanElevation + style.altitude[0] + random() * style.altitude[1];
+    const puffs = style.puffs[0] + Math.floor(random() * style.puffs[1]);
+    const size = style.radius[0] + random() * style.radius[1];
     for (let p = 0; p < puffs; p += 1) {
-      const offset = [(random() - 0.5) * size * 2.2, random() * size * 0.3, (random() - 0.5) * size];
-      const r = size * (0.6 + random() * 0.5);
-      mesh.ellipsoid(add([x, y, z], offset), [r, r * 0.5, r * 0.8], biome.cloud, 5, 10, random() * Math.PI);
+      const offset = [(random() - 0.5) * size * style.offset[0], random() * size * style.offset[1], (random() - 0.5) * size * style.offset[2]];
+      const r = size * (style.puffRadius[0] + random() * style.puffRadius[1]);
+      mesh.ellipsoid(add([x, y, z], offset), [r, r * style.squash[0], r * style.squash[1]], style.color, style.segments[0], style.segments[1], random() * Math.PI);
     }
   }
   return mesh.build();
@@ -1121,6 +1125,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       islands: buildFarIslands(route, terrain, { biome }),
     },
     clouds: buildClouds(route, terrain, { biome }),
+    weather: buildWeather(terrain, { biome }),
     water: buildWater(terrain, ground.water, Math.max(40000, ground.horizon * 4), biome),
     rivers: rivers3d.build(),
     rotors,

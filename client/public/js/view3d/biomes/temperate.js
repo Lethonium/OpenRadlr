@@ -227,7 +227,27 @@ export const temperate = Object.freeze({
   }),
   water: Object.freeze({ color: COLORS.water, alpha: 0.82 }),
   river: Object.freeze({ color: COLORS.river, alpha: 0.85 }),
-  cloud: COLORS.cloud,
+  weather: null,
+  /** A small three-colour swatch for the season picker. */
+  preview: Object.freeze({
+    sky: Object.freeze([0.62, 0.78, 0.9]),
+    ground: Object.freeze([0.45, 0.6, 0.26]),
+    accent: Object.freeze([0.95, 0.85, 0.2]),
+  }),
+  sky: Object.freeze({
+    clouds: Object.freeze({
+      color: COLORS.cloud,
+      count: 18,
+      spread: 3500,
+      altitude: Object.freeze([420, 300]),
+      puffs: Object.freeze([3, 4]),
+      radius: Object.freeze([60, 70]),
+      offset: Object.freeze([2.2, 0.3, 1.0]),
+      puffRadius: Object.freeze([0.6, 0.5]),
+      squash: Object.freeze([0.5, 0.8]),
+      segments: Object.freeze([5, 10]),
+    }),
+  }),
   farIsland: COLORS.farIsland,
   farIslandDark: COLORS.farIslandDark,
   rock: COLORS.rock,

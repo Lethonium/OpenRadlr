@@ -7,7 +7,7 @@ import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
 import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
-import { invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
+import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { Renderer, createContext } from "./renderer.js";
 import {
   RIDER_GEOMETRY,
@@ -255,6 +255,7 @@ export class View3D {
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
     this.clouds = this.renderer.upload(world.clouds);
+    this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
     this.water = this.renderer.upload(world.water);
     this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
@@ -659,6 +660,13 @@ export class View3D {
       if (part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
     }
+    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
+      let right = cross(forward, [0, 1, 0]);
+      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
+      right = normalize(right);
+      const up = normalize(cross(right, forward));
+      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
+    }
 
     this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
     const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
@@ -747,6 +755,7 @@ export class View3D {
   dispose() {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);

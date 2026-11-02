@@ -143,6 +143,23 @@ function biomeSetting() {
   return saved && resolveBiome(saved).id === saved ? saved : DEFAULT_BIOME;
 }
 
+/** Adds the three swatches that preview a season next to its picker. */
+function paintBiomePreview(select, id) {
+  let preview = select.biomePreview;
+  if (!preview) {
+    preview = document.createElement("span");
+    preview.className = "biome-preview";
+    preview.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i += 1) preview.append(document.createElement("i"));
+    select.after(preview);
+    select.biomePreview = preview;
+  }
+  const { sky, ground, accent } = resolveBiome(id).preview;
+  [sky, ground, accent].forEach((color, i) => {
+    preview.children[i].style.backgroundColor = `rgb(${color.map((c) => Math.round(c * 255)).join(" ")})`;
+  });
+}
+
 /** Fills the season pickers from the biome registry and binds them. */
 function initBiomePicker() {
   for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
@@ -150,6 +167,7 @@ function initBiomePicker() {
     if (!select) continue;
     select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
     select.value = app.biome;
+    paintBiomePreview(select, app.biome);
     select.addEventListener("change", (event) => setBiome(event.target.value));
   }
 }
@@ -165,7 +183,10 @@ function setBiome(id) {
   writeSetting(BIOME_KEY, biome.id);
   for (const picker of ["biome-mode", "start-biome", "menu-biome"]) {
     const select = $(picker);
-    if (select) select.value = biome.id;
+    if (select) {
+      select.value = biome.id;
+      paintBiomePreview(select, biome.id);
+    }
   }
   if (app.studio) return;
   if (app.view3d) rebuildRideWorld();

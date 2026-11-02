@@ -17,7 +17,7 @@ export function resolveBiome(id) {
   return BIOMES[id] ?? BIOMES[DEFAULT_BIOME];
 }
 
-/** `[{ id, label }]` for the picker, in a stable order. */
+/** `[{ id, label, preview }]` for the picker, in a stable order. */
 export function biomeChoices() {
-  return BIOME_IDS.map((id) => ({ id, label: BIOMES[id].label }));
+  return BIOME_IDS.map((id) => ({ id, label: BIOMES[id].label, preview: BIOMES[id].preview }));
 }

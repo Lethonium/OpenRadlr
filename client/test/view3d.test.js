@@ -343,6 +343,12 @@ class StubRenderer {
   drawBright() {}
   drawCloudLayer() {}
   drawTransparent() {}
+  uploadWeather(data) {
+    return { data };
+  }
+  drawWeather(handle, options) {
+    this.weather = { handle, options };
+  }
 }
 
 const emptyMesh = () => ({ positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), vertexCount: 0 });
@@ -353,13 +359,14 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms, biome = "temperate") {
+function gymView(gyms, biome = "temperate", weather = null) {
   const route = squareRoute();
   const world = {
     biome,
     meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
     chunks: {},
     clouds: emptyMesh(),
+    weather,
     water: emptyMesh(),
     rivers: emptyMesh(),
     rotors: [],
@@ -376,6 +383,16 @@ const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");
   assert.equal(gymView([], "winter").view.biome.id, "winter");
+});
+
+test("the view draws the biome's weather around the camera", () => {
+  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
+  const { view, renderer } = gymView([], "winter", weather);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(renderer.weather, "snow is drawn");
+  assert.equal(renderer.weather.options.style.kind, "snow");
+  assert.equal(renderer.weather.handle.data, weather.data);
 });
 
 test("a workout rider is drawn at its gym spot, not on the road", () => {

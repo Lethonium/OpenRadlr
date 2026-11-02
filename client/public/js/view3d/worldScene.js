@@ -11,8 +11,8 @@ import { buildWorld } from "./world.js";
 
 /** What the view draws: meshes, chunks, the animated objects and the gyms' spots (no functions). */
 export function sceneOf(world) {
-  const { biome, meshes, chunks, clouds, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms } = world;
-  return { biome, meshes, chunks, clouds, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms };
+  const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms } = world;
+  return { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms };
 }
 
 /** Every typed array buffer in `value`, for a zero-copy postMessage. */
