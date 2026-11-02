@@ -24,6 +24,7 @@ const ENTRIES = [
   ["gym", (b) => b.models.gym({ drop: 0.5, signLift: 0 })],
   ["turbine", (b) => b.models.turbine(62)],
   ["lamp", (b) => b.models.lamp()],
+  ["post", (b) => b.models.post?.(false)],
   ["warning", (b) => b.models.warning()],
   ["village-sign", (b) => b.models.villageSign()],
   ["bale", (b) => b.models.bale()],
@@ -78,16 +79,20 @@ function gather(meshes) {
   return { triangles, min, max };
 }
 
-const models = ENTRIES.filter(([id]) => !only || id === only).map(([id, build]) => {
-  const { triangles, min, max } = gather(meshesOf(build(biome)));
-  return {
-    id,
-    label: LABELS[id] ?? id,
-    triangles,
-    center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
-    size: Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 0.5),
-    count: triangles.length,
-  };
+const models = ENTRIES.filter(([id]) => !only || id === only).flatMap(([id, build]) => {
+  const result = build(biome);
+  if (!result) return []; // a prop this biome does not have (e.g. temperate's posts are inline)
+  const { triangles, min, max } = gather(meshesOf(result));
+  return [
+    {
+      id,
+      label: LABELS[id] ?? id,
+      triangles,
+      center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
+      size: Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 0.5),
+      count: triangles.length,
+    },
+  ];
 });
 
 const select = document.getElementById("biome");

@@ -50,6 +50,17 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
 });
 
+test("winter's roadside posts are snowmen, yellow-scarfed at every kilometre", () => {
+  const winter = resolveBiome("winter");
+  assert.equal(typeof winter.models.post, "function", "the posts have their own model");
+  const ordinary = winter.models.post(false);
+  const kilometre = winter.models.post(true);
+  assert.ok(ordinary.positions.length > 0, "a snowman has geometry");
+  assert.equal(ordinary.positions.length, kilometre.positions.length, "the same snowman, only re-dressed");
+  assert.notDeepEqual(ordinary.colors, kilometre.colors, "the kilometre pair wears a yellow scarf");
+  assert.equal(resolveBiome("temperate").models.post, undefined, "temperate keeps its plain posts");
+});
+
 test("winter changes the look, not the layout", () => {
   const temperate = buildWorld(new RouteGeometry(route), { biome: "temperate" });
   const winter = buildWorld(new RouteGeometry(route), { biome: "winter" });

@@ -31,7 +31,7 @@ import {
 import { COAST, SEA_LEVEL, coastHeight, islandShape } from "./island.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
-import { add, cellKey, normalize, scale } from "./math.js";
+import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 
@@ -514,6 +514,24 @@ const target = (into) => ({ mesh: into ?? new MeshBuilder(), own: !into });
  */
 export const ROAD_LIFT = Object.freeze({ ridden: 0.04, other: -0.02, marking: 0.015 });
 
+const roadPostModels = new Map();
+
+/**
+ * The biome's own roadside marker, if it has one (winter turns the posts into
+ * snowmen). Built once per variant: every post reuses the same mesh.
+ */
+function roadsideModel(biome, km) {
+  const build = biome.models?.post;
+  if (!build) return null;
+  const key = `${biome.id}:${km ? 1 : 0}`;
+  let model = roadPostModels.get(key);
+  if (!model) {
+    model = build(km);
+    roadPostModels.set(key, model);
+  }
+  return model;
+}
+
 /**
  * Asphalt, verges, markings and posts along a route. Other roads of the map
  * pass a lower `lift` (so the ridden road wins where they overlap at
@@ -595,6 +613,11 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
     for (const side of sides) {
       const foot = add(frame.center, scale(frame.right, side * (halfWidth + VERGE + 0.3)));
       if (clear(foot[0], foot[2])) continue;
+      const marker = detail ? roadsideModel(biome, km) : null;
+      if (marker) {
+        mesh.append(marker, placement(foot, 0));
+        continue;
+      }
       mesh.box(add(foot, [0, 0.5, 0]), [0.12, 1.0, 0.12], biome.road.postWhite);
       mesh.box(add(foot, [0, 1.05, 0]), [0.13, 0.12, 0.13], km ? biome.road.postRed : biome.road.postDark);
       if (postCap) mesh.box(add(foot, [0, 1.14, 0]), [0.16, 0.06, 0.16], postCap.color);
