@@ -21,6 +21,7 @@ import {
   buildOutdoorGymModel,
   buildSheep,
   buildSilo,
+  buildSpectator,
   buildStreetLamp,
   buildTurbineTower,
   buildVillageSign,
@@ -208,6 +209,8 @@ export const temperate = Object.freeze({
   seaFloor: SEA_FLOOR,
   palette: PALETTE,
   models,
+  /** `model(pose)` draws the two crowd poses; `motion` tells the view how to play them. */
+  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true }),
   terrainColor,
   flora: Object.freeze({
     /** Scenery per kilometre of road, so every route gets the same density. */

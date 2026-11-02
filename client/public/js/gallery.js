@@ -7,11 +7,20 @@
  * algorithm) rather than WebGL, so a headless browser can screenshot it.
  */
 import { BIOME_IDS, BIOMES, resolveBiome } from "./view3d/biomes/index.js";
+import { MeshBuilder } from "./view3d/meshBuilder.js";
+import { seededRandom } from "./view3d/noise.js";
 import { t } from "./i18n/i18n.js";
 
 const params = new URLSearchParams(location.search);
 const biome = resolveBiome(params.get("biome") ?? undefined);
 const only = params.get("model");
+
+/** One sample tree at the origin, so the gallery shows a season's tree shapes. */
+function sampleTree(biome, kind, seed) {
+  const mesh = new MeshBuilder();
+  biome.flora.tree({ mesh, x: 0, y: 0, z: 0, kind, random: seededRandom(seed) });
+  return mesh.build();
+}
 
 /** Everything a biome can draw on its own, in a stable, readable order. */
 const ENTRIES = [
@@ -31,6 +40,11 @@ const ENTRIES = [
   ["animal-1", (b) => b.models.animal1()],
   ["animal-2", (b) => b.models.animal2()],
   ["animal-3", (b) => b.models.animal3()],
+  ["spectator", (b) => b.people.model(false)],
+  ["spectator-excited", (b) => b.people.model(true)],
+  ["tree-fir", (b) => sampleTree(b, 0.45, 11)],
+  ["tree-leafy", (b) => sampleTree(b, 0.8, 12)],
+  ["tree-bush", (b) => sampleTree(b, 0.2, 13)],
 ];
 
 const LABELS = {
@@ -40,6 +54,10 @@ const LABELS = {
   "animal-1": "animal 1",
   "animal-2": "animal 2",
   "animal-3": "animal 3",
+  "spectator-excited": "spectator (excited)",
+  "tree-fir": "tree (fir / spruce)",
+  "tree-leafy": "tree (leafy / birch)",
+  "tree-bush": "bush / drift",
   gym: "outdoor gym",
 };
 

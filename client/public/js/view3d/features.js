@@ -547,6 +547,7 @@ const SHIRTS = [
 /** Crowds behind barriers at the finish and on top of the climb. */
 export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate }) {
   const random = seededRandom(seed ^ 0x5bec);
+  const crowd = biome.people ?? temperate.people;
   const half = roadHalfWidth(route.lanes) + VERGE;
   const spots = [0];
   for (const marker of route.markers) if (marker.type === "climb") spots.push(marker.distance + (marker.length ?? 0));
@@ -573,11 +574,13 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const f = roadFrame(route, spot + along);
         const lateral = half + 1.0 + (k % 2) * 0.8 + random() * 0.4;
         const p = add(f.center, scale(f.right, side * lateral));
+        const shirt = SHIRTS[Math.floor(random() * SHIRTS.length)];
         people.push({
           position: [p[0], terrain.height(p[0], p[2]), p[2]],
           yaw: yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.6,
-          shirt: SHIRTS[Math.floor(random() * SHIRTS.length)],
+          shirt: crowd.tint ? shirt : [1, 1, 1],
           armsUp: random() < 0.55,
+          motion: crowd.motion,
           phase: random() * Math.PI * 2,
           scale: 0.92 + random() * 0.16,
         });

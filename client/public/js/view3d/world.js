@@ -1057,6 +1057,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     biome,
   });
   const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome });
+  // The crowd's two poses are biome models like every other shape; the view
+  // only alternates them (and adds the hop) while drawing.
+  const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
   for (const r of ordered) {
     const { villages, cliffs } = zonesOf.get(r);
     buildRoadside(r, terrain, {
@@ -1119,5 +1122,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     rivers: rivers3d.build(),
     rotors,
     spectators,
+    spectatorMeshes,
   };
 }

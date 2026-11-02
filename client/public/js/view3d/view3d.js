@@ -257,7 +257,7 @@ export class View3D {
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
     this.spectators = world.spectators;
-    this.spectatorMeshes = [this.renderer.upload(buildSpectator(false)), this.renderer.upload(buildSpectator(true))];
+    this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -568,9 +568,14 @@ export class View3D {
         return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide;
       })
       .map((p) => {
-        const hop = p.armsUp ? Math.max(0, Math.sin(timeS * 6 + p.phase)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
+        // People jump with their arms up; penguins clap by alternating the two
+        // poses, with a tiny bob so the motion still reads at a distance.
+        const clap = p.motion === "clap";
+        const tick = timeS * (clap ? 7.5 : 6) + p.phase;
+        const pose = clap ? Math.sin(tick) > 0 : p.armsUp;
+        const hop = clap ? Math.abs(Math.sin(tick)) * 0.02 : pose ? Math.max(0, Math.sin(tick)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
         const position = [p.position[0], p.position[1] + hop, p.position[2]];
-        return { ...p, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
+        return { ...p, pose, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
       });
 
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
@@ -600,7 +605,7 @@ export class View3D {
       }
       for (const p of crowd) {
         if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
-          this.renderer.drawShadowCaster(this.spectatorMeshes[p.armsUp ? 1 : 0], p.model);
+          this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
         }
       }
       this.renderer.endShadows();
@@ -624,7 +629,7 @@ export class View3D {
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
-    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.armsUp ? 1 : 0], p.model, p.shirt);
+    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);

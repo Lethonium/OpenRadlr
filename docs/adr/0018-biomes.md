@@ -44,6 +44,11 @@ roads.
   `.gym(opts)`, …), so a season can replace a model outright. Features key
   their model caches by `biome.id`, so two seasons in one worker session do
   not share shapes.
+- **Flora and the crowd are biome hooks too.** `biome.flora.tree` draws each
+  season's trees, and `biome.people.model(pose)` draws the crowd's two poses;
+  `biome.people.motion` tells the view how to play them (`jump` for people,
+  `clap` for winter's penguins). Both are built in the world like any other
+  model, so the view animates plain data across the worker boundary.
 - **Rebuild in the worker.** Changing the season rebuilds the scene through
   `buildScene(route, others, { network, biome })`; the old world keeps
   rendering until the new one arrives, then the old view is disposed before

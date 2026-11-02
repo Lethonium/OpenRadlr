@@ -6,6 +6,7 @@
 import { winterModels } from "./buildings.js";
 import { plantFlower, plantTree, plantTuft } from "./flora.js";
 import { ICE, SNOW, WINTER_PALETTE } from "./palette.js";
+import { buildPenguin } from "./people.js";
 import { terrainColor } from "./terrain.js";
 
 export const winter = Object.freeze({
@@ -40,6 +41,8 @@ export const winter = Object.freeze({
   seaFloor: Object.freeze([0.18, 0.26, 0.32]),
   palette: WINTER_PALETTE,
   models: winterModels,
+  /** The roadside crowd becomes clapping penguins; the scarf takes the per-person tint. */
+  people: Object.freeze({ model: buildPenguin, motion: "clap", tint: true }),
   terrainColor,
   flora: Object.freeze({
     /** Sparse under the snow: fewer trees than summer, no flowers at all. */

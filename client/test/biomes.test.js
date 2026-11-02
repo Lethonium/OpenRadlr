@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
+import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
@@ -27,9 +28,11 @@ test("the registry knows every biome and falls back to the default", () => {
 test("a biome brings everything the world draws with", () => {
   for (const id of BIOME_IDS) {
     const biome = resolveBiome(id);
-    for (const key of ["id", "label", "road", "arch", "water", "cloud", "sand", "seaFloor", "palette", "models", "terrainColor", "flora"]) {
+    for (const key of ["id", "label", "road", "arch", "water", "cloud", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
+    assert.equal(typeof biome.people.model, "function", `${id} draws its own crowd`);
+    assert.equal(typeof biome.people.motion, "string", `${id} says how the crowd moves`);
     const spot = { x: 10, z: 20, height: 30, steep: 0.2, seed: 7, water: 0, riverDistance: Infinity, riverHalfWidth: 9 };
     const color = biome.terrainColor(spot);
     assert.equal(color.length, 3, `${id} returns an RGB colour`);
@@ -48,6 +51,32 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.ok(winter.road.postCap, "posts wear a cap of snow");
   assert.notDeepEqual(winter.river, resolveBiome("temperate").water, "the river freezes over");
   assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
+});
+
+/** One tree at the origin with a deterministic random stream, for comparing biomes. */
+const sampleTree = (biome, kind) => {
+  const mesh = new MeshBuilder();
+  let state = 1;
+  const random = () => (state = (state * 48271) % 2147483647) / 2147483647;
+  biome.flora.tree({ mesh, x: 0, y: 0, z: 0, kind, random });
+  return mesh.build();
+};
+
+test("a biome grows its own trees and crowd", () => {
+  const temperate = resolveBiome("temperate");
+  const winter = resolveBiome("winter");
+  assert.equal(temperate.people.motion, "jump", "people jump in summer");
+  assert.equal(winter.people.motion, "clap", "penguins clap in winter");
+
+  const idle = winter.people.model(false);
+  const clap = winter.people.model(true);
+  assert.ok(idle.vertexCount > 0, "the penguin has geometry");
+  assert.notDeepEqual(clap.positions, idle.positions, "the flippers move");
+
+  const leafy = sampleTree(temperate, 0.8);
+  const birch = sampleTree(winter, 0.8);
+  assert.ok(leafy.vertexCount > 0 && birch.vertexCount > 0);
+  assert.notDeepEqual(birch.positions, leafy.positions, "winter grows a different tree");
 });
 
 test("a junction apron flattens winter's ploughed bank", () => {
@@ -91,6 +120,12 @@ test("winter changes the look, not the layout", () => {
   for (const [x, z] of [[0, 0], [1200, -400], [-800, 900], [route.points[15][0], route.points[15][1]]]) {
     assert.equal(winter.terrain.height(x, z), temperate.terrain.height(x, z), `terrain height at ${x},${z}`);
   }
+
+  assert.deepEqual(winter.spectators.map((p) => p.position), temperate.spectators.map((p) => p.position), "the crowd stands on the same spots");
+  assert.equal(temperate.spectators[0].motion, "jump");
+  assert.equal(winter.spectators[0].motion, "clap", "the winter crowd claps");
+  assert.notDeepEqual(winter.spectatorMeshes[0].positions, temperate.spectatorMeshes[0].positions, "winter's crowd is penguins");
+  assert.notDeepEqual(winter.spectatorMeshes[1].positions, winter.spectatorMeshes[0].positions, "the clapping pose moves");
 
   const total = (scene) => Object.values(triangles(scene)).reduce((a, b) => a + b, 0);
   const t = total(temperate);
