@@ -8,7 +8,6 @@ import { placement } from "../../math.js";
 import {
   GYM_SIGN,
   buildOutdoorGymModel,
-  buildStreetLamp,
   buildTurbineTower,
   buildVillageSign,
   buildWarningSign,
@@ -141,21 +140,53 @@ export function buildWinterSilo() {
   return m.build();
 }
 
-/** A round bale with snow settled on top. */
-export function buildWinterBale() {
+/** A stack of split logs under a cap of snow, with an axe left in the top log. */
+export function buildWinterWoodpile() {
   const m = new MeshBuilder();
-  m.wheel([0, 0.7, 0], 0.72, 1.25, WINTER_PALETTE.hay, 10);
-  m.ellipsoid([0, 1.0, 0], [0.68, 0.22, 0.72], SNOW, 3, 8);
+  const bark = [0.4, 0.29, 0.19];
+  const barkShade = [0.32, 0.22, 0.15];
+  const rows = [
+    { y: 0.11, zs: [-0.45, 0, 0.45] },
+    { y: 0.31, zs: [-0.22, 0.22] },
+    { y: 0.51, zs: [-0.15, 0.15] },
+  ];
+  for (const [row, { y, zs }] of rows.entries()) {
+    for (const [i, z] of zs.entries()) {
+      m.wheel([0, y, z], 0.1, 1.35, (row + i) % 2 === 0 ? bark : barkShade, 6);
+    }
+  }
+  m.ellipsoid([0, 0.66, 0], [0.72, 0.1, 0.5], SNOW, 2, 5); // snow on the top course
+  // The axe, left standing in the top log.
+  m.segment([0.35, 0.6, 0.15], [0.42, 0.95, 0.15], 0.05, 0.05, WINTER_PALETTE.pole);
+  m.box([0.42, 0.93, 0.15], [0.18, 0.14, 0.05], WINTER_PALETTE.metal);
   return m.build();
 }
 
-/** The street lamp, with a cap of snow over the arm. */
+/**
+ * A village lantern: a tapered wooden post with an iron bracket, a snow-capped
+ * lantern roof and warm panes. The panes are the glowing `head`; everything
+ * structural stays in `pole`.
+ */
 export function buildWinterLamp() {
-  const base = buildStreetLamp();
+  const pole = new MeshBuilder();
   const head = new MeshBuilder();
-  head.append(base.head, IDENTITY);
-  head.box([0, 5.29, -1.45], [0.34, 0.08, 0.5], SNOW);
-  return { pole: base.pole, head: head.build() };
+  const wood = [0.36, 0.25, 0.17];
+  const iron = [0.18, 0.19, 0.21];
+  const warm = [1.0, 0.86, 0.55];
+
+  pole.cylinder([0, 0, 0], 0.1, 3.3, wood, 6, 0.075);
+  pole.cone([0, 3.29, 0], 0.12, 0.12, SNOW, 6); // snow on the post cap
+  pole.segment([0, 3.15, 0], [0, 3.35, -0.7], 0.07, 0.07, iron); // bracket over the road
+  pole.segment([0, 3.3, -0.72], [0, 3.12, -0.72], 0.035, 0.035, iron); // chain
+  pole.cone([0, 3.18, -0.72], 0.3, 0.22, SNOW, 4, Math.PI / 4); // snow-covered lantern roof
+  pole.box([0, 3.02, -0.72], [0.42, 0.04, 0.42], iron);
+  for (const x of [-0.18, 0.18]) {
+    for (const z of [-0.18, 0.18]) pole.box([x, 2.85, -0.72 + z], [0.04, 0.34, 0.04], iron);
+  }
+  pole.box([0, 2.68, -0.72], [0.42, 0.05, 0.42], iron);
+  pole.box([0, 2.63, -0.72], [0.3, 0.08, 0.3], SNOW);
+  head.box([0, 2.85, -0.72], [0.28, 0.3, 0.28], warm);
+  return { pole: pole.build(), head: head.build() };
 }
 
 /**
@@ -321,7 +352,7 @@ export const winterModels = Object.freeze({
   church: buildChapel,
   barn: buildWinterBarn,
   silo: buildWinterSilo,
-  bale: buildWinterBale,
+  bale: buildWinterWoodpile,
   lamp: buildWinterLamp,
   post: buildWinterPost,
   warning: buildWarningSign,
