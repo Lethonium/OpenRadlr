@@ -6,7 +6,7 @@
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
-import { TIME_MODES, TIME_PRESETS, resolvePreset, sunShadowMatrix } from "./lighting.js";
+import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
 import { invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { Renderer, createContext } from "./renderer.js";
 import {
@@ -36,6 +36,7 @@ import { VEHICLE_KINDS } from "../ride/vehicle.js";
 import { buildBeerBike, buildSeatedBody, buildTandemFrame } from "./vehicleModel.js";
 import { buildWorld, riderPosition } from "./world.js";
 import { sceneOf } from "./worldScene.js";
+import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
@@ -234,6 +235,8 @@ export class View3D {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
+    /** The scene's biome, for its sky and lighting overrides. */
+    this.biome = resolveBiome(world.biome ?? "temperate");
     /** The map's other routes by id (RouteGeometry), where their riders ride (#14). */
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
@@ -524,7 +527,7 @@ export class View3D {
 
     const lens = this.lens;
     const preset = resolvePreset(this.timeMode);
-    const light = { ...preset, fog: preset.fog.map((f) => f * lens.haze) };
+    const light = resolvedLight(preset, this.biome, lens.haze);
     const [ox, oy] = this.viewOffset;
     const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
     const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;

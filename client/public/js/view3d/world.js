@@ -711,7 +711,7 @@ export function buildArches(route, { biome = temperate } = {}) {
       for (let i = 0; i < squares; i += 1) {
         const t0 = -halfWidth + 0.6 + (i / squares) * (2 * halfWidth - 1.2);
         const t1 = t0 + (2 * halfWidth - 1.2) / squares;
-        const shade = i % 2 === 0 ? [0.95, 0.95, 0.95] : [0.1, 0.1, 0.1];
+        const shade = colors.chequer[i % 2];
         const p = (t, o) => add(add(add(frame.center, scale(frame.right, t)), scale(normalize([frame.forward[0], 0, frame.forward[2]]), o)), [0, 0.06, 0]);
         mesh.quad(p(t0, -0.4), p(t1, -0.4), p(t1, 0.4), p(t0, 0.4), shade);
       }
@@ -1105,6 +1105,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   for (const river of rivers) buildRiverWater(river, rivers3d, biome.river ?? undefined);
 
   return {
+    // The view needs the biome to resolve its sky and lighting at render time.
+    biome: biome.id,
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,

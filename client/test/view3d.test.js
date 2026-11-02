@@ -353,9 +353,10 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms) {
+function gymView(gyms, biome = "temperate") {
   const route = squareRoute();
   const world = {
+    biome,
     meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
     chunks: {},
     clouds: emptyMesh(),
@@ -371,6 +372,11 @@ function gymView(gyms) {
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("the view resolves the scene's biome for its sky", () => {
+  assert.equal(gymView([]).view.biome.id, "temperate");
+  assert.equal(gymView([], "winter").view.biome.id, "winter");
+});
 
 test("a workout rider is drawn at its gym spot, not on the road", () => {
   const gym = testGym();

@@ -49,6 +49,16 @@ roads.
   `biome.people.motion` tells the view how to play them (`jump` for people,
   `clap` for winter's penguins). Both are built in the world like any other
   model, so the view animates plain data across the worker boundary.
+- **Palette details stay with the season.** Crowd shirt colours
+  (`people.shirts`), barrier posts/stripes (`road.barrier`), the start-line
+  chequer (`arch.chequer`) and the river colour (`river`) are biome data, not
+  shared feature code.
+- **The air can change without moving the sun.** `biome.light.<time>` may
+  override any part of the shared time-of-day preset (zenith, horizon, ground
+  bounce, sun colour, cloud tint, fog, shadow strength). The scene carries the
+  biome id, and the view applies the override at render time, so riders keep
+  their own time-of-day setting while winter still looks cold. The sun's
+  direction itself stays the time-of-day preset's.
 - **Rebuild in the worker.** Changing the season rebuilds the scene through
   `buildScene(route, others, { network, biome })`; the old world keeps
   rendering until the new one arrives, then the old view is disposed before

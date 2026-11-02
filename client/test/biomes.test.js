@@ -28,11 +28,14 @@ test("the registry knows every biome and falls back to the default", () => {
 test("a biome brings everything the world draws with", () => {
   for (const id of BIOME_IDS) {
     const biome = resolveBiome(id);
-    for (const key of ["id", "label", "road", "arch", "water", "cloud", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
+    for (const key of ["id", "label", "road", "arch", "water", "river", "cloud", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
     assert.equal(typeof biome.people.model, "function", `${id} draws its own crowd`);
     assert.equal(typeof biome.people.motion, "string", `${id} says how the crowd moves`);
+    assert.ok(biome.people.shirts.length > 0, `${id} has crowd colours`);
+    assert.equal(biome.road.barrier.stripes.length, 2, `${id} has two barrier stripes`);
+    assert.equal(biome.arch.chequer.length, 2, `${id} has two chequer squares`);
     const spot = { x: 10, z: 20, height: 30, steep: 0.2, seed: 7, water: 0, riverDistance: Infinity, riverHalfWidth: 9 };
     const color = biome.terrainColor(spot);
     assert.equal(color.length, 3, `${id} returns an RGB colour`);
@@ -51,6 +54,21 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.ok(winter.road.postCap, "posts wear a cap of snow");
   assert.notDeepEqual(winter.river, resolveBiome("temperate").water, "the river freezes over");
   assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
+});
+
+test("winter changes the air, not the sun's direction", async () => {
+  const { TIME_PRESETS, resolvedLight } = await import("../public/js/view3d/lighting.js");
+  const temperate = resolveBiome("temperate");
+  const winter = resolveBiome("winter");
+  for (const key of Object.keys(TIME_PRESETS)) {
+    const preset = { key, ...TIME_PRESETS[key] };
+    const warm = resolvedLight(preset, temperate, 1);
+    const cold = resolvedLight(preset, winter, 2);
+    assert.deepEqual(warm.zenith, preset.zenith, "the default biome keeps the time of day");
+    assert.notDeepEqual(cold.zenith, warm.zenith, `winter repaints the ${key} sky`);
+    assert.deepEqual(cold.sun, warm.sun, `the ${key} sun keeps its angle`);
+    assert.deepEqual(cold.fog, winter.light[key].fog.map((f) => f * 2), "the lens scales winter's haze too");
+  }
 });
 
 /** One tree at the origin with a deterministic random stream, for comparing biomes. */
@@ -122,6 +140,11 @@ test("winter changes the look, not the layout", () => {
   }
 
   assert.deepEqual(winter.spectators.map((p) => p.position), temperate.spectators.map((p) => p.position), "the crowd stands on the same spots");
+  assert.notDeepEqual(winter.spectators.map((p) => p.shirt), temperate.spectators.map((p) => p.shirt), "the winter crowd wears winter coats");
+  const winterBiome = resolveBiome("winter");
+  const temperateBiome = resolveBiome("temperate");
+  assert.notDeepEqual(winterBiome.road.barrier.stripes, temperateBiome.road.barrier.stripes, "the barriers change colour");
+  assert.notDeepEqual(winterBiome.arch.chequer, temperateBiome.arch.chequer, "the start strip changes colour");
   assert.equal(temperate.spectators[0].motion, "jump");
   assert.equal(winter.spectators[0].motion, "clap", "the winter crowd claps");
   assert.notDeepEqual(winter.spectatorMeshes[0].positions, temperate.spectatorMeshes[0].positions, "winter's crowd is penguins");

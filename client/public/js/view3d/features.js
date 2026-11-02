@@ -533,21 +533,12 @@ export function buildWindTurbines(route, terrain, { structures, occupancy, seed,
 
 // -------------------------------------------------------------- spectators ---
 
-const SHIRTS = [
-  [0.86, 0.2, 0.2],
-  [0.2, 0.45, 0.85],
-  [0.98, 0.8, 0.2],
-  [0.95, 0.95, 0.95],
-  [0.25, 0.65, 0.35],
-  [0.95, 0.5, 0.15],
-  [0.55, 0.3, 0.75],
-  [0.15, 0.15, 0.18],
-];
-
 /** Crowds behind barriers at the finish and on top of the climb. */
 export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate }) {
   const random = seededRandom(seed ^ 0x5bec);
   const crowd = biome.people ?? temperate.people;
+  const shirts = crowd.shirts ?? temperate.people.shirts;
+  const barrier = biome.road.barrier ?? temperate.road.barrier;
   const half = roadHalfWidth(route.lanes) + VERGE;
   const spots = [0];
   for (const marker of route.markers) if (marker.type === "climb") spots.push(marker.distance + (marker.length ?? 0));
@@ -561,9 +552,9 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const p0 = add(f0.center, scale(f0.right, side * (half + 0.5)));
         const p1 = add(f1.center, scale(f1.right, side * (half + 0.5)));
         const y0 = terrain.height(p0[0], p0[2]);
-        structures.box([p0[0], y0 + 0.5, p0[2]], [0.07, 1.0, 0.07], biome.palette.metal);
+        structures.box([p0[0], y0 + 0.5, p0[2]], [0.07, 1.0, 0.07], barrier.post);
         const mid = scale(add(p0, p1), 0.5);
-        const color = Math.floor((s + 24) / 3) % 2 === 0 ? biome.palette.white : [0.2, 0.42, 0.85];
+        const color = barrier.stripes[Math.floor((s + 24) / 3) % barrier.stripes.length];
         structures.orientedBox([mid[0], y0 + 0.85, mid[2]], sub(p1, p0), [0, 0.28, 0], scale(f0.right, 0.04), color);
       }
     }
@@ -574,7 +565,7 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const f = roadFrame(route, spot + along);
         const lateral = half + 1.0 + (k % 2) * 0.8 + random() * 0.4;
         const p = add(f.center, scale(f.right, side * lateral));
-        const shirt = SHIRTS[Math.floor(random() * SHIRTS.length)];
+        const shirt = shirts[Math.floor(random() * shirts.length)];
         people.push({
           position: [p[0], terrain.height(p[0], p[2]), p[2]],
           yaw: yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.6,

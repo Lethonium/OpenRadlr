@@ -58,6 +58,7 @@ export const COLORS = Object.freeze({
   farIslandDark: [0.45, 0.45, 0.42],
   cloud: [1, 1, 1, 1], // tinted by the time of day
   water: [0.16, 0.42, 0.56],
+  river: [0.22, 0.45, 0.6],
   grass: [
     [0.3, 0.5, 0.2],
     [0.38, 0.58, 0.22],
@@ -70,6 +71,18 @@ export const COLORS = Object.freeze({
     [0.55, 0.45, 0.9],
   ],
 });
+
+/** The crowd's shirts, a stable list so the same person keeps the same colour. */
+const SHIRTS = Object.freeze([
+  Object.freeze([0.86, 0.2, 0.2]),
+  Object.freeze([0.2, 0.45, 0.85]),
+  Object.freeze([0.98, 0.8, 0.2]),
+  Object.freeze([0.95, 0.95, 0.95]),
+  Object.freeze([0.25, 0.65, 0.35]),
+  Object.freeze([0.95, 0.5, 0.15]),
+  Object.freeze([0.55, 0.3, 0.75]),
+  Object.freeze([0.15, 0.15, 0.18]),
+]);
 
 /** Farmland palette with thresholds on a patch noise: mostly grass, some fields. */
 export const FIELDS = [
@@ -198,9 +211,22 @@ export const temperate = Object.freeze({
     postWhite: COLORS.postWhite,
     postRed: COLORS.postRed,
     postDark: [0.2, 0.2, 0.2],
+    /** Event barriers: a metal post and alternating stripe colours. */
+    barrier: Object.freeze({
+      post: PALETTE.metal,
+      stripes: Object.freeze([PALETTE.white, Object.freeze([0.2, 0.42, 0.85])]),
+    }),
   }),
-  arch: Object.freeze({ post: COLORS.post, start: COLORS.start, climb: COLORS.climb, sprint: COLORS.sprint }),
+  arch: Object.freeze({
+    post: COLORS.post,
+    start: COLORS.start,
+    climb: COLORS.climb,
+    sprint: COLORS.sprint,
+    /** The light and dark squares of the start/finish strip. */
+    chequer: Object.freeze([Object.freeze([0.95, 0.95, 0.95]), Object.freeze([0.1, 0.1, 0.1])]),
+  }),
   water: COLORS.water,
+  river: COLORS.river,
   cloud: COLORS.cloud,
   farIsland: COLORS.farIsland,
   farIslandDark: COLORS.farIslandDark,
@@ -210,7 +236,7 @@ export const temperate = Object.freeze({
   palette: PALETTE,
   models,
   /** `model(pose)` draws the two crowd poses; `motion` tells the view how to play them. */
-  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true }),
+  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true, shirts: SHIRTS }),
   terrainColor,
   flora: Object.freeze({
     /** Scenery per kilometre of road, so every route gets the same density. */
