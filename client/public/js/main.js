@@ -86,6 +86,7 @@ import { gymOfRoute } from "./workout/gymSpots.js";
 import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
+import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
@@ -107,6 +108,7 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+const BIOME_KEY = "openride.biome";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
@@ -129,6 +131,69 @@ const writeSetting = (key, value) => {
     // Settings are a convenience; ignore unavailable storage.
   }
 };
+
+/**
+ * The biome to draw: `?biome=winter` previews one (not saved), else the
+ * rider's saved pick, else the default.
+ */
+function biomeSetting() {
+  const param = new URLSearchParams(location.search).get("biome");
+  if (param) return resolveBiome(param).id;
+  const saved = readSetting(BIOME_KEY);
+  return saved && resolveBiome(saved).id === saved ? saved : DEFAULT_BIOME;
+}
+
+/** Fills the season pickers from the biome registry and binds them. */
+function initBiomePicker() {
+  for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
+    const select = $(id);
+    if (!select) continue;
+    select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
+    select.value = app.biome;
+    select.addEventListener("change", (event) => setBiome(event.target.value));
+  }
+}
+
+/**
+ * Changes the season: saved for next time, the menu world rebuilt behind the
+ * menu, or the ride's world rebuilt in the background. Only the look changes,
+ * never the road, the café or where anything stands.
+ */
+function setBiome(id) {
+  const biome = resolveBiome(id);
+  app.biome = biome.id;
+  writeSetting(BIOME_KEY, biome.id);
+  for (const picker of ["biome-mode", "start-biome", "menu-biome"]) {
+    const select = $(picker);
+    if (select) select.value = biome.id;
+  }
+  if (app.studio) return;
+  if (app.view3d) rebuildRideWorld();
+  else app.menu?.biomeChanged();
+}
+
+/** Rebuilds the ridden world for the current biome, then swaps it in. */
+function rebuildRideWorld() {
+  const ride = app.ride;
+  const previous = app.view3d;
+  if (!ride || !previous || !app.routeFile) return;
+  $("view-note").textContent = t("view.building");
+  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
+    .then(([others, network]) => buildScene(app.routeFile, others, { network, biome: app.biome }))
+    .then((scene) => {
+      if (app.ride !== ride) return;
+      // Drop the old world's buffers before the new one is uploaded: two full
+      // maps at once are too much for a low-end GPU.
+      previous.dispose();
+      if (app.view3d === previous) app.view3d = null;
+      show3d(scene);
+    })
+    .catch((error) => {
+      if (app.ride !== ride) return;
+      console.error(error);
+      $("view-note").textContent = t("view.unavailable");
+    });
+}
 
 const profiles = new ProfileStore();
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
@@ -269,6 +334,8 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
+  /** The biome this rider sees; every client may pick its own (cosmetic only). */
+  biome: biomeSetting(),
   /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
   activity: null,
   /** The route the Ride tab goes back to. */
@@ -642,6 +709,7 @@ function openStartMenu() {
  * the menu's background until joining, so the built world carries over.
  */
 function initMenuStage() {
+  initBiomePicker();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
   const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -670,6 +738,7 @@ function initMenuStage() {
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
+    biome: () => app.biome,
     createView: use3d
       ? (route, scene) => {
           const view = new View3D(canvas, $("labels3d"), route, scene);
@@ -3497,7 +3566,7 @@ function initViews() {
   $("view-note").textContent = t("view.building");
   const ride = app.ride;
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(app.routeFile, others, { network }))
+    .then(([others, network]) => buildScene(app.routeFile, others, { network, biome: app.biome }))
     .then((scene) => app.ride === ride && show3d(scene))
     .catch((error) => {
       if (app.ride !== ride) return;

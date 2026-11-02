@@ -75,6 +75,16 @@ test("a long route's world is thinned to a size a browser can build", () => {
   assert.ok(perKm < 12_000, `${Math.round(perKm)} triangles per km`);
 });
 
+test("a long route in winter stays inside the temperate budget", () => {
+  const route = bigLoop(30000, 20000);
+  const file = { id: "big", name: "Big", lanes: 4, seed: 9, points: route.nodes.map((n) => [n.x, n.y, n.elevation]) };
+  const temperate = chunkTriangles(buildSceneNow(file));
+  const winter = chunkTriangles(buildSceneNow(file, [], null, "winter"));
+  const perKm = winter / (route.length / 1000);
+  assert.ok(perKm < 12_000, `${Math.round(perKm)} winter triangles per km`);
+  assert.ok(winter <= temperate * 1.1, `winter ${winter} triangles vs temperate ${temperate}`);
+});
+
 test("FloatBuffer grows and trims", () => {
   const buffer = new FloatBuffer();
   for (let i = 0; i < 1000; i += 1) buffer.push(i, i + 0.5);

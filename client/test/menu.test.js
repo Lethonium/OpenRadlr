@@ -380,6 +380,36 @@ test("another pick is highlighted right away and its world rebuilt once the pick
   assert.equal(log.views[1].camera, log.views[0].camera, "the camera flies on");
 });
 
+test("another biome rebuilds the menu world in it", async () => {
+  const { stage, log } = fakeStage();
+  let biome = "temperate";
+  stage.deps.biome = () => biome;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, biome: options?.biome, resolve: () => resolve({ overview: overview() }) }));
+
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(log.builds[0].biome, "temperate");
+
+  // The pick did not change, the season did: the same route is built again.
+  biome = "winter";
+  await stage.biomeChanged();
+  land(log);
+  log.timers.at(-1)();
+  assert.deepEqual(
+    log.builds.map((build) => [build.id, build.biome]),
+    [
+      ["rolling-hills", "temperate"],
+      ["rolling-hills", "winter"],
+    ],
+  );
+
+  // Asking again while that one is on its way changes nothing.
+  await stage.biomeChanged();
+  assert.equal(log.builds.length, 2);
+});
+
 test("a rebuilt world waits until the camera has landed: no hitch in the middle of a glide", async () => {
   const { stage, log } = fakeStage();
   await stage.select(listed, "rolling-hills");

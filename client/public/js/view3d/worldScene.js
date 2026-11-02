@@ -23,12 +23,13 @@ export function transferList(value, found = new Set()) {
   return [...found];
 }
 
-/** Builds the scene for `routeFile` and the `others` on its map (or its map's `network` file), synchronously. */
-export function buildSceneNow(routeFile, others = [], network = null) {
+/** Builds the scene for `routeFile` and the `others` on its map (or its map's `network` file), in `biome`, synchronously. */
+export function buildSceneNow(routeFile, others = [], network = null, biome = "temperate") {
   return sceneOf(
     buildWorld(new RouteGeometry(routeFile), {
       others: others.map((file) => new RouteGeometry(file)),
       network: network ? roadNetworkOf(network) : null,
+      biome: biome?.id ?? biome,
     }),
   );
 }
@@ -37,13 +38,14 @@ export function buildSceneNow(routeFile, others = [], network = null) {
  * Builds the scene in a module worker; falls back to building in place when
  * workers are unavailable or fail (older browsers, file:// pages).
  */
-export function buildScene(routeFile, others = [], { network = null, createWorker = defaultWorker } = {}) {
+export function buildScene(routeFile, others = [], { network = null, biome = "temperate", createWorker = defaultWorker } = {}) {
+  const biomeId = biome?.id ?? biome;
   return new Promise((resolve) => {
     let worker = null;
     const fallback = (reason) => {
       worker?.terminate();
       if (reason) console.warn("Building the 3D world in place:", reason);
-      resolve(buildSceneNow(routeFile, others, network));
+      resolve(buildSceneNow(routeFile, others, network, biomeId));
     };
     try {
       worker = createWorker();
@@ -64,7 +66,7 @@ export function buildScene(routeFile, others = [], { network = null, createWorke
       event.preventDefault?.();
       fallback(event.message ?? "worker failed");
     };
-    worker.postMessage({ route: routeFile, others, network });
+    worker.postMessage({ route: routeFile, others, network, biome: biomeId });
   });
 }
 
