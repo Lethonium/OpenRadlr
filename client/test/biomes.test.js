@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
-import { buildWorld } from "../public/js/view3d/world.js";
+import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
@@ -48,6 +48,23 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.ok(winter.road.postCap, "posts wear a cap of snow");
   assert.notDeepEqual(winter.river, resolveBiome("temperate").water, "the river freezes over");
   assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
+});
+
+test("a junction apron flattens winter's ploughed bank", () => {
+  const winter = resolveBiome("winter");
+  const road = new RouteGeometry({ id: "straight", name: "straight", lanes: 4, seed: 1, loop: false, points: [[0, 0, 10], [600, 0, 10]] });
+  const highest = (mesh, from, to) => {
+    let y = -Infinity;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      if (mesh.positions[i] >= from && mesh.positions[i] <= to) y = Math.max(y, mesh.positions[i + 1]);
+    }
+    return y;
+  };
+  const full = buildRoad(road, { biome: winter, clear: () => true });
+  const apron = buildRoad(road, { biome: winter, clear: () => true, bankAt: (x) => (x > 100 && x < 200 ? 0 : 1) });
+  assert.ok(highest(full, 110, 190) > 10.3, "the full bank stands above the road");
+  assert.ok(highest(apron, 110, 190) < 10.1, "the junction apron is flat");
+  assert.ok(highest(apron, 250, 350) > 10.3, "the bank comes back away from the junction");
 });
 
 test("winter's roadside posts are snowmen, yellow-scarfed at every kilometre", () => {

@@ -493,6 +493,59 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
 /** Junction pads sit below every road's asphalt (other roads: -0.02) and above the road bed (-0.35). */
 export const JUNCTION_LIFT = -0.07;
 
+/**
+ * How far from a junction the ploughed banks flatten out, and over what
+ * distance they fade back in. Without this, each road's raised snow shoulder
+ * runs straight across the other roads' asphalt where they meet.
+ */
+export const JUNCTION_BANK_CLEAR = 6.5;
+export const JUNCTION_BANK_FADE = 4;
+
+/**
+ * The world points where a network's roads meet at a fork or corner, so their
+ * ploughed banks have to open up. A straight-through node keeps its bank: the
+ * shoulders of both roads line up there.
+ * @returns {Array<[number, number]>} world x/z pairs
+ */
+export function junctionClearings(network) {
+  if (!network) return [];
+  const incident = new Map();
+  for (const road of network.roads()) {
+    const nodes = road.nodes;
+    const ends = [
+      [road.edge.from, nodes[0], nodes[1]],
+      [road.edge.to, nodes[nodes.length - 1], nodes[nodes.length - 2]],
+    ];
+    for (const [id, at, next] of ends) {
+      const dirs = incident.get(id) ?? [];
+      dirs.push([next.x - at.x, next.y - at.y]);
+      incident.set(id, dirs);
+    }
+  }
+  const points = [];
+  for (const node of network.nodes.values()) {
+    const dirs = incident.get(node.id) ?? [];
+    if (dirs.length < 2) continue;
+    let open = dirs.length >= 3;
+    if (dirs.length === 2) {
+      const [ax, ay] = dirs[0];
+      const [bx, by] = dirs[1];
+      const la = Math.hypot(ax, ay) || 1;
+      const lb = Math.hypot(bx, by) || 1;
+      open = (ax * bx + ay * by) / (la * lb) > -0.9; // sharper than ~154°
+    }
+    if (open) points.push([node.x, -node.y]);
+  }
+  return points;
+}
+
+/** 0 on a junction's flat apron, rising to 1 where the ploughed bank resumes. */
+export function junctionBankAt(points, x, z) {
+  let nearest = Infinity;
+  for (const [px, pz] of points) nearest = Math.min(nearest, Math.hypot(x - px, z - pz));
+  return Math.min(1, Math.max(0, (nearest - JUNCTION_BANK_CLEAR) / JUNCTION_BANK_FADE));
+}
+
 /** A round asphalt pad where roads of a network meet (`node` in route coordinates). */
 export function buildJunctionPad(node, into, { lanes = 4, sides = 20, biome = temperate } = {}) {
   const radius = roadHalfWidth(lanes) + 0.3;
@@ -536,9 +589,10 @@ function roadsideModel(biome, km) {
  * Asphalt, verges, markings and posts along a route. Other roads of the map
  * pass a lower `lift` (so the ridden road wins where they overlap at
  * junctions) and `skip` the stretches already drawn; `clear` keeps posts off
- * other roads.
+ * other roads. `bankAt` (0..1) flattens the season's ploughed bank near
+ * junctions, where raised shoulders would cut across the other roads.
  */
-export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift = ROAD_LIFT.ridden, skip = () => false, clear = () => false, detail = true, biome = temperate } = {}) {
+export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift = ROAD_LIFT.ridden, skip = () => false, clear = () => false, detail = true, bankAt = null, biome = temperate } = {}) {
   const halfWidth = roadHalfWidth(route.lanes);
   const { mesh, own } = target(into);
   const random = seededRandom((route.seed >>> 0) ^ 0xa5f);
@@ -551,6 +605,10 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
   const bank = biome.road.bank;
   const rut = detail ? biome.road.rut : null;
   const postCap = detail ? biome.road.postCap : null;
+  // A ploughed bank fades from a flat verge (0) to full height (1), so the
+  // snow can open up where roads meet instead of cutting across them.
+  const shoulder = (k) => (bank ? -0.2 + (bank.height + 0.2) * k : -0.2);
+  const ploughed = (frame) => (bankAt ? bankAt(frame.center[0], frame.center[2]) : 1);
   const steps = Math.ceil(route.length / step);
   for (let i = 0; i < steps; i += 1) {
     // Slight per-segment variation reads as patched asphalt.
@@ -562,16 +620,19 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
     mesh.quad(edgeAt(f0, -halfWidth), edgeAt(f0, halfWidth), edgeAt(f1, halfWidth), edgeAt(f1, -halfWidth), asphalt);
     // Gravel verge on both sides, sloping down into the grass. In winter it
     // is a raised snow shoulder closing into a small ploughed bank.
-    const outerDrop = bank ? bank.height : -0.2;
+    const bank0 = bank ? ploughed(f0) : 0;
+    const bank1 = bank ? ploughed(f1) : 0;
+    const drop0 = shoulder(bank0);
+    const drop1 = shoulder(bank1);
     for (const side of [-1, 1]) {
       const inner = side * halfWidth;
       const outer = side * (halfWidth + VERGE);
-      const pts = side < 0 ? [edgeAt(f0, outer, outerDrop), edgeAt(f0, inner, -0.03), edgeAt(f1, inner, -0.03), edgeAt(f1, outer, outerDrop)] : [edgeAt(f0, inner, -0.03), edgeAt(f0, outer, outerDrop), edgeAt(f1, outer, outerDrop), edgeAt(f1, inner, -0.03)];
+      const pts = side < 0 ? [edgeAt(f0, outer, drop0), edgeAt(f0, inner, -0.03), edgeAt(f1, inner, -0.03), edgeAt(f1, outer, drop1)] : [edgeAt(f0, inner, -0.03), edgeAt(f0, outer, drop0), edgeAt(f1, outer, drop1), edgeAt(f1, inner, -0.03)];
       mesh.quad(...pts, biome.road.verge);
-      if (bank) {
+      if (bank && (bank0 > 0 || bank1 > 0)) {
         // Close the shoulder down to the ground so the bank has a face.
-        const top0 = edgeAt(f0, outer, bank.height);
-        const top1 = edgeAt(f1, outer, bank.height);
+        const top0 = edgeAt(f0, outer, drop0);
+        const top1 = edgeAt(f1, outer, drop1);
         const down1 = edgeAt(f1, outer, -0.5);
         const down0 = edgeAt(f0, outer, -0.5);
         const facing = scale(f0.right, side);
@@ -596,6 +657,8 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
       if (skip(d) && skip(Math.min(route.length, d + markingStep))) continue;
       const f0 = roadFrame(route, d);
       const f1 = roadFrame(route, Math.min(route.length, d + markingStep));
+      // Lines stop at a junction instead of running across the other road.
+      if (bankAt && (!ploughed(f0) || !ploughed(f1))) continue;
       const at = (f, o) => edgeAt(f, o, ROAD_LIFT.marking);
       mesh.quad(at(f0, offset - width / 2), at(f0, offset + width / 2), at(f1, offset + width / 2), at(f1, offset - width / 2), color);
     }
@@ -914,6 +977,14 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const long = route.length > LONG_ROUTE_M;
   const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
 
+  // Nodes where a network's roads meet, for the junction pads.
+  const degree = new Map();
+  if (network) for (const road of roads) for (const id of [road.edge.from, road.edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
+  // Ploughed banks flatten out near a fork or corner, so no road's snow
+  // shoulder runs across another road's asphalt.
+  const junctionPoints = junctionClearings(network);
+  const bankAt = (x, z) => junctionBankAt(junctionPoints, x, z);
+
   // The ridden road on top; the others skip what is already drawn and sit
   // lower where they overlap it at junctions, markings included.
   const shared = new Map();
@@ -924,14 +995,12 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     shared.set(r, stretches);
     const other = (s) => s.route !== r && !(i === 0 && ridden.has(s.route));
     const otherRoad = (x, z) => base.index.nearest(x, z, 1, other)?.distance < roadHalfWidth(r.lanes) + VERGE;
-    buildRoad(r, { into: chunks.road, biome, ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep, detail: false } : {}), lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other, skip: (d) => onStretches(stretches, d), clear: otherRoad });
+    buildRoad(r, { into: chunks.road, biome, ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep, detail: false } : {}), lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other, skip: (d) => onStretches(stretches, d), clear: otherRoad, ...(junctionPoints.length ? { bankAt } : {}) });
   }
 
   // Where roads of a network meet at an angle, an asphalt pad closes the
   // gap between their square ends (under every road, so markings stay on top).
   if (network) {
-    const degree = new Map();
-    for (const road of roads) for (const id of [road.edge.from, road.edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
     for (const node of network.nodes.values()) {
       if ((degree.get(node.id) ?? 0) >= 2) buildJunctionPad(node, chunks.road, { biome });
     }

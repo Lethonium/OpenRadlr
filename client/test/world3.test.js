@@ -8,7 +8,7 @@ import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { buildTerrain, buildWorld, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -387,6 +387,22 @@ test("the map world: terrain hugs every road and rivers cross them only at bridg
 test("junction pads lie under every road and over the road bed", () => {
   assert.ok(JUNCTION_LIFT < ROAD_LIFT.other - depthStep(RIDE_LENS, 150), "under the other roads");
   assert.ok(JUNCTION_LIFT > -0.35 + 0.1, "over the terrain's road bed");
+});
+
+test("the ploughed bank opens at forks and corners, not where a road runs through", () => {
+  const clearings = junctionClearings(network);
+  const cleared = (id) => {
+    const node = network.nodes.get(id);
+    return clearings.some(([x, z]) => Math.hypot(x - node.x, z + node.y) < 1);
+  };
+  for (const id of ["hill-cafe", "east-fork", "west-fork", "south-east", "north-east", "north-west"]) assert.ok(cleared(id), `${id} opens the bank`);
+  assert.ok(!cleared("valley-cafe"), "two roads continue straight through the café");
+  assert.ok(!cleared("beach-cafe"), "the coast road runs straight through its café");
+
+  const hill = network.nodes.get("hill-cafe");
+  assert.equal(junctionBankAt(clearings, hill.x, -hill.y), 0, "flat on the apron");
+  const beyond = -hill.y - (JUNCTION_BANK_CLEAR + JUNCTION_BANK_FADE);
+  assert.equal(junctionBankAt(clearings, hill.x, beyond), 1, "the full bank resumes beyond the fade");
 });
 
 test("every café of the map gets its café, whichever route you ride", () => {
