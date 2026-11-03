@@ -64,7 +64,7 @@ import {
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoFileName, photoStats } from "./view/photos.js";
-import { drawPeloton } from "./view/pelotonView.js";
+import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
 import { ftpProvenance } from "./view/ftpProvenance.js";
@@ -3604,7 +3604,7 @@ function setViewMode(mode, { remember = true } = {}) {
   const use3d = mode === "3d" && Boolean(app.view3d);
   app.viewMode = use3d ? "3d" : "2d";
   $("world-wrap").hidden = !use3d;
-  $("peloton").hidden = use3d;
+  $("ride-map").hidden = use3d;
   $("view-3d").setAttribute("aria-pressed", String(use3d));
   $("view-2d").setAttribute("aria-pressed", String(!use3d));
   $("scene-controls").hidden = !use3d;
@@ -3878,11 +3878,11 @@ function frame() {
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors });
+    drawRideMap($("ride-map"), { route: app.route, riders, me, colors, network: app.network, routes: app.routes });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {
-    const scene = grabScene(app.viewMode === "3d" ? $("world3d") : $("peloton"));
+    const scene = grabScene(app.viewMode === "3d" ? $("world3d") : $("ride-map"));
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
