@@ -410,6 +410,92 @@ test("another biome rebuilds the menu world in it", async () => {
   assert.equal(log.builds.length, 2);
 });
 
+test("a season change on the studio tab rebuilds the island in it", async () => {
+  const { stage, log } = fakeStage();
+  let biome = "temperate";
+  stage.deps.biome = () => biome;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, biome: options?.biome, resolve: () => resolve({ overview: overview() }) }));
+
+  await stage.select(listed, "spin-studio");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(stage.viewRouteId, "riverside-flats", "the island of the first route");
+
+  biome = "winter";
+  await stage.biomeChanged();
+  land(log);
+  log.timers.at(-1)();
+  assert.deepEqual(
+    log.builds.map((build) => [build.id, build.biome]),
+    [
+      ["riverside-flats", "temperate"],
+      ["riverside-flats", "winter"],
+    ],
+  );
+
+  log.builds[1].resolve();
+  await settle();
+  assert.ok(log.views[0].disposed, "the old season's island is released");
+  assert.equal(stage.viewRouteId, "riverside-flats");
+});
+
+test("a season change on the workout card rebuilds the world around its gym", async () => {
+  const { stage, log } = fakeStage();
+  const withWorkout = [...listed, { id: "workout", name: "Workout", kind: "workout" }];
+  let biome = "temperate";
+  stage.deps.biome = () => biome;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, biome: options?.biome, resolve: () => resolve({ overview: overview(), gyms: [gymAt(flats)] }) }));
+
+  await stage.select(withWorkout, "workout");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(log.views[0].camera.view, "gym", "circling the gym");
+
+  biome = "winter";
+  await stage.biomeChanged();
+  land(log);
+  log.timers.at(-1)();
+  assert.deepEqual(
+    log.builds.map((build) => [build.id, build.biome]),
+    [
+      ["riverside-flats", "temperate"],
+      ["riverside-flats", "winter"],
+    ],
+  );
+
+  log.builds[1].resolve();
+  await settle();
+  assert.ok(log.views[0].disposed, "the old season's world is released");
+  assert.equal(log.views[1].camera.view, "gym", "still circling the gym");
+});
+
+test("a season change while the first world is still building is not lost", async () => {
+  const { stage, log } = fakeStage();
+  let biome = "temperate";
+  stage.deps.biome = () => biome;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, biome: options?.biome, resolve: () => resolve({ overview: overview() }) }));
+
+  await stage.select(listed, "rolling-hills");
+  biome = "winter";
+  await stage.biomeChanged();
+
+  // The temperate build lands too late: it is dropped, and the winter one waits behind it.
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(stage.viewRouteId, null, "the old season's world is not shown");
+  assert.deepEqual(log.world, [], "nothing faded in");
+
+  log.timers.at(-1)();
+  assert.equal(log.builds.at(-1).biome, "winter");
+  log.builds.at(-1).resolve();
+  await settle();
+  assert.equal(stage.viewRouteId, "rolling-hills");
+  assert.deepEqual(log.world, [true]);
+});
+
 test("a rebuilt world waits until the camera has landed: no hitch in the middle of a glide", async () => {
   const { stage, log } = fakeStage();
   await stage.select(listed, "rolling-hills");
@@ -458,6 +544,18 @@ test("joining takes the view over only when it was built for the joined route", 
   await settle();
   assert.equal(other.stage.takeView("col-de-la-forge"), null);
   assert.ok(other.log.views[0].disposed);
+});
+
+test("joining takes the view over only when it was built in the season picked", async () => {
+  const { stage, log } = fakeStage();
+  let biome = "temperate";
+  stage.deps.biome = () => biome;
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  biome = "winter";
+  assert.equal(stage.takeView("rolling-hills"), null, "the old season's world is not ridden");
+  assert.ok(log.views[0].disposed, "it is released instead");
 });
 
 test("joining pauses the drone view; a failed join resumes it", async () => {

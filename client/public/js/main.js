@@ -160,7 +160,7 @@ function paintBiomePreview(select, id) {
   });
 }
 
-/** Fills the season pickers from the biome registry and binds them. */
+/** Fills the season pickers from the biome registry and binds them once. */
 function initBiomePicker() {
   for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
     const select = $(id);
@@ -168,7 +168,11 @@ function initBiomePicker() {
     select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
     select.value = app.biome;
     paintBiomePreview(select, app.biome);
-    select.addEventListener("change", (event) => setBiome(event.target.value));
+    // The menu picker stays on the page between rides, so bind it only once.
+    if (!select.biomeListening) {
+      select.addEventListener("change", (event) => setBiome(event.target.value));
+      select.biomeListening = true;
+    }
   }
 }
 
@@ -189,28 +193,39 @@ function setBiome(id) {
     }
   }
   if (app.studio) return;
-  if (app.view3d) rebuildRideWorld();
+  if (app.view3d) buildRideWorld();
   else app.menu?.biomeChanged();
 }
 
-/** Rebuilds the ridden world for the current biome, then swaps it in. */
-function rebuildRideWorld() {
+/** The newest ride-world build; a later request makes an earlier one's result stale. */
+let rideWorldBuild = 0;
+
+/**
+ * Builds the ride's world for the current biome and swaps it in. Only the latest
+ * request may swap, and it drops whatever view is on screen then, not the one
+ * that was there when it started.
+ */
+function buildRideWorld() {
   const ride = app.ride;
-  const previous = app.view3d;
-  if (!ride || !previous || !app.routeFile) return;
+  const routeFile = app.routeFile;
+  const biome = app.biome;
+  if (!ride || !routeFile) return;
+  const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(app.routeFile, others, { network, biome: app.biome }))
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
     .then((scene) => {
-      if (app.ride !== ride) return;
+      if (app.ride !== ride || build !== rideWorldBuild) return;
+      // The season changed while this was building: build the picked one instead.
+      if (app.biome !== biome) return buildRideWorld();
       // Drop the old world's buffers before the new one is uploaded: two full
       // maps at once are too much for a low-end GPU.
-      previous.dispose();
-      if (app.view3d === previous) app.view3d = null;
+      app.view3d?.dispose();
+      app.view3d = null;
       show3d(scene);
     })
     .catch((error) => {
-      if (app.ride !== ride) return;
+      if (app.ride !== ride || build !== rideWorldBuild) return;
       console.error(error);
       $("view-note").textContent = t("view.unavailable");
     });
@@ -542,7 +557,7 @@ function renderDeviceStatuses() {
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu, initBiomePicker);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -1750,6 +1765,8 @@ function endRide() {
   const fresh = rideTemplate.cloneNode(true);
   for (const id of ["world3d", "labels3d", "studio3d", "studio-labels"]) fresh.querySelector(`#${id}`).replaceWith($(id));
   $("ride").replaceWith(fresh);
+  // The template predates the pickers being filled: build the fresh screen's options too.
+  initBiomePicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
   delete $("join").dataset.busy;
@@ -3583,17 +3600,9 @@ function initViews() {
     return;
   }
   // Building the world (with the other routes on its map) takes a moment,
-  // off the main thread where possible; ride in 2D meanwhile.
-  $("view-note").textContent = t("view.building");
-  const ride = app.ride;
-  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(app.routeFile, others, { network, biome: app.biome }))
-    .then((scene) => app.ride === ride && show3d(scene))
-    .catch((error) => {
-      if (app.ride !== ride) return;
-      console.error(error);
-      $("view-note").textContent = t("view.unavailable");
-    });
+  // off the main thread where possible; ride in 2D meanwhile. A season changed
+  // meanwhile is picked up when this build lands.
+  buildRideWorld();
 }
 
 /** A route file from the server (the default route without an id). */

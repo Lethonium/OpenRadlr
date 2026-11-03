@@ -133,7 +133,7 @@ void main() {
   outColor = vec4(sky, 1.0);
 }`;
 
-const WEATHER_VERTEX = `#version 300 es
+export const WEATHER_VERTEX = `#version 300 es
 in vec2 a_corner;
 in vec4 a_seed;
 uniform mat4 u_viewProjection;
@@ -153,8 +153,7 @@ void main() {
   vec3 world;
   world.x = mod(seed.x + drift.x - u_cameraPosition.x, u_box.x) + u_cameraPosition.x - u_box.x * 0.5;
   world.z = mod(seed.z + drift.z - u_cameraPosition.z, u_box.z) + u_cameraPosition.z - u_box.z * 0.5;
-  float y = mod(seed.y - u_time * speed - u_cameraPosition.y, u_box.y);
-  world.y = u_cameraPosition.y + u_box.y * 0.5 - y;
+  world.y = u_cameraPosition.y - u_box.y * 0.5 + mod(seed.y - u_time * speed - u_cameraPosition.y, u_box.y);
   float size = mix(u_size.x, u_size.y, fract(a_seed.w * 7.13));
   world += (u_cameraRight * a_corner.x + u_cameraUp * a_corner.y) * size;
   v_corner = a_corner;

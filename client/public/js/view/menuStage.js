@@ -125,12 +125,19 @@ export class MenuStage {
           console.warn("Route preview unavailable:", error);
           return;
         }
-        if (token !== this.#token || this.#stopped || this.#showGym()) return;
+        if (token !== this.#token || this.#stopped) return;
+        // Changing the season rebuilds the world even when the gym is already on screen.
+        if (this.#showGym() && !force) return;
         await this.#prepare(first.id, token, { highlight: false });
         return;
       }
       this.#camera?.showIsland();
-      if (!this.#view && first) this.#prepare(first.id, token, { highlight: false });
+      // Changing the season rebuilds the world on screen; without one, build the first.
+      if (!this.#view && first) await this.#prepare(first.id, token, { highlight: false });
+      else if (force) {
+        const id = this.#selectedOrFirst();
+        if (id) await this.#prepare(id, token, { highlight: false });
+      }
       return;
     }
     await this.#prepare(picked.id, token, { highlight: true });
@@ -325,7 +332,7 @@ export class MenuStage {
     this.#view = null;
     if (!view) return null;
     view.setHighlights([]);
-    if (this.#viewRouteId === routeId) return view;
+    if (this.#viewRouteId === routeId && this.#viewBiome === this.#biome()) return view;
     view.dispose();
     return null;
   }

@@ -25,6 +25,7 @@ import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
+import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 
@@ -393,6 +394,27 @@ test("the view draws the biome's weather around the camera", () => {
   assert.ok(renderer.weather, "snow is drawn");
   assert.equal(renderer.weather.options.style.kind, "snow");
   assert.equal(renderer.weather.handle.data, weather.data);
+});
+
+/** Evaluates the weather shader's vertical placement, with GLSL's mod semantics. */
+function weatherFlakeY({ seedY, timeS, speed, cameraY, boxY }) {
+  const expression = WEATHER_VERTEX.match(/world\.y = ([^;]+);/)?.[1];
+  assert.ok(expression, "the vertex shader places the weather");
+  const mod = (x, y) => x - y * Math.floor(x / y);
+  return new Function("seed", "u_time", "speed", "u_cameraPosition", "u_box", "mod", `return ${expression};`)({ y: seedY }, timeS, speed, { y: cameraY }, { y: boxY }, mod);
+}
+
+test("snow falls past the camera instead of rising with it", () => {
+  const boxY = 100;
+  const seedY = 60;
+  const speed = 8;
+  const first = weatherFlakeY({ seedY, timeS: 0, speed, cameraY: 30, boxY });
+  const later = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 30, boxY });
+  assert.ok(later < first, "the flake falls as time passes");
+  assert.ok(Math.abs(first - later - speed) < 1e-9, "at its fall speed");
+  // The field is wrapped around the camera: climbing must not drag it along.
+  const climbed = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 40, boxY });
+  assert.ok(Math.abs(climbed - later) < 1e-9, "climbing leaves the flake where it is");
 });
 
 test("a workout rider is drawn at its gym spot, not on the road", () => {
