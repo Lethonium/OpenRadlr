@@ -210,6 +210,9 @@
                   <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
                   <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
                 </div>
+                <label><span data-i18n="drawer.biome">Season</span>
+                  <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
+                </label>
                 <label class="ride-only"><span data-i18n="rider.splits">Splits</span>
                   <select id="split-mode" name="split-mode">
                     <option value="auto" data-i18n="layout.auto">Auto</option>
@@ -616,6 +619,7 @@
                         <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
                         <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
                       </select>
+                      <select id="biome-mode" aria-label="Season" title="Season: changes how the world looks, not where anything is" data-i18n-attr="title:drawer.biomeHint,aria-label:drawer.biome"></select>
                     </div>
                   </div>
                 </div>
@@ -707,6 +711,13 @@
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="drawer.biome">Season</h2>
+                    <label><span class="visually-hidden" data-i18n="drawer.biome">Season</span>
+                      <select id="menu-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
+                    </label>
+                    <p class="hint" data-i18n="drawer.biomeHint">Season: changes how the world looks, not where anything is</p>
+                  </div>
                   <div class="panel">
                     <h2 data-i18n="rider.units">Units</h2>
                     <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">

@@ -31,63 +31,14 @@ import {
 import { COAST, SEA_LEVEL, coastHeight, islandShape } from "./island.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
-import { add, cellKey, normalize, scale } from "./math.js";
+import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
+import { resolveBiome, temperate } from "./biomes/index.js";
+import { buildWeather } from "./weather.js";
 
 export const LANE_WIDTH = 1.4;
 export const SHOULDER = 0.9;
 export const VERGE = 1.1;
-
-const COLORS = Object.freeze({
-  road: [0.25, 0.26, 0.28],
-  verge: [0.62, 0.58, 0.48],
-  marking: [0.93, 0.93, 0.89],
-  edge: [0.9, 0.9, 0.86],
-  trunk: [0.38, 0.27, 0.18],
-  firs: [
-    [0.13, 0.33, 0.2],
-    [0.16, 0.37, 0.22],
-    [0.11, 0.29, 0.19],
-  ],
-  leaves: [
-    [0.3, 0.52, 0.22],
-    [0.38, 0.58, 0.24],
-    [0.46, 0.6, 0.2],
-    [0.68, 0.55, 0.2],
-  ],
-  bush: [0.27, 0.45, 0.2],
-  rock: [0.52, 0.51, 0.49],
-  postWhite: [0.94, 0.94, 0.92],
-  postRed: [0.82, 0.18, 0.16],
-  start: [1.0, 0.48, 0.1],
-  climb: [0.86, 0.3, 0.3],
-  sprint: [0.3, 0.7, 0.95],
-  post: [0.92, 0.92, 0.92],
-  farIsland: [0.4, 0.46, 0.4],
-  farIslandDark: [0.45, 0.45, 0.42],
-  cloud: [1, 1, 1, 1], // tinted by the time of day
-  water: [0.16, 0.42, 0.56],
-  grass: [
-    [0.3, 0.5, 0.2],
-    [0.38, 0.58, 0.22],
-    [0.45, 0.6, 0.26],
-  ],
-  flowers: [
-    [0.95, 0.85, 0.2],
-    [0.95, 0.95, 0.95],
-    [0.85, 0.3, 0.55],
-    [0.55, 0.45, 0.9],
-  ],
-});
-
-/** Farmland palette with thresholds on a patch noise: mostly grass, some fields. */
-const FIELDS = [
-  { upTo: 0.42, color: [0.36, 0.58, 0.25] }, // meadow
-  { upTo: 0.62, color: [0.3, 0.52, 0.23] }, // lush grass
-  { upTo: 0.74, color: [0.45, 0.62, 0.28] }, // young crops
-  { upTo: 0.84, color: [0.58, 0.63, 0.3] }, // hay
-  { upTo: 1.01, color: [0.82, 0.7, 0.36] }, // wheat
-];
 
 export const roadHalfWidth = (lanes) => (lanes * LANE_WIDTH) / 2 + SHOULDER;
 
@@ -336,22 +287,6 @@ export function networkTerrain(network, roads = network.roads()) {
 /** Sea level: route elevations are above the sea; a road lower than that still stays dry. */
 export const waterLevel = (index) => Math.min(SEA_LEVEL, index.minElevation - 6);
 
-const SAND = [0.78, 0.71, 0.52];
-const SEA_FLOOR = [0.2, 0.36, 0.38];
-
-function terrainColor(x, z, height, steep, seed, water, riverDistance = Infinity) {
-  if (height < water - 0.2) return SAND.map((c, i) => c + (SEA_FLOOR[i] - c) * smoothstep(0, 14, water - height)); // sea floor
-  if (height < water + 2.4 && steep < 0.5) return SAND.map((c) => c * (0.95 + 0.1 * valueNoise(x / 9, z / 9, seed + 3))); // beach
-  if (riverDistance < RIVER.halfWidth + 3) return [0.5, 0.45, 0.34]; // river bed and muddy banks
-  if (riverDistance < RIVER.halfWidth + 9) return [0.34, 0.5, 0.26]; // lush river meadow
-  if (steep > 0.6) return [0.48, 0.46, 0.42];
-  const patch = valueNoise(x / 85, z / 85, seed + 31);
-  const base = FIELDS.find((f) => patch < f.upTo).color;
-  const shade = 0.92 + 0.16 * fbm(x / 30, z / 30, seed + 7, 2);
-  const high = smoothstep(85, 140, height - water);
-  return [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + [0.5, 0.52, 0.42][i] * high);
-}
-
 /**
  * A height grid of flat-shaded triangles. Where `coarse(x0, z0, x1, z1)` says
  * a block of `block` × `block` cells needs no detail (far from any road), and
@@ -508,7 +443,7 @@ export const TERRAIN_LAYERS = Object.freeze({ sink: 40, floorGap: 20 });
 /** Above this many fine-grid nodes an island is "huge" (a 180 km route): built lazily, in big far blocks, with a horizon around all of it. */
 export const HUGE_ISLAND_NODES = 1_500_000;
 
-export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null } = {}) {
+export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate } = {}) {
   const { minX, maxX, minY, maxY } = terrain.bounds;
   const seed = terrain.seed;
   const water = waterLevel(terrain.index);
@@ -522,7 +457,7 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   const [cx, cz] = terrain.island?.center ?? terrain.index.center;
   if (huge) horizon = Math.hypot(bounds.x1 - bounds.x0, bounds.z1 - bounds.z0) / 2 + horizon;
   const riverDistance = (x, z) => terrain.riverDistance?.(x, z) ?? Infinity;
-  const color = (x, z, y, steep) => terrainColor(x, z, y, steep, seed, water, riverDistance(x, z));
+  const color = (x, z, y, steep) => biome.terrainColor({ x, z, height: y, steep, seed, water, riverDistance: riverDistance(x, z), riverHalfWidth: RIVER.halfWidth });
 
   const fine = into ?? new MeshBuilder();
   const mesh = into ? new MeshBuilder() : fine;
@@ -552,22 +487,75 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   // A sea floor under everything, so the sea looks the same out to the horizon.
   const floor = lowest - TERRAIN_LAYERS.floorGap;
   const far = Math.max(20000, horizon * 2);
-  mesh.quad([cx - far, floor, cz - far], [cx - far, floor, cz + far], [cx + far, floor, cz + far], [cx + far, floor, cz - far], terrainColor(cx, cz, floor, 0, seed, water));
+  mesh.quad([cx - far, floor, cz - far], [cx - far, floor, cz + far], [cx + far, floor, cz + far], [cx + far, floor, cz - far], biome.terrainColor({ x: cx, z: cz, height: floor, steep: 0, seed, water, riverHalfWidth: RIVER.halfWidth }));
   return { mesh: mesh.build(), bounds, water, floor, horizon };
 }
 
 /** Junction pads sit below every road's asphalt (other roads: -0.02) and above the road bed (-0.35). */
 export const JUNCTION_LIFT = -0.07;
 
+/**
+ * How far from a junction the ploughed banks flatten out, and over what
+ * distance they fade back in. Without this, each road's raised snow shoulder
+ * runs straight across the other roads' asphalt where they meet.
+ */
+export const JUNCTION_BANK_CLEAR = 6.5;
+export const JUNCTION_BANK_FADE = 4;
+
+/**
+ * The world points where a network's roads meet at a fork or corner, so their
+ * ploughed banks have to open up. A straight-through node keeps its bank: the
+ * shoulders of both roads line up there.
+ * @returns {Array<[number, number]>} world x/z pairs
+ */
+export function junctionClearings(network) {
+  if (!network) return [];
+  const incident = new Map();
+  for (const road of network.roads()) {
+    const nodes = road.nodes;
+    const ends = [
+      [road.edge.from, nodes[0], nodes[1]],
+      [road.edge.to, nodes[nodes.length - 1], nodes[nodes.length - 2]],
+    ];
+    for (const [id, at, next] of ends) {
+      const dirs = incident.get(id) ?? [];
+      dirs.push([next.x - at.x, next.y - at.y]);
+      incident.set(id, dirs);
+    }
+  }
+  const points = [];
+  for (const node of network.nodes.values()) {
+    const dirs = incident.get(node.id) ?? [];
+    if (dirs.length < 2) continue;
+    let open = dirs.length >= 3;
+    if (dirs.length === 2) {
+      const [ax, ay] = dirs[0];
+      const [bx, by] = dirs[1];
+      const la = Math.hypot(ax, ay) || 1;
+      const lb = Math.hypot(bx, by) || 1;
+      open = (ax * bx + ay * by) / (la * lb) > -0.9; // sharper than ~154°
+    }
+    if (open) points.push([node.x, -node.y]);
+  }
+  return points;
+}
+
+/** 0 on a junction's flat apron, rising to 1 where the ploughed bank resumes. */
+export function junctionBankAt(points, x, z) {
+  let nearest = Infinity;
+  for (const [px, pz] of points) nearest = Math.min(nearest, Math.hypot(x - px, z - pz));
+  return Math.min(1, Math.max(0, (nearest - JUNCTION_BANK_CLEAR) / JUNCTION_BANK_FADE));
+}
+
 /** A round asphalt pad where roads of a network meet (`node` in route coordinates). */
-export function buildJunctionPad(node, into, { lanes = 4, sides = 20 } = {}) {
+export function buildJunctionPad(node, into, { lanes = 4, sides = 20, biome = temperate } = {}) {
   const radius = roadHalfWidth(lanes) + 0.3;
   const center = [node.x, node.elevation + JUNCTION_LIFT, -node.y];
   const at = (k) => {
     const a = (k / sides) * 2 * Math.PI;
     return [center[0] + Math.cos(a) * radius, center[1], center[2] + Math.sin(a) * radius];
   };
-  for (let k = 0; k < sides; k += 1) into.triangleFacing(center, at(k), at(k + 1), COLORS.road, [0, 1, 0]);
+  for (let k = 0; k < sides; k += 1) into.triangleFacing(center, at(k), at(k + 1), biome.road.surface, [0, 1, 0]);
 }
 
 /** Wraps a target so builders can share the "own a mesh or write into one" pattern. */
@@ -580,18 +568,48 @@ const target = (into) => ({ mesh: into ?? new MeshBuilder(), own: !into });
  */
 export const ROAD_LIFT = Object.freeze({ ridden: 0.04, other: -0.02, marking: 0.015 });
 
+const roadPostModels = new Map();
+
+/**
+ * The biome's own roadside marker, if it has one (winter turns the posts into
+ * snowmen). Built once per variant: every post reuses the same mesh.
+ */
+function roadsideModel(biome, km) {
+  const build = biome.models?.post;
+  if (!build) return null;
+  const key = `${biome.id}:${km ? 1 : 0}`;
+  let model = roadPostModels.get(key);
+  if (!model) {
+    model = build(km);
+    roadPostModels.set(key, model);
+  }
+  return model;
+}
+
 /**
  * Asphalt, verges, markings and posts along a route. Other roads of the map
  * pass a lower `lift` (so the ridden road wins where they overlap at
  * junctions) and `skip` the stretches already drawn; `clear` keeps posts off
- * other roads.
+ * other roads. `bankAt` (0..1) flattens the season's ploughed bank near
+ * junctions, where raised shoulders would cut across the other roads.
  */
-export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift = ROAD_LIFT.ridden, skip = () => false, clear = () => false } = {}) {
+export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift = ROAD_LIFT.ridden, skip = () => false, clear = () => false, detail = true, bankAt = null, biome = temperate } = {}) {
   const halfWidth = roadHalfWidth(route.lanes);
   const { mesh, own } = target(into);
   const random = seededRandom((route.seed >>> 0) ^ 0xa5f);
   const edgeAt = (frame, offset, extra = 0) => add(add(frame.center, scale(frame.right, offset)), [0, lift + extra, 0]);
 
+  const laneEdge = (route.lanes * LANE_WIDTH) / 2;
+  // Optional season detail on top of the same road: ploughed banks at the
+  // verge, worn ruts along the lanes, snow on the posts. Long routes keep the
+  // banks (they read from far away) and drop the close-up detail.
+  const bank = biome.road.bank;
+  const rut = detail ? biome.road.rut : null;
+  const postCap = detail ? biome.road.postCap : null;
+  // A ploughed bank fades from a flat verge (0) to full height (1), so the
+  // snow can open up where roads meet instead of cutting across them.
+  const shoulder = (k) => (bank ? -0.2 + (bank.height + 0.2) * k : -0.2);
+  const ploughed = (frame) => (bankAt ? bankAt(frame.center[0], frame.center[2]) : 1);
   const steps = Math.ceil(route.length / step);
   for (let i = 0; i < steps; i += 1) {
     // Slight per-segment variation reads as patched asphalt.
@@ -599,14 +617,37 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
     if (skip(i * step) && skip(Math.min(route.length, (i + 1) * step))) continue;
     const f0 = roadFrame(route, i * step);
     const f1 = roadFrame(route, Math.min(route.length, (i + 1) * step));
-    const asphalt = COLORS.road.map((c) => c * v);
+    const asphalt = biome.road.surface.map((c) => c * v);
     mesh.quad(edgeAt(f0, -halfWidth), edgeAt(f0, halfWidth), edgeAt(f1, halfWidth), edgeAt(f1, -halfWidth), asphalt);
-    // Gravel verge on both sides, sloping down into the grass.
+    // Gravel verge on both sides, sloping down into the grass. In winter it
+    // is a raised snow shoulder closing into a small ploughed bank.
+    const bank0 = bank ? ploughed(f0) : 0;
+    const bank1 = bank ? ploughed(f1) : 0;
+    const drop0 = shoulder(bank0);
+    const drop1 = shoulder(bank1);
     for (const side of [-1, 1]) {
       const inner = side * halfWidth;
       const outer = side * (halfWidth + VERGE);
-      const pts = side < 0 ? [edgeAt(f0, outer, -0.2), edgeAt(f0, inner, -0.03), edgeAt(f1, inner, -0.03), edgeAt(f1, outer, -0.2)] : [edgeAt(f0, inner, -0.03), edgeAt(f0, outer, -0.2), edgeAt(f1, outer, -0.2), edgeAt(f1, inner, -0.03)];
-      mesh.quad(...pts, COLORS.verge);
+      const pts = side < 0 ? [edgeAt(f0, outer, drop0), edgeAt(f0, inner, -0.03), edgeAt(f1, inner, -0.03), edgeAt(f1, outer, drop1)] : [edgeAt(f0, inner, -0.03), edgeAt(f0, outer, drop0), edgeAt(f1, outer, drop1), edgeAt(f1, inner, -0.03)];
+      mesh.quad(...pts, biome.road.verge);
+      if (bank && (bank0 > 0 || bank1 > 0)) {
+        // Close the shoulder down to the ground so the bank has a face.
+        const top0 = edgeAt(f0, outer, drop0);
+        const top1 = edgeAt(f1, outer, drop1);
+        const down1 = edgeAt(f1, outer, -0.5);
+        const down0 = edgeAt(f0, outer, -0.5);
+        const facing = scale(f0.right, side);
+        mesh.triangleFacing(top0, top1, down1, bank.color, facing);
+        mesh.triangleFacing(top0, down1, down0, bank.color, facing);
+      }
+    }
+    // Two darker ruts per lane, worn through the snow.
+    if (rut) {
+      for (let lane = 0; lane < route.lanes; lane += 1) {
+        const offset = -laneEdge + (lane + 0.5) * LANE_WIDTH;
+        const at = (f, o) => edgeAt(f, o, 0.005);
+        mesh.quad(at(f0, offset - rut.width / 2), at(f0, offset + rut.width / 2), at(f1, offset + rut.width / 2), at(f1, offset - rut.width / 2), rut.color);
+      }
     }
   }
 
@@ -617,14 +658,15 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
       if (skip(d) && skip(Math.min(route.length, d + markingStep))) continue;
       const f0 = roadFrame(route, d);
       const f1 = roadFrame(route, Math.min(route.length, d + markingStep));
+      // Lines stop at a junction instead of running across the other road.
+      if (bankAt && (!ploughed(f0) || !ploughed(f1))) continue;
       const at = (f, o) => edgeAt(f, o, ROAD_LIFT.marking);
       mesh.quad(at(f0, offset - width / 2), at(f0, offset + width / 2), at(f1, offset + width / 2), at(f1, offset - width / 2), color);
     }
   };
-  const laneEdge = (route.lanes * LANE_WIDTH) / 2;
-  stripe(-laneEdge, 0.12, false, COLORS.edge);
-  stripe(laneEdge, 0.12, false, COLORS.edge);
-  for (let lane = 1; lane < route.lanes; lane += 1) stripe(-laneEdge + lane * LANE_WIDTH, 0.1, true, COLORS.marking);
+  stripe(-laneEdge, 0.12, false, biome.road.edge);
+  stripe(laneEdge, 0.12, false, biome.road.edge);
+  for (let lane = 1; lane < route.lanes; lane += 1) stripe(-laneEdge + lane * LANE_WIDTH, 0.1, true, biome.road.marking);
 
   // Roadside posts every 50 m, alternating sides; every kilometre a pair with red tops.
   for (let d = 25; d < route.length; d += 50) {
@@ -635,15 +677,22 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
     for (const side of sides) {
       const foot = add(frame.center, scale(frame.right, side * (halfWidth + VERGE + 0.3)));
       if (clear(foot[0], foot[2])) continue;
-      mesh.box(add(foot, [0, 0.5, 0]), [0.12, 1.0, 0.12], COLORS.postWhite);
-      mesh.box(add(foot, [0, 1.05, 0]), [0.13, 0.12, 0.13], km ? COLORS.postRed : [0.2, 0.2, 0.2]);
+      const marker = detail ? roadsideModel(biome, km) : null;
+      if (marker) {
+        mesh.append(marker, placement(foot, 0));
+        continue;
+      }
+      mesh.box(add(foot, [0, 0.5, 0]), [0.12, 1.0, 0.12], biome.road.postWhite);
+      mesh.box(add(foot, [0, 1.05, 0]), [0.13, 0.12, 0.13], km ? biome.road.postRed : biome.road.postDark);
+      if (postCap) mesh.box(add(foot, [0, 1.14, 0]), [0.16, 0.06, 0.16], postCap.color);
     }
   }
   return own ? mesh.build() : mesh;
 }
 
 /** Arches at the start/finish line and at climb and sprint segments. */
-export function buildArches(route) {
+export function buildArches(route, { biome = temperate } = {}) {
+  const colors = biome.arch;
   const mesh = new MeshBuilder();
   const halfWidth = roadHalfWidth(route.lanes) + 0.6;
   const arch = (distance, color, height = 5.2) => {
@@ -651,28 +700,28 @@ export function buildArches(route) {
     const along = scale(normalize([frame.forward[0], 0, frame.forward[2]]), -0.4);
     for (const side of [-1, 1]) {
       const foot = add(frame.center, scale(frame.right, side * halfWidth));
-      mesh.orientedBox(add(foot, [0, height / 2, 0]), scale(frame.right, 0.4), [0, height, 0], along, COLORS.post);
+      mesh.orientedBox(add(foot, [0, height / 2, 0]), scale(frame.right, 0.4), [0, height, 0], along, colors.post);
     }
     const left = add(frame.center, scale(frame.right, -halfWidth));
     const right = add(frame.center, scale(frame.right, halfWidth));
     const beamCenter = add(scale(add(left, right), 0.5), [0, height, 0]);
     mesh.orientedBox(beamCenter, scale(frame.right, 2 * halfWidth + 0.4), [0, 1.0, 0], along, color);
     // Chequered strip on the start/finish line.
-    if (color === COLORS.start) {
+    if (color === colors.start) {
       const squares = 12;
       for (let i = 0; i < squares; i += 1) {
         const t0 = -halfWidth + 0.6 + (i / squares) * (2 * halfWidth - 1.2);
         const t1 = t0 + (2 * halfWidth - 1.2) / squares;
-        const shade = i % 2 === 0 ? [0.95, 0.95, 0.95] : [0.1, 0.1, 0.1];
+        const shade = colors.chequer[i % 2];
         const p = (t, o) => add(add(add(frame.center, scale(frame.right, t)), scale(normalize([frame.forward[0], 0, frame.forward[2]]), o)), [0, 0.06, 0]);
         mesh.quad(p(t0, -0.4), p(t1, -0.4), p(t1, 0.4), p(t0, 0.4), shade);
       }
     }
   };
   for (const marker of route.markers) {
-    if (marker.type === "start_finish") arch(marker.distance, COLORS.start, 5.6);
-    else if (marker.type === "climb") arch(marker.distance, COLORS.climb);
-    else if (marker.type === "sprint") arch(marker.distance, COLORS.sprint);
+    if (marker.type === "start_finish") arch(marker.distance, colors.start, 5.6);
+    else if (marker.type === "climb") arch(marker.distance, colors.climb);
+    else if (marker.type === "sprint") arch(marker.distance, colors.sprint);
   }
   return mesh.build();
 }
@@ -686,7 +735,7 @@ export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [] } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -726,36 +775,7 @@ export function buildScenery(
     positions.push([x, y, z]);
 
     const kind = inForest ? 0.28 + random() * 0.72 : random();
-    if (kind < 0.1) {
-      const size = 0.8 + random() * 2;
-      mesh.cone([x, y, z], size, size * 0.8, COLORS.rock, 5, random() * Math.PI);
-    } else if (kind < 0.28) {
-      const size = 0.9 + random() * 1.2;
-      mesh.ellipsoid([x, y + size * 0.55, z], [size, size * 0.75, size], COLORS.bush, 4, 8, random() * Math.PI);
-    } else if (kind < 0.62) {
-      // Fir: two or three stacked cones.
-      const height = 6 + random() * 7;
-      const color = COLORS.firs[Math.floor(random() * COLORS.firs.length)];
-      mesh.box([x, y + height * 0.12, z], [0.4, height * 0.24, 0.4], COLORS.trunk);
-      const tiers = random() < 0.5 ? 2 : 3;
-      for (let t = 0; t < tiers; t += 1) {
-        const base = y + height * (0.18 + t * 0.22);
-        const radius = height * (0.3 - t * 0.07);
-        mesh.cone([x, base, z], radius, height * (0.5 - t * 0.08), color, 7, random() * Math.PI);
-      }
-    } else {
-      // Leafy tree: trunk and one or two round crowns.
-      const height = 5 + random() * 5;
-      const color = COLORS.leaves[Math.floor(random() * COLORS.leaves.length)];
-      const crown = height * (0.3 + random() * 0.1);
-      mesh.box([x, y + height * 0.3, z], [0.45, height * 0.6, 0.45], COLORS.trunk);
-      mesh.ellipsoid([x, y + height * 0.68, z], [crown, crown * 0.85, crown], color, 4, 7, random() * Math.PI);
-      if (random() < 0.5) {
-        const dx = (random() - 0.5) * crown;
-        const dz = (random() - 0.5) * crown;
-        mesh.ellipsoid([x + dx, y + height * 0.85, z + dz], [crown * 0.7, crown * 0.6, crown * 0.7], color, 3, 6, random() * Math.PI);
-      }
-    }
+    biome.flora.tree({ mesh, x, y, z, kind, random });
   }
   return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
 }
@@ -767,7 +787,7 @@ export function buildScenery(
 export function buildGroundDetail(
   route,
   terrain,
-  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false } = {},
+  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x6a55);
   const halfWidth = roadHalfWidth(route.lanes) + VERGE;
@@ -787,27 +807,13 @@ export function buildGroundDetail(
     const p = spot();
     if (!p) continue;
     placed += 1;
-    const color = COLORS.grass[Math.floor(random() * COLORS.grass.length)];
-    const height = 0.25 + random() * 0.35;
-    const turn = random() * Math.PI;
-    for (let blade = 0; blade < 3; blade += 1) {
-      const angle = turn + (blade / 3) * Math.PI;
-      const dx = Math.cos(angle) * 0.09;
-      const dz = Math.sin(angle) * 0.09;
-      const lean = [(random() - 0.5) * 0.15, height, (random() - 0.5) * 0.15];
-      mesh.triangle([p[0] - dx, p[1], p[2] - dz], [p[0] + dx, p[1], p[2] + dz], add(p, lean), color);
-    }
+    biome.flora.tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   for (let i = 0; i < flowers; i += 1) {
     const p = spot();
     if (!p) continue;
     placed += 1;
-    const height = 0.3 + random() * 0.25;
-    const top = add(p, [0, height, 0]);
-    mesh.triangle([p[0] - 0.015, p[1], p[2]], [p[0] + 0.015, p[1], p[2]], top, COLORS.grass[0]);
-    const color = COLORS.flowers[Math.floor(random() * COLORS.flowers.length)];
-    const r = 0.06 + random() * 0.04;
-    mesh.ellipsoid(top, [r, r * 0.6, r], color, 2, 5, random() * Math.PI);
+    biome.flora.flower({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   return { mesh: own ? mesh.build() : mesh, count: placed };
 }
@@ -816,7 +822,7 @@ export function buildGroundDetail(
  * Far-off islands on the horizon, out at sea around the map's island: a few
  * hazy rocky hills, some in small groups.
  */
-export function buildFarIslands(route, terrain, { count = 11, distance = 1300 } = {}) {
+export function buildFarIslands(route, terrain, { count = 11, distance = 1300, biome = temperate } = {}) {
   const random = seededRandom((terrain.seed ?? route.seed >>> 0) ^ 0x3a7);
   const mesh = new MeshBuilder();
   const island = terrain.island;
@@ -834,40 +840,44 @@ export function buildFarIslands(route, terrain, { count = 11, distance = 1300 } 
       const d = far + radius + random() * 300;
       const x = cx + Math.cos(a) * d;
       const z = cz + Math.sin(a) * d;
-      const color = random() < 0.5 ? COLORS.farIsland : COLORS.farIslandDark;
+      const color = random() < 0.5 ? biome.farIsland : biome.farIslandDark;
       // A rounded hump, mostly under water, with a rocky top on the taller ones.
       const depth = height * 0.4;
       mesh.ellipsoid([x, sea - depth, z], [radius, height + depth, radius * (0.55 + random() * 0.4)], color, 5, 9, random() * Math.PI);
-      if (height > 220) mesh.cone([x, sea + height * 0.55, z], radius * 0.28, height * 0.62, COLORS.rock, 6, random() * Math.PI);
+      if (height > 220) mesh.cone([x, sea + height * 0.55, z], radius * 0.28, height * 0.62, biome.rock, 6, random() * Math.PI);
     }
   }
   return mesh.build();
 }
 
 /** The sea (or any water level): one flat plane; it only shows where the land dips below it. */
-export function buildWater(terrain, level, size = 40000) {
+export function buildWater(terrain, level, size = 40000, biome = temperate) {
   const mesh = new MeshBuilder();
   const [cx, cz] = terrain.island?.center ?? terrain.index.center;
   const h = size / 2;
-  mesh.quad([cx - h, level, cz - h], [cx - h, level, cz + h], [cx + h, level, cz + h], [cx + h, level, cz - h], COLORS.water);
+  const color = biome.water.color ?? biome.water;
+  mesh.quad([cx - h, level, cz - h], [cx - h, level, cz + h], [cx + h, level, cz + h], [cx + h, level, cz - h], color);
   return mesh.build();
 }
 
-/** Puffy low-poly clouds high above the route. */
-export function buildClouds(route, terrain, { count = 18, spread = 3500 } = {}) {
+/** Puffy low-poly clouds high above the route, shaped by the biome's sky. */
+export function buildClouds(route, terrain, { count, spread, biome = temperate } = {}) {
+  const style = biome.sky?.clouds ?? temperate.sky.clouds;
   const random = seededRandom((terrain.seed ?? route.seed >>> 0) ^ 0xc10d);
   const mesh = new MeshBuilder();
   const [cx, cz] = terrain.index.center;
-  for (let i = 0; i < count; i += 1) {
-    const x = cx + (random() - 0.5) * 2 * spread;
-    const z = cz + (random() - 0.5) * 2 * spread;
-    const y = terrain.index.meanElevation + 420 + random() * 300;
-    const puffs = 3 + Math.floor(random() * 4);
-    const size = 60 + random() * 70;
+  const total = count ?? style.count;
+  const span = spread ?? style.spread;
+  for (let i = 0; i < total; i += 1) {
+    const x = cx + (random() - 0.5) * 2 * span;
+    const z = cz + (random() - 0.5) * 2 * span;
+    const y = terrain.index.meanElevation + style.altitude[0] + random() * style.altitude[1];
+    const puffs = style.puffs[0] + Math.floor(random() * style.puffs[1]);
+    const size = style.radius[0] + random() * style.radius[1];
     for (let p = 0; p < puffs; p += 1) {
-      const offset = [(random() - 0.5) * size * 2.2, random() * size * 0.3, (random() - 0.5) * size];
-      const r = size * (0.6 + random() * 0.5);
-      mesh.ellipsoid(add([x, y, z], offset), [r, r * 0.5, r * 0.8], COLORS.cloud, 5, 10, random() * Math.PI);
+      const offset = [(random() - 0.5) * size * style.offset[0], random() * size * style.offset[1], (random() - 0.5) * size * style.offset[2]];
+      const r = size * (style.puffRadius[0] + random() * style.puffRadius[1]);
+      mesh.ellipsoid(add([x, y, z], offset), [r, r * style.squash[0], r * style.squash[1]], style.color, style.segments[0], style.segments[1], random() * Math.PI);
     }
   }
   return mesh.build();
@@ -923,12 +933,6 @@ export function sharedStretches(route, drawn) {
 const onStretches = (stretches, d) => stretches.some((s) => d >= s.from - 1e-6 && d <= s.to + 1e-6);
 
 /**
- * Scenery per kilometre of road, so every route gets the same density. On a
- * network, roads the ridden route doesn't use get `elsewhere` of the ground detail.
- */
-const PER_KM = Object.freeze({ trees: 270, tufts: 1450, flowers: 190, elsewhere: 0.4 });
-
-/**
  * A route this long (a 180 km course) can't have the valley's density all
  * along it: the world would have millions of triangles. Scenery, ground
  * detail, roads and far terrain get this much thinner instead.
@@ -950,7 +954,9 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+  biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
+  const density = biome.flora.density;
   const roads = network ? network.roads() : null;
   // Everything drawn as a road (the ridden route first), and what the shared
   // things are built along.
@@ -974,7 +980,15 @@ export function buildWorld(route, { others = [], network = null } = {}) {
   };
 
   const long = route.length > LONG_ROUTE_M;
-  const ground = buildTerrain(terrain, { into: chunks.terrain, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+  const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+
+  // Nodes where a network's roads meet, for the junction pads.
+  const degree = new Map();
+  if (network) for (const road of roads) for (const id of [road.edge.from, road.edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
+  // Ploughed banks flatten out near a fork or corner, so no road's snow
+  // shoulder runs across another road's asphalt.
+  const junctionPoints = junctionClearings(network);
+  const bankAt = (x, z) => junctionBankAt(junctionPoints, x, z);
 
   // The ridden road on top; the others skip what is already drawn and sit
   // lower where they overlap it at junctions, markings included.
@@ -986,16 +1000,14 @@ export function buildWorld(route, { others = [], network = null } = {}) {
     shared.set(r, stretches);
     const other = (s) => s.route !== r && !(i === 0 && ridden.has(s.route));
     const otherRoad = (x, z) => base.index.nearest(x, z, 1, other)?.distance < roadHalfWidth(r.lanes) + VERGE;
-    buildRoad(r, { into: chunks.road, ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep } : {}), lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other, skip: (d) => onStretches(stretches, d), clear: otherRoad });
+    buildRoad(r, { into: chunks.road, biome, ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep, detail: false } : {}), lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other, skip: (d) => onStretches(stretches, d), clear: otherRoad, ...(junctionPoints.length ? { bankAt } : {}) });
   }
 
   // Where roads of a network meet at an angle, an asphalt pad closes the
   // gap between their square ends (under every road, so markings stay on top).
   if (network) {
-    const degree = new Map();
-    for (const road of roads) for (const id of [road.edge.from, road.edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
     for (const node of network.nodes.values()) {
-      if ((degree.get(node.id) ?? 0) >= 2) buildJunctionPad(node, chunks.road);
+      if ((degree.get(node.id) ?? 0) >= 2) buildJunctionPad(node, chunks.road, { biome });
     }
   }
 
@@ -1006,10 +1018,10 @@ export function buildWorld(route, { others = [], network = null } = {}) {
   const avoid = (x, z, radius = 0) => nearRiver(x, z, radius) || terrain.height(x, z) < ground.water + 2.5 || nearRoad(x, z, radius);
   const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
 
-  for (const river of rivers) buildBridge(river.route, terrain, river, chunks.structures);
+  for (const river of rivers) buildBridge(river.route, terrain, river, chunks.structures, biome);
   for (const r of ordered) {
     for (const village of zonesOf.get(r).villages) {
-      buildVillage(r, terrain, village, { structures: chunks.structures, bright: chunks.bright, occupancy, seed: r.seed >>> 0, avoid });
+      buildVillage(r, terrain, village, { structures: chunks.structures, bright: chunks.bright, occupancy, seed: r.seed >>> 0, avoid, biome });
     }
   }
   // The bike café where rides start, before anything else claims the spot
@@ -1030,16 +1042,16 @@ export function buildWorld(route, { others = [], network = null } = {}) {
     const start = r.positionAt(0);
     if (cafes.some((c) => Math.hypot(c.x - start.x, c.y - start.y) < 30)) continue;
     cafes.push(start);
-    const cafe = buildBikeCafe(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid });
+    const cafe = buildBikeCafe(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome });
     if (!cafe) continue;
     cafeSpots.push(cafe.position);
     // The outdoor gym next to it, where workout riders train (#77).
-    const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid });
+    const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome });
     if (gym) gyms.push(gym);
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
-  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid });
+  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome });
   const rotors = buildWindTurbines(route, terrain, {
     structures: chunks.structures,
     occupancy,
@@ -1047,8 +1059,12 @@ export function buildWorld(route, { others = [], network = null } = {}) {
     bounds: ground.bounds,
     lakeLevel: ground.water,
     avoid,
+    biome,
   });
-  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0 });
+  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome });
+  // The crowd's two poses are biome models like every other shape; the view
+  // only alternates them (and adds the hop) while drawing.
+  const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
   for (const r of ordered) {
     const { villages, cliffs } = zonesOf.get(r);
     buildRoadside(r, terrain, {
@@ -1057,12 +1073,13 @@ export function buildWorld(route, { others = [], network = null } = {}) {
       bright: chunks.bright,
       markers: r === route,
       twoWay: Boolean(network),
+      biome,
       ...(long ? { railGrade: LONG.railGrade, railStep: LONG.railStep } : {}),
       skip: (d) => (!network && onStretches(shared.get(r), d)) || onBridge(r, d) || inStretch(r, villages, d, 10),
     });
   }
   // On a network the roads have the rails; the ridden route adds its signs.
-  if (network) buildRoadside(route, terrain, { structures: chunks.structures, bright: chunks.bright, rails: false });
+  if (network) buildRoadside(route, terrain, { structures: chunks.structures, bright: chunks.bright, rails: false, biome });
 
   // Villages keep their streets clear of trees; nothing grows in rivers or buildings.
   const inVillage = (x, z) => {
@@ -1076,22 +1093,25 @@ export function buildWorld(route, { others = [], network = null } = {}) {
     const margin = 450;
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(PER_KM.trees * km * (long ? LONG.trees : 1)) });
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
     // Grass and flowers only show close up: thinner along the roads you don't ride.
-    const detail = (network && !ridden.has(r) ? PER_KM.elsewhere : 1) * (long ? LONG.ground : 1);
+    const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
     buildGroundDetail(r, terrain, {
+      biome,
       water: ground.water,
       into: chunks.detail,
-      tufts: Math.round(PER_KM.tufts * km * detail),
-      flowers: Math.round(PER_KM.flowers * km * detail),
+      tufts: Math.round(density.tufts * km * detail),
+      flowers: Math.round(density.flowers * km * detail),
       blocked: detailBlocked,
     });
   }
 
   const rivers3d = new MeshBuilder();
-  for (const river of rivers) buildRiverWater(river, rivers3d);
+  for (const river of rivers) buildRiverWater(river, rivers3d, biome.river ?? undefined);
 
   return {
+    // The view needs the biome to resolve its sky and lighting at render time.
+    biome: biome.id,
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,
@@ -1101,13 +1121,15 @@ export function buildWorld(route, { others = [], network = null } = {}) {
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     meshes: {
       horizon: ground.mesh,
-      arches: buildArches(route),
-      islands: buildFarIslands(route, terrain),
+      arches: buildArches(route, { biome }),
+      islands: buildFarIslands(route, terrain, { biome }),
     },
-    clouds: buildClouds(route, terrain),
-    water: buildWater(terrain, ground.water, Math.max(40000, ground.horizon * 4)),
+    clouds: buildClouds(route, terrain, { biome }),
+    weather: buildWeather(terrain, { biome }),
+    water: buildWater(terrain, ground.water, Math.max(40000, ground.horizon * 4), biome),
     rivers: rivers3d.build(),
     rotors,
     spectators,
+    spectatorMeshes,
   };
 }

@@ -28,6 +28,10 @@ export const PALETTE = Object.freeze({
   door: [0.36, 0.24, 0.16],
   stone: [0.64, 0.6, 0.53],
   stoneDark: [0.52, 0.49, 0.44],
+  pavement: [0.66, 0.66, 0.64],
+  kerb: [0.55, 0.55, 0.53],
+  forecourt: [0.7, 0.68, 0.64],
+  forecourtEdge: [0.55, 0.55, 0.53],
   barn: [0.6, 0.2, 0.16],
   barnRoof: [0.28, 0.28, 0.3],
   silo: [0.82, 0.83, 0.84],
@@ -48,7 +52,7 @@ export const PALETTE = Object.freeze({
 });
 
 /** Sloped roof slab between an eave line and the ridge, `width` long along X, facing `hint`. */
-function roofSlab(m, eave, ridge, width, thickness, color, hint) {
+export function roofSlab(m, eave, ridge, width, thickness, color, hint) {
   let u = [width, 0, 0];
   const v = sub(ridge, eave);
   let n = cross(u, v);
@@ -62,7 +66,7 @@ function roofSlab(m, eave, ridge, width, thickness, color, hint) {
 }
 
 /** Gabled roof over a w × d footprint at height h, ridge along X. */
-function gableRoof(m, w, d, h, rise, color, wallColor, overhang = 0.45) {
+export function gableRoof(m, w, d, h, rise, color, wallColor, overhang = 0.45) {
   const ridge = [0, h + rise, 0];
   roofSlab(m, [0, h, -(d / 2 + overhang)], ridge, w + 2 * overhang, 0.18, color, [0, 1, -1]);
   roofSlab(m, [0, h, d / 2 + overhang], ridge, w + 2 * overhang, 0.18, color, [0, 1, 1]);

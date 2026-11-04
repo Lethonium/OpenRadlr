@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenRadlr model gallery</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <header class="gallery-head">
+      <h1>Model gallery</h1>
+      <label class="gallery-hint">Biome <select id="biome"></select></label>
+      <span class="gallery-hint" id="summary"></span>
+      <span class="gallery-hint">?model=&lt;id&gt; shows one; this page is a dev aid, not part of the app.</span>
+    </header>
+    <canvas id="gallery" class="gallery-canvas" aria-label="Every model of the selected biome, on labelled turntables"></canvas>
+    <script type="module" src="js/gallery.js"></script>
+  </body>
+</html>

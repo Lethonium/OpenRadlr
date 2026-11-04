@@ -25,6 +25,7 @@ import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
+import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 
@@ -343,6 +344,12 @@ class StubRenderer {
   drawBright() {}
   drawCloudLayer() {}
   drawTransparent() {}
+  uploadWeather(data) {
+    return { data };
+  }
+  drawWeather(handle, options) {
+    this.weather = { handle, options };
+  }
 }
 
 const emptyMesh = () => ({ positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), vertexCount: 0 });
@@ -353,12 +360,14 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms) {
+function gymView(gyms, biome = "temperate", weather = null) {
   const route = squareRoute();
   const world = {
+    biome,
     meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
     chunks: {},
     clouds: emptyMesh(),
+    weather,
     water: emptyMesh(),
     rivers: emptyMesh(),
     rotors: [],
@@ -371,6 +380,42 @@ function gymView(gyms) {
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("the view resolves the scene's biome for its sky", () => {
+  assert.equal(gymView([]).view.biome.id, "temperate");
+  assert.equal(gymView([], "winter").view.biome.id, "winter");
+});
+
+test("the view draws the biome's weather around the camera", () => {
+  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
+  const { view, renderer } = gymView([], "winter", weather);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(renderer.weather, "snow is drawn");
+  assert.equal(renderer.weather.options.style.kind, "snow");
+  assert.equal(renderer.weather.handle.data, weather.data);
+});
+
+/** Evaluates the weather shader's vertical placement, with GLSL's mod semantics. */
+function weatherFlakeY({ seedY, timeS, speed, cameraY, boxY }) {
+  const expression = WEATHER_VERTEX.match(/world\.y = ([^;]+);/)?.[1];
+  assert.ok(expression, "the vertex shader places the weather");
+  const mod = (x, y) => x - y * Math.floor(x / y);
+  return new Function("seed", "u_time", "speed", "u_cameraPosition", "u_box", "mod", `return ${expression};`)({ y: seedY }, timeS, speed, { y: cameraY }, { y: boxY }, mod);
+}
+
+test("snow falls past the camera instead of rising with it", () => {
+  const boxY = 100;
+  const seedY = 60;
+  const speed = 8;
+  const first = weatherFlakeY({ seedY, timeS: 0, speed, cameraY: 30, boxY });
+  const later = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 30, boxY });
+  assert.ok(later < first, "the flake falls as time passes");
+  assert.ok(Math.abs(first - later - speed) < 1e-9, "at its fall speed");
+  // The field is wrapped around the camera: climbing must not drag it along.
+  const climbed = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 40, boxY });
+  assert.ok(Math.abs(climbed - later) < 1e-9, "climbing leaves the flake where it is");
+});
 
 test("a workout rider is drawn at its gym spot, not on the road", () => {
   const gym = testGym();

@@ -6,8 +6,8 @@
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
-import { TIME_MODES, TIME_PRESETS, resolvePreset, sunShadowMatrix } from "./lighting.js";
-import { invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
+import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
+import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { Renderer, createContext } from "./renderer.js";
 import {
   RIDER_GEOMETRY,
@@ -36,6 +36,7 @@ import { VEHICLE_KINDS } from "../ride/vehicle.js";
 import { buildBeerBike, buildSeatedBody, buildTandemFrame } from "./vehicleModel.js";
 import { buildWorld, riderPosition } from "./world.js";
 import { sceneOf } from "./worldScene.js";
+import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
@@ -234,6 +235,8 @@ export class View3D {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
+    /** The scene's biome, for its sky and lighting overrides. */
+    this.biome = resolveBiome(world.biome ?? "temperate");
     /** The map's other routes by id (RouteGeometry), where their riders ride (#14). */
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
@@ -252,12 +255,13 @@ export class View3D {
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
     this.clouds = this.renderer.upload(world.clouds);
+    this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
     this.water = this.renderer.upload(world.water);
     this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
     this.spectators = world.spectators;
-    this.spectatorMeshes = [this.renderer.upload(buildSpectator(false)), this.renderer.upload(buildSpectator(true))];
+    this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -524,7 +528,7 @@ export class View3D {
 
     const lens = this.lens;
     const preset = resolvePreset(this.timeMode);
-    const light = { ...preset, fog: preset.fog.map((f) => f * lens.haze) };
+    const light = resolvedLight(preset, this.biome, lens.haze);
     const [ox, oy] = this.viewOffset;
     const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
     const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
@@ -568,9 +572,14 @@ export class View3D {
         return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide;
       })
       .map((p) => {
-        const hop = p.armsUp ? Math.max(0, Math.sin(timeS * 6 + p.phase)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
+        // People jump with their arms up; penguins clap by alternating the two
+        // poses, with a tiny bob so the motion still reads at a distance.
+        const clap = p.motion === "clap";
+        const tick = timeS * (clap ? 7.5 : 6) + p.phase;
+        const pose = clap ? Math.sin(tick) > 0 : p.armsUp;
+        const hop = clap ? Math.abs(Math.sin(tick)) * 0.02 : pose ? Math.max(0, Math.sin(tick)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
         const position = [p.position[0], p.position[1] + hop, p.position[2]];
-        return { ...p, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
+        return { ...p, pose, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
       });
 
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
@@ -600,7 +609,7 @@ export class View3D {
       }
       for (const p of crowd) {
         if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
-          this.renderer.drawShadowCaster(this.spectatorMeshes[p.armsUp ? 1 : 0], p.model);
+          this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
         }
       }
       this.renderer.endShadows();
@@ -624,7 +633,7 @@ export class View3D {
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
-    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.armsUp ? 1 : 0], p.model, p.shirt);
+    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -645,11 +654,18 @@ export class View3D {
     }
 
     // Pass 3: blended — sea and soft contact shadows under the bikes.
-    this.renderer.drawTransparent(this.water, this.identity, { alpha: 0.82 });
-    this.renderer.drawTransparent(this.rivers, this.identity, { alpha: 0.85 });
+    this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
+    this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
     for (const part of visible) {
       if (part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
+    }
+    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
+      let right = cross(forward, [0, 1, 0]);
+      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
+      right = normalize(right);
+      const up = normalize(cross(right, forward));
+      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
     }
 
     this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
@@ -739,6 +755,7 @@ export class View3D {
   dispose() {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);

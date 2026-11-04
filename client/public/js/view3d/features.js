@@ -9,23 +9,7 @@
 import { MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
 import { fbm, seededRandom } from "./noise.js";
-import {
-  PALETTE,
-  buildBarn,
-  buildChurch,
-  buildCow,
-  buildHayBale,
-  buildHouse,
-  buildSheep,
-  buildSilo,
-  buildStreetLamp,
-  buildTurbineTower,
-  buildVillageSign,
-  buildCafe,
-  buildOutdoorGymModel,
-  GYM_SIGN,
-  buildWarningSign,
-} from "./structures.js";
+import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "./world.js";
 
 export const RIVER = Object.freeze({ halfWidth: 9, bank: 26, belowRoad: 9, length: 2400, step: 15, rise: 0.05, mouthDepth: 2.5 });
@@ -225,9 +209,61 @@ export function withRivers(base, rivers, floor = -Infinity) {
   };
 }
 
+const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
+
+/** Snow patches and cracks lying on top of a frozen river. */
+function addRiverIce(river, into, ice) {
+  const random = seededRandom((Math.round((river.at ?? 0) * 1000) ^ 0x1ce) >>> 0);
+  const w = RIVER.halfWidth + 1.5;
+  for (let i = 0; i + 1 < river.points.length; i += 1) {
+    if (random() >= ice.cover) continue;
+    const a = river.points[i];
+    const b = river.points[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 1) continue;
+    const dir = [dx / length, 0, dz / length];
+    const side = [-dir[2], 0, dir[0]];
+    const half = RIVER.halfWidth * (0.35 + random() * 0.35);
+    const maxOffset = Math.max(0, w - half - 0.5);
+    const offset = (random() - 0.5) * 2 * maxOffset;
+    const t0 = 0.1 + random() * 0.15;
+    const t1 = 0.68 + random() * 0.22;
+    const at = (t, lateral) => {
+      const y = a.surface + (b.surface - a.surface) * t + 0.04;
+      return [a.x + dx * t + side[0] * (offset + lateral), y, a.z + dz * t + side[2] * (offset + lateral)];
+    };
+    const q0 = at(t0, -half);
+    const q1 = at(t1, -half);
+    const q2 = at(t1, half);
+    const q3 = at(t0, half);
+    into.triangleFacing(q0, q1, q2, ice.color, [0, 1, 0]);
+    into.triangleFacing(q0, q2, q3, ice.color, [0, 1, 0]);
+    if (ice.crack && random() < 0.45) {
+      const c0 = at(t0 + (t1 - t0) * 0.15, -half * 0.35);
+      const c1 = at(t1 - (t1 - t0) * 0.15, half * 0.25);
+      const cw = 0.08;
+      into.triangleFacing(add(c0, scale(side, -cw)), add(c0, scale(side, cw)), add(c1, scale(side, cw)), ice.crack, [0, 1, 0]);
+      into.triangleFacing(add(c0, scale(side, -cw)), add(c1, scale(side, cw)), add(c1, scale(side, -cw)), ice.crack, [0, 1, 0]);
+    }
+  }
+  // A few wind-blown snow patches on each frozen pond.
+  for (const pond of river.ponds) {
+    for (let k = 0; k < 2; k += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = random() * pond.radius * 0.45;
+      const x = pond.x + Math.cos(angle) * distance;
+      const z = pond.z + Math.sin(angle) * distance;
+      const radius = pond.radius * (0.16 + random() * 0.18);
+      into.disc([x, pond.surface + 0.04, z], [radius, radius], ice.color, 8);
+    }
+  }
+}
+
 /** Water ribbon along the river plus a disc for each pond. */
-export function buildRiverWater(river, into = new MeshBuilder()) {
-  const color = [0.22, 0.45, 0.6];
+export function buildRiverWater(river, into = new MeshBuilder(), style = null) {
+  const color = Array.isArray(style) ? style : (style?.color ?? DEFAULT_RIVER);
   const w = RIVER.halfWidth + 1.5;
   for (let i = 0; i + 1 < river.points.length; i += 1) {
     const a = river.points[i];
@@ -240,14 +276,16 @@ export function buildRiverWater(river, into = new MeshBuilder()) {
     into.triangleFacing(sub(pa, side), add(pb, side), sub(pb, side), color, [0, 1, 0]);
   }
   for (const pond of river.ponds) into.disc([pond.x, pond.surface, pond.z], [pond.radius + 2, pond.radius + 2], color, 16);
+  if (style?.ice) addRiverIce(river, into, style.ice);
   return into;
 }
 
 /** Stone arch bridge carrying the road over the river. */
-export function buildBridge(route, terrain, river, into) {
+export function buildBridge(route, terrain, river, into, biome = temperate) {
   const half = roadHalfWidth(route.lanes) + VERGE;
   const L = BRIDGE_HALF_LENGTH;
-  const stone = PALETTE.stone;
+  const palette = biome.palette;
+  const stone = palette.stone;
   const deckThickness = 1.4;
   const frameAt = (s) => roadFrame(route, river.at + s);
   const deckBottom = (s) => frameAt(s).center[1] - deckThickness;
@@ -259,8 +297,8 @@ export function buildBridge(route, terrain, river, into) {
     const mid = scale(add(f0.center, f1.center), 0.5);
     into.orientedBox(add(mid, [0, -deckThickness / 2 + 0.02, 0]), scale(f0.right, 2 * half + 0.8), [0, deckThickness, 0], back, stone);
     for (const side of [-1, 1]) {
-      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.38, 0]), scale(f0.right, 0.45), [0, 0.76, 0], back, PALETTE.stone);
-      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.82, 0]), scale(f0.right, 0.6), [0, 0.12, 0], back, PALETTE.stoneDark);
+      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.38, 0]), scale(f0.right, 0.45), [0, 0.76, 0], back, palette.stone);
+      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.82, 0]), scale(f0.right, 0.6), [0, 0.12, 0], back, palette.stoneDark);
     }
   }
 
@@ -296,7 +334,7 @@ export function buildBridge(route, terrain, river, into) {
         scale(fa.right, 2 * half + 0.3),
         [0, depth, 0],
         sub([fa.center[0], 0, fa.center[2]], [fb.center[0], 0, fb.center[2]]),
-        PALETTE.stoneDark,
+        palette.stoneDark,
       );
     }
   }
@@ -305,40 +343,49 @@ export function buildBridge(route, terrain, river, into) {
 
 // ----------------------------------------------------------------- village ---
 
-const houseCache = new Map();
-function houseVariant(index) {
-  if (!houseCache.has(index)) {
+const houseCaches = new Map();
+function houseVariant(biome, index) {
+  let cache = houseCaches.get(biome.id);
+  if (!cache) {
+    cache = new Map();
+    houseCaches.set(biome.id, cache);
+  }
+  if (!cache.has(index)) {
     const random = seededRandom(9001 + index);
     const pick = (list) => list[Math.floor(random() * list.length)];
-    houseCache.set(index, {
-      mesh: buildHouse({
+    cache.set(index, {
+      mesh: biome.models.house({
         w: 7 + random() * 3.5,
         d: 6 + random() * 3,
         floors: random() < 0.6 ? 2 : random() < 0.5 ? 1 : 3,
-        wall: pick(PALETTE.walls),
-        roof: pick(PALETTE.roofs),
+        wall: pick(biome.palette.walls),
+        roof: pick(biome.palette.roofs),
         chimney: random() < 0.6,
       }),
     });
   }
-  return houseCache.get(index).mesh;
+  return cache.get(index).mesh;
 }
 const HOUSE_VARIANTS = 14;
 
-let models = null;
-function sharedModels() {
-  models ??= {
-    church: buildChurch(),
-    barn: buildBarn(),
-    silo: buildSilo(),
-    bale: buildHayBale(),
-    lamp: buildStreetLamp(),
-    warning: buildWarningSign(),
-    villageSign: buildVillageSign(),
-    cow: buildCow(false),
-    cowBrown: buildCow(true),
-    sheep: buildSheep(),
-  };
+const modelsByBiome = new Map();
+function sharedModels(biome) {
+  let models = modelsByBiome.get(biome.id);
+  if (!models) {
+    models = {
+      church: biome.models.church(),
+      barn: biome.models.barn(),
+      silo: biome.models.silo(),
+      bale: biome.models.bale(),
+      lamp: biome.models.lamp(),
+      warning: biome.models.warning(),
+      villageSign: biome.models.villageSign(),
+      animal1: biome.models.animal1(),
+      animal2: biome.models.animal2(),
+      animal3: biome.models.animal3(),
+    };
+    modelsByBiome.set(biome.id, models);
+  }
   return models;
 }
 
@@ -365,10 +412,11 @@ function groundUnder(terrain, center, yaw, w, d) {
  * A village along `zone`: pavements, houses on both sides facing the road,
  * a church, street lamps and name boards at both ends.
  */
-export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false }) {
+export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate }) {
   const random = seededRandom(seed ^ Math.round(zone.from * 7));
   const half = roadHalfWidth(route.lanes);
-  const m = sharedModels();
+  const m = sharedModels(biome);
+  const palette = biome.palette;
   const houses = [];
 
   // Pavements with kerbs, covering the verge.
@@ -379,12 +427,12 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
       const at = (f, o, y) => add(add(f.center, scale(f.right, side * o)), [0, y, 0]);
       const inner = half + 0.02;
       const outer = half + PAVEMENT;
-      structures.triangleFacing(at(f0, inner, 0.14), at(f0, outer, 0.14), at(f1, outer, 0.14), [0.66, 0.66, 0.64], [0, 1, 0]);
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, outer, 0.14), at(f1, inner, 0.14), [0.66, 0.66, 0.64], [0, 1, 0]);
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.14), at(f1, inner, 0.0), [0.55, 0.55, 0.53], scale(f0.right, -side));
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.0), at(f0, inner, 0.0), [0.55, 0.55, 0.53], scale(f0.right, -side));
-      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, 0.14), at(f1, outer, -0.8), [0.55, 0.55, 0.53], scale(f0.right, side));
-      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, -0.8), at(f0, outer, -0.8), [0.55, 0.55, 0.53], scale(f0.right, side));
+      structures.triangleFacing(at(f0, inner, 0.14), at(f0, outer, 0.14), at(f1, outer, 0.14), palette.pavement, [0, 1, 0]);
+      structures.triangleFacing(at(f0, inner, 0.14), at(f1, outer, 0.14), at(f1, inner, 0.14), palette.pavement, [0, 1, 0]);
+      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.14), at(f1, inner, 0.0), palette.kerb, scale(f0.right, -side));
+      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.0), at(f0, inner, 0.0), palette.kerb, scale(f0.right, -side));
+      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, 0.14), at(f1, outer, -0.8), palette.kerb, scale(f0.right, side));
+      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, -0.8), at(f0, outer, -0.8), palette.kerb, scale(f0.right, side));
     }
   }
 
@@ -412,7 +460,7 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
       if (!nearChurch && random() < 0.88 && !avoid(pos[0], pos[2], 7) && !occupancy.blocked(pos[0], pos[2], 5)) {
         const yaw = yawFor(scale(f.right, -side));
         const y = groundUnder(terrain, pos, yaw, 11, 10);
-        structures.append(houseVariant(variant), placement([pos[0], y, pos[2]], yaw));
+        structures.append(houseVariant(biome, variant), placement([pos[0], y, pos[2]], yaw));
         occupancy.add(pos[0], pos[2], 7);
         houses.push(pos);
       }
@@ -445,9 +493,9 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
 // ------------------------------------------------------------------- farms ---
 
 /** Farmsteads (barn, house, silo, hay bales) with grazing animals nearby. */
-export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false }) {
+export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
   const random = seededRandom(seed ^ 0xfa53);
-  const m = sharedModels();
+  const m = sharedModels(biome);
   const farms = [];
   let attempts = 0;
   while (farms.length < count && attempts < count * 40) {
@@ -474,23 +522,24 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
       structures.append(mesh, placement([p[0], y, p[2]], yaw + turn));
     };
     place(m.barn, 0, 0, 0, 15, 10);
-    place(houseVariant(Math.floor(random() * HOUSE_VARIANTS)), -17, -4, 0, 10, 9);
+    place(houseVariant(biome, Math.floor(random() * HOUSE_VARIANTS)), -17, -4, 0, 10, 9);
     place(m.silo, 10.5, 6, 0, 5, 5);
     for (let b = 0; b < 4 + Math.floor(random() * 4); b += 1) {
       place(m.bale, 4 + random() * 14, -9 - random() * 8, random() * Math.PI, 1.3, 1.5);
     }
 
-    // A herd in a field further from the road.
+    // A herd in a field further from the road: usually the first two animals
+    // in small groups, sometimes a larger herd of the third.
     const field = local((random() - 0.5) * 30, 45 + random() * 20);
-    const sheep = random() < 0.4;
-    const animals = sheep ? 7 + Math.floor(random() * 6) : 4 + Math.floor(random() * 5);
+    const third = random() < 0.4;
+    const animals = third ? 7 + Math.floor(random() * 6) : 4 + Math.floor(random() * 5);
     for (let a = 0; a < animals; a += 1) {
       const angle = random() * Math.PI * 2;
       const r = random() * 16;
       const x = field[0] + Math.cos(angle) * r;
       const z = field[2] + Math.sin(angle) * r;
       if (avoid(x, z, 2) || terrain.height(x, z) < lakeLevel + 1) continue;
-      const mesh = sheep ? m.sheep : random() < 0.5 ? m.cow : m.cowBrown;
+      const mesh = third ? m.animal3 : random() < 0.5 ? m.animal1 : m.animal2;
       structures.append(mesh, placement([x, terrain.height(x, z) - 0.05, z], random() * Math.PI * 2));
     }
     occupancy.add(pos[0], pos[2], 30);
@@ -503,7 +552,7 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
 // ---------------------------------------------------------------- turbines ---
 
 /** A row of wind turbines on the highest ground near the route. Returns rotor hubs. */
-export function buildWindTurbines(route, terrain, { structures, occupancy, seed, bounds, count = 6, lakeLevel = -Infinity, avoid = () => false }) {
+export function buildWindTurbines(route, terrain, { structures, occupancy, seed, bounds, count = 6, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
   const random = seededRandom(seed ^ 0x7b1e);
   const height = 62;
   let best = null;
@@ -518,7 +567,7 @@ export function buildWindTurbines(route, terrain, { structures, occupancy, seed,
   if (!best) return [];
   const across = [-WIND[2], 0, WIND[0]];
   const yaw = Math.atan2(-WIND[2], WIND[0]);
-  const tower = buildTurbineTower(height);
+  const tower = biome.models.turbine(height);
   const rotors = [];
   for (let i = 0; i < count; i += 1) {
     const offset = (i - (count - 1) / 2) * 170 + (random() - 0.5) * 30;
@@ -538,20 +587,12 @@ export function buildWindTurbines(route, terrain, { structures, occupancy, seed,
 
 // -------------------------------------------------------------- spectators ---
 
-const SHIRTS = [
-  [0.86, 0.2, 0.2],
-  [0.2, 0.45, 0.85],
-  [0.98, 0.8, 0.2],
-  [0.95, 0.95, 0.95],
-  [0.25, 0.65, 0.35],
-  [0.95, 0.5, 0.15],
-  [0.55, 0.3, 0.75],
-  [0.15, 0.15, 0.18],
-];
-
 /** Crowds behind barriers at the finish and on top of the climb. */
-export function buildSpectators(route, terrain, { structures, seed, perSide = 16 }) {
+export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate }) {
   const random = seededRandom(seed ^ 0x5bec);
+  const crowd = biome.people ?? temperate.people;
+  const shirts = crowd.shirts ?? temperate.people.shirts;
+  const barrier = biome.road.barrier ?? temperate.road.barrier;
   const half = roadHalfWidth(route.lanes) + VERGE;
   const spots = [0];
   for (const marker of route.markers) if (marker.type === "climb") spots.push(marker.distance + (marker.length ?? 0));
@@ -565,9 +606,9 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const p0 = add(f0.center, scale(f0.right, side * (half + 0.5)));
         const p1 = add(f1.center, scale(f1.right, side * (half + 0.5)));
         const y0 = terrain.height(p0[0], p0[2]);
-        structures.box([p0[0], y0 + 0.5, p0[2]], [0.07, 1.0, 0.07], PALETTE.metal);
+        structures.box([p0[0], y0 + 0.5, p0[2]], [0.07, 1.0, 0.07], barrier.post);
         const mid = scale(add(p0, p1), 0.5);
-        const color = Math.floor((s + 24) / 3) % 2 === 0 ? PALETTE.white : [0.2, 0.42, 0.85];
+        const color = barrier.stripes[Math.floor((s + 24) / 3) % barrier.stripes.length];
         structures.orientedBox([mid[0], y0 + 0.85, mid[2]], sub(p1, p0), [0, 0.28, 0], scale(f0.right, 0.04), color);
       }
     }
@@ -578,11 +619,13 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const f = roadFrame(route, spot + along);
         const lateral = half + 1.0 + (k % 2) * 0.8 + random() * 0.4;
         const p = add(f.center, scale(f.right, side * lateral));
+        const shirt = shirts[Math.floor(random() * shirts.length)];
         people.push({
           position: [p[0], terrain.height(p[0], p[2]), p[2]],
           yaw: yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.6,
-          shirt: SHIRTS[Math.floor(random() * SHIRTS.length)],
+          shirt: crowd.tint ? shirt : [1, 1, 1],
           armsUp: random() < 0.55,
+          motion: crowd.motion,
           phase: random() * Math.PI * 2,
           scale: 0.92 + random() * 0.16,
         });
@@ -613,9 +656,10 @@ function seaDistance(terrain, x, z, dx, dz) {
  * `cliffs` are stretches along a cliff: a rail on the side where the ground
  * falls away (the sea side), whichever way the road runs.
  */
-export function buildRoadside(route, terrain, { structures, bright, skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [] }) {
+export function buildRoadside(route, terrain, { structures, bright, skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [], biome = temperate }) {
   const half = roadHalfWidth(route.lanes) + VERGE;
-  const m = sharedModels();
+  const m = sharedModels(biome);
+  const palette = biome.palette;
 
   // Guard rails wherever the road descends steeply (either way on a two-way road).
   for (let d = 0; rails && d < route.length; d += railStep) {
@@ -631,9 +675,9 @@ export function buildRoadside(route, terrain, { structures, bright, skip = () =>
     for (const side of sides) {
       const p0 = add(f0.center, scale(f0.right, side * (half + 0.3)));
       const p1 = add(f1.center, scale(f1.right, side * (half + 0.3)));
-      structures.box([p0[0], p0[1] + 0.2, p0[2]], [0.12, 0.9, 0.12], PALETTE.pole);
+      structures.box([p0[0], p0[1] + 0.2, p0[2]], [0.12, 0.9, 0.12], palette.pole);
       const mid = scale(add(p0, p1), 0.5);
-      structures.orientedBox([mid[0], mid[1] + 0.55, mid[2]], sub(p1, p0), [0, 0.3, 0], scale(f0.right, 0.06), PALETTE.metal);
+      structures.orientedBox([mid[0], mid[1] + 0.55, mid[2]], sub(p1, p0), [0, 0.3, 0], scale(f0.right, 0.06), palette.metal);
     }
   }
 
@@ -657,11 +701,11 @@ export function buildRoadside(route, terrain, { structures, bright, skip = () =>
   if (route.length > 1500) {
     const f = roadFrame(route, route.length - 1000);
     const width = half + 0.6;
-    for (const side of [-1, 1]) structures.box(add(add(f.center, scale(f.right, side * width)), [0, 2.6, 0]), [0.25, 5.2, 0.25], PALETTE.white);
-    structures.orientedBox(add(f.center, [0, 5.3, 0]), scale(f.right, 2 * width + 0.3), [0, 0.3, 0], scale(normalize([f.forward[0], 0, f.forward[2]]), -0.2), PALETTE.white);
+    for (const side of [-1, 1]) structures.box(add(add(f.center, scale(f.right, side * width)), [0, 2.6, 0]), [0.25, 5.2, 0.25], palette.white);
+    structures.orientedBox(add(f.center, [0, 5.3, 0]), scale(f.right, 2 * width + 0.3), [0, 0.3, 0], scale(normalize([f.forward[0], 0, f.forward[2]]), -0.2), palette.white);
     const face = scale(normalize([f.forward[0], 0, f.forward[2]]), -1);
     const top = add(f.center, [0, 5.15, 0]);
-    bright.triangleFacing(add(top, scale(f.right, -1.4)), add(top, scale(f.right, 1.4)), add(f.center, [0, 3.6, 0]), PALETTE.red, face);
+    bright.triangleFacing(add(top, scale(f.right, -1.4)), add(top, scale(f.right, 1.4)), add(f.center, [0, 3.6, 0]), palette.red, face);
   }
 }
 
@@ -674,7 +718,7 @@ export const CAFE_DISTANCE = 45;
  * The bike café at the start: a paved forecourt along the road, then the
  * terrace and the café itself facing the road.
  */
-export function buildBikeCafe(route, terrain, { structures, bright, occupancy, avoid = () => false }) {
+export function buildBikeCafe(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate }) {
   const half = roadHalfWidth(route.lanes);
   const terraceDepth = 7;
   const forecourt = 3;
@@ -694,14 +738,14 @@ export function buildBikeCafe(route, terrain, { structures, bright, occupancy, a
     const at = (fr, o, y) => add(add(fr.center, scale(fr.right, side * o)), [0, y, 0]);
     const inner = half + 0.02;
     const outer = half + forecourt + terraceDepth;
-    const stone = [0.7, 0.68, 0.64];
+    const stone = biome.palette.forecourt;
     structures.triangleFacing(at(f0, inner, 0.1), at(f0, outer, 0.1), at(f1, outer, 0.1), stone, [0, 1, 0]);
     structures.triangleFacing(at(f0, inner, 0.1), at(f1, outer, 0.1), at(f1, inner, 0.1), stone, [0, 1, 0]);
-    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, 0.1), at(f1, inner, -0.3), [0.55, 0.55, 0.53], scale(f0.right, -side));
-    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, -0.3), at(f0, inner, -0.3), [0.55, 0.55, 0.53], scale(f0.right, -side));
+    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, 0.1), at(f1, inner, -0.3), biome.palette.forecourtEdge, scale(f0.right, -side));
+    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, -0.3), at(f0, inner, -0.3), biome.palette.forecourtEdge, scale(f0.right, -side));
   }
 
-  const cafe = cafeModel();
+  const cafe = cafeModel(biome);
   const yaw = yawFor(scale(f.right, -side));
   const model = placement([pos[0], f.center[1] + 0.1, pos[2]], yaw);
   structures.append(cafe.mesh, model);
@@ -726,7 +770,7 @@ const SPOT_GAP = 1.8;
  *
  * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[]} | null}
  */
-export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false }) {
+export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate }) {
   const half = roadHalfWidth(route.lanes);
   const side = 1;
   const f = roadFrame(route, route.wrap(GYM_DISTANCE));
@@ -752,8 +796,8 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
     lowest = Math.min(...heights);
   }
   const base = highest + 0.05;
-  const signGround = terrain ? terrain.height(...local(GYM_SIGN.x, GYM_SIGN.z)) : f.center[1];
-  const gym = buildOutdoorGymModel({ drop: base - lowest + 0.4, signLift: signGround - base });
+  const signGround = terrain ? terrain.height(...local(biome.models.gymSign.x, biome.models.gymSign.z)) : f.center[1];
+  const gym = biome.models.gym({ drop: base - lowest + 0.4, signLift: signGround - base });
   const model = placement([pos[0], base, pos[2]], yaw);
   structures.append(gym.mesh, model);
   bright.append(gym.bright, model);
@@ -769,9 +813,13 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
   return { center: [pos[0], base + gym.top, pos[2]], yaw, spots };
 }
 
-let cafeCache = null;
-function cafeModel() {
-  cafeCache ??= buildCafe();
-  return cafeCache;
+const cafeCache = new Map();
+function cafeModel(biome) {
+  let cafe = cafeCache.get(biome.id);
+  if (!cafe) {
+    cafe = biome.models.cafe();
+    cafeCache.set(biome.id, cafe);
+  }
+  return cafe;
 }
 
