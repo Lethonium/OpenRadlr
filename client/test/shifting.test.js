@@ -7,6 +7,7 @@ import {
   SHIFTING_CW,
   effectiveGrade,
   referenceRatio,
+  shiftingCommand,
   shiftingInputs,
 } from "../public/js/ride/virtualShifting.js";
 import { RideSession } from "../public/js/ride/rideSession.js";
@@ -166,4 +167,23 @@ test("effectiveGrade inputs do not depend on a vehicle", () => {
   const solo = { id: 1, speed: 8 };
   const seated = { ...solo, vehicle: { id: 3, kind: "tandem" } };
   assert.deepEqual(shiftingInputs({ physics, profile, me: seated }), shiftingInputs({ physics, profile, me: solo }));
+});
+
+test("gears get the road grade without climb feel", () => {
+  const gearbox = new Gearbox();
+  const command = shiftingCommand({ roadGrade: 8, gearbox, profile, physics, me: { speed: 5 }, dragFactor: 1 });
+  const expected = effectiveGrade({
+    gradePercent: 8,
+    ratio: gearbox.ratio,
+    referenceRatio: referenceRatio(34, 14),
+    speed: 5,
+    dragFactor: 1,
+    ...shiftingInputs({ physics, profile, me: null }),
+  });
+  assert.equal(command.grade, expected);
+});
+
+test("a gear command carries no trainer air drag and the server's crr", () => {
+  const command = shiftingCommand({ roadGrade: 8, gearbox: new Gearbox(), profile, physics, me: null, dragFactor: 1 });
+  assert.deepEqual({ cw: command.cw, crr: command.crr }, { cw: SHIFTING_CW, crr: 0.005 });
 });

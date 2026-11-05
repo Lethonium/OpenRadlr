@@ -224,10 +224,10 @@
                   </select>
                 </label>
                 <label class="check"><input id="auto-pause" type="checkbox" /> <span data-i18n="rider.autoPause">Auto-pause when I stop</span></label>
-                <label class="ride-only">
+                <label id="difficulty-row" class="ride-only">
                   <span class="label-text"><span data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value">50 %</output></span>
                   <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
-                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.</span>
+                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.</span>
                 </label>
               </fieldset>
               <details id="diagnostics" class="diagnostics">
@@ -705,7 +705,7 @@
                     <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
                     <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
                   </div>
-                  <div class="panel">
+                  <div id="ride-difficulty-panel" class="panel">
                     <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
                     <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
                   </div>

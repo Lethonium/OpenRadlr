@@ -652,7 +652,7 @@ export default {
   "start.joiningAFriendS": "Joining a friend's tandem or beer bike?",
   "start.settings": "Settings",
   "start.rideSettings": "Ride settings",
-  "start.howMuchOfEach": "How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.",
+  "start.howMuchOfEach": "How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.",
   "start.whatDoYouWant": "What do you want to do?",
   "start.routes": "Routes",
   "start.chainringTeeth": "Chainring teeth",

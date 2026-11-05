@@ -120,3 +120,23 @@ export function shiftingInputs({ physics, profile }) {
   if (!physics) return { massKg: profile.weightKg + 9, cda: undefined, crr: undefined, airDensity: undefined };
   return { massKg: physics.mass_kg, cda: physics.cda_m2, crr: physics.crr, airDensity: physics.air_density };
 }
+
+/**
+ * The trainer command in a virtual gear: the road grade as it is (no climb
+ * feel, the gears do that, #22), no trainer air drag and the server's Crr.
+ * @param {{ roadGrade: number, gearbox: Gearbox, profile: {weightKg: number, chainring: number, cog: number},
+ *   physics: object | null, me: {speed: number} | null, dragFactor: number }} input
+ * @returns {{ grade: number, cw: number, crr?: number }}
+ */
+export function shiftingCommand({ roadGrade, gearbox, profile, physics, me, dragFactor }) {
+  const inputs = shiftingInputs({ physics, profile, me });
+  const grade = effectiveGrade({
+    gradePercent: roadGrade,
+    ratio: gearbox.ratio,
+    referenceRatio: referenceRatio(profile.chainring, profile.cog),
+    speed: me?.speed ?? 0,
+    dragFactor,
+    ...inputs,
+  });
+  return { grade, cw: SHIFTING_CW, ...(inputs.crr && { crr: inputs.crr }) };
+}
