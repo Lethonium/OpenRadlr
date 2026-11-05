@@ -17,8 +17,8 @@ const WHEEL_M: f64 = 2.1;
 const BISECTIONS: usize = 60;
 
 /// The solo bike a rider of `rider_mass_kg` rides.
-fn body(params: &PhysicsParams, _rider_mass_kg: f64) -> Body {
-    Body::bike(params)
+fn body(params: &PhysicsParams, rider_mass_kg: f64) -> Body {
+    Body::bike(params, rider_mass_kg)
 }
 
 /// Speed (m/s) where [`physics::acceleration`] is zero at `power_watts` on
@@ -144,5 +144,59 @@ mod tests {
         let rows = table(&PhysicsParams::default(), &RIDERS);
         let weights: Vec<f64> = rows.iter().map(|r| r.rider_kg).collect();
         assert_eq!(weights, RIDERS.to_vec());
+    }
+
+    fn rows() -> Vec<Row> {
+        table(&PhysicsParams::default(), &RIDERS)
+    }
+
+    fn row(kg: f64) -> Row {
+        rows().into_iter().find(|r| r.rider_kg == kg).expect("rider in RIDERS")
+    }
+
+    fn strictly_increasing(values: impl Iterator<Item = f64>) -> bool {
+        let values: Vec<f64> = values.collect();
+        values.windows(2).all(|w| w[0] < w[1])
+    }
+
+    #[test]
+    fn two_hundred_watts_flat_suits_a_75_kg_rider() {
+        let v = row(75.0).flat_200w_kmh;
+        assert!((31.0..=32.0).contains(&v), "{v} km/h");
+    }
+
+    #[test]
+    fn two_hundred_watts_flat_suits_a_90_kg_rider() {
+        let v = row(90.0).flat_200w_kmh;
+        assert!((29.0..=31.0).contains(&v), "{v} km/h");
+    }
+
+    #[test]
+    fn heavier_riders_are_slower_at_the_same_watts() {
+        assert!(strictly_increasing(rows().iter().map(|r| -r.flat_200w_kmh)));
+    }
+
+    #[test]
+    fn heavier_riders_are_faster_at_the_same_watts_per_kg() {
+        assert!(strictly_increasing(rows().iter().map(|r| r.flat_2_5wkg_kmh)));
+    }
+
+    #[test]
+    fn three_watts_per_kg_climbs_eight_percent_plausibly() {
+        for r in rows() {
+            assert!((10.0..=13.0).contains(&r.climb_8pct_3wkg_kmh), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn descents_stay_in_a_sane_band() {
+        for r in rows() {
+            assert!((54.0..=62.0).contains(&r.coast_8pct_kmh), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn heavier_riders_coast_faster() {
+        assert!(strictly_increasing(rows().iter().map(|r| r.coast_8pct_kmh)));
     }
 }

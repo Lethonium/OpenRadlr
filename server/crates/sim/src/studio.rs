@@ -7,7 +7,7 @@
 //! way to humans; when every room is full of humans, another room opens.
 
 use crate::names;
-use crate::physics::{step_speed, Body, PhysicsParams, StepInput};
+use crate::physics::{self, step_speed, Body, PhysicsParams, RiderPhysics, StepInput};
 use crate::rng::RandomSource;
 use crate::schedule::Schedule;
 use crate::RiderId;
@@ -420,6 +420,12 @@ impl Studio {
         self.rooms[room].seats[seat].as_ref()
     }
 
+    /// The numbers a rider is ridden with on the studio's bikes.
+    pub fn rider_physics(&self, id: RiderId) -> Option<RiderPhysics> {
+        self.rider(id)
+            .map(|r| physics::rider_physics(&self.config.physics, r.weight_kg))
+    }
+
     pub fn drain_events(&mut self) -> Vec<StudioEvent> {
         std::mem::take(&mut self.events)
     }
@@ -558,7 +564,7 @@ impl Studio {
                     &config.physics,
                     &StepInput {
                         rider_mass_kg: rider.weight_kg,
-                        body: Body::bike(&config.physics),
+                        body: Body::bike(&config.physics, rider.weight_kg),
                         speed: rider.speed,
                         power_watts: rider.power,
                         grade_percent: 0.0,
@@ -855,5 +861,18 @@ mod tests {
         assert!(!studio.leave(anna));
         assert!(!studio.set_telemetry(anna, 100.0, None));
         assert_eq!(studio.rooms()[0].riders().count(), 2);
+    }
+
+    #[test]
+    fn rider_physics_adds_the_bike_to_the_rider() {
+        let mut studio = studio(0, SLOT_START);
+        let id = studio.join_human("Anna", 90.0, 250.0);
+        assert_eq!(studio.rider_physics(id).unwrap().mass_kg, 100.0);
+    }
+
+    #[test]
+    fn rider_physics_of_an_unknown_rider_is_none() {
+        let studio = studio(0, SLOT_START);
+        assert_eq!(studio.rider_physics(9_999), None);
     }
 }
