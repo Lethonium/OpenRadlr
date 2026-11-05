@@ -114,7 +114,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             let sink = Box::new(ChannelSink(outbox.clone()));
                             match world.reattach(token, sink).await {
                                 Ok(Some(joined)) => {
-                                    session.joined(joined.rider_id);
+                                    session.joined(joined.rider_id, device, now());
                                     epoch = joined.epoch;
                                     game = Some(world.clone());
                                     _seat = Some(seat);
@@ -158,7 +158,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                                 if !device.is_trainer() && world.send(Command::SetDevice { rider_id, device }).await.is_err() {
                                     break;
                                 }
-                                session.joined(rider_id);
+                                session.joined(rider_id, device, now());
                                 epoch = joined_epoch;
                                 game = Some(world.clone());
                                 _seat = Some(seat);
@@ -176,6 +176,8 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             }
                         }
                     }
+                    // The AFK answer is acted on in the connection loop (next task).
+                    Action::Stayed => {}
                     Action::Leave => {
                         leaving = true;
                         break;
