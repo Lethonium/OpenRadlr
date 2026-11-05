@@ -3,7 +3,7 @@
 #
 #   docker build -f landing/Dockerfile .
 
-FROM node:24-alpine AS build
+FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /src/landing
 COPY landing/package.json landing/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -22,6 +22,6 @@ ARG PUBLIC_PLAUSIBLE_SCRIPT=
 ENV ASTRO_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM caddy:2-alpine
+FROM caddy:2-alpine@sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3
 COPY landing/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/landing/dist /srv

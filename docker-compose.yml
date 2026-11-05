@@ -114,7 +114,7 @@ services:
   # (Web Bluetooth needs a secure context). Enable with COMPOSE_PROFILES=tls
   # and OPENRADLR_DOMAIN in .env. Behind your own Caddy/nginx, leave it off.
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3
     profiles: ["tls"]
     restart: unless-stopped
     depends_on:
