@@ -8,8 +8,68 @@
 //! This module holds only the state machine. The connection loop polls it and
 //! turns its [`AfkEvent`]s into messages and removals.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
 /// Warnings that offer "Stay" before the final, leave-only warning.
 pub const AFK_STAYS: u32 = 3;
+
+/// One step of the AFK flow, as counted by `openradlr_afk_events_total`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AfkOutcome {
+    /// A warning was sent.
+    Warning,
+    /// The rider chose Stay.
+    Stayed,
+    /// The rider chose Leave now.
+    Left,
+    /// The warning went unanswered and the rider was removed.
+    Timeout,
+}
+
+/// Point-in-time values of the AFK counters.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct AfkCounts {
+    pub warning: u64,
+    pub stayed: u64,
+    pub left: u64,
+    pub timeout: u64,
+}
+
+#[derive(Debug, Default)]
+struct Counters {
+    warning: AtomicU64,
+    stayed: AtomicU64,
+    left: AtomicU64,
+    timeout: AtomicU64,
+}
+
+/// Cheap, cloneable handle to the server's AFK counters, shared by all connections.
+#[derive(Debug, Clone, Default)]
+pub struct AfkStats {
+    counts: Arc<Counters>,
+}
+
+impl AfkStats {
+    pub fn record(&self, outcome: AfkOutcome) {
+        let counter = match outcome {
+            AfkOutcome::Warning => &self.counts.warning,
+            AfkOutcome::Stayed => &self.counts.stayed,
+            AfkOutcome::Left => &self.counts.left,
+            AfkOutcome::Timeout => &self.counts.timeout,
+        };
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn snapshot(&self) -> AfkCounts {
+        AfkCounts {
+            warning: self.counts.warning.load(Ordering::Relaxed),
+            stayed: self.counts.stayed.load(Ordering::Relaxed),
+            left: self.counts.left.load(Ordering::Relaxed),
+            timeout: self.counts.timeout.load(Ordering::Relaxed),
+        }
+    }
+}
 
 /// What the connection loop should do after polling the watch.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -222,5 +282,21 @@ mod tests {
     fn zero_timeout_is_inert() {
         assert_eq!(AfkWatch::new(0.0, 600.0, 120.0, 0.0).poll(1e9), None);
         assert_eq!(AfkWatch::inert().poll(1e9), None);
+    }
+
+    #[test]
+    fn stats_count_each_outcome_and_share_one_total() {
+        let stats = AfkStats::default();
+        stats.clone().record(AfkOutcome::Warning);
+        stats.record(AfkOutcome::Warning);
+        stats.clone().record(AfkOutcome::Timeout);
+        assert_eq!(
+            stats.snapshot(),
+            AfkCounts {
+                warning: 2,
+                timeout: 1,
+                ..Default::default()
+            }
+        );
     }
 }
