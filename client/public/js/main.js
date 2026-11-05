@@ -1819,6 +1819,8 @@ function wireConnection(connection) {
   on("chat", ({ name, text }) => notify(`${name}: ${text}`, "chat"));
   on("afk_warning", (warning) => {
     app.afkPrompt?.open(warning);
+    // Show it now, not on the next frame, so focus can land on a visible button.
+    renderAfkPrompt();
     $(warning.can_stay === false ? "afk-leave" : "afk-stay").focus();
   });
   on("error", ({ code, message }) => {
