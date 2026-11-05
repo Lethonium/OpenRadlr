@@ -20,6 +20,7 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
@@ -250,6 +251,9 @@ const app = {
   actions: null,
   connection: null,
   session: null,
+  /** The "Still riding?" prompt and what it last drew (null outside a ride). */
+  afkPrompt: null,
+  afkShown: null,
   route: null,
   /** The route file as served (the 3D world is built from it in a worker). */
   routeFile: null,
@@ -1813,7 +1817,17 @@ function wireConnection(connection) {
     if (text) notify(text);
   });
   on("chat", ({ name, text }) => notify(`${name}: ${text}`, "chat"));
+  on("afk_warning", (warning) => {
+    app.afkPrompt?.open(warning);
+    $(warning.can_stay === false ? "afk-leave" : "afk-stay").focus();
+  });
   on("error", ({ code, message }) => {
+    // The server removed me for not pedalling: end the ride before the socket closes, so nothing reconnects.
+    if (code === "afk_timeout") {
+      app.afkPrompt?.pressLeave();
+      notify(t("afk.removed"), "error");
+      return;
+    }
     // The server won't pause here (a race, an event or a vehicle): ride on (#89).
     if (code === "pause_rejected") {
       performPause(app.pause?.rejected() ?? [], now());
@@ -1906,6 +1920,7 @@ function startRide() {
   if (app.restored) restoreRide(app.restored);
   startSplits();
   initFinish();
+  initAfkPrompt();
   initPhotos();
   startAutosave();
   notify(t("ride.welcome", { server: info.server_name }));
@@ -1916,6 +1931,7 @@ function startRide() {
     if (app.ride !== ride) return;
     requestAnimationFrame(loop);
     draw();
+    renderAfkPrompt();
   };
   requestAnimationFrame(loop);
 }
@@ -2348,6 +2364,30 @@ function showFinishConfirm() {
   app.menuDialog?.showConfirm();
 }
 
+/** The "Still riding?" prompt: the server's warnings open it, pedalling or an answer closes it. */
+function initAfkPrompt() {
+  app.afkPrompt = new AfkPrompt({ stay: () => app.connection?.stay(), leave: () => finishRide(), now: () => Date.now() });
+  app.afkShown = { visible: false, canStay: true, text: "" };
+  $("afk-stay").addEventListener("click", () => app.afkPrompt.pressStay());
+  $("afk-leave").addEventListener("click", () => app.afkPrompt.pressLeave());
+}
+
+/** Per frame: feeds the power to the prompt and touches the DOM only when something changed. */
+function renderAfkPrompt() {
+  const prompt = app.afkPrompt;
+  if (!prompt) return;
+  if (app.session) prompt.power(app.session.latest.power);
+  // An ended ride or a lost connection (the server starts a fresh clock on resume) has no prompt.
+  const visible = prompt.visible && !app.finished && !app.offline;
+  const canStay = prompt.canStay;
+  const text = visible ? t(canStay ? "afk.body" : "afk.finalBody", { time: formatDuration(prompt.secondsLeft()) }) : "";
+  const shown = app.afkShown;
+  if (visible !== shown.visible) $("afk-prompt").hidden = !visible;
+  if (canStay !== shown.canStay) $("afk-stay").hidden = !canStay;
+  if (text !== shown.text) $("afk-text").textContent = text;
+  app.afkShown = { visible, canStay, text };
+}
+
 function initFinish() {
   $("finish-ride").addEventListener("click", () => showFinishConfirm());
   $("finish-confirm-cancel").addEventListener("click", () => app.menuDialog?.cancelConfirm());
@@ -2405,6 +2445,7 @@ function finishRide() {
   app.viewPopover?.close();
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
+  $("afk-prompt").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
   const connection = app.connection;
   app.finishController = createFinishController({
