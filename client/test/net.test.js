@@ -25,6 +25,7 @@ test("builds protocol messages", () => {
   assert.deepEqual(ClientMessages.boardVehicle("ABC234"), { type: "board_vehicle", code: "ABC234" });
   assert.deepEqual(ClientMessages.leaveVehicle(), { type: "leave_vehicle" });
   assert.deepEqual(ClientMessages.pause(), { type: "pause" });
+  assert.deepEqual(ClientMessages.stay(), { type: "stay" });
   assert.deepEqual(ClientMessages.resume(), { type: "resume" });
   assert.deepEqual(ClientMessages.joinRace(), { type: "join_race" });
   assert.deepEqual(ClientMessages.joinEvent("e1"), { type: "join_event", event_id: "e1" });
@@ -33,6 +34,10 @@ test("builds protocol messages", () => {
   assert.deepEqual(ClientMessages.telemetry({ power: 200, cadence: null }), { type: "telemetry", power: 200 });
   assert.deepEqual(ClientMessages.telemetry({ power: NaN, cadence: 90 }), { type: "telemetry", power: 0, cadence: 90 });
   assert.deepEqual(ClientMessages.laneLeft(), { type: "input", action: "lane_left" });
+});
+
+test("parses the AFK warning from the server", () => {
+  assert.notEqual(parseServerMessage('{"type":"afk_warning","leave_in_s":120,"can_stay":true}'), null);
 });
 
 test("workout messages carry the exercise or null", () => {
