@@ -66,6 +66,12 @@ pub struct Config {
     /// Seconds a rider lingers (coasting) after their socket dies before
     /// being removed; `0` removes at once.
     pub grace_s: f64,
+    /// Seconds of 0 W before a rider is asked "still riding?"; `0` turns it off.
+    pub afk_timeout_s: f64,
+    /// Seconds of 0 W after a "Stay" before the next warning.
+    pub afk_reminder_s: f64,
+    /// Seconds a rider has to answer a warning (no environment variable; for tests).
+    pub afk_answer_s: f64,
     /// WebSocket origins allowed to connect; empty allows all.
     pub allowed_origins: Vec<String>,
     /// The address riders use, e.g. `https://ride.example.com` (needed for Strava).
@@ -231,6 +237,21 @@ impl Config {
             "must be a finite number of seconds (0 or more)",
         )?;
 
+        let afk_timeout_s: f64 = reader.parse("OPENRADLR_AFK_TIMEOUT_S", 1800.0)?;
+        reader.check(
+            "OPENRADLR_AFK_TIMEOUT_S",
+            afk_timeout_s,
+            afk_timeout_s.is_finite() && afk_timeout_s >= 0.0,
+            "must be a finite number of seconds (0 or more)",
+        )?;
+        let afk_reminder_s: f64 = reader.parse("OPENRADLR_AFK_REMINDER_S", 600.0)?;
+        reader.check(
+            "OPENRADLR_AFK_REMINDER_S",
+            afk_reminder_s,
+            afk_reminder_s.is_finite() && afk_reminder_s > 0.0,
+            "must be a finite number of seconds above 0",
+        )?;
+
         let allowed_origins: Vec<String> = reader
             .raw("OPENRADLR_ALLOWED_ORIGINS")
             .unwrap_or_default()
@@ -393,6 +414,9 @@ impl Config {
             max_connections_per_ip,
             messages_per_second,
             grace_s,
+            afk_timeout_s,
+            afk_reminder_s,
+            afk_answer_s: 120.0,
             allowed_origins,
             public_url,
             strava,
@@ -415,6 +439,9 @@ impl Config {
         ConnectionLimits {
             messages_per_second: self.messages_per_second,
             message_burst: self.messages_per_second * 2.0,
+            afk_timeout_s: self.afk_timeout_s,
+            afk_reminder_s: self.afk_reminder_s,
+            afk_answer_s: self.afk_answer_s,
             ..ConnectionLimits::default()
         }
     }
@@ -545,6 +572,26 @@ mod tests {
     fn unparsable_values_name_the_variable() {
         let err = config(&[("OPENRADLR_TICK_HZ", "fast")]).unwrap_err();
         assert_eq!(err.key, "OPENRADLR_TICK_HZ");
+    }
+
+    #[test]
+    fn afk_settings_default_validate_and_reach_the_limits() {
+        let c = config(&[]).unwrap();
+        assert_eq!((c.afk_timeout_s, c.afk_reminder_s), (1800.0, 600.0));
+        assert_eq!(c.connection_limits().afk_timeout_s, 1800.0);
+        assert_eq!(c.connection_limits().afk_reminder_s, 600.0);
+        assert_eq!(c.connection_limits().afk_answer_s, 120.0);
+        let off = config(&[("OPENRADLR_AFK_TIMEOUT_S", "0")]).unwrap();
+        assert_eq!(off.afk_timeout_s, 0.0);
+        assert_eq!(off.connection_limits().afk_timeout_s, 0.0);
+        assert_eq!(
+            config(&[("OPENRADLR_AFK_TIMEOUT_S", "-1")]).unwrap_err().key,
+            "OPENRADLR_AFK_TIMEOUT_S"
+        );
+        assert_eq!(
+            config(&[("OPENRADLR_AFK_REMINDER_S", "0")]).unwrap_err().key,
+            "OPENRADLR_AFK_REMINDER_S"
+        );
     }
 
     #[test]

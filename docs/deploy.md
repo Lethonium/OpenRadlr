@@ -207,6 +207,8 @@ Things to know:
 | `OPENRADLR_ALLOWED_ORIGINS` | the public URL | Pages from other sites can't open game connections |
 | `OPENRADLR_REQUIRE_STRAVA` | false | Riders need a Strava account; one ride per account |
 | `OPENRADLR_GRACE_S` | 60 | How long a rider whose connection dropped is kept (coasting, holding their place) before being removed; 0 removes at once |
+| `OPENRADLR_AFK_TIMEOUT_S` | 1800 | Seconds of 0 W before a "Still riding?" warning; an unanswered warning removes the rider. 0 turns it off |
+| `OPENRADLR_AFK_REMINDER_S` | 600 | Seconds of 0 W after "Stay" before the next warning |
 
 Connections must say hello and join within 15 s, and silent connections are
 closed after 120 s. Chat is limited to bursts of 5, then one message every

@@ -5207,6 +5207,31 @@ body.working-out #paddles {
   z-index: 5;
 }
 
+.afk-prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  width: min(90vw, 24rem);
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  z-index: 7;
+}
+
+.afk-prompt[hidden] {
+  display: none;
+}
+
+.afk-prompt h2,
+.afk-prompt p {
+  margin: 0;
+}
+
 .finish-confirm {
   display: grid;
   gap: 0.5rem;
