@@ -30,6 +30,7 @@ and a state stream, and they inflate the rider count.
 | Decided by | The server (authoritative, covers old clients) |
 | Exempt | Workout riders (`device: workout`): they send no telemetry by design |
 | Off switch | `OPENRADLR_AFK_TIMEOUT_S=0` turns the whole thing off |
+| Metric | Counter `openradlr_afk_events_total{event}` on `/internal/metrics`, `event` one of `warning`, `stayed`, `left`, `timeout`, plus a panel on the OpenRadlr Grafana dashboard |
 | Protocol | Additive within version 2: one new server message, one new client message, one new error code. No `PROTOCOL_VERSION` bump |
 
 Timeline for a rider who never pedals and presses Stay every time:
@@ -52,10 +53,11 @@ In:
 - Client: the warning dialog, sending `stay` and `leave`, the end-of-ride
   notice, no automatic reconnect after `afk_timeout`.
 - `docs/protocol.md`, `.env.example`, CHANGELOG, en + de texts.
+- The `openradlr_afk_events_total` counter and its Grafana panels (Monitoring
+  repo, its own PR).
 
 Out:
 
-- A Grafana metric for AFK removals (can follow; a log line is enough now).
 - Any change to `idle_timeout` or the grace period.
 - Treating vehicle stokers, event lobbies or the spin studio differently: 30
   min is longer than every lobby (studio `LOBBY_S` is 5 min).
@@ -104,6 +106,35 @@ rider is removed at once, not after the grace period.
 `ConnectionLimits` gains `afk_timeout_s` and `afk_reminder_s` from the config.
 The 2 min answer window and the 3 warnings are constants.
 
+## Metric
+
+`openradlr_afk_events_total{event}`, a Prometheus counter next to the
+existing ones in `http.rs` (`/internal/metrics`), counting per server since
+start:
+
+| `event` | Counted when |
+| --- | --- |
+| `warning` | an `afk_warning` is sent (final ones included) |
+| `stayed` | a `stay` is accepted |
+| `left` | a rider sends `leave` while a warning is open |
+| `timeout` | a rider is removed with `afk_timeout` |
+
+The counts live in a small shared `AfkStats` (atomics, like `DistanceStats`
+in `stats.rs`) handed to each connection through the app state; the
+connection loop counts the `AfkEvent`s it acts on. All four series are
+printed from start at 0, so `increase()` works from the first scrape.
+
+Grafana (`Monitoring/grafana/dashboards/openradlr.json`, a separate PR in
+that repo): a new row below the existing panels with
+
+- a stat "AFK removals · selected range":
+  `increase(openradlr_afk_events_total{event="timeout"}[$__range])`;
+- a timeseries "AFK warnings and outcomes":
+  `sum by (event) (increase(openradlr_afk_events_total[1h]))`, legend per event.
+
+Together these answer "how often does it happen" (timeouts) and "do people
+take a break or are they gone" (stayed and left against timeout).
+
 ## Client
 
 - `net/protocol.js`: `stay()` message builder; `afk_warning` reaches the ride
@@ -135,3 +166,6 @@ warning is ignored.
 
 Client: the dialog module's countdown, Stay/Leave sending, closing on power,
 no Stay button on the final warning; no reconnect after `afk_timeout`.
+
+Metric: the `/internal/metrics` output test asserts all four series, and a
+connection test that a timeout increments `event="timeout"`.
