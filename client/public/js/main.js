@@ -2370,6 +2370,7 @@ function showFinishConfirm() {
 function initAfkPrompt() {
   app.afkPrompt = new AfkPrompt({ stay: () => app.connection?.stay(), leave: () => finishRide(), now: () => Date.now() });
   app.afkShown = { visible: false, canStay: true, text: "" };
+  // Safe once per ride: endRide swaps #ride for a fresh clone, so these buttons (and their listeners) are new each time.
   $("afk-stay").addEventListener("click", () => app.afkPrompt.pressStay());
   $("afk-leave").addEventListener("click", () => app.afkPrompt.pressLeave());
 }
