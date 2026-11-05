@@ -801,6 +801,14 @@
         <p id="split-toast" class="toast-split glass" role="status" hidden></p>
         <p id="trainer-warning" class="warning toast-warning" hidden data-i18n="ride.noDataFromYour">No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
         <div id="pause-pill" class="pause-pill" role="status" hidden></div>
+        <div id="afk-prompt" class="afk-prompt" role="alertdialog" aria-labelledby="afk-title" aria-describedby="afk-text" hidden>
+          <h2 id="afk-title" data-i18n="afk.title">Still riding?</h2>
+          <p id="afk-text"></p>
+          <div class="workout-actions">
+            <button type="button" id="afk-stay" class="primary" data-i18n="afk.stay">Stay</button>
+            <button type="button" id="afk-leave" class="secondary" data-i18n="afk.leave">Leave now</button>
+          </div>
+        </div>
         <div id="reconnecting" class="reconnecting" role="status" hidden data-i18n="ride.reconnecting">Reconnecting…</div>
         <div id="disconnected" class="banner" hidden>
           <span data-i18n="ride.connectionLost">Connection lost.</span>

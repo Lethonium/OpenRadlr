@@ -1,5 +1,6 @@
 //! Composition root: builds the worlds, game loops and router from a [`Config`].
 
+use crate::afk::AfkStats;
 use crate::auth::Strava;
 use crate::config::Config;
 use crate::events_file::{load_entries, resolve};
@@ -271,6 +272,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         allow_simulated_trainer: config.allow_simulated_trainer,
         allow_paddle_mode: config.allow_paddle_mode,
         stats: stats.clone(),
+        afk: AfkStats::default(),
     };
     let headers = crate::headers::security_headers(config.analytics.as_ref(), config.public_url.as_deref());
     Ok((router(state, config.static_dir.as_deref(), &headers), stats))

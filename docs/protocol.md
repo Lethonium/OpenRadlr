@@ -31,6 +31,15 @@ connection that sends nothing for 120 s is closed (`handshake_timeout`,
 this only catches dead connections. A workout client sends no telemetry:
 it repeats its current `workout` message every 30 s as a keepalive.
 
+A rider who sends only 0 W telemetry for `OPENRADLR_AFK_TIMEOUT_S` seconds
+(default 1800; 0 turns this off) is warned with `afk_warning`. Each warning
+allows 120 s to answer: `stay` restarts the clock with `OPENRADLR_AFK_REMINDER_S`
+(default 600) until the next warning; `leave` ends the ride at once. Three
+warnings can be stayed, the fourth only allows leaving. An unanswered warning
+ends the connection with `afk_timeout` and removes the rider as `leave` does,
+without a grace period. Any telemetry with power above 0 resets everything.
+Workout riders are exempt.
+
 ## Client → server
 
 | `type` | Fields | When |
@@ -52,6 +61,7 @@ it repeats its current `workout` message every 30 s as a keepalive.
 | `workout` | `exercise`: `squats` \| `situps` \| `pushups` \| `jumping_jacks` \| `plank` \| `burpees` \| `null` | the exercise being done now, or `null` for rest; only for a `workout` rider (others get `not_in_workout`, an unknown id `unknown_exercise`). A workout rider gets `in_workout` for `input`, `start_race`, `join_race`, `join_event`, `turn`, `create_vehicle`, `board_vehicle`, `pause` and `resume`; `telemetry` is ignored |
 | `chat` | `text` (≤ 200 chars) | at most 5 in a row, then one every 2 s |
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
+| `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
 
 ## Server → client
 
@@ -63,6 +73,7 @@ it repeats its current `workout` message every 30 s as a keepalive.
 | `studio_state` | spin studio only, for the rider's room: `tick`, `room` (0-based), `rooms`, `class` (`id`, `name`, `starts_at_s` Unix time, `elapsed_s` — negative in the lobby), `riders[]` — about 4 Hz |
 | `resistance` | `grade_percent` — when the grade under the rider changes |
 | `event` | `event` with a `kind` (see below) |
+| `afk_warning` | `leave_in_s` (the answer window), `can_stay` (false on the final warning) — see the paragraph on timeouts above |
 | `chat` | `rider_id`, `name`, `text` |
 | `error` | `code`, `message` |
 
@@ -156,7 +167,7 @@ server turned the simulated trainer or phone paddles off), `chat_rate_limited`,
 belongs to another world; `message` is `route:<id>` to rejoin with), `not_captain`, `in_event` (seated riders can't join events or races and the other way round),
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
 `in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`,
-`rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
+`afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
 
 ### Reconnecting
 
@@ -235,6 +246,7 @@ A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.
 Community distance counters (#65) added `distance_m` to `/api/info` within version 2.
 Physics calibration (#22) added `physics` to `joined` within version 2.
+AFK warnings added `afk_warning`, `stay` and `afk_timeout` within version 2.
 Reconnecting (#73) added `leave`, `resume_token` and `resume` in `join`,
 `resume_token` in `joined` and `grace_s` in `welcome` within version 2. An
 older client that never sends `leave` is kept for `grace_s` after it leaves.

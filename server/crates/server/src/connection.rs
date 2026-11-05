@@ -1,6 +1,7 @@
 //! Runs one WebSocket connection: feeds frames into the [`Session`] state
 //! machine (see [`crate::session`]) and carries out what it decides.
 
+use crate::afk::{AfkEvent, AfkOutcome};
 use crate::game::JoinError;
 use crate::guard::SlotPermit;
 use crate::http::AppState;
@@ -114,7 +115,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             let sink = Box::new(ChannelSink(outbox.clone()));
                             match world.reattach(token, sink).await {
                                 Ok(Some(joined)) => {
-                                    session.joined(joined.rider_id);
+                                    session.joined(joined.rider_id, device, now());
                                     epoch = joined.epoch;
                                     game = Some(world.clone());
                                     _seat = Some(seat);
@@ -158,7 +159,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                                 if !device.is_trainer() && world.send(Command::SetDevice { rider_id, device }).await.is_err() {
                                     break;
                                 }
-                                session.joined(rider_id);
+                                session.joined(rider_id, device, now());
                                 epoch = joined_epoch;
                                 game = Some(world.clone());
                                 _seat = Some(seat);
@@ -176,7 +177,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             }
                         }
                     }
+                    Action::Stayed => state.afk.record(AfkOutcome::Stayed),
                     Action::Leave => {
+                        if session.afk_warning_open() {
+                            state.afk.record(AfkOutcome::Left);
+                        }
                         leaving = true;
                         break;
                     }
@@ -186,6 +191,22 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                 if let Some(reason) = session.expired(now()) {
                     let _ = outbox.send(reason).await;
                     break;
+                }
+                match session.poll_afk(now()) {
+                    Some(AfkEvent::Warn { leave_in_s, can_stay }) => {
+                        state.afk.record(AfkOutcome::Warning);
+                        if outbox.send(ServerMessage::AfkWarning { leave_in_s, can_stay }).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(AfkEvent::Expire) => {
+                        state.afk.record(AfkOutcome::Timeout);
+                        tracing::info!("removing a rider who stopped pedalling");
+                        let _ = outbox.send(ServerMessage::error("afk_timeout", "no pedalling for too long")).await;
+                        leaving = true;
+                        break;
+                    }
+                    None => {}
                 }
             }
             _ = &mut write_task, if !writer_done => {

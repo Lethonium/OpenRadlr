@@ -5,6 +5,7 @@
 //! It also enforces the per-connection limits from [`ConnectionLimits`].
 //! [`crate::connection::serve`] wires it to a real WebSocket.
 
+use crate::afk::{AfkEvent, AfkWatch};
 use crate::guard::{ConnectionLimits, TokenBucket};
 use crate::protocol::{ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, PROTOCOL_VERSION};
 use crate::studio::STUDIO_ID;
@@ -42,6 +43,8 @@ pub enum Action {
         /// Place the rider where the ride left off; ignored with a vehicle code.
         resume: Option<ResumePoint>,
     },
+    /// The rider answered an AFK warning with Stay.
+    Stayed,
     /// Leave the game; the rider is removed and the connection is closed.
     Leave,
     Forward(PlayerCommand),
@@ -99,6 +102,7 @@ pub struct Session {
     dropped: u32,
     opened_s: f64,
     last_message_s: f64,
+    afk: AfkWatch,
 }
 
 impl Session {
@@ -113,6 +117,7 @@ impl Session {
             dropped: 0,
             opened_s: now_s,
             last_message_s: now_s,
+            afk: AfkWatch::inert(),
         }
     }
 
@@ -120,8 +125,27 @@ impl Session {
         self.phase
     }
 
-    pub fn joined(&mut self, rider_id: RiderId) {
+    /// Marks the connection as joined and starts a fresh AFK clock (workouts are exempt).
+    pub fn joined(&mut self, rider_id: RiderId, device: DeviceKind, now_s: f64) {
         self.phase = Phase::Joined(rider_id);
+        self.afk = match device {
+            DeviceKind::Workout => AfkWatch::inert(),
+            _ => AfkWatch::new(
+                self.limits.afk_timeout_s,
+                self.limits.afk_reminder_s,
+                self.limits.afk_answer_s,
+                now_s,
+            ),
+        };
+    }
+
+    /// Advances the AFK watch: a warning to send, or the end of the ride.
+    pub fn poll_afk(&mut self, now_s: f64) -> Option<AfkEvent> {
+        self.afk.poll(now_s)
+    }
+
+    pub fn afk_warning_open(&self) -> bool {
+        self.afk.warning_open()
     }
 
     /// Why the connection should be closed at `now_s`, if it should.
@@ -229,7 +253,15 @@ impl Session {
             (Phase::Joined(_), ClientMessage::Hello { .. } | ClientMessage::Join { .. }) => Action::Reply(
                 ServerMessage::error("already_joined", "this connection has already joined"),
             ),
+            (Phase::Joined(_), ClientMessage::Stay) => {
+                if self.afk.on_stay(now_s) {
+                    Action::Stayed
+                } else {
+                    Action::Ignore
+                }
+            }
             (Phase::Joined(_), ClientMessage::Telemetry { power, cadence }) => {
+                self.afk.on_power(power, now_s);
                 Action::Forward(PlayerCommand::Telemetry { power, cadence })
             }
             (Phase::Joined(_), ClientMessage::Input { action }) => Action::Forward(PlayerCommand::Input(action)),
@@ -335,7 +367,7 @@ mod tests {
                 resume: None,
             }
         );
-        s.joined(5);
+        s.joined(5, DeviceKind::Trainer, 0.0);
         assert_eq!(
             s.on_text(r#"{"type":"input","action":"lane_right"}"#, 0.2),
             Action::Forward(PlayerCommand::Input(InputAction::LaneRight))
@@ -418,7 +450,7 @@ mod tests {
         s.on_text(HELLO, 0.1);
         assert!(is_error(&s.on_text(r#"{"type":"leave"}"#, 0.2), "join_required"));
         s.on_text(JOIN, 0.3);
-        s.joined(5);
+        s.joined(5, DeviceKind::Trainer, 0.0);
         assert_eq!(s.on_text(r#"{"type":"leave"}"#, 0.4), Action::Leave);
     }
 
@@ -453,8 +485,69 @@ mod tests {
             &s.on_text(r#"{"type":"telemetry","power":200}"#, 0.0),
             "join_required"
         ));
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         assert!(is_error(&s.on_text(HELLO, 0.0), "already_joined"));
+    }
+
+    fn afk_session() -> Session {
+        let mut s = session_with(ConnectionLimits {
+            afk_timeout_s: 30.0,
+            afk_reminder_s: 10.0,
+            afk_answer_s: 5.0,
+            ..ConnectionLimits::default()
+        });
+        s.on_text(HELLO, 0.0);
+        s.on_text(JOIN, 0.0);
+        s
+    }
+
+    fn warn(can_stay: bool) -> Option<AfkEvent> {
+        Some(AfkEvent::Warn {
+            leave_in_s: 5,
+            can_stay,
+        })
+    }
+
+    #[test]
+    fn zero_power_telemetry_warns_after_the_timeout() {
+        let mut s = afk_session();
+        s.joined(1, DeviceKind::Trainer, 0.0);
+        s.on_text(r#"{"type":"telemetry","power":0}"#, 10.0);
+        assert_eq!(s.poll_afk(30.0), warn(true));
+        assert!(s.afk_warning_open());
+    }
+
+    #[test]
+    fn pedalling_postpones_the_warning() {
+        let mut s = afk_session();
+        s.joined(1, DeviceKind::Trainer, 0.0);
+        s.on_text(r#"{"type":"telemetry","power":120}"#, 20.0);
+        assert_eq!(s.poll_afk(30.0), None);
+    }
+
+    #[test]
+    fn accepted_stay_is_reported() {
+        let mut s = afk_session();
+        s.joined(1, DeviceKind::Trainer, 0.0);
+        assert_eq!(s.poll_afk(30.0), warn(true));
+        assert_eq!(s.on_text(r#"{"type":"stay"}"#, 31.0), Action::Stayed);
+        assert_eq!(s.on_text(r#"{"type":"stay"}"#, 32.0), Action::Ignore);
+    }
+
+    #[test]
+    fn workout_riders_never_warn() {
+        let mut s = afk_session();
+        s.joined(1, DeviceKind::Workout, 0.0);
+        assert_eq!(s.poll_afk(1e6), None);
+    }
+
+    #[test]
+    fn reattached_rider_gets_a_fresh_clock() {
+        let mut s = afk_session();
+        s.joined(1, DeviceKind::Trainer, 0.0);
+        s.joined(1, DeviceKind::Trainer, 100.0);
+        assert_eq!(s.poll_afk(129.0), None);
+        assert_eq!(s.poll_afk(130.0), warn(true));
     }
 
     #[test]
@@ -473,7 +566,7 @@ mod tests {
         });
         s.on_text(HELLO, 0.0);
         s.on_text(JOIN, 0.0);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         let telemetry = r#"{"type":"telemetry","power":200}"#;
         for _ in 0..3 {
             assert_eq!(s.on_text(telemetry, 0.0), Action::Ignore);
@@ -486,7 +579,7 @@ mod tests {
         let mut s = session();
         s.on_text(HELLO, 0.0);
         s.on_text(JOIN, 0.0);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         for i in 0..10_000 {
             let action = s.on_text(r#"{"type":"telemetry","power":200}"#, 1.0 + f64::from(i) * 0.1);
             assert!(matches!(action, Action::Forward(_)), "message {i} was limited");
@@ -502,7 +595,7 @@ mod tests {
         });
         s.on_text(HELLO, 0.0);
         s.on_text(JOIN, 0.0);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         let chat = r#"{"type":"chat","text":"hi"}"#;
         assert!(matches!(s.on_text(chat, 1.0), Action::Forward(_)));
         assert!(matches!(s.on_text(chat, 1.0), Action::Forward(_)));
@@ -520,7 +613,7 @@ mod tests {
         });
         s.on_text(HELLO, 0.0);
         s.on_text(JOIN, 0.0);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         let create = r#"{"type":"create_vehicle","kind":"tandem"}"#;
         let board = r#"{"type":"board_vehicle","code":"ABC234"}"#;
         assert!(matches!(s.on_text(create, 1.0), Action::Forward(_)));
@@ -543,7 +636,7 @@ mod tests {
         let mut s = session();
         s.on_text(HELLO, 0.0);
         s.on_text(JOIN, 0.1);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         s
     }
 
@@ -613,7 +706,7 @@ mod tests {
         let mut s = session_with(limits);
         s.on_text(HELLO, 1.0);
         s.on_text(JOIN, 2.0);
-        s.joined(1);
+        s.joined(1, DeviceKind::Trainer, 0.0);
         assert_eq!(s.expired(31.0), None, "joined connections only expire when idle");
         s.on_text(r#"{"type":"telemetry","power":0}"#, 40.0);
         assert_eq!(s.expired(69.0), None);

@@ -125,6 +125,11 @@ export class GameConnection extends Emitter {
     this.#send(ClientMessages.resume());
   }
 
+  /** Tells the server the rider is still there after an AFK warning. */
+  stay() {
+    this.#send(ClientMessages.stay());
+  }
+
   /** Picks the road for the next junction (`null`: stay on the route). */
   turn(edge) {
     this.#send(ClientMessages.turn(edge));

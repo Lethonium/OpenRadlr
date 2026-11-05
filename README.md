@@ -138,7 +138,8 @@ make up
 Later, to deploy new commits: `make update`.
 
 The server exposes aggregate Prometheus metrics at `/internal/metrics` for
-connected riders, configured rider capacity and community distance totals. The
+connected riders, configured rider capacity, community distance totals and AFK
+warning outcomes (`openradlr_afk_events_total`). The
 endpoint contains no rider names, IDs, credentials or request details. The
 Monitoring stack scrapes it over the private `openradlr-metrics` Docker
 network; its Grafana dashboard also probes the public `/healthz` URL.

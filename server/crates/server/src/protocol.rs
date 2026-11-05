@@ -125,6 +125,8 @@ pub enum ClientMessage {
         #[serde(default)]
         exercise: Option<String>,
     },
+    /// Answer to an `afk_warning`: the rider is still there.
+    Stay,
     /// Leave the game now; the server removes the rider and closes the
     /// connection.
     Leave,
@@ -210,6 +212,12 @@ pub enum ServerMessage {
         /// Seconds a rider lingers after their socket dies before being
         /// removed; `0` removes at once.
         grace_s: f64,
+    },
+    /// The rider has sent 0 W for a long time. Answer with `stay` (if
+    /// `can_stay`) or the ride ends in `leave_in_s` seconds with `afk_timeout`.
+    AfkWarning {
+        leave_in_s: u32,
+        can_stay: bool,
     },
     Joined {
         rider_id: RiderId,
@@ -1232,6 +1240,21 @@ mod tests {
         assert!(json.contains(r#""vehicle":{"id":3,"code":"ABC234","kind":"tandem","captain":1,"bots":true,"seats":[{"rider_id":1,"name":"Anna","is_bot":false,"power":200.0,"share":0.5},null]}"#));
         assert!(json.contains(r#""vehicle":{"id":3,"kind":"tandem","seat":1,"seats":2,"captain":false}"#));
         assert!(json.contains(r#""cadence":85.0"#));
+    }
+
+    #[test]
+    fn stay_parses() {
+        assert_eq!(ClientMessage::parse(r#"{"type":"stay"}"#).unwrap(), ClientMessage::Stay);
+    }
+
+    #[test]
+    fn afk_warning_serialises() {
+        let json = ServerMessage::AfkWarning {
+            leave_in_s: 120,
+            can_stay: false,
+        }
+        .to_json();
+        assert_eq!(json, r#"{"type":"afk_warning","leave_in_s":120,"can_stay":false}"#);
     }
 
     #[test]
