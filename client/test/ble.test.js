@@ -8,8 +8,9 @@ import {
   parseIndoorBikeData,
 } from "../public/js/ble/ftms.js";
 import { parseHeartRate } from "../public/js/ble/heartRate.js";
-import { PaddleTrainer, SimulatedTrainer, canExportRide, deviceKind, hasRealPowerSource } from "../public/js/ble/devices.js";
+import { PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource } from "../public/js/ble/devices.js";
 import { dataView, fakeScheduler } from "./helpers.js";
+import { fakeTrainer } from "./fakeBluetooth.js";
 
 test("parses speed, cadence and power from indoor bike data", () => {
   // flags 0x0044: speed present (bit0 clear), cadence (bit2), power (bit6)
@@ -142,4 +143,13 @@ test("?debug=controller captures every controller packet, the trainer's stay cap
   assert.equal(logged("zwift"), 50);
   assert.equal(logged("ftms"), 20);
   assert.match(log.report(), /Capturing: zwift/);
+});
+
+test("setGrade sends the given crr", async () => {
+  const fake = fakeTrainer({ services: { 0x1826: { 0x2ad2: {}, 0x2ad9: {} } } });
+  const trainer = await SmartTrainer.connect(fake.bluetooth);
+  const control = fake.characteristics[0x2ad9];
+  control.writes.length = 0;
+  await trainer.setGrade(2, { crr: 0.005 });
+  assert.equal(control.writes[0][5], 50);
 });

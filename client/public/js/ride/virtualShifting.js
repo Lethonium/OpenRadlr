@@ -64,18 +64,21 @@ export class Gearbox {
 
 /** Least force on the pedals in the physical gear, as a grade in percent. */
 export const FLOOR_GRADE = 1.5;
-/** Drag of an undrafted rider, ½·ρ·CdA (the server's physics: ρ 1.225, CdA 0.32). */
-const DRAG = 0.5 * 1.225 * 0.32;
 /** Trainer air drag sent with a virtual gear: none, the grade carries it. */
 export const SHIFTING_CW = 0;
 
 /**
  * Grade (percent) to send to an FTMS trainer, with `cw` SHIFTING_CW, so that
  * the rider feels the virtual gear.
+ *
+ * Mass, drag area, Crr and air density are the server's (`joined.physics`, see
+ * {@link shiftingInputs}); the defaults are the constants from before the
+ * server sent them (#22), for an older server. `crr` is also what the trainer
+ * is assumed to add, so send it along.
  * @param {{
  *   gradePercent: number, ratio: number, referenceRatio: number, speed: number | null,
- *   massKg: number, crr?: number, dragFactor?: number, floorGrade?: number,
- *   minGrade?: number, maxGrade?: number,
+ *   massKg: number, cda?: number, crr?: number, airDensity?: number, dragFactor?: number,
+ *   floorGrade?: number, minGrade?: number, maxGrade?: number,
  * }} input `speed` m/s in the game; `dragFactor` below 1 in a draft
  */
 export function effectiveGrade({
@@ -84,7 +87,9 @@ export function effectiveGrade({
   referenceRatio,
   speed,
   massKg,
+  cda = 0.32,
   crr = 0.004,
+  airDensity = 1.225,
   dragFactor = 1,
   floorGrade = FLOOR_GRADE,
   minGrade = -10,
@@ -95,7 +100,7 @@ export function effectiveGrade({
   const v = Number.isFinite(speed) ? Math.max(0, speed) : 0;
   const weight = massKg * GRAVITY;
 
-  const road = weight * (Math.sin(theta) + crr * Math.cos(theta)) + DRAG * dragFactor * v * v;
+  const road = weight * (Math.sin(theta) + crr * Math.cos(theta)) + 0.5 * airDensity * cda * dragFactor * v * v;
   const wanted = k * Math.max(road, (weight * floorGrade) / 100);
   const sinTheta = Math.min(0.99, Math.max(-0.99, wanted / weight - crr));
   const grade = Math.tan(Math.asin(sinTheta)) * 100;
@@ -103,3 +108,15 @@ export function effectiveGrade({
 }
 
 export const referenceRatio = (chainring, cog) => chainring / cog;
+
+/**
+ * The physics inputs of {@link effectiveGrade}: the server's numbers for this
+ * rider on a solo bike, or the profile weight plus a 9 kg bike and the
+ * defaults on an older server. A vehicle seat doesn't change them (#22).
+ * @param {{ physics: {mass_kg: number, cda_m2: number, crr: number, air_density: number} | null,
+ *   profile: {weightKg: number}, me: object | null }} input
+ */
+export function shiftingInputs({ physics, profile }) {
+  if (!physics) return { massKg: profile.weightKg + 9, cda: undefined, crr: undefined, airDensity: undefined };
+  return { massKg: physics.mass_kg, cda: physics.cda_m2, crr: physics.crr, airDensity: physics.air_density };
+}

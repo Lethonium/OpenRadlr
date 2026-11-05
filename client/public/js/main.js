@@ -30,7 +30,7 @@ import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
 import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
-import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "./ride/virtualShifting.js";
+import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio, shiftingInputs } from "./ride/virtualShifting.js";
 import { RiderSmoother } from "./ride/smoothing.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -1575,18 +1575,21 @@ async function joinRide(restored = null) {
     resistanceModel: (roadGrade) => {
       // The road (flat in the studio: no grades arrive), with virtual gears if on.
       const road = () => {
-        if (!app.gearbox) return applyDifficulty(roadGrade, app.profile.difficulty);
+        // The server's Crr, so the trainer's rolling resistance matches the game's (#22).
+        const physics = app.connection?.physics ?? null;
+        if (!app.gearbox) return { grade: applyDifficulty(roadGrade, app.profile.difficulty), ...(physics?.crr && { crr: physics.crr }) };
         const me = app.state ? myRider(app.state.riders) : null;
         const draft = me && !app.studio ? draftInfo(me, app.state.riders, app.route) : null;
+        const inputs = shiftingInputs({ physics, profile: app.profile, me });
         const grade = effectiveGrade({
           gradePercent: applyDifficulty(roadGrade, app.profile.difficulty, { descents: 1 }),
           ratio: app.gearbox.ratio,
           referenceRatio: referenceRatio(app.profile.chainring, app.profile.cog),
           speed: me?.speed ?? 0,
           dragFactor: 1 - (draft?.savingPercent ?? 0) / 100,
-          massKg: app.profile.weightKg + 9,
+          ...inputs,
         });
-        return { grade, cw: SHIFTING_CW };
+        return { grade, cw: SHIFTING_CW, ...(inputs.crr && { crr: inputs.crr }) };
       };
       return app.studio ? app.studio.command(road, now()) : app.training.command(road);
     },
