@@ -1,6 +1,6 @@
 # AFK timeout — design
 
-Date: 2026-11-05 · Issue: – · Status: design
+Date: 2026-11-05 · Issue: – · Status: implemented
 
 ## Goal
 
