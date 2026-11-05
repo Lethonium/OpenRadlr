@@ -93,7 +93,9 @@ impl AfkWatch {
         }
         if let Some((opened_s, _)) = self.open {
             if now_s - opened_s >= self.answer_s {
+                // The ride ends here: never warn again.
                 self.open = None;
+                self.inert = true;
                 return Some(AfkEvent::Expire);
             }
             return None;
@@ -159,6 +161,14 @@ mod tests {
         assert_eq!(w.poll(1800.0), warn(true));
         assert_eq!(w.poll(1919.0), None);
         assert_eq!(w.poll(1920.0), Some(AfkEvent::Expire));
+    }
+
+    #[test]
+    fn nothing_follows_an_expiry() {
+        let mut w = watch();
+        w.poll(1800.0);
+        w.poll(1920.0);
+        assert_eq!(w.poll(1e9), None);
     }
 
     #[test]
