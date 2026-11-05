@@ -5,6 +5,7 @@
 //! * [`http`] — axum router: health check, info, routes, WebSocket, static client
 //! * [`connection`] — drives one WebSocket with a [`session::Session`]
 //! * [`session`] — per-connection protocol state machine and limits
+//! * [`afk`] — notices riders who stopped pedalling and warns them
 //! * [`guard`] — rate limits, connection caps, client IPs behind a proxy
 //! * [`worlds`] — one world (and game loop) per route, plus the spin studio
 //! * [`map_file`] — road network files of shared maps, served to clients
@@ -19,6 +20,7 @@
 //! [`app::build`] composes everything; it is the composition root used by
 //! `main.rs` and by the integration tests.
 
+pub mod afk;
 pub mod app;
 pub mod auth;
 pub mod config;
