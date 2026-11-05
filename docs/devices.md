@@ -12,8 +12,9 @@
 
 The client requests control (`0x00`), starts (`0x07`) and then sends
 *Set Indoor Bike Simulation Parameters* (`0x11`) whenever the server reports a
-new grade: wind 0 m/s, grade in 0.01 %, Crr 0.004, Cw 0.51 kg/m. The grade is
-scaled by the trainer difficulty first (positive grades × difficulty, descents × 0.5).
+new grade: wind 0 m/s, grade in 0.01 %, the server's Crr (`joined.physics`,
+0.005; 0.004 from an older server), Cw 0.51 kg/m. Without virtual shifting the
+grade is scaled by Climb feel first (positive grades × difficulty, descents × 0.5).
 
 In ERG mode the client sends *Set Target Power* (`0x05`, watts) instead; the
 trainer then holds that power regardless of cadence. Grade and power commands
@@ -61,11 +62,16 @@ in simulation mode, Cog or not:
   with `k · max(F_road(v), F_floor)`, where *v* is the rider's speed in the
   game: each gear changes the force by its own step (about 9 %), whatever the
   cadence. `F_floor` (1.5 % in the real gear) leaves something to push against
-  on descents, which count in full here (difficulty only eases climbs). The app
-  solves for the grade that produces this force and sends it with no air drag
-  of the trainer's own (`cw` 0), so the trainer adds nothing that depends on its
-  wheel speed (`ride/virtualShifting.js`, unit-tested). It is re-sent as the
-  speed changes.
+  on descents. The app solves for the grade that produces this force and sends
+  it with no air drag of the trainer's own (`cw` 0), so the trainer adds nothing
+  that depends on its wheel speed (`ride/virtualShifting.js`, unit-tested). It
+  is re-sent as the speed changes.
+- `F_road` uses the server's numbers for this rider: mass with the bike, drag
+  area, Crr and air density from `joined.physics` (see
+  [ADR 0019](adr/0019-calibrated-physics.md)). The same Crr goes to the trainer,
+  since the app assumes the trainer adds it.
+- Climb feel doesn't apply with gears, and its sliders hide: the gears make a
+  climb as easy as the rider wants (#22).
 - Changes of grade reach the trainer eased in over a few seconds (at most
   1.5 % per second), shifts at once. The server measures grades over 50 m of
   road, so they don't step at every point of the route.

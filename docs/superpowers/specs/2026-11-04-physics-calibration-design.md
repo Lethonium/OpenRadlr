@@ -1,6 +1,6 @@
 # Physics calibration and virtual shifting — design
 
-Date: 2026-11-04 · Issue: #22 · Status: draft
+Date: 2026-11-04 · Issue: #22 · Status: implemented
 
 ## Goal
 
@@ -37,7 +37,7 @@ In:
 - An additive `physics` object in `joined` (protocol version stays 2).
 - The client's `effectiveGrade` uses the server's mass, CdA, Crr and air density. The Crr sent to the trainer matches.
 - Climb feel option B.
-- Docs: `docs/devices.md`, `docs/protocol.md`, ADR 0006 note, new ADR 0018, CHANGELOG.
+- Docs: `docs/devices.md`, `docs/protocol.md`, ADR 0006 note, new ADR 0019, CHANGELOG.
 
 Out:
 
@@ -240,7 +240,7 @@ the FTMS default (see Scope, Out).
   - FTMS: the Crr sent is the server's
   - correct "positive grades × difficulty" to say it's only without gears
 - ADR 0006: a dated consequence line (drag and mass from the server; Climb feel off with gears).
-- New ADR `docs/adr/0018-calibrated-physics.md`. Context: uncalibrated constants, one CdA for everyone. Decision: a calibration table in tests; CdA scaled by weight with exponent 2/3; the server is the one source for the constants. Consequences: bots slow down; a retune is a reviewed table change.
+- New ADR `docs/adr/0019-calibrated-physics.md`. Context: uncalibrated constants, one CdA for everyone. Decision: a calibration table in tests; CdA scaled by weight with exponent 2/3; the server is the one source for the constants. Consequences: bots slow down; a retune is a reviewed table change.
 - `docs/protocol.md`: `joined.physics`.
 - CHANGELOG `[Unreleased]` (#22):
   - Changed: riding speeds are calibrated, and heavier riders have more drag
@@ -254,7 +254,7 @@ the FTMS default (see Scope, Out).
 3. `joined.physics` on the server, protocol doc.
 4. Client: connection, `effectiveGrade` inputs, Crr to the trainer.
 5. Climb feel option B, with i18n.
-6. Docs, ADR 0018, CHANGELOG.
+6. Docs, ADR 0019, CHANGELOG.
 
 ## Open points for the plan
 
