@@ -191,8 +191,19 @@ controller's, so they act as in the table above:
 | `0x30` / `0x31` | Increase / decrease difficulty | power or ERG target ± (riding only) |
 | `0x40` | Camera view | change camera (riding only) |
 
-A controller may send several IDs for one press; IDs that become the same
-button (e.g. Left and Steer Left) act once. Other IDs are ignored and appear in
+A controller may send several IDs for one press (BikeControl sends e.g. Shift
+Up, Increase Difficulty and Select for one button, so every app finds one it
+knows). IDs pressed in one message are one press, held until all of them are
+released, and it acts **once**, as the first of its buttons that does
+something here:
+
+- riding: shift, then difficulty, then d-pad and steering, then select, back
+  and menu (select does nothing while riding);
+- in menus: d-pad, select, back and menu, then shift, then difficulty.
+
+So that button shifts while riding and selects in a menu. The choice holds
+until the press is released, also when the press itself opens the menu; both
+shift buttons together still open the menu. Other IDs are ignored and appear in
 hex in the diagnostics and the live check. Reconnecting works as for Zwift
 controllers; packets appear under *Device diagnostics* as source `obc`.
 

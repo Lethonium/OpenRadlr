@@ -9,7 +9,7 @@ import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExp
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { connectController, openController } from "./ble/controllers.js";
-import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
+import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { viewControls } from "./view/viewControls.js";
@@ -1325,8 +1325,10 @@ function useController(controller) {
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
       const known = controller.seen.size;
-      for (const button of pressed) controller.seen.add(button);
-      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      // An OpenBikeControl press may stand for several buttons: each counts as seen.
+      const each = pressed.flatMap(alternatives);
+      for (const button of each) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: each };
       renderControllerCheck();
       // The first shift tells the half's side: the line names it.
       if (controller.seen.size !== known) {

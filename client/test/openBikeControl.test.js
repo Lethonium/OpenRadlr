@@ -5,7 +5,7 @@ import { OpenBikeControlController } from "../public/js/ble/openBikeControl.js";
 import { connectController, openController } from "../public/js/ble/controllers.js";
 import { ZwiftController } from "../public/js/ble/zwiftController.js";
 import { ASYNC_CHARACTERISTIC, SYNC_RX_CHARACTERISTIC, SYNC_TX_CHARACTERISTIC, ZWIFT_SERVICE, encodeHandshake } from "../public/js/ble/zwiftProtocol.js";
-import { ControllerInput } from "../public/js/input/controller.js";
+import { ControllerInput, alternatives } from "../public/js/input/controller.js";
 import { DeviceLog } from "../public/js/ble/deviceLog.js";
 import { fakeTrainer } from "./fakeBluetooth.js";
 import { dataView } from "./helpers.js";
@@ -44,6 +44,56 @@ test("select, difficulty and camera act only where they make sense", () => {
   assert.deepEqual(input.update(["easier", "camera", "select"], false), ["powerDown", "cycleCamera"]);
   assert.deepEqual(input.update([], true), []);
   assert.deepEqual(input.update(["select", "harder", "camera"], true), ["select"]);
+});
+
+test("one press standing for several buttons acts once while riding: shift first", () => {
+  const input = new ControllerInput({ now: () => 0 });
+  assert.deepEqual(input.update(["shiftUp/harder/select"], false), ["shiftUp"]);
+  assert.deepEqual(input.update(["shiftUp/harder/select"], false), [], "holding does not repeat");
+  assert.deepEqual(input.update([], false), []);
+});
+
+test("while riding, difficulty comes before the d-pad, and the d-pad before select, back and menu", () => {
+  const input = new ControllerInput({ now: () => 0 });
+  assert.deepEqual(input.update(["harder/up/select"], false), ["powerUp"]);
+  assert.deepEqual(input.update([], false), []);
+  assert.deepEqual(input.update(["select/left/b"], false), ["laneLeft"]);
+  assert.deepEqual(input.update([], false), []);
+  assert.deepEqual(input.update(["select/b/y"], false), ["closePanels"], "select does nothing while riding");
+});
+
+test("in menus, the d-pad, select and back come before shift and difficulty", () => {
+  const input = new ControllerInput({ now: () => 0 });
+  assert.deepEqual(input.update(["shiftUp/harder/select"], true), ["select"]);
+  assert.deepEqual(input.update([], true), []);
+  assert.deepEqual(input.update(["shiftDown/easier/b"], true), ["closePanels"]);
+  assert.deepEqual(input.update([], true), []);
+  assert.deepEqual(input.update(["shiftUp/harder/down"], true), ["focusNext"]);
+  assert.deepEqual(input.update([], true), []);
+  assert.deepEqual(input.update(["shiftUp/harder"], true), ["focusNext"], "shift when nothing else navigates");
+});
+
+test("a held press keeps its choice when the screen changes under it", () => {
+  const input = new ControllerInput({ now: () => 0 });
+  assert.deepEqual(input.update(["shiftUp/select"], false), ["shiftUp"]);
+  assert.deepEqual(input.update(["shiftUp/select"], true), [], "not a new press");
+  assert.deepEqual(input.update([], true), []);
+  assert.deepEqual(input.update(["shiftUp/select"], true), ["select"]);
+});
+
+test("both shift buttons together still open the menu when each sends several IDs", () => {
+  let t = 0;
+  const input = new ControllerInput({ now: () => t, chordMs: 250 });
+  assert.deepEqual(input.update(["shiftUp/harder"], false), ["shiftUp"]);
+  t = 100;
+  assert.deepEqual(input.update(["shiftUp/harder", "shiftDown/easier"], false), ["shiftDown", "toggleMenu"]);
+  t = 200;
+  assert.deepEqual(input.update(["shiftDown/easier"], true), [], "letting go of one is not a new press, also in the menu it opened");
+});
+
+test("a press standing for several buttons lists each of them", () => {
+  assert.deepEqual(alternatives("shiftUp/harder/select"), ["shiftUp", "harder", "select"]);
+  assert.deepEqual(alternatives("left"), ["left"]);
 });
 
 // --------------------------------------------------------------- device ---
@@ -100,6 +150,20 @@ test("button changes add up to the buttons held now", async () => {
   fake.buttons.notify([0x01, 0x01, 0x00]);
   fake.buttons.notify([0x01, 0x02, 0x00]);
   assert.deepEqual(states, [["shiftUp"], ["shiftUp", "shiftDown"], ["shiftDown"], []]);
+});
+
+test("IDs pressed in one message are one press until all of them are released", async () => {
+  const fake = fakeObc();
+  const controller = await openController(fake.device);
+  const states = [];
+  controller.on("buttons", (buttons) => states.push(buttons));
+  // Shift Up + Increase Difficulty + Select for one physical button
+  fake.buttons.notify([0x01, 0x01, 0x01, 0x30, 0x01, 0x14, 0x01]);
+  fake.buttons.notify([0x01, 0x02, 0x01]);
+  fake.buttons.notify([0x01, 0x01, 0x00]);
+  fake.buttons.notify([0x01, 0x30, 0x00, 0x14, 0x00]);
+  fake.buttons.notify([0x01, 0x02, 0x00]);
+  assert.deepEqual(states, [["shiftUp/harder/select"], ["shiftUp/harder/select", "shiftDown"], ["shiftUp/harder/select", "shiftDown"], ["shiftDown"], []]);
 });
 
 test("several IDs for one press act as one button; unknown IDs appear in hex", async () => {

@@ -10,6 +10,8 @@
  *
  * OpenBikeControl controllers (ble/openBikeControlProtocol.js) also press
  * select, harder, easier and camera, which act only where they make sense.
+ * One of their presses may stand for several buttons ("shiftUp/harder/select"):
+ * it acts once, as the first of them by PRIORITY that does something here.
  */
 
 export const RIDING_ACTIONS = Object.freeze({
@@ -53,9 +55,20 @@ const OPPOSITE = Object.freeze({
 
 const CHORD = ["shiftUp", "shiftDown"];
 
+/** Which button a press standing for several acts as: riding shifts first, menus navigate first. */
+export const PRIORITY = Object.freeze({
+  riding: ["shiftUp", "shiftDown", "harder", "easier", "up", "down", "left", "right", "select", "b", "y", "a", "z", "camera"],
+  navigating: ["up", "down", "left", "right", "select", "a", "b", "y", "shiftUp", "shiftDown", "harder", "easier"],
+});
+
+/** The buttons a press stands for: "shiftUp/harder" → ["shiftUp", "harder"]. */
+export const alternatives = (button) => button.split("/");
+
 export class ControllerInput {
   /** button → { at, action } for buttons held down right now */
   #held = new Map();
+  /** press standing for several buttons → the one it acts as, kept while it is held */
+  #chosen = new Map();
   #now;
   #chordMs;
 
@@ -77,7 +90,8 @@ export class ControllerInput {
   update(pressed, navigating) {
     const map = navigating ? NAVIGATING_ACTIONS : RIDING_ACTIONS;
     const now = this.#now();
-    const down = new Set(pressed);
+    for (const press of [...this.#chosen.keys()]) if (!pressed.includes(press)) this.#chosen.delete(press);
+    const down = new Set(pressed.map((press) => this.#choose(press, map, navigating ? PRIORITY.navigating : PRIORITY.riding)));
     for (const button of [...this.#held.keys()]) if (!down.has(button)) this.#held.delete(button);
 
     const fresh = [...down].filter((button) => !this.#held.has(button));
@@ -99,6 +113,17 @@ export class ControllerInput {
       if (action) actions.push(action);
     }
     return actions;
+  }
+
+  /** The button a press acts as: itself, or the first of its buttons by priority that has an action. */
+  #choose(press, map, priority) {
+    if (!press.includes("/")) return press;
+    if (!this.#chosen.has(press)) {
+      const buttons = alternatives(press);
+      const ranked = buttons.filter((button) => priority.includes(button)).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
+      this.#chosen.set(press, ranked.find((button) => map[button]) ?? buttons[0]);
+    }
+    return this.#chosen.get(press);
   }
 }
 

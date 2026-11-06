@@ -25,7 +25,11 @@ export class OpenBikeControlController extends Emitter {
   #log;
   #reconnector;
   #timers;
-  /** Button ID → state, for the buttons held now: a notification carries only the changes. */
+  /**
+   * Button ID → its press, for the IDs held now (a notification carries only the changes).
+   * IDs pressed in one message are one press of one physical button: "shiftUp/harder/select"
+   * (input/controller.js picks one), held until all of them are released.
+   */
   #held = new Map();
   #lastButtons = "";
   battery = null;
@@ -110,12 +114,15 @@ export class OpenBikeControlController extends Emitter {
     const message = parseButtonState(event.target.value);
     this.#log?.packet("obc", event.target.value, message);
     if (message.kind !== "buttons") return;
+    const fresh = [];
     for (const [id, state] of message.changes) {
       if (state === 0) this.#held.delete(id);
-      else this.#held.set(id, state);
+      else if (!this.#held.has(id)) fresh.push(id);
     }
     // Unknown IDs appear in hex, so a rider can report what a button sends.
-    const pressed = [...new Set([...this.#held.keys()].map((id) => OBC_BUTTONS.get(id) ?? `0x${id.toString(16)}`))];
+    const press = [...new Set(fresh.map((id) => OBC_BUTTONS.get(id) ?? `0x${id.toString(16)}`))].join("/");
+    for (const id of fresh) this.#held.set(id, press);
+    const pressed = [...new Set(this.#held.values())];
     const key = pressed.join("+");
     if (key !== this.#lastButtons) this.#log?.info(`${this.label}: ${key || "released"} (${toHex(event.target.value)})`);
     this.#lastButtons = key;
