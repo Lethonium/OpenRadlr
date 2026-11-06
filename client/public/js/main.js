@@ -86,7 +86,7 @@ import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
-import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
+import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
@@ -1705,6 +1705,7 @@ function endRide() {
   app.workoutAudio?.close?.().catch?.(() => {});
   app.workoutAudio = null;
   app.workoutView?.dispose();
+  app.view3d?.setStatueGlow(null, null);
   document.body.classList.remove("working-out");
   $("workout-note").hidden = true;
   ride.unbindKeyboard?.();
@@ -2173,9 +2174,13 @@ function workoutFrame() {
   if (workout.state !== "done") {
     const position = workout.position();
     app.workoutView.render(workoutHudText(position, { state: workout.state, heartRate: app.workoutHeartRate }), blockProgress(position));
+    // The next figure's statue glows during rests only (get-ready included); local to this screen.
+    app.view3d?.setStatueGlow(app.workoutGym, highlightedFigure(position, app.workoutRowFigures));
     $("workout-pause").textContent = workout.state === "paused" ? t("workout.resume") : t("workout.pause");
     // Paused, the plan clock is frozen: the avatar's idle clip keeps the server's start so it keeps moving.
     if (position.block && workout.state !== "paused") blockStart = time - (position.block.seconds - position.blockRemainingS);
+  } else {
+    app.view3d?.setStatueGlow(null, null);
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
