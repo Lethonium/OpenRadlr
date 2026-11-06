@@ -21,6 +21,9 @@ import { DEFAULT_BIOME } from "../view3d/biomes/index.js";
 /** Routes on one map share a world; a route without a map is a world of its own. */
 const mapOf = (route) => route.map?.id ?? `route:${route.id}`;
 
+/** The distinct exercises of a plan in order: what its figure chips count. */
+const planFigures = (plan) => [...new Set(plan.blocks.filter((b) => b.kind === "exercise").map((b) => b.exercise))];
+
 /** What a built world is for: one route in one biome. */
 const buildKey = (routeId, biome) => `${routeId}\0${biome}`;
 
@@ -343,8 +346,12 @@ export class MenuStage {
     this.#applyStatues(override);
     if (!gym) this.#camera.showIsland();
     else {
+      // The chip counts the plan's own figures; the row may hold more (other presets at the café).
       const figure = this.#workout?.figure ?? null;
-      const target = figure === null ? undefined : this.#view.statueTargets(gym)[figure];
+      const exercise = figure === null ? null : planFigures(this.#workout.plan)[figure];
+      const row = statueRows(this.#gyms, PRESETS, override).find((r) => r.gym === gym);
+      const index = exercise && row ? row.figures.indexOf(exercise) : -1;
+      const target = index < 0 ? undefined : this.#view.statueTargets(gym)[index];
       if (target) this.#camera.showStatue(target);
       else this.#camera.showGym(gym);
     }
