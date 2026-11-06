@@ -43,3 +43,30 @@ export function venueRoute(venueId, routes, cafes) {
   const route = routes.find((r) => Math.hypot(r.start.x - cafe.x, r.start.y - cafe.y) <= VENUE_RADIUS_M);
   return route ? route.id : null;
 }
+
+/**
+ * The statue rows to show: one per gym with a known café and at least one figure.
+ * `override` shows a plan's figures (and its venue's material) at one gym instead.
+ * @param {{cafeId: string | null, statueRow: object | null}[]} gyms
+ * @param {{venue: string | null, blocks: {kind: string, exercise?: string}[]}[]} presets
+ * @param {{gym: object, plan: {venue: string | null, blocks: {kind: string, exercise?: string}[]}} | null} [override]
+ * @returns {{gym: object, figures: string[], material: string}[]}
+ */
+export function statueRows(gyms, presets, override = null) {
+  const rows = [];
+  for (const gym of gyms) {
+    if (!gym.statueRow) continue;
+    let figures;
+    let venue;
+    if (override && override.gym === gym) {
+      venue = override.plan.venue;
+      figures = [...new Set(override.plan.blocks.filter((b) => b.kind === "exercise").map((b) => b.exercise))];
+    } else {
+      venue = gym.cafeId;
+      figures = Object.hasOwn(VENUES, venue) ? figuresAt(venue, presets) : [];
+    }
+    if (!Object.hasOwn(VENUES, venue) || figures.length === 0) continue;
+    rows.push({ gym, figures, material: VENUES[venue].material });
+  }
+  return rows;
+}

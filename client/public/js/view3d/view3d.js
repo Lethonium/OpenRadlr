@@ -30,6 +30,7 @@ import {
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
 import { buildRotor, buildSpectator } from "./structures.js";
+import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { VEHICLE_KINDS } from "../ride/vehicle.js";
@@ -211,6 +212,9 @@ export class View3D {
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
   #highlights = [];
+  /** Statue rows by gym: `{ handle, glows, tops, xs, model, row }`. */
+  #statues = new Map();
+  #glow = { gym: null, index: null };
   #pedalPhase = new Map();
   #wheelPhase = new Map();
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
@@ -305,6 +309,43 @@ export class View3D {
   setHighlights(bands) {
     for (const band of this.#highlights) this.renderer.dispose(band.handle);
     this.#highlights = bands.map(({ mesh, glow = 1 }) => ({ handle: this.renderer.upload(mesh), glow }));
+  }
+
+  /**
+   * The gyms' statue rows (#77), replacing the previous ones.
+   * @param {{gym: object, figures: string[], material: string}[]} rows from `statueRows`
+   */
+  setStatues(rows) {
+    this.#disposeStatues();
+    for (const { gym, figures, material } of rows) {
+      const { mesh, glows, tops } = buildStatues(figures, material);
+      const row = gym.statueRow;
+      this.#statues.set(gym, {
+        handle: this.renderer.upload(mesh),
+        glows: glows.map((glow) => this.renderer.upload(glow)),
+        tops,
+        xs: statueSlots(figures.length).map((slot) => slot.x),
+        row,
+        model: placement(row.position, row.yaw),
+      });
+    }
+  }
+
+  /** Lights the ring of plinth `index` at `gym`; `null` switches the glow off. */
+  setStatueGlow(gym, index) {
+    this.#glow = { gym, index };
+  }
+
+  /** World-space plinth tops of `gym`'s statue row, with the row's yaw and the plinth height. */
+  statueTargets(gym) {
+    const entry = this.#statues.get(gym);
+    if (!entry) return [];
+    return entry.xs.map((x, i) => ({ position: transformPoint(entry.model, [x, entry.tops[i], 0]).slice(0, 3), yaw: entry.row.yaw, top: entry.tops[i] }));
+  }
+
+  #disposeStatues() {
+    for (const { handle, glows } of this.#statues.values()) for (const h of [handle, ...glows]) this.renderer.dispose(h);
+    this.#statues.clear();
   }
 
   /** Back to riding after the menu: chase camera, ride lens, nothing highlighted. */
@@ -612,6 +653,9 @@ export class View3D {
           this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
         }
       }
+      for (const { handle, model } of this.#statues.values()) {
+        if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(handle, model);
+      }
       this.renderer.endShadows();
     }
 
@@ -645,6 +689,12 @@ export class View3D {
       for (const body of v.bodies) this.renderer.draw(this.seatedBodies[body.variant], body.model, body.tint);
       for (const limb of v.limbs) this.renderer.draw(limb.mesh, limb.model);
       for (const wheel of v.wheels) this.renderer.draw(this.wheel, wheel);
+    }
+
+    for (const [gym, { handle, glows, model }] of this.#statues) {
+      this.renderer.draw(handle, model);
+      const glow = gym === this.#glow.gym ? glows[this.#glow.index] : null;
+      if (glow) this.renderer.drawBright(glow, model, 0.9);
     }
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -757,6 +807,7 @@ export class View3D {
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
+    this.#disposeStatues();
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);
     }
