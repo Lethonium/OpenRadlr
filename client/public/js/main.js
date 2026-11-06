@@ -31,7 +31,8 @@ import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
 import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
-import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "./ride/virtualShifting.js";
+import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
+import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -598,7 +599,7 @@ function initSetup() {
   $("cog").value = app.profile.cog;
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
-  $("virtual-shifting").addEventListener("change", (e) => ($("gear-settings").hidden = !e.target.checked));
+  $("virtual-shifting").addEventListener("change", showShiftingSettings);
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
   for (const card of document.querySelectorAll(".mode-card")) {
@@ -1162,7 +1163,15 @@ function dropTrainer() {
   delete $("trainer-status").dataset.note;
   $("power-only-note").hidden = true;
   $("virtual-shifting-row").hidden = true;
-  $("gear-settings").hidden = true;
+  showShiftingSettings();
+}
+
+/** Gear settings show while virtual shifting is offered and on; Climb feel then hides (#22). */
+function showShiftingSettings() {
+  const offered = !$("virtual-shifting-row").hidden && !$("virtual-shifting").disabled;
+  const checked = $("virtual-shifting").checked;
+  $("gear-settings").hidden = !offered || !checked;
+  $("difficulty-row").hidden = !climbFeelVisible({ shiftingOffered: offered, shiftingChecked: checked });
 }
 
 /**
@@ -1223,7 +1232,7 @@ function showTrainerControl(trainer) {
   $("virtual-shifting").disabled = !could;
   $("virtual-shifting-row").hidden = !could;
   if (!could) $("virtual-shifting").checked = false;
-  $("gear-settings").hidden = !could || !$("virtual-shifting").checked;
+  showShiftingSettings();
   // In a ride, the HUD says it too.
   $("power-only").hidden = controllable || paddles;
   $("power-only").textContent = blocked ? t("hud.resistanceBlocked") : t("hud.powerOnly");
@@ -1568,6 +1577,7 @@ async function joinRide(restored = null) {
   }
 
   app.gearbox = app.profile.virtualShifting && controllable ? new Gearbox() : null;
+  $("ride-difficulty-panel").hidden = Boolean(app.gearbox);
   app.training = new TrainingControl({ ftp: app.profile.ftp, canControl: controllable });
   // Per ride, so its test flag lives and dies with the ride record
   app.ftpTest = new FtpTestSession({ training: app.training, getSamples: () => app.recorder?.samples ?? [] });
@@ -1579,18 +1589,13 @@ async function joinRide(restored = null) {
     resistanceModel: (roadGrade) => {
       // The road (flat in the studio: no grades arrive), with virtual gears if on.
       const road = () => {
-        if (!app.gearbox) return applyDifficulty(roadGrade, app.profile.difficulty);
+        // The server's Crr, so the trainer's rolling resistance matches the game's (#22).
+        const physics = app.connection?.physics ?? null;
+        if (!app.gearbox) return { grade: applyDifficulty(roadGrade, app.profile.difficulty), ...(physics?.crr && { crr: physics.crr }) };
         const me = app.state ? myRider(app.state.riders) : null;
         const draft = me && !app.studio ? draftInfo(me, app.state.riders, app.route) : null;
-        const grade = effectiveGrade({
-          gradePercent: applyDifficulty(roadGrade, app.profile.difficulty, { descents: 1 }),
-          ratio: app.gearbox.ratio,
-          referenceRatio: referenceRatio(app.profile.chainring, app.profile.cog),
-          speed: me?.speed ?? 0,
-          dragFactor: 1 - (draft?.savingPercent ?? 0) / 100,
-          massKg: app.profile.weightKg + 9,
-        });
-        return { grade, cw: SHIFTING_CW };
+        const dragFactor = 1 - (draft?.savingPercent ?? 0) / 100;
+        return shiftingCommand({ roadGrade, gearbox: app.gearbox, profile: app.profile, physics, me, dragFactor });
       };
       return app.studio ? app.studio.command(road, now()) : app.training.command(road);
     },

@@ -8,7 +8,7 @@
 
 use crate::protocol::{
     event_info, event_message, event_notice_message, event_state, state_message, DeviceKind, EventInfoWire, EventState,
-    Exercise, InputAction, RiderTags, ServerMessage,
+    Exercise, InputAction, PhysicsWire, RiderTags, ServerMessage,
 };
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
@@ -390,7 +390,11 @@ impl GameCore {
         }
         let (resume_token, epoch) = self.attachments.attach(rider_id);
         // A failed delivery here is cleaned up on the next tick.
-        let _ = sink.deliver(ServerMessage::Joined { rider_id, resume_token });
+        let _ = sink.deliver(ServerMessage::Joined {
+            rider_id,
+            resume_token,
+            physics: self.physics_of(rider_id),
+        });
         let event = self.event_state_for(rider_id);
         if let Some(state) = state_message(
             &self.world,
@@ -415,6 +419,14 @@ impl GameCore {
         Ok(JoinedRider { rider_id, epoch })
     }
 
+    /// The physics a rider in the world rides with, for `joined`.
+    fn physics_of(&self, rider_id: RiderId) -> PhysicsWire {
+        self.world
+            .rider_physics(rider_id)
+            .expect("a joined rider is in the world")
+            .into()
+    }
+
     /// The rider's connection dropped: they coast at 0 W, keep their race,
     /// event and seat, and are removed only after the grace period (#73).
     pub fn detach(&mut self, rider_id: RiderId) {
@@ -435,10 +447,12 @@ impl GameCore {
     pub fn reattach(&mut self, token: &str, sink: Box<dyn MessageSink>) -> Option<JoinedRider> {
         let joined = self.attachments.reattach(token)?;
         let rider_id = joined.rider_id;
+        let physics = self.physics_of(rider_id);
         let client = self.clients.get_mut(&rider_id)?;
         let _ = sink.deliver(ServerMessage::Joined {
             rider_id,
             resume_token: token.to_owned(),
+            physics,
         });
         client.sink = sink;
         // The new connection's trainer needs the grade again.
@@ -1091,7 +1105,7 @@ mod tests {
         let messages = sink.take();
         assert!(matches!(
             &messages[0],
-            ServerMessage::Joined { rider_id, resume_token } if *rider_id == id && resume_token.len() == 64
+            ServerMessage::Joined { rider_id, resume_token, .. } if *rider_id == id && resume_token.len() == 64
         ));
         match &messages[1] {
             ServerMessage::State { riders, .. } => {
@@ -2006,7 +2020,7 @@ mod tests {
         let messages = sink.take();
         assert!(matches!(
             &messages[0],
-            ServerMessage::Joined { rider_id, resume_token } if *rider_id == ben && resume_token.len() == 64
+            ServerMessage::Joined { rider_id, resume_token, .. } if *rider_id == ben && resume_token.len() == 64
         ));
         let vehicle = vehicle_of_state(&messages[1]).expect("a vehicle in the first state");
         assert_eq!(vehicle.code, code);
@@ -2054,6 +2068,40 @@ mod tests {
         game
     }
 
+    fn physics_of(messages: &[ServerMessage]) -> PhysicsWire {
+        messages
+            .iter()
+            .find_map(|m| match m {
+                ServerMessage::Joined { physics, .. } => Some(*physics),
+                _ => None,
+            })
+            .expect("a joined message")
+    }
+
+    #[test]
+    fn joined_tells_the_rider_their_physics() {
+        let mut game = game(0, 10);
+        let sink = RecordingSink::default();
+        game.join("Anna", 90.0, None, None, None, None, Box::new(sink.clone()))
+            .unwrap();
+        assert_eq!(physics_of(&sink.take()).mass_kg, 100.0);
+    }
+
+    #[test]
+    fn reattach_sends_the_same_physics() {
+        let mut game = game_with_grace(60.0);
+        let sink = RecordingSink::default();
+        let anna = game
+            .join("Anna", 90.0, None, None, None, None, Box::new(sink.clone()))
+            .unwrap();
+        let first = sink.take();
+        game.detach(anna);
+        let fresh = RecordingSink::default();
+        game.reattach(&token_of(&first), Box::new(fresh.clone()))
+            .expect("reattached");
+        assert_eq!(physics_of(&fresh.take()), physics_of(&first));
+    }
+
     fn token_of(messages: &[ServerMessage]) -> String {
         messages
             .iter()
@@ -2096,13 +2144,10 @@ mod tests {
         let joined = game.reattach(&token, Box::new(fresh.clone())).expect("reattached");
         assert_eq!(joined.rider_id, anna);
         let messages = fresh.take();
-        assert_eq!(
-            messages[0],
-            ServerMessage::Joined {
-                rider_id: anna,
-                resume_token: token
-            }
-        );
+        assert!(matches!(
+            &messages[0],
+            ServerMessage::Joined { rider_id, resume_token, .. } if *rider_id == anna && *resume_token == token
+        ));
         assert!(matches!(messages[1], ServerMessage::State { .. }));
     }
 

@@ -908,7 +908,7 @@ mod tests {
             &config.physics,
             &StepInput {
                 rider_mass_kg: 70.0,
-                body: physics::Body::bike(&config.physics),
+                body: physics::Body::bike(&config.physics, 70.0),
                 speed: 8.0,
                 power_watts: 200.0,
                 grade_percent: 0.0,
@@ -1001,8 +1001,9 @@ mod tests {
         assert!((odometer - SOLO_ODOMETER).abs() < 1e-9, "{odometer:?}");
     }
 
-    /// Recorded on c10a43d, before vehicles had their own physics step.
-    const SOLO_ODOMETER: f64 = 417.085_126_413_022_8;
+    /// Recorded on c10a43d, before vehicles had their own physics step;
+    /// re-recorded for the calibrated physics, #22.
+    const SOLO_ODOMETER: f64 = 400.957_290_244_504_46;
 
     #[test]
     fn huge_power_is_capped() {

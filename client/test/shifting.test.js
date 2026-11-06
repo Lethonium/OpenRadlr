@@ -1,6 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FLOOR_GRADE, GEAR_RATIOS, Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "../public/js/ride/virtualShifting.js";
+import {
+  FLOOR_GRADE,
+  GEAR_RATIOS,
+  Gearbox,
+  SHIFTING_CW,
+  effectiveGrade,
+  referenceRatio,
+  shiftingCommand,
+  shiftingInputs,
+} from "../public/js/ride/virtualShifting.js";
 import { RideSession } from "../public/js/ride/rideSession.js";
 import { Emitter } from "../public/js/util/emitter.js";
 import { fakeScheduler } from "./helpers.js";
@@ -109,4 +118,72 @@ test("the ride session re-sends resistance when speed changes the virtual load",
   gearbox.shiftUp();
   session.refreshResistance();
   assert.ok(trainer.grades[2] > trainer.grades[1]);
+});
+
+// --- the server's physics (#22) ---------------------------------------------
+
+const today = { ratio: 2, referenceRatio: 2, massKg: 84 };
+
+test("defaults reproduce today's grades", () => {
+  assert.equal(effectiveGrade({ ...today, gradePercent: 0, speed: 9 }), 1.9);
+  assert.equal(effectiveGrade({ ...today, gradePercent: 6, speed: 4 }), 6.4);
+  assert.equal(effectiveGrade({ ...today, gradePercent: -5, speed: 15 }), 1.1);
+});
+
+test("a larger drag area makes speed harder", () => {
+  const flat = { ...today, gradePercent: 0, speed: 9 };
+  assert.ok(effectiveGrade({ ...flat, cda: 0.45 }) > effectiveGrade({ ...flat, cda: 0.32 }));
+});
+
+test("denser air makes speed harder", () => {
+  const flat = { ...today, gradePercent: 0, speed: 9 };
+  assert.ok(effectiveGrade({ ...flat, airDensity: 1.6 }) > effectiveGrade({ ...flat, airDensity: 1.225 }));
+});
+
+test("the given crr is what the trainer is assumed to add", () => {
+  const climb = { ...today, gradePercent: 10, speed: 3 };
+  const low = effectiveGrade({ ...climb, crr: 0.004 });
+  const high = effectiveGrade({ ...climb, crr: 0.005 });
+  assert.ok(Math.abs(high - low) < 0.05, `${low} vs ${high}`);
+});
+
+const physics = { mass_kg: 100, cda_m2: 0.452, crr: 0.005, air_density: 1.225 };
+const profile = { weightKg: 90, difficulty: 0.5, chainring: 34, cog: 14 };
+
+test("shifting uses the server's physics when it sends them", () => {
+  assert.deepEqual(shiftingInputs({ physics, profile, me: null }), { massKg: 100, cda: 0.452, crr: 0.005, airDensity: 1.225 });
+});
+
+test("without the server's physics, shifting uses the profile weight and today's constants", () => {
+  assert.deepEqual(shiftingInputs({ physics: null, profile, me: null }), {
+    massKg: 99,
+    cda: undefined,
+    crr: undefined,
+    airDensity: undefined,
+  });
+});
+
+test("effectiveGrade inputs do not depend on a vehicle", () => {
+  const solo = { id: 1, speed: 8 };
+  const seated = { ...solo, vehicle: { id: 3, kind: "tandem" } };
+  assert.deepEqual(shiftingInputs({ physics, profile, me: seated }), shiftingInputs({ physics, profile, me: solo }));
+});
+
+test("gears get the road grade without climb feel", () => {
+  const gearbox = new Gearbox();
+  const command = shiftingCommand({ roadGrade: 8, gearbox, profile, physics, me: { speed: 5 }, dragFactor: 1 });
+  const expected = effectiveGrade({
+    gradePercent: 8,
+    ratio: gearbox.ratio,
+    referenceRatio: referenceRatio(34, 14),
+    speed: 5,
+    dragFactor: 1,
+    ...shiftingInputs({ physics, profile, me: null }),
+  });
+  assert.equal(command.grade, expected);
+});
+
+test("a gear command carries no trainer air drag and the server's crr", () => {
+  const command = shiftingCommand({ roadGrade: 8, gearbox: new Gearbox(), profile, physics, me: null, dragFactor: 1 });
+  assert.deepEqual({ cw: command.cw, crr: command.crr }, { cw: SHIFTING_CW, crr: 0.005 });
 });

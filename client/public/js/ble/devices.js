@@ -255,9 +255,14 @@ export class SmartTrainer extends Emitter {
   }
 
   /** Simulation mode: the trainer models this road grade. */
-  /** @param {{cw?: number}} [options] the trainer's own air drag (kg/m), FTMS default without */
-  setGrade(gradePercent, { cw } = {}) {
-    return this.#send(encodeSimulationParameters({ gradePercent, ...(Number.isFinite(cw) && { cw }) }));
+  /**
+   * @param {{cw?: number, crr?: number}} [options] the trainer's own air drag (kg/m) and
+   *   rolling resistance; FTMS defaults without
+   */
+  setGrade(gradePercent, { cw, crr } = {}) {
+    return this.#send(
+      encodeSimulationParameters({ gradePercent, ...(Number.isFinite(cw) && { cw }), ...(Number.isFinite(crr) && { crr }) }),
+    );
   }
 
   /** ERG mode: the trainer holds this power regardless of cadence. */

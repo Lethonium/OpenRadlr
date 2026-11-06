@@ -658,7 +658,7 @@ export default {
   "start.joiningAFriendS": "Du steigst bei einem Tandem oder Bierbike eines Freundes ein?",
   "start.settings": "Einstellungen",
   "start.rideSettings": "Fahrteinstellungen",
-  "start.howMuchOfEach": "Wie viel von jedem Anstieg deine Smart-Rolle simuliert: 100 % ist die echte Steigung. Dein Tempo bleibt gleich. Auch im Fahrtmenü.",
+  "start.howMuchOfEach": "Wie viel von jedem Anstieg deine Smart-Rolle simuliert: 100 % ist die echte Steigung. Dein Tempo bleibt gleich. Auch im Fahrtmenü. Nicht bei virtuellem Schalten: Das übernehmen die Gänge.",
   "start.whatDoYouWant": "Was möchtest du tun?",
   "start.routes": "Strecken",
   "start.chainringTeeth": "Zähne am Kettenblatt",

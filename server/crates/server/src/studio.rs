@@ -3,7 +3,7 @@
 //! message goes to the riders of one room only.
 
 use crate::game::{sanitise_chat, sanitise_name, valid_weight, GameSettings, JoinError, MessageSink, NullSink};
-use crate::protocol::{studio_event_message, studio_state_message, DeviceKind, ServerMessage};
+use crate::protocol::{studio_event_message, studio_state_message, DeviceKind, PhysicsWire, ServerMessage};
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
 use crate::stats::DistanceStats;
@@ -80,6 +80,14 @@ impl StudioCore {
         &self.studio
     }
 
+    /// The physics a seated rider rides with, for `joined`.
+    fn physics_of(&self, rider_id: RiderId) -> PhysicsWire {
+        self.studio
+            .rider_physics(rider_id)
+            .expect("a joined rider has a seat")
+            .into()
+    }
+
     fn room_of(&self, rider_id: RiderId) -> Option<usize> {
         self.studio.seat_of(rider_id).map(|(room, _)| room)
     }
@@ -137,7 +145,11 @@ impl Game for StudioCore {
         let room = self.room_of(rider_id).expect("a rider who just joined has a seat");
         let (resume_token, epoch) = self.attachments.attach(rider_id);
         // A failed delivery here is cleaned up on the next tick.
-        let _ = sink.deliver(ServerMessage::Joined { rider_id, resume_token });
+        let _ = sink.deliver(ServerMessage::Joined {
+            rider_id,
+            resume_token,
+            physics: self.physics_of(rider_id),
+        });
         let _ = sink.deliver(studio_state_message(&self.studio, room, self.tick));
         self.clients.insert(rider_id, sink);
         self.ridden.insert(
@@ -181,10 +193,12 @@ impl Game for StudioCore {
         let joined = self.attachments.reattach(token)?;
         let rider_id = joined.rider_id;
         let room = self.room_of(rider_id)?;
+        let physics = self.physics_of(rider_id);
         let client = self.clients.get_mut(&rider_id)?;
         let _ = sink.deliver(ServerMessage::Joined {
             rider_id,
             resume_token: token.to_owned(),
+            physics,
         });
         let _ = sink.deliver(studio_state_message(&self.studio, room, self.tick));
         *client = sink;
@@ -326,7 +340,7 @@ mod tests {
         let messages = sink.take();
         assert!(matches!(
             &messages[0],
-            ServerMessage::Joined { rider_id, resume_token } if *rider_id == id && resume_token.len() == 64
+            ServerMessage::Joined { rider_id, resume_token, .. } if *rider_id == id && resume_token.len() == 64
         ));
         let ServerMessage::StudioState {
             room,
@@ -480,5 +494,58 @@ mod tests {
         assert_eq!(Game::player_count(&core), 0);
         assert!(core.studio().rider(anna).is_none());
         assert!(Game::reattach(&mut core, &token, Box::new(RecordingSink::default())).is_none());
+    }
+
+    fn joined_physics(messages: &[ServerMessage]) -> PhysicsWire {
+        messages
+            .iter()
+            .find_map(|m| match m {
+                ServerMessage::Joined { physics, .. } => Some(*physics),
+                _ => None,
+            })
+            .expect("a joined message")
+    }
+
+    fn join_90_kg(core: &mut StudioCore) -> (RiderId, RecordingSink) {
+        let sink = RecordingSink::default();
+        let id = core
+            .join(
+                "Anna",
+                90.0,
+                Some(250.0),
+                None,
+                None,
+                None,
+                None,
+                Box::new(sink.clone()),
+            )
+            .unwrap()
+            .rider_id;
+        (id, sink)
+    }
+
+    #[test]
+    fn joined_tells_the_studio_rider_their_physics() {
+        let mut core = core(0, 10);
+        let (_, sink) = join_90_kg(&mut core);
+        assert_eq!(joined_physics(&sink.take()).mass_kg, 100.0);
+    }
+
+    #[test]
+    fn studio_reattach_sends_the_same_physics() {
+        let mut core = core(0, 10);
+        let (anna, sink) = join_90_kg(&mut core);
+        let first = sink.take();
+        let token = first
+            .iter()
+            .find_map(|m| match m {
+                ServerMessage::Joined { resume_token, .. } => Some(resume_token.clone()),
+                _ => None,
+            })
+            .expect("a joined message");
+        Game::detach(&mut core, anna);
+        let fresh = RecordingSink::default();
+        Game::reattach(&mut core, &token, Box::new(fresh.clone())).expect("reattached");
+        assert_eq!(joined_physics(&fresh.take()), joined_physics(&first));
     }
 }

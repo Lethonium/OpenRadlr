@@ -174,3 +174,24 @@ test("workout sends the current exercise after joining", async () => {
     { type: "workout", exercise: null },
   ]);
 });
+
+test("keeps the physics from joined", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 90 });
+  socket().open();
+  socket().receive({ type: "welcome", server_name: "Test", route_id: "loop" });
+  const physics = { mass_kg: 100, cda_m2: 0.452, crr: 0.005, air_density: 1.225 };
+  socket().receive({ type: "joined", rider_id: 7, physics });
+  await joined;
+  assert.deepEqual(connection.physics, physics);
+});
+
+test("physics is null when the server sends none", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 90 });
+  socket().open();
+  socket().receive({ type: "welcome", server_name: "Test", route_id: "loop" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.equal(connection.physics, null);
+});

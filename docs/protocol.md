@@ -68,7 +68,7 @@ Workout riders are exempt.
 | `type` | Fields |
 | --- | --- |
 | `welcome` | `protocol_version`, `server_name`, `server_version`, `auth_mode`, `route_id`, `grace_s` (how long a dropped rider is kept) |
-| `joined` | `rider_id`, `resume_token` (send it back in `join` after a dropped connection) |
+| `joined` | `rider_id`, `resume_token` (send it back in `join` after a dropped connection), `physics` (`mass_kg` rider plus bike, `cda_m2`, `crr`, `air_density`: what the server rides you with on a solo bike) |
 | `state` | `tick`, `riders[]` (the riders around you), `race` (your route's, see below), `route_riders` (`humans`, `bots`: everyone on your route), `event`? (your route's scheduled event, see below), `vehicle`? (your own vehicle, see below) — about 4 Hz |
 | `studio_state` | spin studio only, for the rider's room: `tick`, `room` (0-based), `rooms`, `class` (`id`, `name`, `starts_at_s` Unix time, `elapsed_s` — negative in the lobby), `riders[]` — about 4 Hz |
 | `resistance` | `grade_percent` — when the grade under the rider changes |
@@ -245,6 +245,7 @@ Security hardening added the `vehicle_rate_limited` error within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.
 Community distance counters (#65) added `distance_m` to `/api/info` within version 2.
+Physics calibration (#22) added `physics` to `joined` within version 2.
 AFK warnings added `afk_warning`, `stay` and `afk_timeout` within version 2.
 Reconnecting (#73) added `leave`, `resume_token` and `resume` in `join`,
 `resume_token` in `joined` and `grace_s` in `welcome` within version 2. An

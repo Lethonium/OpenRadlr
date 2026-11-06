@@ -11,6 +11,7 @@
 //! messages into calls on [`world::World`] and world state back into messages.
 
 pub mod bot;
+pub mod calibration;
 pub mod drafting;
 pub mod events;
 pub mod names;
