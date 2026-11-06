@@ -6,7 +6,7 @@ import { coastOutline, islandOf, mapFrame } from "../public/js/view/mapPreview.j
 import { MenuStage } from "../public/js/view/menuStage.js";
 import { HIGHLIGHT, HIGHLIGHT_LIFT, buildHighlight, highlightColor } from "../public/js/view3d/highlight.js";
 import { DRONE_LENS, depthStep } from "../public/js/view3d/view3d.js";
-import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose } from "../public/js/view3d/menuCamera.js";
+import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose, statuePose } from "../public/js/view3d/menuCamera.js";
 import { roadFrame } from "../public/js/view3d/world.js";
 
 const file = (id) => JSON.parse(readFileSync(new URL(`../../routes/${id}.json`, import.meta.url)));
@@ -215,6 +215,61 @@ test("with reduced motion the gym view is a still", () => {
   const still = camera.eye.slice();
   camera.update(3);
   assert.deepEqual(camera.eye, still);
+});
+
+const STATUE = { position: [400, 31, -190], yaw: 0.7, top: 1 };
+
+test("the statue shot stands 4.5 m in front of the plinth, above it, looking at the figure's chest", () => {
+  const o = overview();
+  const { eye, target } = statuePose(STATUE, o, 0);
+  assert.ok(Math.abs(flatDistance(eye, STATUE.position) - MENU_CAMERA.statueDistance) < 0.05);
+  const front = [-Math.sin(STATUE.yaw), -Math.cos(STATUE.yaw)];
+  const off = [eye[0] - STATUE.position[0], eye[2] - STATUE.position[2]];
+  assert.ok(off[0] * front[0] + off[1] * front[1] > 4.4, "on the road side");
+  assert.ok(Math.abs(eye[1] - (STATUE.position[1] + MENU_CAMERA.statueHeight)) < 1e-6);
+  assert.ok(Math.abs(target[1] - STATUE.position[1] - 0.9) <= 0.2);
+  assert.ok(flatDistance(target, STATUE.position) < 1e-6);
+});
+
+test("the statue shot swings no more than 20 degrees off the plinth's facing", () => {
+  const o = overview();
+  const front = [-Math.sin(STATUE.yaw), -Math.cos(STATUE.yaw)];
+  for (let k = 0; k <= 12; k += 1) {
+    const { eye } = statuePose(STATUE, o, (k * Math.PI) / 6);
+    const off = [eye[0] - STATUE.position[0], eye[2] - STATUE.position[2]];
+    const angle = Math.acos(Math.min(1, (off[0] * front[0] + off[1] * front[1]) / Math.hypot(...off)));
+    assert.ok(angle <= MENU_CAMERA.statueSwing + 1e-6, `phase ${k}: ${angle}`);
+  }
+});
+
+test("a hill under the statue shot's eye lifts it", () => {
+  const hill = { position: [500, 31, 495.5], yaw: Math.PI, top: 1 };
+  const { eye } = statuePose(hill, overview(), 0);
+  assert.ok(eye[1] >= groundAt(overview(), eye[0], eye[2]) + 1.2 - 1e-6);
+});
+
+test("picking a statue glides to it, and picking the gym flies back", () => {
+  const o = overview();
+  const camera = new MenuCamera(o);
+  camera.showStatue(STATUE);
+  assert.equal(camera.view, "statue");
+  for (let i = 0; i < 120; i += 1) camera.update(0.05);
+  assert.ok(!camera.flying);
+  assert.ok(Math.abs(flatDistance(camera.eye, STATUE.position) - MENU_CAMERA.statueDistance) < 0.05, "at the statue");
+  assert.ok(Math.abs(camera.eye[1] - STATUE.position[1] - MENU_CAMERA.statueHeight) < 1e-6);
+  camera.showGym(GYM);
+  assert.equal(camera.view, "gym");
+  assert.ok(camera.flying);
+});
+
+test("with reduced motion the statue shot is a cut", () => {
+  const o = overview();
+  const camera = new MenuCamera(o, { reducedMotion: true });
+  camera.showStatue(STATUE);
+  assert.ok(!camera.flying);
+  camera.update(10);
+  const pose = statuePose(STATUE, o, 0);
+  for (let k = 0; k < 3; k += 1) assert.ok(Math.abs(camera.eye[k] - pose.eye[k]) < 1e-6);
 });
 
 // --- highlight -------------------------------------------------------------------

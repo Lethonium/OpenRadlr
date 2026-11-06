@@ -789,7 +789,7 @@ function initMenuStage() {
           return view;
         }
       : null,
-    lensFor: (kind, overview) => (kind === "gym" ? gymLens(overview) : droneLens(overview)),
+    lensFor: (kind, overview) => (kind === "gym" || kind === "statue" ? gymLens(overview) : droneLens(overview)),
     // The first world opens with a descent from high over the island.
     createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
