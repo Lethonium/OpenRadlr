@@ -194,3 +194,17 @@ export const CLIPS = Object.freeze({
 export function clipFor(exercise) {
   return Object.hasOwn(CLIPS, exercise ?? "") ? CLIPS[exercise] : CLIPS.idle;
 }
+
+/**
+ * The moment of each exercise a statue freezes, and the plinth it stands or
+ * lies on: a squat at its bottom, a push-up down, a sit-up halfway up, a
+ * jumping jack open, a burpee at the top of its jump.
+ */
+export const STATUE_MOMENT = Object.freeze({
+  squats: Object.freeze({ t: 1.2, plinth: "upright" }),
+  pushups: Object.freeze({ t: 1.0, plinth: "lying" }),
+  plank: Object.freeze({ t: 0, plinth: "lying" }),
+  situps: Object.freeze({ t: 0.6, plinth: "lying" }),
+  jumping_jacks: Object.freeze({ t: 0.5, plinth: "upright" }),
+  burpees: Object.freeze({ t: 2.75, plinth: "upright" }),
+});

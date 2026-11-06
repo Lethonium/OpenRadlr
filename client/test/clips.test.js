@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { invert, transformPoint } from "../public/js/view3d/math.js";
 import * as model from "../public/js/view3d/riderModel.js";
-import { CLIPS, clipFor, settle } from "../public/js/view3d/clips.js";
+import { CLIPS, STATUE_MOMENT, clipFor, settle } from "../public/js/view3d/clips.js";
+import { EXERCISES } from "../public/js/workout/plan.js";
 import { bodyTransforms, poseAt, validClip } from "../public/js/view3d/riderPose.js";
 
 const look = model.variantLook(0);
@@ -137,4 +138,12 @@ test("a planted point holds still through the clip", () => {
     ["squats", true],
     ["pushups", true],
   ]);
+});
+
+test("every exercise has a statue moment inside its clip", () => {
+  assert.deepEqual(Object.keys(STATUE_MOMENT).sort(), Object.keys(EXERCISES).sort());
+  for (const [name, { t, plinth }] of Object.entries(STATUE_MOMENT)) {
+    assert.ok(t >= 0 && t <= CLIPS[name].loopS, `${name} at ${t}`);
+    assert.ok(["upright", "lying"].includes(plinth), `${name} plinth ${plinth}`);
+  }
 });
