@@ -85,6 +85,7 @@ import { WorkoutSession } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
+import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
@@ -246,6 +247,9 @@ const app = {
   /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
   workoutPick: null,
   workoutFigure: null,
+  /** The gym the workout trains at and the figures of its statue row, in row order (set with the ride's 3D view). */
+  workoutGym: null,
+  workoutRowFigures: [],
   redrawStage: null,
   trainer: null,
   heartRateMonitor: null,
@@ -753,6 +757,8 @@ function openStartMenu() {
     renderStartMenu();
   };
   initMenuStage();
+  // The menu learns the pick, so opening the Workout tab shows its gym.
+  app.menu?.showWorkout(pickedWorkout(), app.workoutFigure);
   renderStartMenu();
   refresh();
   clearInterval(app.infoTimer);
@@ -811,6 +817,7 @@ function initMenuStage() {
       ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
       { mesh: buildHighlight(route), glow: 1 },
     ],
+    onCafes: () => renderWorkoutPick(),
     onRoute: (stage) => {
       shown = stage;
       drawStage();
@@ -1622,10 +1629,11 @@ async function joinRide(restored = null) {
 
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
 async function joinWorkout(profile, errors) {
-  const routeId = workoutRoute(app.info);
+  const plan = pickedWorkout();
+  // The route that starts at the workout's café, else the default route (its gym shows the workout's statues).
+  const routeId = app.menu?.workoutRouteId(plan) ?? workoutRoute(app.info);
   if (!routeId) errors.push(t("join.error.noRoute"));
   if (errors.length) return showSetupError(errors.join("\n"));
-  const plan = pickedWorkout();
   // No "discard your unfinished ride?" prompt: a workout never touches the autosave
   // (no recorder, so saveRide() does nothing), the unfinished ride is still offered afterwards.
   app.restored = null;
@@ -1771,6 +1779,8 @@ function endRide() {
     studioView: null,
     workout: null,
     workoutPlan: null,
+    workoutGym: null,
+    workoutRowFigures: [],
     workoutView: null,
     workoutCue: null,
     workoutHeartRate: null,
@@ -3708,8 +3718,17 @@ function show3d(scene, view = null) {
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
   setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
+  // Each gym's statues (also on a view taken over from the menu, which had its own rows).
+  // A workout whose café this route does not start at shows its figures at the gym here.
+  const rideGym = gymOfRoute(app.view3d.gyms, app.route);
+  const plan = app.workoutPlan;
+  const override = app.workout && rideGym && plan && rideGym.cafeId !== plan.venue ? { gym: rideGym, plan } : null;
+  const rows = statueRows(app.view3d.gyms, PRESETS, override);
+  app.view3d.setStatues(rows);
+  app.workoutGym = app.workout ? rideGym : null;
+  app.workoutRowFigures = app.workout ? (rows.find((row) => row.gym === rideGym)?.figures ?? []) : [];
   // The workout watches my avatar on the gym mat (#77).
-  const gym = app.workout ? gymOfRoute(app.view3d.gyms, app.route) : null;
+  const gym = app.workout ? rideGym : null;
   if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
 }
 

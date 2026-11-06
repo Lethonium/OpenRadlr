@@ -8,6 +8,7 @@ import { HIGHLIGHT, HIGHLIGHT_LIFT, buildHighlight, highlightColor } from "../pu
 import { DRONE_LENS, depthStep } from "../public/js/view3d/view3d.js";
 import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose, statuePose } from "../public/js/view3d/menuCamera.js";
 import { roadFrame } from "../public/js/view3d/world.js";
+import { PRESETS } from "../public/js/workout/presets.js";
 
 const file = (id) => JSON.parse(readFileSync(new URL(`../../routes/${id}.json`, import.meta.url)));
 const flats = new RouteGeometry(file("riverside-flats"));
@@ -363,7 +364,23 @@ function fakeStage({ use3d = true } = {}) {
       : null,
     createView: use3d
       ? (route, scene) => {
-          const view = { route, scene, highlights: [], disposed: false, setHighlights: (bands) => (view.highlights = bands), dispose: () => (view.disposed = true), render: () => {} };
+          const view = {
+            route,
+            scene,
+            highlights: [],
+            disposed: false,
+            statueCalls: [],
+            lateStatues: 0,
+            setHighlights: (bands) => (view.highlights = bands),
+            setStatues: (rows) => {
+              if (view.disposed) view.lateStatues += 1;
+              view.statueCalls.push(rows);
+            },
+            // Six targets per gym with a row, as the real view lays out a full-body row.
+            statueTargets: (gym) => (view.statueCalls.at(-1)?.some((row) => row.gym === gym) ? Array.from({ length: 6 }, (_, i) => ({ position: [gym.center[0] + i, 0, gym.center[2]], yaw: 0, top: 1 })) : []),
+            dispose: () => (view.disposed = true),
+            render: () => {},
+          };
           log.views.push(view);
           return view;
         }
@@ -726,6 +743,111 @@ test("the workout card builds the default route's world when the one on screen l
   await settle();
   assert.equal(stage.viewRouteId, "riverside-flats");
   assert.equal(log.views.at(-1).camera.view, "gym");
+});
+
+// --- workout venues -----------------------------------------------------------------
+
+const full = PRESETS.find((plan) => plan.id === "full-body");
+const tabata = PRESETS.find((plan) => plan.id === "tabata");
+const CAFES = [
+  { id: "valley-cafe", kind: "cafe", name: "Valley Café", x: 0, y: 0 },
+  { id: "hill-cafe", kind: "cafe", name: "Hilltop Café", x: 2400, y: 950 },
+];
+
+/** A stage on the valley map: a gym at the flats' start (valley café) and one at the hills' (hill café). */
+function venueStage({ offered }) {
+  const { stage, log } = fakeStage();
+  const valleyGym = { ...gymAt(flats), cafeId: "valley-cafe", statueRow: {} };
+  const hillGym = { ...gymAt(hills), cafeId: "hill-cafe", statueRow: {} };
+  stage.deps.fetchNetwork = async () => ({ id: "valley", edges: [], nodes: CAFES });
+  stage.deps.buildScene = (routeFile) => new Promise((resolve) => log.builds.push({ id: routeFile.id, resolve: () => resolve({ overview: overview(), gyms: [valleyGym, hillGym] }) }));
+  stage.deps.createCamera = (o) => {
+    const camera = new MenuCamera(o);
+    camera.shots = [];
+    for (const name of ["showGym", "showStatue"]) {
+      const original = camera[name].bind(camera);
+      camera[name] = (arg) => {
+        camera.shots.push([name, arg]);
+        original(arg);
+      };
+    }
+    return camera;
+  };
+  return { stage, log, valleyGym, hillGym, routes: [...offered, { id: "workout", name: "Workout", kind: "workout" }] };
+}
+
+const ALL = [listed[0], listed[1], listed[2]];
+
+test("the workout tab flies to the gym of the picked workout's café", async () => {
+  const { stage, log, valleyGym, hillGym, routes } = venueStage({ offered: ALL });
+  await stage.select(routes, "workout");
+  log.builds[0].resolve();
+  await settle();
+  await stage.showWorkout(tabata, null);
+  assert.deepEqual(log.views[0].camera.shots.at(-1), ["showGym", hillGym]);
+  assert.equal(log.builds.length, 1, "the world of the map holds both gyms: no rebuild");
+  await stage.showWorkout(full, null);
+  assert.deepEqual(log.views[0].camera.shots.at(-1), ["showGym", valleyGym]);
+  assert.equal(stage.workoutRouteId(tabata), "rolling-hills");
+  assert.equal(stage.workoutRouteId(full), "riverside-flats");
+  assert.equal(stage.cafeNames().get("hill-cafe"), "Hilltop Café");
+});
+
+test("a workout picked before the tab opens decides the gym the tab shows", async () => {
+  const { stage, log, hillGym, routes } = venueStage({ offered: ALL });
+  await stage.showWorkout(tabata, null);
+  await stage.select(routes, "workout");
+  assert.equal(log.builds[0].id, "rolling-hills", "the world of the route at the hill café");
+  log.builds[0].resolve();
+  await settle();
+  assert.deepEqual(log.views[0].camera.shots.at(-1), ["showGym", hillGym]);
+});
+
+test("a figure chip flies to its statue and back to the gym", async () => {
+  const { stage, log, valleyGym, routes } = venueStage({ offered: ALL });
+  await stage.select(routes, "workout");
+  log.builds[0].resolve();
+  await settle();
+  await stage.showWorkout(full, 2);
+  const view = log.views[0];
+  assert.deepEqual(view.camera.shots.at(-1), ["showStatue", view.statueTargets(valleyGym)[2]]);
+  assert.equal(view.camera.view, "statue");
+  await stage.showWorkout(full, null);
+  assert.deepEqual(view.camera.shots.at(-1), ["showGym", valleyGym]);
+});
+
+test("a workout whose café has no offered route is shown at the default gym with its own figures", async () => {
+  const { stage, log, valleyGym, routes } = venueStage({ offered: [listed[0]] });
+  await stage.select(routes, "workout");
+  log.builds[0].resolve();
+  await settle();
+  await stage.showWorkout(tabata, null);
+  const view = log.views[0];
+  assert.equal(stage.workoutRouteId(tabata), null);
+  assert.deepEqual(view.camera.shots.at(-1), ["showGym", valleyGym]);
+  const rowAt = (rows) => rows.find((row) => row.gym === valleyGym);
+  assert.deepEqual([rowAt(view.statueCalls.at(-1)).figures, rowAt(view.statueCalls.at(-1)).material], [["squats", "burpees"], "bronze"]);
+  await stage.showWorkout(full, null);
+  assert.equal(rowAt(view.statueCalls.at(-1)).figures.length, 6);
+  assert.equal(rowAt(view.statueCalls.at(-1)).material, "marble");
+});
+
+test("two picks while the world is still building end on the last pick's gym and leave nothing on a disposed view", async () => {
+  const { stage, log, valleyGym, routes } = venueStage({ offered: ALL });
+  await stage.select(routes, "workout");
+  const first = stage.showWorkout(tabata, null);
+  const second = stage.showWorkout(full, null);
+  await Promise.all([first, second]);
+  log.builds[0].resolve();
+  await settle();
+  assert.deepEqual(log.views[0].camera.shots.at(-1), ["showGym", valleyGym]);
+  for (const t of log.timers) t();
+  land(log);
+  for (const build of log.builds.slice(1)) build.resolve();
+  await settle();
+  assert.deepEqual(log.views.map((view) => view.lateStatues), log.views.map(() => 0));
+  assert.equal(log.views.filter((view) => !view.disposed).length, 1);
+  assert.deepEqual(log.views.at(-1).camera.shots.at(-1), ["showGym", valleyGym]);
 });
 
 test("without 3D the stage still shows the map and profile", async () => {
