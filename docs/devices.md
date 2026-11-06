@@ -199,9 +199,11 @@ something here:
 
 - riding: shift, then difficulty, then d-pad and steering, then select, back
   and menu (select does nothing while riding);
+- riding in ERG: difficulty first, then shift (ERG holds the power, so a
+  shift would do nothing); a press without difficulty still shifts as before;
 - in menus: d-pad, select, back and menu, then shift, then difficulty.
 
-So that button shifts while riding and selects in a menu. The choice holds
+So that button shifts while riding, changes the ERG target in ERG, and selects in a menu. The choice holds
 until the press is released, also when the press itself opens the menu; both
 shift buttons together still open the menu. Other IDs are ignored and appear in
 hex in the diagnostics and the live check. Reconnecting works as for Zwift

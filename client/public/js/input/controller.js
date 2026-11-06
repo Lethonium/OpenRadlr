@@ -12,6 +12,7 @@
  * select, harder, easier and camera, which act only where they make sense.
  * One of their presses may stand for several buttons ("shiftUp/harder/select"):
  * it acts once, as the first of them by PRIORITY that does something here.
+ * In ERG a shift does nothing, so there difficulty comes first.
  */
 
 export const RIDING_ACTIONS = Object.freeze({
@@ -55,9 +56,10 @@ const OPPOSITE = Object.freeze({
 
 const CHORD = ["shiftUp", "shiftDown"];
 
-/** Which button a press standing for several acts as: riding shifts first, menus navigate first. */
+/** Which button a press standing for several acts as: riding shifts first (in ERG: difficulty), menus navigate first. */
 export const PRIORITY = Object.freeze({
   riding: ["shiftUp", "shiftDown", "harder", "easier", "up", "down", "left", "right", "select", "b", "y", "a", "z", "camera"],
+  erg: ["harder", "easier", "shiftUp", "shiftDown", "up", "down", "left", "right", "select", "b", "y", "a", "z", "camera"],
   navigating: ["up", "down", "left", "right", "select", "a", "b", "y", "shiftUp", "shiftDown", "harder", "easier"],
 });
 
@@ -71,11 +73,16 @@ export class ControllerInput {
   #chosen = new Map();
   #now;
   #chordMs;
+  #erg;
 
-  /** @param {{now?: () => number, chordMs?: number}} [options] now in milliseconds */
-  constructor({ now = () => performance.now(), chordMs = 250 } = {}) {
+  /**
+   * @param {{now?: () => number, chordMs?: number, erg?: () => boolean}} [options] now in milliseconds;
+   *   `erg`: whether ERG holds the power now (shifts do nothing then)
+   */
+  constructor({ now = () => performance.now(), chordMs = 250, erg = () => false } = {}) {
     this.#now = now;
     this.#chordMs = chordMs;
+    this.#erg = erg;
   }
 
   /**
@@ -91,7 +98,8 @@ export class ControllerInput {
     const map = navigating ? NAVIGATING_ACTIONS : RIDING_ACTIONS;
     const now = this.#now();
     for (const press of [...this.#chosen.keys()]) if (!pressed.includes(press)) this.#chosen.delete(press);
-    const down = new Set(pressed.map((press) => this.#choose(press, map, navigating ? PRIORITY.navigating : PRIORITY.riding)));
+    const priority = () => (navigating ? PRIORITY.navigating : this.#erg() ? PRIORITY.erg : PRIORITY.riding);
+    const down = new Set(pressed.map((press) => this.#choose(press, map, priority)));
     for (const button of [...this.#held.keys()]) if (!down.has(button)) this.#held.delete(button);
 
     const fresh = [...down].filter((button) => !this.#held.has(button));
@@ -115,12 +123,13 @@ export class ControllerInput {
     return actions;
   }
 
-  /** The button a press acts as: itself, or the first of its buttons by priority that has an action. */
+  /** The button a press acts as: itself, or the first of its buttons by priority (asked only for a new press) that has an action. */
   #choose(press, map, priority) {
     if (!press.includes("/")) return press;
     if (!this.#chosen.has(press)) {
       const buttons = alternatives(press);
-      const ranked = buttons.filter((button) => priority.includes(button)).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
+      const order = priority();
+      const ranked = buttons.filter((button) => order.includes(button)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
       this.#chosen.set(press, ranked.find((button) => map[button]) ?? buttons[0]);
     }
     return this.#chosen.get(press);

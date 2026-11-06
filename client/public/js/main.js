@@ -1319,7 +1319,8 @@ function useController(controller) {
     renderReconnectButtons();
   }, 3000);
   // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
-  app.controllerInput ??= new MergedControllers(new ControllerInput());
+  // In ERG a combined OpenBikeControl press changes the target instead of shifting (shift() ignores it there).
+  app.controllerInput ??= new MergedControllers(new ControllerInput({ erg: () => app.training?.mode === "erg" || Boolean(app.studio?.erg) }));
   $("controller-live").hidden = false;
   renderControllerCheck();
   controller.on("buttons", (pressed) => {

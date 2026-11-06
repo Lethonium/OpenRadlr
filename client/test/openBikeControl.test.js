@@ -91,6 +91,31 @@ test("both shift buttons together still open the menu when each sends several ID
   assert.deepEqual(input.update(["shiftDown/easier"], true), [], "letting go of one is not a new press, also in the menu it opened");
 });
 
+test("in ERG, a press standing for shift and difficulty changes the ERG target once", () => {
+  const input = new ControllerInput({ now: () => 0, erg: () => true });
+  assert.deepEqual(input.update(["shiftUp/harder/select"], false), ["powerUp"]);
+  assert.deepEqual(input.update([], false), []);
+  assert.deepEqual(input.update(["shiftDown/easier/b"], false), ["powerDown"]);
+});
+
+test("in ERG, a shift-only press still shifts, and menus still navigate first", () => {
+  const input = new ControllerInput({ now: () => 0, erg: () => true });
+  assert.deepEqual(input.update(["shiftUp"], false), ["shiftUp"]);
+  assert.deepEqual(input.update([], false), []);
+  assert.deepEqual(input.update(["shiftUp/select"], false), ["shiftUp"], "no difficulty in the press: shift as before");
+  assert.deepEqual(input.update([], true), []);
+  assert.deepEqual(input.update(["shiftUp/harder/select"], true), ["select"]);
+});
+
+test("ERG is asked at each new press: shift wins again once ERG is off", () => {
+  let erg = true;
+  const input = new ControllerInput({ now: () => 0, erg: () => erg });
+  assert.deepEqual(input.update(["shiftUp/harder"], false), ["powerUp"]);
+  assert.deepEqual(input.update([], false), []);
+  erg = false;
+  assert.deepEqual(input.update(["shiftUp/harder"], false), ["shiftUp"]);
+});
+
 test("a press standing for several buttons lists each of them", () => {
   assert.deepEqual(alternatives("shiftUp/harder/select"), ["shiftUp", "harder", "select"]);
   assert.deepEqual(alternatives("left"), ["left"]);
