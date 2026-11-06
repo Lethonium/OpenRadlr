@@ -1030,15 +1030,15 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const cafeRoads = network
     ? network.cafes().flatMap((cafe) => {
         const start = route.positionAt(0);
-        if (Math.hypot(start.x - cafe.x, start.y - cafe.y) < 30) return [route];
+        if (Math.hypot(start.x - cafe.x, start.y - cafe.y) < 30) return [{ road: route, cafeId: cafe.id }];
         const road = network.roadFrom(cafe.id);
-        return road ? [road] : [];
+        return road ? [{ road, cafeId: cafe.id }] : [];
       })
-    : ordered;
+    : ordered.map((road) => ({ road, cafeId: null }));
   const cafes = [];
   const cafeSpots = [];
   const gyms = [];
-  for (const r of cafeRoads) {
+  for (const { road: r, cafeId } of cafeRoads) {
     const start = r.positionAt(0);
     if (cafes.some((c) => Math.hypot(c.x - start.x, c.y - start.y) < 30)) continue;
     cafes.push(start);
@@ -1046,7 +1046,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     if (!cafe) continue;
     cafeSpots.push(cafe.position);
     // The outdoor gym next to it, where workout riders train (#77).
-    const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome });
+    const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome, cafeId });
     if (gym) gyms.push(gym);
   }
   // Route files: seven farms each. Network roads: about one per kilometre.

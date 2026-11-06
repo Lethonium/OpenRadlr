@@ -234,6 +234,27 @@ test("the outdoor gym stands beside the café, off the road, with eight spots fa
   assert.equal(buildOutdoorGym(route, null, { structures, bright, occupancy: new Occupancy(), avoid: () => true }), null, "never in a river or on a road");
 });
 
+test("a gym knows its café and where its statue row stands behind the pad", () => {
+  const make = (extra) => {
+    const occupancy = new Occupancy();
+    const gym = buildOutdoorGym(route, null, { structures: new MeshBuilder(), bright: new MeshBuilder(), occupancy, ...extra });
+    return { gym, occupancy };
+  };
+  assert.equal(make({ cafeId: "valley-cafe" }).gym.cafeId, "valley-cafe");
+  const { gym, occupancy } = make({});
+  assert.equal(gym.cafeId, null, "no café id without a network");
+  const frame = roadFrame(route, GYM_DISTANCE);
+  const row = gym.statueRow;
+  assert.ok(Math.abs(Math.hypot(row.position[0] - gym.center[0], row.position[2] - gym.center[2]) - 8) < 0.01, "8 m behind the mat");
+  assert.ok(lateralOf(frame, row.position) > lateralOf(frame, gym.center), "on the side away from the road");
+  assert.equal(row.yaw, gym.yaw);
+  for (const x of [-7.5, 7.5]) {
+    const px = row.position[0] + x * Math.cos(gym.yaw);
+    const pz = row.position[2] - x * Math.sin(gym.yaw);
+    assert.ok(occupancy.blocked(px, pz), `the row's end at x ${x} is reserved`);
+  }
+});
+
 // --- one map for all routes: the road network (ADR 0010, #26) ---------------------
 
 import { RoadNetwork } from "../public/js/route/network.js";
@@ -755,4 +776,11 @@ test("on the real map the cliff rail is on the side the sea is nearer", () => {
     assert.ok(here < away, `post at ${best.d} m is on the land side (${here} m / ${away} m to the sea)`);
   }
   assert.ok(checked > 100, `${checked} rail posts by the sea`);
+});
+
+test("every gym on the map knows a distinct café of the network", () => {
+  const ids = mapWorld.gyms.map((g) => g.cafeId);
+  const cafeIds = network.cafes().map((c) => c.id);
+  for (const id of ids) assert.ok(cafeIds.includes(id), `${id} is a café of the network`);
+  assert.equal(new Set(ids).size, ids.length, "distinct");
 });

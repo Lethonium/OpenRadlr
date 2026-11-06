@@ -111,8 +111,8 @@
 
             <fieldset id="workout-setup" hidden>
               <legend data-i18n="workout.title">Workout</legend>
-              <label><span data-i18n="workout.circuit">Circuit</span> <select id="workout-preset" name="workout-preset"></select></label>
-              <p id="workout-preset-summary" class="field-hint"></p>
+              <div id="workout-cards" class="workout-cards" role="radiogroup" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></div>
+              <p id="workout-hint" class="field-hint" aria-live="polite"></p>
               <label class="check"><input id="workout-cues" type="checkbox" checked /> <span data-i18n="workout.cues">Beep in the last 3 seconds</span></label>
             </fieldset>
 

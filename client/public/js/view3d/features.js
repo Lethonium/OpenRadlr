@@ -768,9 +768,12 @@ const SPOT_GAP = 1.8;
  * back like it, a little further along. Workout riders stand on its mat.
  * Skipped (null) where `avoid` says so or something else stands there.
  *
- * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[]} | null}
+ * The statue row (workout figures on plinths) stands behind the pad at local
+ * z 8; its strip is reserved so scenery keeps off it.
+ *
+ * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[], cafeId: string | null, statueRow: {position: number[], yaw: number}} | null}
  */
-export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate }) {
+export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate, cafeId = null }) {
   const half = roadHalfWidth(route.lanes);
   const side = 1;
   const f = roadFrame(route, route.wrap(GYM_DISTANCE));
@@ -802,6 +805,7 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
   structures.append(gym.mesh, model);
   bright.append(gym.bright, model);
   occupancy.add(padX, padZ, 11);
+  for (const x of [-5, 0, 5]) occupancy.add(...local(x, 8), 4);
 
   const spots = [];
   for (const z of [-SPOT_GAP / 2, SPOT_GAP / 2]) {
@@ -810,7 +814,8 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
       spots.push({ position: [x, base + gym.top, wz], yaw });
     }
   }
-  return { center: [pos[0], base + gym.top, pos[2]], yaw, spots };
+  const [rowX, rowZ] = local(0, 8);
+  return { center: [pos[0], base + gym.top, pos[2]], yaw, spots, cafeId, statueRow: { position: [rowX, base, rowZ], yaw } };
 }
 
 const cafeCache = new Map();

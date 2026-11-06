@@ -80,12 +80,13 @@ import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
 import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
-import { planDuration, planSummary } from "./workout/plan.js";
+import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
-import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
+import { statueRows } from "./workout/venues.js";
+import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
@@ -243,6 +244,12 @@ const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
   profile: profiles.load(),
+  /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
+  workoutPick: null,
+  workoutFigure: null,
+  /** The gym the workout trains at and the figures of its statue row, in row order (set with the ride's 3D view). */
+  workoutGym: null,
+  workoutRowFigures: [],
   redrawStage: null,
   trainer: null,
   heartRateMonitor: null,
@@ -562,7 +569,7 @@ function renderDeviceStatuses() {
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu, initBiomePicker);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, renderWorkoutPick, renderStartMenu, initBiomePicker);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -653,33 +660,45 @@ function initSetup() {
   });
 }
 
-/** The preset picker of the Workout card: the saved choice, a summary under it. */
+/** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
 function initWorkoutSetup() {
-  const select = $("workout-preset");
-  fillWorkoutPresets();
-  select.value = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutFigure = null;
   $("workout-cues").checked = app.profile.workoutCues !== false;
-  select.addEventListener("change", summariseWorkoutPreset);
-  summariseWorkoutPreset();
+  $("workout-cards").addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */ && app.workoutFigure !== null) pickWorkoutFigure(app.workoutPick, null);
+  });
+  renderWorkoutPick();
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-function summariseWorkoutPreset() {
-  $("workout-preset-summary").textContent = planSummary(PRESETS.find((plan) => plan.id === $("workout-preset").value));
+/** The picked plan; an unknown saved id falls back to the first preset. */
+const pickedWorkout = () => PRESETS.find((plan) => plan.id === app.workoutPick) ?? PRESETS[0];
+
+/** Draws the cards in the current language (also after a language switch); the pick stays. */
+function renderWorkoutPick() {
+  renderWorkoutCards($("workout-cards"), PRESETS, {
+    selectedId: app.workoutPick,
+    cafeNames: app.menu?.cafeNames?.() ?? new Map(),
+    figureIndex: app.workoutFigure,
+    onSelect: pickWorkout,
+    onFigure: pickWorkoutFigure,
+  });
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-/** The options with their names in the current language; the choice stays. */
-function fillWorkoutPresets() {
-  const select = $("workout-preset");
-  const chosen = select.value;
-  select.replaceChildren(
-    ...PRESETS.map((plan) => {
-      const option = document.createElement("option");
-      option.value = plan.id;
-      option.textContent = t("workout.option", { name: plan.name, min: Math.round(planDuration(plan) / 60) });
-      return option;
-    }),
-  );
-  if (PRESETS.some((plan) => plan.id === chosen)) select.value = chosen;
+function pickWorkout(id) {
+  app.workoutPick = id;
+  app.workoutFigure = null;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), null);
+}
+
+function pickWorkoutFigure(id, index) {
+  app.workoutPick = id;
+  app.workoutFigure = index;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), index);
 }
 
 function setDifficultyInputs(difficulty) {
@@ -738,6 +757,8 @@ function openStartMenu() {
     renderStartMenu();
   };
   initMenuStage();
+  // The menu learns the pick, so opening the Workout tab shows its gym.
+  app.menu?.showWorkout(pickedWorkout(), app.workoutFigure);
   renderStartMenu();
   refresh();
   clearInterval(app.infoTimer);
@@ -789,13 +810,14 @@ function initMenuStage() {
           return view;
         }
       : null,
-    lensFor: (kind, overview) => (kind === "gym" ? gymLens(overview) : droneLens(overview)),
+    lensFor: (kind, overview) => (kind === "gym" || kind === "statue" ? gymLens(overview) : droneLens(overview)),
     // The first world opens with a descent from high over the island.
     createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
       ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
       { mesh: buildHighlight(route), glow: 1 },
     ],
+    onCafes: () => renderWorkoutPick(),
     onRoute: (stage) => {
       shown = stage;
       drawStage();
@@ -1607,10 +1629,11 @@ async function joinRide(restored = null) {
 
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
 async function joinWorkout(profile, errors) {
-  const routeId = workoutRoute(app.info);
+  const plan = pickedWorkout();
+  // The route that starts at the workout's café, else the default route (its gym shows the workout's statues).
+  const routeId = app.menu?.workoutRouteId(plan) ?? workoutRoute(app.info);
   if (!routeId) errors.push(t("join.error.noRoute"));
   if (errors.length) return showSetupError(errors.join("\n"));
-  const plan = PRESETS.find((preset) => preset.id === $("workout-preset").value) ?? PRESETS[0];
   // No "discard your unfinished ride?" prompt: a workout never touches the autosave
   // (no recorder, so saveRide() does nothing), the unfinished ride is still offered afterwards.
   app.restored = null;
@@ -1682,6 +1705,7 @@ function endRide() {
   app.workoutAudio?.close?.().catch?.(() => {});
   app.workoutAudio = null;
   app.workoutView?.dispose();
+  app.view3d?.setStatueGlow(null, null);
   document.body.classList.remove("working-out");
   $("workout-note").hidden = true;
   ride.unbindKeyboard?.();
@@ -1756,6 +1780,8 @@ function endRide() {
     studioView: null,
     workout: null,
     workoutPlan: null,
+    workoutGym: null,
+    workoutRowFigures: [],
     workoutView: null,
     workoutCue: null,
     workoutHeartRate: null,
@@ -2148,9 +2174,13 @@ function workoutFrame() {
   if (workout.state !== "done") {
     const position = workout.position();
     app.workoutView.render(workoutHudText(position, { state: workout.state, heartRate: app.workoutHeartRate }), blockProgress(position));
+    // The next figure's statue glows during rests only (get-ready included); local to this screen.
+    app.view3d?.setStatueGlow(app.workoutGym, highlightedFigure(position, app.workoutRowFigures));
     $("workout-pause").textContent = workout.state === "paused" ? t("workout.resume") : t("workout.pause");
     // Paused, the plan clock is frozen: the avatar's idle clip keeps the server's start so it keeps moving.
     if (position.block && workout.state !== "paused") blockStart = time - (position.block.seconds - position.blockRemainingS);
+  } else {
+    app.view3d?.setStatueGlow(null, null);
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
@@ -3693,8 +3723,17 @@ function show3d(scene, view = null) {
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
   setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
+  // Each gym's statues (also on a view taken over from the menu, which had its own rows).
+  // A workout whose café this route does not start at shows its figures at the gym here.
+  const rideGym = gymOfRoute(app.view3d.gyms, app.route);
+  const plan = app.workoutPlan;
+  const override = app.workout && rideGym && plan && rideGym.cafeId !== plan.venue ? { gym: rideGym, plan } : null;
+  const rows = statueRows(app.view3d.gyms, PRESETS, override);
+  app.view3d.setStatues(rows);
+  app.workoutGym = app.workout ? rideGym : null;
+  app.workoutRowFigures = app.workout ? (rows.find((row) => row.gym === rideGym)?.figures ?? []) : [];
   // The workout watches my avatar on the gym mat (#77).
-  const gym = app.workout ? gymOfRoute(app.view3d.gyms, app.route) : null;
+  const gym = app.workout ? rideGym : null;
   if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
 }
 

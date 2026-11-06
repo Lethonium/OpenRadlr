@@ -37,6 +37,20 @@ export function workoutHudText(position, { state, heartRate }) {
   };
 }
 
+/**
+ * The index in `figures` (the gym's statue row) of the exercise a rest leads
+ * into, or null: during an exercise, after the plan, or without a statue.
+ * @param {ReturnType<import("../workout/plan.js").planPositionAt>} position
+ * @param {string[]} figures exercise ids in the plinth order of the gym's row
+ */
+export function highlightedFigure(position, figures) {
+  if (position.finished || position.block?.kind !== "rest") return null;
+  const next = position.next;
+  if (next?.kind !== "exercise") return null;
+  const index = figures.indexOf(next.exercise);
+  return index < 0 ? null : index;
+}
+
 /** How much of the current block is over, 0..1 (the ring). */
 export function blockProgress(position) {
   if (!position.block) return 1;
