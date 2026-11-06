@@ -80,7 +80,7 @@ import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
 import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
-import { planDuration, planSummary } from "./workout/plan.js";
+import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
@@ -243,6 +243,9 @@ const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
   profile: profiles.load(),
+  /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
+  workoutPick: null,
+  workoutFigure: null,
   redrawStage: null,
   trainer: null,
   heartRateMonitor: null,
@@ -562,7 +565,7 @@ function renderDeviceStatuses() {
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu, initBiomePicker);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, renderWorkoutPick, renderStartMenu, initBiomePicker);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -653,33 +656,45 @@ function initSetup() {
   });
 }
 
-/** The preset picker of the Workout card: the saved choice, a summary under it. */
+/** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
 function initWorkoutSetup() {
-  const select = $("workout-preset");
-  fillWorkoutPresets();
-  select.value = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutFigure = null;
   $("workout-cues").checked = app.profile.workoutCues !== false;
-  select.addEventListener("change", summariseWorkoutPreset);
-  summariseWorkoutPreset();
+  $("workout-cards").addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */ && app.workoutFigure !== null) pickWorkoutFigure(app.workoutPick, null);
+  });
+  renderWorkoutPick();
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-function summariseWorkoutPreset() {
-  $("workout-preset-summary").textContent = planSummary(PRESETS.find((plan) => plan.id === $("workout-preset").value));
+/** The picked plan; an unknown saved id falls back to the first preset. */
+const pickedWorkout = () => PRESETS.find((plan) => plan.id === app.workoutPick) ?? PRESETS[0];
+
+/** Draws the cards in the current language (also after a language switch); the pick stays. */
+function renderWorkoutPick() {
+  renderWorkoutCards($("workout-cards"), PRESETS, {
+    selectedId: app.workoutPick,
+    cafeNames: app.menu?.cafeNames?.() ?? new Map(),
+    figureIndex: app.workoutFigure,
+    onSelect: pickWorkout,
+    onFigure: pickWorkoutFigure,
+  });
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-/** The options with their names in the current language; the choice stays. */
-function fillWorkoutPresets() {
-  const select = $("workout-preset");
-  const chosen = select.value;
-  select.replaceChildren(
-    ...PRESETS.map((plan) => {
-      const option = document.createElement("option");
-      option.value = plan.id;
-      option.textContent = t("workout.option", { name: plan.name, min: Math.round(planDuration(plan) / 60) });
-      return option;
-    }),
-  );
-  if (PRESETS.some((plan) => plan.id === chosen)) select.value = chosen;
+function pickWorkout(id) {
+  app.workoutPick = id;
+  app.workoutFigure = null;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), null);
+}
+
+function pickWorkoutFigure(id, index) {
+  app.workoutPick = id;
+  app.workoutFigure = index;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), index);
 }
 
 function setDifficultyInputs(difficulty) {
@@ -1610,7 +1625,7 @@ async function joinWorkout(profile, errors) {
   const routeId = workoutRoute(app.info);
   if (!routeId) errors.push(t("join.error.noRoute"));
   if (errors.length) return showSetupError(errors.join("\n"));
-  const plan = PRESETS.find((preset) => preset.id === $("workout-preset").value) ?? PRESETS[0];
+  const plan = pickedWorkout();
   // No "discard your unfinished ride?" prompt: a workout never touches the autosave
   // (no recorder, so saveRide() does nothing), the unfinished ride is still offered afterwards.
   app.restored = null;
