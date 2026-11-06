@@ -226,7 +226,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 - [Events](docs/events.md) — group rides, races, power sharing, events file
 - [Vehicles](docs/vehicles.md) — tandems and beer bikes, codes, captain, bots
 - [Workouts](docs/workouts.md) — café circuits, presets, exercises, history
-- [Devices](docs/devices.md) — FTMS, heart rate, Zwift Click/Play/Ride controllers
+- [Devices](docs/devices.md) — FTMS, heart rate, Zwift Click/Play/Ride and OpenBikeControl controllers
 - [Routes](docs/routes.md) — route file format
 - [Deploying](docs/deploy.md) — production behind a reverse proxy, Strava, limits
 - [Decisions](docs/adr/) — architecture decision records

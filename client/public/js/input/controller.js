@@ -7,6 +7,9 @@
  * dialog or the start screen is in front) or riding. Pressing both shift
  * buttons together is a chord: it opens the menu while riding and selects
  * while navigating, so a two-button Zwift Click can do both.
+ *
+ * OpenBikeControl controllers (ble/openBikeControlProtocol.js) also press
+ * select, harder, easier and camera, which act only where they make sense.
  */
 
 export const RIDING_ACTIONS = Object.freeze({
@@ -20,6 +23,9 @@ export const RIDING_ACTIONS = Object.freeze({
   b: "closePanels",
   y: "toggleMenu",
   z: "takePhoto",
+  harder: "powerUp",
+  easier: "powerDown",
+  camera: "cycleCamera",
   chord: "toggleMenu",
 });
 
@@ -33,6 +39,7 @@ export const NAVIGATING_ACTIONS = Object.freeze({
   a: "select",
   b: "closePanels",
   y: "toggleMenu",
+  select: "select",
   chord: "select",
 });
 

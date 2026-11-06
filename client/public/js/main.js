@@ -8,7 +8,7 @@ import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
-import { ZwiftController } from "./ble/zwiftController.js";
+import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
@@ -1070,8 +1070,8 @@ const DEVICES = {
   },
   controller: {
     statusId: "controller-status",
-    connect: (names) => ZwiftController.connect(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
-    open: (device) => ZwiftController.open(device, { log: deviceLog }),
+    connect: (names) => connectController(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
+    open: (device) => openController(device, { log: deviceLog }),
     use: (controller) => useController(controller),
     // Any trainer or strap will do; controllers count one by one (a Play is two).
     has: (id) => hasController(id),
