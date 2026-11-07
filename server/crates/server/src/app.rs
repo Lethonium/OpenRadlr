@@ -35,8 +35,6 @@ const STATS_SAVE_EVERY: Duration = Duration::from_secs(60);
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-/// Builds the application. Must be called inside a Tokio runtime because it
-/// starts one game loop task per route.
 /// The simulation settings of one world. A world with a route shared through
 /// OpenBikeNet has no bots: its riders come from other apps.
 fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
@@ -47,6 +45,8 @@ fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
     sim
 }
 
+/// Builds the application. Must be called inside a Tokio runtime because it
+/// starts one game loop task per route.
 pub fn build(config: &Config) -> Result<Router, BoxError> {
     build_with_stats(config).map(|(router, _)| router)
 }
