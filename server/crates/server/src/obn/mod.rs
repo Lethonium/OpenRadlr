@@ -4,6 +4,7 @@
 //! [`outbox`] turns this server's riders into the messages an app sends.
 
 pub mod outbox;
+pub mod remote;
 pub mod wire;
 
 /// Length of the shared route, in metres. The OpenBikeNet route `velodrome-250` is 250 m.

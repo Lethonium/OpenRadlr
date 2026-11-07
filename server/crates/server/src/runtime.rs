@@ -4,6 +4,7 @@
 //! game directly; they send [`Command`]s through a [`GameHandle`].
 
 use crate::game::{JoinError, MessageSink, SinkClosed};
+use crate::obn::remote::RemoteEvent;
 use crate::protocol::{DeviceKind, EventInfoWire, Exercise, InputAction, ServerMessage};
 use crate::resume::JoinedRider;
 use openradlr_sim::RiderId;
@@ -102,6 +103,8 @@ pub trait Game: Send + 'static {
     fn workout(&mut self, _rider_id: RiderId, _exercise: Option<Exercise>) {}
     fn chat(&mut self, rider_id: RiderId, text: &str);
     fn tick(&mut self);
+    /// What the OpenBikeNet link reports; worlds without a shared route ignore it.
+    fn remote(&mut self, _event: RemoteEvent) {}
 }
 
 pub enum Command {
@@ -190,6 +193,8 @@ pub enum Command {
         rider_id: RiderId,
         exercise: Option<Exercise>,
     },
+    /// Riders of other apps arriving or leaving on the shared route.
+    Remote(RemoteEvent),
 }
 
 /// Cheap, cloneable handle to the running game.
@@ -421,5 +426,6 @@ pub(crate) fn apply<G: Game>(core: &mut G, command: Command) {
         Command::LeaveVehicle { rider_id } => core.leave_vehicle(rider_id),
         Command::Pause { rider_id, on } => core.pause(rider_id, on),
         Command::Workout { rider_id, exercise } => core.workout(rider_id, exercise),
+        Command::Remote(event) => core.remote(event),
     }
 }
