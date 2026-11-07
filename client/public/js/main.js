@@ -792,6 +792,8 @@ function initMenuStage() {
   const drawStage = () => {
     const { route, routes } = shown;
     $("menu-profile").hidden = !route;
+    // Docked in the corner, the map points at the picked route; with none (Workout, Studio) it is an empty box.
+    $("menu-map").hidden = !route && $("setup").classList.contains("map-docked");
     drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
