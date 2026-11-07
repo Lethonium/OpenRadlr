@@ -227,3 +227,50 @@ async fn api_info_marks_the_route_shared() {
         .iter()
         .all(|r| r.get("shared").is_none()));
 }
+
+/// The next `state` for `socket` whose riders satisfy `wanted`, within `WAIT`.
+async fn state_where(socket: &mut Client, what: &str, within: Duration, wanted: impl Fn(&Value) -> bool) -> Value {
+    tokio::time::timeout(within, async {
+        loop {
+            let state = expect_type(socket, "state").await;
+            if wanted(&state) {
+                return state;
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("no state where {what} within {within:?}"))
+}
+
+fn shows_ben(state: &Value) -> bool {
+    state["riders"].as_array().unwrap().iter().any(|r| r["name"] == "Ben")
+}
+
+#[tokio::test]
+async fn remote_riders_vanish_when_the_link_drops() {
+    let (listener, url) = fake_server().await;
+    // A long pause before reconnecting: the riders must go at the drop, not at the retry.
+    let config = Config {
+        obn_backoff_unit: Duration::from_secs(60),
+        ..velodrome_config(Some(url))
+    };
+    let addr = serve(config).await;
+    let mut fake = accept(&listener).await;
+    expect_hello_and_subscribe(&mut fake).await;
+    fake.send(Message::text(r#"{"type":"welcome"}"#)).await.unwrap();
+    fake.send(Message::text(
+        r#"{"type":"joined","route":"velodrome-250","room":"public","rider":
+            {"id":"ben-1","app":"incyclist","name":"Ben","lap":0,"distance":10.0,"speed":0.0,"power":180}}"#,
+    ))
+    .await
+    .unwrap();
+
+    let mut anna = anna_joins(addr).await;
+    let seen = state_where(&mut anna, "Ben is shown", WAIT, shows_ben).await;
+    assert_eq!(seen["route_riders"]["remote"], 1);
+
+    drop(fake);
+    // Well before the 10 s after which a silent rider is dropped anyway.
+    let gone = state_where(&mut anna, "Ben is gone", Duration::from_secs(3), |s| !shows_ben(s)).await;
+    assert!(gone["route_riders"].get("remote").is_none_or(|n| n == 0));
+}
