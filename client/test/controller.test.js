@@ -503,12 +503,14 @@ test("a locked left half is rebooted with 0x18 (zwiftboard's pod reset), once pe
   const events = [];
   controller.on("disconnected", () => events.push("disconnected"));
   controller.on("reconnected", () => events.push("reconnected"));
-  // The reset reboots the pod: it drops the link, then advertises again.
-  fake.commands.onWrite = (bytes) => bytes.length === 1 && bytes[0] === 0x18 && setTimeout(() => fake.device.gatt.disconnect(), 0);
   fake.notifications.notify(clickStatus(1));
   fake.notifications.notify(clickStatus(1));
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The fake's write lands after a real 1 ms timer: wait for it, not for a fixed time.
+  while (!fake.commands.writes.some((w) => w.length === 1)) await new Promise(setImmediate);
+  await new Promise(setImmediate);
   assert.deepEqual(fake.commands.writes.filter((w) => w.length === 1), [[0x18]], "one reset");
+  // The reset reboots the pod: it drops the link, then advertises again.
+  fake.device.gatt.disconnect();
   assert.deepEqual(events, [], "a planned reboot: no 'disconnected' for the rider");
   await fake.scheduler.runNext(); // the reconnect after the reboot
   assert.ok(controller.connected);
