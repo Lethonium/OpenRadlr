@@ -50,21 +50,24 @@ impl Outbox {
         }
     }
 
-    /// The messages for one frame: joins for new riders, one `update` for all
-    /// riders present, and leaves for riders that are gone. Empty when there is
+    /// The messages for one frame: joins for new riders, one `update` for the
+    /// riders that joined earlier, and leaves for riders that are gone. Empty when there is
     /// nothing to say.
     pub fn frame(&mut self, riders: &[LocalRider]) -> Vec<AppMessage> {
         let mut joins = Vec::new();
         let mut entries = Vec::new();
         for rider in riders {
-            let state = match self.joined.get_mut(&rider.id) {
+            match self.joined.get_mut(&rider.id) {
                 Some(joined) => {
                     // Positions wrap at the start line: a big step back is a crossing.
                     if joined.last_position - rider.position > self.route_length_m / 2.0 {
                         joined.lap += 1;
                     }
                     joined.last_position = rider.position;
-                    state_of(joined.lap, rider, self.route_length_m)
+                    entries.push(RiderEntry {
+                        rider: rider_key(rider.id),
+                        state: state_of(joined.lap, rider, self.route_length_m),
+                    });
                 }
                 None => {
                     self.joined.insert(
@@ -74,21 +77,17 @@ impl Outbox {
                             last_position: rider.position,
                         },
                     );
-                    let state = state_of(0, rider, self.route_length_m);
+                    // The join carries the starting state; an update in the same
+                    // frame would be rate limited (the server counts the join as one).
                     joins.push(AppMessage::Join {
                         rider: rider_key(rider.id),
                         route: self.route.clone(),
                         room: ROOM.into(),
                         name: rider.name.clone(),
-                        state: state.clone(),
+                        state: state_of(0, rider, self.route_length_m),
                     });
-                    state
                 }
-            };
-            entries.push(RiderEntry {
-                rider: rider_key(rider.id),
-                state,
-            });
+            }
         }
 
         let mut leaves = Vec::new();
@@ -191,14 +190,34 @@ mod tests {
         }
     }
 
+    /// The state of the only rider in a frame, whether it joined or was updated.
+    fn state_of_only(messages: &[AppMessage]) -> RiderState {
+        match messages.first() {
+            Some(AppMessage::Join { state, .. }) => state.clone(),
+            Some(AppMessage::Update { riders }) => riders[0].state.clone(),
+            other => panic!("expected a join or an update, got {other:?}"),
+        }
+    }
+
     #[test]
-    fn first_frame_joins_then_updates() {
+    fn first_frame_only_joins_then_updates() {
         let mut outbox = outbox();
         let first = outbox.frame(&[rider(7, 10.0)]);
-        assert_eq!(kinds(&first), ["join", "update"]);
+        assert_eq!(kinds(&first), ["join"]);
 
         let second = outbox.frame(&[rider(7, 20.0)]);
         assert_eq!(kinds(&second), ["update"]);
+    }
+
+    #[test]
+    fn a_joining_rider_is_not_updated_in_the_same_frame() {
+        let mut outbox = outbox();
+        outbox.frame(&[rider(7, 10.0)]);
+        let frame = outbox.frame(&[rider(7, 20.0), rider(8, 30.0)]);
+        assert_eq!(kinds(&frame), ["join", "update"]);
+        let updated: Vec<String> = update_entries(&frame).into_iter().map(|e| e.rider).collect();
+        assert_eq!(updated, ["r7"]);
+        assert!(matches!(&frame[0], AppMessage::Join { rider, .. } if rider == "r8"));
     }
 
     #[test]
@@ -217,18 +236,45 @@ mod tests {
         let positions = [240.0, 249.9, 0.4, 120.0];
         let laps: Vec<u32> = positions
             .iter()
-            .map(|&p| update_entries(&outbox.frame(&[rider(7, p)]))[0].state.lap)
+            .map(|&p| state_of_only(&outbox.frame(&[rider(7, p)])).lap)
             .collect();
         assert_eq!(laps, [0, 0, 1, 1]);
     }
 
     #[test]
+    fn a_small_step_back_is_not_a_lap() {
+        let mut outbox = outbox();
+        let laps: Vec<u32> = [100.0, 99.9]
+            .iter()
+            .map(|&p| state_of_only(&outbox.frame(&[rider(7, p)])).lap)
+            .collect();
+        assert_eq!(laps, [0, 0]);
+    }
+
+    #[test]
+    fn the_lap_threshold_is_half_a_route() {
+        let lap_after = |back_to: f64| {
+            let mut outbox = outbox();
+            outbox.frame(&[rider(7, 200.0)]);
+            update_entries(&outbox.frame(&[rider(7, back_to)]))[0].state.lap
+        };
+        assert_eq!(lap_after(75.1), 0); // 124.9 back: not yet half a lap
+        assert_eq!(lap_after(74.9), 1); // 125.1 back: a crossing
+    }
+
+    #[test]
     fn distance_stays_below_length() {
         let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
-        let at_end = update_entries(&outbox.frame(&[rider(7, 250.0)]));
+        outbox.frame(&[rider(7, 1.0)]);
+        let at_end = update_entries(&outbox.frame(&[rider(7, 250.004)]));
+        assert!(at_end[0].state.distance < 250.0);
         assert!((at_end[0].state.distance - 249.99).abs() < 0.01);
 
+        let beyond = update_entries(&outbox.frame(&[rider(7, 251.0)]));
+        assert!(beyond[0].state.distance < 250.0);
+
         let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
+        outbox.frame(&[rider(7, 1.0)]);
         let halfway = update_entries(&outbox.frame(&[rider(7, 125.002)]));
         assert!((halfway[0].state.distance - 125.0).abs() < 0.01);
     }
@@ -245,7 +291,7 @@ mod tests {
                 power,
                 cadence,
             };
-            update_entries(&outbox.frame(&[local]))[0].state.clone()
+            state_of_only(&outbox.frame(&[local]))
         };
 
         let high_power = sample(10.0, 3456.7, Some(90.0));
@@ -278,7 +324,8 @@ mod tests {
         outbox.reset();
 
         let after_reset = outbox.frame(&[rider(7, 0.5)]);
-        assert_eq!(kinds(&after_reset), ["join", "update"]);
-        assert_eq!(update_entries(&after_reset)[0].state.lap, 0);
+        assert_eq!(kinds(&after_reset), ["join"]);
+        let AppMessage::Join { state, .. } = &after_reset[0] else { unreachable!() };
+        assert_eq!(state.lap, 0);
     }
 }
