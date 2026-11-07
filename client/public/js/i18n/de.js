@@ -106,7 +106,7 @@ export default {
   "ride.gap": "Abstand",
   "ride.aroundYou": "Um dich herum",
   "ride.3dViewOfThe": "3D-Ansicht der Straße hinter deinem Fahrer",
-  "ride.ridersAroundYouOne": "Fahrer um dich herum, eine Reihe pro Spur",
+  "ride.mapOfTheRoad": "Draufsicht auf die Straße um dich herum",
   "ride.3dViewOfThe2": "3D-Ansicht des Spinning-Studios",
   "ride.leftPaddle": "Linkes Paddle",
   "ride.rightPaddle": "Rechtes Paddle",

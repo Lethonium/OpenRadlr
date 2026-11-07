@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The 2D ride map now follows the selected season and time of day, like the 3D world: winter paints snow, ice and pine tree dots, golden hour and dusk tint the ground, water, road and buildings, and `auto` follows the local clock. The start menu's map uses the same palette, so the season carries from the menu into the ride.
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
@@ -29,6 +30,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A menu opened with the mouse during a ride no longer turns the Click's shifters into menu navigation; a menu opened with the Click (+ and − together) is still navigated with it.
 - Controller navigation in the start menu goes on from where the focus is (e.g. the button just clicked to pair), and skips the build label and privacy link.
 - The device report traces each controller press to its result ("Zwift Click → shiftDown (riding)", "Gear 12 → 11", or why a shift was ignored), notes window and tab switches, and with `?debug=controller` keeps every controller packet.
+
+### Changed
+- The 2D view is a top-down map of the road around you: the coast, every road, the ridden road with its lane markings, and nearby riders, with your marker heading up. It replaces the lane strip that stretched over the whole window and had nothing to show when riding alone. In the Training layout the map ends above the workout band.
+- The 2D map has small tree dots in and near forests and thin outline houses in villages, plus the café at the start. They come from the route's scenery zones and the map's cafés, are generated once and culled to the view; no extra requests.
 
 ### Fixed
 - A trainer held by another app (Zwift, its own app) is shown as "resistance blocked" with what to do, instead of looking connected while resistance never follows the road; OpenRadlr asks for control again every 10 s.

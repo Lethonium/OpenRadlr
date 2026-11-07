@@ -80,7 +80,7 @@ uploaded to Strava.
   e.g. Wahoo KICKR Core, Van Rysel D500) and heart rate straps, a simulated trainer,
   trainer difficulty, virtual shifting (for Zwift Cog and single-gear setups), a
   ERG mode with structured workouts (built-in presets and `.zwo` import),
-  low-poly 3D view with chase camera, a 2D lane view, an elevation profile, a
+  low-poly 3D view with chase camera, a top-down 2D map view, an elevation profile, a
   minimap, nearby riders, race panel and chat; live player counts in the start
   menu and during the ride; ride photos and a summary image; ride summary with
   `.tcx`/`.gpx`/`.fit` download and Strava upload (as a virtual ride with its climbing), placed on the map in a virtual world off Mallorca;
