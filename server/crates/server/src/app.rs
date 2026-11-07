@@ -20,7 +20,7 @@ use axum::Router;
 use openradlr_sim::events::Events;
 use openradlr_sim::rng::SplitMix64;
 use openradlr_sim::studio::{builtin_classes, Studio, StudioConfig, Timetable};
-use openradlr_sim::World;
+use openradlr_sim::{SimConfig, World};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -33,6 +33,16 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Builds the application. Must be called inside a Tokio runtime because it
 /// starts one game loop task per route.
+/// The simulation settings of one world. A world with a route shared through
+/// OpenBikeNet has no bots: its riders come from other apps.
+fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
+    let mut sim = config.sim_config();
+    if group.iter().any(|file| file.openbikenet.is_some()) {
+        sim.target_riders = 0;
+    }
+    sim
+}
+
 pub fn build(config: &Config) -> Result<Router, BoxError> {
     build_with_stats(config).map(|(router, _)| router)
 }
@@ -139,7 +149,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         let mut world = World::with_network(
             routes.clone(),
             network,
-            config.sim_config(),
+            sim_config_for(config, &group),
             Box::new(SplitMix64::new(world_seed)),
         );
         // Boarding codes guard private vehicles: never from the logged, seedable sim RNG.
@@ -310,4 +320,35 @@ pub async fn run(config: Config, shutdown: impl Future<Output = ()> + Send + 'st
     }
     tracing::info!("server stopped");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    const ROUTES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes");
+
+    fn world_of(config: &Config, id: &str) -> World {
+        let file = RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap();
+        let route = file.to_route().unwrap();
+        let sim = sim_config_for(config, std::slice::from_ref(&file));
+        World::new(route, sim, Box::new(SplitMix64::new(1)))
+    }
+
+    #[test]
+    fn shared_route_world_has_no_bots() {
+        let config = Config {
+            target_riders: 3,
+            ..Config::default()
+        };
+        let mut velodrome = world_of(&config, "velodrome");
+        let mut other = world_of(&config, "rolling-hills");
+        for _ in 0..20 {
+            velodrome.tick(0.1);
+            other.tick(0.1);
+        }
+        assert_eq!(velodrome.bot_count(), 0);
+        assert_eq!(other.bot_count(), 3);
+    }
 }

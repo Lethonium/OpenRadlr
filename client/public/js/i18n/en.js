@@ -232,6 +232,7 @@ export default {
   "route.lanzarote-lava-180.description": "A 180 km loop around Lanzarote with about 2,500 m of climbing, in the spirit of the island's famous long-distance triathlon bike leg. Course order unconfirmed: built from public guides, pending a check by someone who knows it.",
   "route.riverside-flats.description": "Fast and flat down the river valley, made for drafting and sprints.",
   "route.rolling-hills.description": "From the hilltop café through the orchards and the valley, with one short climb back up.",
+  "route.velodrome.description": "250 m oval, shared with riders from other apps when this server is connected to OpenBikeNet.",
   "menu.routeStats": "{distance} · {gain} up",
   "menu.stage.pickWorkout": "Pick your workout",
   "menu.workout.lede": "Bodyweight circuit at the café's outdoor gym.",
