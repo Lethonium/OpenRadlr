@@ -23,7 +23,9 @@ promise about what leaves the server.
 - **What is sent**, per human on the velodrome, once per second: display name,
   `lap`, `distance`, `speed`, `power`, `cadence`. Never heart rate, never bots;
   the protocol `rider` value is `r<rider id>`. Values are clamped to the spec's
-  ranges so the OpenBikeNet server never drops an entry.
+  ranges so the OpenBikeNet server never drops an entry. Riders doing a workout
+  and riders off the route are not sent either. `ws://` is unencrypted: use
+  `wss://` beyond a trusted network.
 - **One outgoing connection per server**, room `public`, reconnecting with
   backoff from 1 s to 60 s. Local riding never waits for it.
 - **Remote riders live in the game core, not the sim.** They have no physics,
