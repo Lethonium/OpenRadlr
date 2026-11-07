@@ -32,7 +32,7 @@ make hooks
 
 Bypass a hook with `git commit --no-verify` / `git push --no-verify`, or skip
 one by id, for example `SKIP=eslint git commit ...`. A pull request still runs
-the checks.
+the lint and test jobs in CI.
 
 If the secret scanner flags a false positive, review it, then update and check
 the baseline:
