@@ -52,7 +52,7 @@ pub fn spawn_link(
             if end.stopped {
                 return;
             }
-            if end.welcomed {
+            if resets_backoff(&end) {
                 attempt = 0;
             }
             if game.send(Command::Remote(RemoteEvent::Reset)).await.is_err() {
@@ -71,8 +71,16 @@ pub fn spawn_link(
 struct End {
     /// The server said `welcome` during it.
     welcomed: bool,
+    /// The server ended it with a fatal `error`.
+    fatal: bool,
     /// The game or its frame channel is gone: stop for good.
     stopped: bool,
+}
+
+/// A server that welcomes us and then fails us at once must not be retried every
+/// second: only a session that got a welcome and ended without a fatal error starts the backoff over.
+fn resets_backoff(end: &End) -> bool {
+    end.welcomed && !end.fatal
 }
 
 fn hello() -> AppMessage {
@@ -100,6 +108,7 @@ async fn session(
 ) -> End {
     let mut end = End {
         welcomed: false,
+        fatal: false,
         stopped: false,
     };
     let socket = match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(url)).await {
@@ -130,12 +139,20 @@ async fn session(
             incoming = stream.next() => match incoming {
                 Some(Ok(Message::Text(raw))) => {
                     // Messages this version does not know are skipped (spec 3).
-                    let Ok(message) = serde_json::from_str::<ServerMessage>(raw.as_str()) else { continue };
+                    let message = match serde_json::from_str::<ServerMessage>(raw.as_str()) {
+                        Ok(message) => message,
+                        Err(e) => {
+                            // Neither the text nor the error: both can quote rider names.
+                            tracing::debug!(kind = ?e.classify(), "OpenBikeNet: ignoring unreadable message");
+                            continue;
+                        }
+                    };
                     match &message {
                         ServerMessage::Welcome {} => end.welcomed = true,
                         ServerMessage::Error { code, fatal, .. } => {
                             tracing::info!(code = %code, fatal, "OpenBikeNet: error from the server");
                             if *fatal {
+                                end.fatal = true;
                                 return end;
                             }
                         }
@@ -176,6 +193,19 @@ async fn session(
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn backoff_resets_only_after_a_welcome_without_a_fatal_error() {
+        let end = |welcomed, fatal| End {
+            welcomed,
+            fatal,
+            stopped: false,
+        };
+        assert!(resets_backoff(&end(true, false)));
+        assert!(!resets_backoff(&end(true, true)), "a fatal-error loop must back off");
+        assert!(!resets_backoff(&end(false, false)));
+        assert!(!resets_backoff(&end(false, true)));
+    }
 
     #[test]
     fn backoff_doubles_to_a_minute() {
