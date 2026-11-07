@@ -45,6 +45,8 @@ test("a biome brings everything the world draws with", () => {
     assert.ok(biome.sky.clouds.count > 0, `${id} has clouds`);
     assert.equal(biome.sky.clouds.color.length, 4, `${id} has a cloud colour`);
     assert.equal(biome.preview.sky.length, 3, `${id} has a picker swatch`);
+    assert.equal(biome.flora.mapColors.length, 2, `${id} has two 2D tree colours`);
+    for (const color of biome.flora.mapColors) assert.equal(color.length, 3, `${id} has an RGB 2D tree colour`);
     if (biome.weather) {
       assert.ok(biome.weather.count > 0, `${id} has weather particles`);
       assert.equal(biome.weather.color.length, 4, `${id} has a weather colour`);

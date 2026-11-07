@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The 2D ride map now follows the selected season and time of day, like the 3D world: winter paints snow, ice and pine tree dots, golden hour and dusk tint the ground, water, road and buildings, and `auto` follows the local clock. The start menu's map uses the same palette, so the season carries from the menu into the ride.
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 

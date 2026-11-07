@@ -1,4 +1,4 @@
-# 18. The 2D view is a top-down map
+# 20. The 2D view is a top-down map
 
 Date: 2026-11-02 · Status: accepted
 
@@ -30,6 +30,12 @@ menu already draws such a map (`view/mapPreview.js`).
   every road as a thin context line, the ridden road at full width with
   shoulders, edge lines and dashed lane dividers, then one mark per rider or
   vehicle with its name. Me is an orange arrow.
+- **Theme with the world:** `view/rideMapTheme.js` takes the selected biome's
+  2D colours (ground, water, road, markings, trees and buildings) and the
+  time-of-day preset, and returns the map's palette. The season and the light
+  therefore read the same in 2D as in 3D: winter paints snow, ice and pine dots,
+  golden hour and dusk tint the whole map, and `auto` follows the local clock.
+  The rider and HUD marks keep their own high-contrast colours.
 - **Same data as 3D, no new requests:** the map uses the route and `app.network`
   / `app.routes` that the ride already loads. Without a network it draws the
   current route on land, so it works as the WebGL 2 fallback and while the world
@@ -46,8 +52,13 @@ menu already draws such a map (`view/mapPreview.js`).
   route and all riders.
 - The map's land is a coarse hillshade sampled from the network's height grid
   (drawn on a small offscreen canvas and smoothed up), not the 3D terrain
-  render; the coast, roads and riders carry the rest. The start menu's map
-  palette keeps the two views consistent.
+  render; the coast, roads and riders carry the rest. The start menu's map uses
+  the same theme, so the season and time of day carry from the menu into the
+  ride; the two maps agree on palette, not on every tree or building.
+- The 2D palette has no shaders to reuse: it derives its colours from the biome
+  data and lighting presets in plain JavaScript. A new biome supplies its 2D
+  values alongside its 3D ones; a missing value falls back to the temperate
+  palette, so an incomplete biome still draws.
 - Trees and buildings are symbolic (dots and thin outlines) generated from the
   route's scenery zones and the network's cafés, not the 3D meshes: they stay
   cheap and available while the world builds or without WebGL, at the cost of

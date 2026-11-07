@@ -99,6 +99,8 @@ test("a vehicle is marked once, at its captain", () => {
 
 function fakeCanvas(width = 800, height = 600) {
   const calls = { lineTo: 0, fill: 0, fillRect: 0, stroke: 0, arc: 0, fillText: 0 };
+  const fills = [];
+  const strokes = [];
   const ctx = new Proxy(
     {},
     {
@@ -107,10 +109,14 @@ function fakeCanvas(width = 800, height = 600) {
         if (name in calls) return () => (calls[name] += 1);
         return () => {};
       },
-      set: () => true,
+      set: (_, name, value) => {
+        if (name === "fillStyle") fills.push(value);
+        if (name === "strokeStyle") strokes.push(value);
+        return true;
+      },
     },
   );
-  return { canvas: { clientWidth: width, clientHeight: height, width: 0, height: 0, style: {}, getContext: () => ctx }, calls };
+  return { canvas: { clientWidth: width, clientHeight: height, width: 0, height: 0, style: {}, getContext: () => ctx }, calls, fills, strokes };
 }
 
 test("the map draws the coast, every road, the lane lines and the riders", () => {
@@ -129,4 +135,13 @@ test("without a network the map still shows the road", () => {
   drawRideMap(canvas, { route: road, riders: [], me: null, colors: COLORS });
   assert.ok(calls.lineTo > 100, "the road and its markings");
   assert.ok(calls.fillRect >= 1, "the land");
+});
+
+test("the map paints its ground and decorations with the selected biome", () => {
+  const { canvas, fills, strokes } = fakeCanvas();
+  const road = new RouteGeometry(tinyLoopFile());
+  drawRideMap(canvas, { route: road, riders: [], me: null, colors: COLORS, network: new RoadNetwork(tinyNetworkFile()), biome: "winter", timeMode: "day" });
+  assert.ok(fills.includes("rgb(240, 245, 252)"), "snow covers the land");
+  assert.ok(strokes.includes("rgb(184, 189, 201)"), "the winter road uses the biome's surface");
+  assert.ok(strokes.includes("rgb(219, 173, 71)"), "the lane markings use the biome's paint");
 });

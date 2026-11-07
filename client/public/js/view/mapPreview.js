@@ -1,6 +1,9 @@
 import { prepareCanvas } from "./canvas.js";
+import { MAP_COLORS, rideMapTheme } from "./rideMapTheme.js";
 import { islandShape } from "../view3d/island.js";
 import { roadNetworkOf } from "../route/worldMap.js";
+
+export { MAP_COLORS };
 
 /**
  * Top-down map of the routes on one map: the island, every road, the picked
@@ -9,17 +12,6 @@ import { roadNetworkOf } from "../route/worldMap.js";
  * without WebGL 2 or with low graphics. Pure mapping functions are exported
  * for tests.
  */
-
-export const MAP_COLORS = Object.freeze({
-  sea: "#163a4e",
-  land: "#2d5b3b",
-  sand: "#cdb98a",
-  road: "rgba(232, 236, 241, 0.5)",
-  accent: "#ff7a1a",
-  climb: "#ff5d5d",
-  sprint: "#4cc3ff",
-  start: "#ffd21f",
-});
 
 /** Road samples like the 3D world's (world x/z, north is −z), for the island's shape. */
 export function roadSamples(routes, step = 6) {
@@ -75,13 +67,15 @@ function markerAt(route, distance) {
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{routes: object[], selectedId: string | null, colors?: object, island?: object | null, network?: object | null}} options
+ * @param {{routes: object[], selectedId: string | null, colors?: object, island?: object | null, network?: object | null, biome?: string, timeMode?: string, date?: Date}} options
  *   routes are RouteGeometry objects of one map; with the map's `network`
- *   file, the island and every road come from it
+ *   file, the island and every road come from it. `biome` and `timeMode`
+ *   colour the map like the ride's 2D view.
  */
-export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS, network = null, island }) {
+export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS, network = null, island, biome = "temperate", timeMode = "day", date }) {
   const { ctx, width, height } = prepareCanvas(canvas);
-  ctx.fillStyle = colors.sea;
+  const theme = rideMapTheme({ biome, timeMode, date, colors });
+  ctx.fillStyle = theme.sea;
   ctx.fillRect(0, 0, width, height);
   if (!routes.length) return;
   const roadNetwork = network ? roadNetworkOf(network) : null;
@@ -99,9 +93,9 @@ export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS
 
   if (coast.length) {
     path(coast, true);
-    ctx.fillStyle = colors.land;
+    ctx.fillStyle = theme.land;
     ctx.fill();
-    ctx.strokeStyle = colors.sand;
+    ctx.strokeStyle = theme.sand;
     ctx.lineWidth = 3;
     ctx.stroke();
   }
@@ -112,7 +106,7 @@ export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS
   routes.forEach((route, i) => {
     if (route === selected) return;
     path(roads[i], route.loop !== false);
-    ctx.strokeStyle = colors.road;
+    ctx.strokeStyle = theme.contextRoad;
     ctx.lineWidth = 2;
     ctx.stroke();
   });
@@ -125,7 +119,8 @@ export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS
       ctx.beginPath();
       ctx.moveTo(...frame.toScreen(a.x, -a.y));
       ctx.lineTo(...frame.toScreen(b.x, -b.y));
-      ctx.strokeStyle = kind === "climb" ? colors.climb : kind === "sprint" ? colors.sprint : colors.accent;
+      const accent = kind === "climb" ? (colors.climb ?? MAP_COLORS.climb) : kind === "sprint" ? (colors.sprint ?? MAP_COLORS.sprint) : (colors.accent ?? MAP_COLORS.accent);
+      ctx.strokeStyle = accent;
       ctx.lineWidth = 4;
       ctx.stroke();
     }
@@ -133,9 +128,9 @@ export function drawMapPreview(canvas, { routes, selectedId, colors = MAP_COLORS
     const [sx, sy] = frame.toScreen(start.x, -start.y);
     ctx.beginPath();
     ctx.arc(sx, sy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = colors.start;
+    ctx.fillStyle = colors.start ?? MAP_COLORS.start;
     ctx.fill();
-    ctx.strokeStyle = colors.sea;
+    ctx.strokeStyle = theme.sea;
     ctx.lineWidth = 2;
     ctx.stroke();
   }

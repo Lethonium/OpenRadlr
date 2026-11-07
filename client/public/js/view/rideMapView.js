@@ -10,8 +10,9 @@
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { LANE_WIDTH, SHOULDER } from "../view3d/world.js";
 import { prepareCanvas, riderColor } from "./canvas.js";
-import { MAP_COLORS, coastOutline } from "./mapPreview.js";
+import { coastOutline } from "./mapPreview.js";
 import { drawDecorations, roadDecorations } from "./rideMapDecor.js";
+import { rideMapTheme } from "./rideMapTheme.js";
 
 /** How much road the canvas height shows, and where on it the rider sits. */
 export const MAP_VIEW = Object.freeze({ spanM: 120, riderY: 0.62 });
@@ -132,13 +133,13 @@ function strokePath(ctx, camera, points, { color, width, dash = null }) {
   if (dash) ctx.setLineDash([]);
 }
 
-function drawGround(ctx, { network, width, height }) {
+function drawGround(ctx, { network, width, height, theme }) {
   if (!network) {
-    ctx.fillStyle = MAP_COLORS.land;
+    ctx.fillStyle = theme.land;
     ctx.fillRect(0, 0, width, height);
     return null;
   }
-  ctx.fillStyle = MAP_COLORS.sea;
+  ctx.fillStyle = theme.sea;
   ctx.fillRect(0, 0, width, height);
   return coastOf(network);
 }
@@ -183,18 +184,22 @@ function terrainShade(network, x, y, range) {
   return Math.max(0.68, Math.min(1.3, 1 + slope * 0.42 + (high - 0.5) * 0.24));
 }
 
-function shadeColor(hex, factor) {
-  const value = Number.parseInt(hex.slice(1), 16);
-  const r = Math.round(((value >> 16) & 255) * factor);
-  const g = Math.round(((value >> 8) & 255) * factor);
-  const b = Math.round((value & 255) * factor);
-  return `rgb(${r}, ${g}, ${b})`;
+function shadeColor(color, factor) {
+  const channels = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(color);
+  const [r, g, b] = channels
+    ? channels.slice(1).map(Number)
+    : (() => {
+        const value = Number.parseInt(color.slice(1), 16);
+        return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+      })();
+  const channel = (value) => Math.max(0, Math.min(255, Math.round(value * factor)));
+  return `rgb(${channel(r)}, ${channel(g)}, ${channel(b)})`;
 }
 
 let terrainSurface = null;
 
 /** Sparse terrain relief, sampled in world space on screen-space cells and smoothed up. */
-function drawTerrain(ctx, { canvas, network, camera, width, height }) {
+function drawTerrain(ctx, { canvas, network, camera, width, height, theme }) {
   const range = heightRange(network);
   const cell = Math.max(24, Math.floor(Math.min(width, height) / 30));
   const columns = Math.ceil(width / cell);
@@ -205,7 +210,7 @@ function drawTerrain(ctx, { canvas, network, camera, width, height }) {
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
         const world = camera.fromScreen({ x: column * cell + cell / 2, y: row * cell + cell / 2 });
-        ctx.fillStyle = shadeColor(MAP_COLORS.land, terrainShade(network, world.x, world.y, range));
+        ctx.fillStyle = shadeColor(theme.land, terrainShade(network, world.x, world.y, range));
         ctx.fillRect(column * cell, row * cell, cell + 1, cell + 1);
       }
     }
@@ -220,7 +225,7 @@ function drawTerrain(ctx, { canvas, network, camera, width, height }) {
   for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column < columns; column += 1) {
       const world = camera.fromScreen({ x: column * cell + cell / 2, y: row * cell + cell / 2 });
-      surface.fillStyle = shadeColor(MAP_COLORS.land, terrainShade(network, world.x, world.y, range));
+      surface.fillStyle = shadeColor(theme.land, terrainShade(network, world.x, world.y, range));
       surface.fillRect(column, row, 1, 1);
     }
   }
@@ -233,30 +238,30 @@ function contextRoads({ network, routes, route }) {
   return roads.filter((road) => road !== route && road.id !== route.id);
 }
 
-function drawRoads(ctx, { network, routes, route, camera, colors }) {
+function drawRoads(ctx, { network, routes, route, camera, theme }) {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   // Other roads are context only: thin lines under the road being ridden.
   ctx.globalAlpha = 0.7;
   for (const road of contextRoads({ network, routes, route })) {
-    strokePath(ctx, camera, road.nodes, { color: colors.muted, width: Math.max(2, camera.scale * 0.45) });
+    strokePath(ctx, camera, road.nodes, { color: theme.contextRoad, width: Math.max(2, camera.scale * 0.45) });
   }
   ctx.globalAlpha = 1;
-  strokePath(ctx, camera, route.nodes, { color: colors.road, width: roadWidth(route) * camera.scale });
+  strokePath(ctx, camera, route.nodes, { color: theme.road, width: roadWidth(route) * camera.scale });
 }
 
-function drawMarkings(ctx, route, camera, colors) {
+function drawMarkings(ctx, route, camera, theme) {
   const scale = camera.scale;
   const line = Math.max(1, 0.12 * scale);
   for (const side of [-1, 1]) {
     const offset = side * (route.lanes * LANE_WIDTH) / 2 - side * EDGE_LINE / 2;
-    strokePath(ctx, camera, offsetNodes(route, offset), { color: colors.text, width: line });
+    strokePath(ctx, camera, offsetNodes(route, offset), { color: theme.edge, width: line });
   }
   // Below a few pixels a lane divider is noise, not information.
   if (LANE_WIDTH * scale < 4) return;
   for (let lane = 1; lane < route.lanes; lane += 1) {
     const offset = (lane - route.lanes / 2) * LANE_WIDTH;
-    strokePath(ctx, camera, offsetNodes(route, offset), { color: colors.text, width: line, dash: [3 * scale, 3 * scale] });
+    strokePath(ctx, camera, offsetNodes(route, offset), { color: theme.marking, width: line, dash: [3 * scale, 3 * scale] });
   }
 }
 
@@ -313,30 +318,31 @@ function drawRiders(ctx, { route, riders, me, myId, camera, colors, width, heigh
   ctx.fillText(me.name, x, y - 18);
 }
 
-export function drawRideMap(canvas, { route, riders = [], me = null, colors, network = null, routes = null }) {
+export function drawRideMap(canvas, { route, riders = [], me = null, colors, network = null, routes = null, biome = "temperate", timeMode = "day", date }) {
   const { ctx, width, height } = prepareCanvas(canvas);
   if (!route) return;
+  const theme = rideMapTheme({ biome, timeMode, date, colors });
   const at = me ?? { distance: 0, lane: (route.lanes - 1) / 2 };
   const camera = mapCamera(route, at, width, height);
-  const coast = drawGround(ctx, { network, width, height });
+  const coast = drawGround(ctx, { network, width, height, theme });
   if (coast) {
     landPath(ctx, camera, coast);
-    ctx.fillStyle = MAP_COLORS.land;
+    ctx.fillStyle = theme.land;
     ctx.fill();
     if (coast.length >= 3) {
       ctx.save();
       landPath(ctx, camera, coast);
       ctx.clip();
-      drawTerrain(ctx, { canvas, network, camera, width, height });
+      drawTerrain(ctx, { canvas, network, camera, width, height, theme });
       ctx.restore();
     }
     landPath(ctx, camera, coast);
-    ctx.strokeStyle = MAP_COLORS.sand;
+    ctx.strokeStyle = theme.sand;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
-  drawDecorations(ctx, { decorations: roadDecorations(route, network), camera, width, height });
-  drawRoads(ctx, { network, routes, route, camera, colors });
-  drawMarkings(ctx, route, camera, colors);
+  drawDecorations(ctx, { decorations: roadDecorations(route, network), camera, width, height, theme });
+  drawRoads(ctx, { network, routes, route, camera, theme });
+  drawMarkings(ctx, route, camera, theme);
   drawRiders(ctx, { route, riders, me, myId: me?.id ?? null, camera, colors, width, height });
 }

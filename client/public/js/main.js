@@ -361,6 +361,8 @@ const app = {
   /** The menu's 3D view, handed over to the ride when it was built for the joined route. */
   menuView: null,
   viewMode: "2d",
+  /** The selected time of day, also used by the 2D map when there is no 3D view. */
+  timeMode: TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day",
   hud: null,
   layoutChoice: "auto",
   layout: "cockpit",
@@ -792,7 +794,7 @@ function initMenuStage() {
   const drawStage = () => {
     const { route, routes } = shown;
     $("menu-profile").hidden = !route;
-    drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
+    drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null, biome: app.biome, timeMode: app.timeMode });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
   app.redrawStage = drawStage;
@@ -3780,10 +3782,12 @@ function setQuality(quality) {
 }
 
 function setTimeMode(mode) {
-  if (!app.view3d) return;
-  app.view3d.setTimeMode(mode);
-  $("time-mode").value = mode;
-  writeSetting(TIME_KEY, mode);
+  const next = TIME_MODES.includes(mode) ? mode : "day";
+  app.timeMode = next;
+  // The 2D map has no view to configure, but it reads the same setting.
+  app.view3d?.setTimeMode(next);
+  $("time-mode").value = next;
+  writeSetting(TIME_KEY, next);
   app.viewPopover?.refresh();
 }
 
@@ -4065,7 +4069,7 @@ function frame() {
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawRideMap($("ride-map"), { route: app.route, riders, me, colors, network: app.network, routes: app.routes });
+    drawRideMap($("ride-map"), { route: app.route, riders, me, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {

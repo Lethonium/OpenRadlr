@@ -15,7 +15,8 @@ import { inStretch, resolveZones } from "../view3d/zones.js";
 const PAVEMENT = 2.4;
 const CAFE_DISTANCE = 45;
 const CAFE_SETBACK = 14;
-const TREE_COLORS = Object.freeze(["#4d7d3a", "#608f45"]);
+/** Fallback colours when a caller has no themed palette. */
+const TREE_COLORS = Object.freeze(["rgb(77, 125, 58)", "rgb(96, 143, 69)"]);
 const HOUSE_FILL = "rgba(116, 76, 56, 0.46)";
 const HOUSE_EDGE = "rgba(216, 199, 155, 0.85)";
 const HOUSE_RIDGE = "rgba(232, 214, 172, 0.45)";
@@ -50,7 +51,7 @@ const cache = new WeakMap();
 
 /**
  * All decorations of a map (or a single route without a map), generated once.
- * @returns {{ trees: {x: number, y: number, r: number, color: string}[], buildings: {x: number, y: number, w: number, d: number, angle: number, kind: "house"|"cafe"}[] }}
+ * @returns {{ trees: {x: number, y: number, r: number, shade: number}[], buildings: {x: number, y: number, w: number, d: number, angle: number, kind: "house"|"cafe"}[] }}
  */
 export function roadDecorations(route, network = null) {
   const key = network ?? route;
@@ -132,7 +133,7 @@ function addTrees(road, zones, buildings, trees, network) {
     const radius = forest ? 3 + random() * 1.2 : 2.6 + random() * 1.0;
     const clear = buildings.some((house) => Math.hypot(house.x - center.x, house.y - center.y) < Math.max(house.w, house.d) / 2 + 4);
     if (clear) return;
-    trees.push({ x: center.x, y: center.y, r: radius, color: random() < 0.5 ? TREE_COLORS[0] : TREE_COLORS[1] });
+    trees.push({ x: center.x, y: center.y, r: radius, shade: random() < 0.5 ? 0 : 1 });
   };
   for (const forest of zones.forests) {
     for (let d = forest.from; d < forest.to; d += 7) {
@@ -178,15 +179,16 @@ function buildingCorners(building, camera) {
 }
 
 /** Draws the decorations under the roads, culled to the view. */
-export function drawDecorations(ctx, { decorations, camera, width, height }) {
+export function drawDecorations(ctx, { decorations, camera, width, height, theme = null }) {
   const { center } = camera;
+  const trees = theme?.trees ?? TREE_COLORS;
   for (const tree of decorations.trees) {
     if (Math.hypot(tree.x - center.x, tree.y - center.y) > CULL_RADIUS) continue;
     const point = camera.toScreen(tree);
     if (point.x < -10 || point.x > width + 10 || point.y < -10 || point.y > height + 10) continue;
     ctx.beginPath();
     ctx.arc(point.x, point.y, tree.r, 0, Math.PI * 2);
-    ctx.fillStyle = tree.color;
+    ctx.fillStyle = trees[tree.shade] ?? trees[0];
     ctx.fill();
   }
   for (const building of decorations.buildings) {
@@ -199,9 +201,9 @@ export function drawDecorations(ctx, { decorations, camera, width, height }) {
     points.forEach((p, index) => (index === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.closePath();
     const cafe = building.kind === "cafe";
-    ctx.fillStyle = cafe ? CAFE_FILL : HOUSE_FILL;
+    ctx.fillStyle = (cafe ? theme?.cafeFill : theme?.houseFill) ?? (cafe ? CAFE_FILL : HOUSE_FILL);
     ctx.fill();
-    ctx.strokeStyle = cafe ? CAFE_EDGE : HOUSE_EDGE;
+    ctx.strokeStyle = (cafe ? theme?.cafeEdge : theme?.houseEdge) ?? (cafe ? CAFE_EDGE : HOUSE_EDGE);
     ctx.lineWidth = cafe ? 1.5 : 1;
     ctx.stroke();
     const ridgeStart = buildingPoint(building, camera, -building.w / 2, 0);
@@ -209,7 +211,7 @@ export function drawDecorations(ctx, { decorations, camera, width, height }) {
     ctx.beginPath();
     ctx.moveTo(ridgeStart.x, ridgeStart.y);
     ctx.lineTo(ridgeEnd.x, ridgeEnd.y);
-    ctx.strokeStyle = cafe ? CAFE_RIDGE : HOUSE_RIDGE;
+    ctx.strokeStyle = (cafe ? theme?.cafeRidge : theme?.houseRidge) ?? (cafe ? CAFE_RIDGE : HOUSE_RIDGE);
     ctx.lineWidth = 1;
     ctx.stroke();
   }
