@@ -246,6 +246,11 @@ export class View3D {
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
     this.renderer = renderer ?? new Renderer(gl);
+    // A biome's workout figure (winter: penguins): built meshes for `settle` and
+    // uploaded handles to draw. Temperate keeps the human rider rig.
+    const workout = this.biome.workout ?? null;
+    this.workoutMeshes = workout ? new Map(Object.entries(workout.parts).map(([name, build]) => [name, build()])) : null;
+    this.workoutParts = this.workoutMeshes ? new Map([...this.workoutMeshes].map(([name, mesh]) => [name, this.renderer.upload(mesh)])) : null;
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
     this.camera = new ChaseCamera(route);
     this.overview = world.overview ?? null;
@@ -318,7 +323,7 @@ export class View3D {
   setStatues(rows) {
     this.#disposeStatues();
     for (const { gym, figures, material } of rows) {
-      const { mesh, glows, tops } = buildStatues(figures, material);
+      const { mesh, glows, tops } = buildStatues(figures, material, this.biome.workout ?? null);
       const row = gym.statueRow;
       this.#statues.set(gym, {
         handle: this.renderer.upload(mesh),
@@ -450,10 +455,14 @@ export class View3D {
     const pose = state.from && w < 1 ? blend(state.from, current, w) : current;
     state.last = pose;
 
-    const body = multiply(placement(spot.position, spot.yaw), scaling(look.scale));
-    const parts = this.bodyParts[look.variant];
-    const meshOf = (name) => parts.get(name) ?? (name.startsWith("thigh") ? this.thighs[look.variant] : name.startsWith("shin") ? this.shins[look.variant] : this.shoe);
-    const torso = bodyTransforms(settle(pose, clip.plant), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
+    // The biome may replace the figure (winter: a penguin); the bike stays the rider's.
+    const rig = this.biome.workout ?? null;
+    const body = multiply(placement(spot.position, spot.yaw), scaling(look.scale * (rig?.scale ?? 1)));
+    const parts = rig ? this.workoutParts : this.bodyParts[look.variant];
+    const meshOf = rig
+      ? (name) => parts.get(name)
+      : (name) => parts.get(name) ?? (name.startsWith("thigh") ? this.thighs[look.variant] : name.startsWith("shin") ? this.shins[look.variant] : this.shoe);
+    const torso = bodyTransforms(settle(pose, clip.plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
 
     // Bikes side by side at the rack, in the order of the mat's spots: right, left, right…
     const across = [Math.cos(gym.yaw), 0, -Math.sin(gym.yaw)];
@@ -808,7 +817,8 @@ export class View3D {
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();
-    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
+    const workoutHandles = this.workoutParts ? [...this.workoutParts.values()] : [];
+    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, ...workoutHandles, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);
     }
     this.#labels.forEach((element) => element.remove());

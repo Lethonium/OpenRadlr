@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { STATUE_MATERIALS, buildStatues, statueSlots } from "../public/js/view3d/statues.js";
 
 const colorAt = (mesh, i) => [0, 1, 2].map((k) => Math.fround(mesh.colors[i * 4 + k]));
@@ -47,6 +48,24 @@ test("the figure is painted in the material's colour", () => {
     const row = buildStatues(["squats"], material);
     assert.ok(painted(row.mesh, figure).length > 100, material);
   }
+});
+
+test("a biome rig casts its own figures on the same plinths", () => {
+  const winter = resolveBiome("winter");
+  const figures = ["squats", "pushups", "plank", "situps", "jumping_jacks", "burpees"];
+  const row = buildStatues(figures, "marble", winter.workout);
+  const human = buildStatues(figures, "marble");
+  assert.deepEqual(row.tops, human.tops, "the plinths stay put");
+  assert.notEqual(row.mesh.vertexCount, human.mesh.vertexCount, "winter's figures are penguins");
+
+  const slots = statueSlots(figures.length);
+  const body = painted(row.mesh, STATUE_MATERIALS.marble.figure);
+  figures.forEach((name, i) => {
+    const mine = body.filter(([x]) => Math.abs(x - slots[i].x) < 1.5);
+    assert.ok(mine.length > 0, name);
+    const low = Math.min(...mine.map((p) => p[1]));
+    assert.ok(Math.abs(low - row.tops[i]) < 0.01, `${name}: lowest ${low}, plinth ${row.tops[i]}`);
+  });
 });
 
 test("an unknown material throws", () => {

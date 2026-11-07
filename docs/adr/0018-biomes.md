@@ -49,6 +49,12 @@ roads.
   `biome.people.motion` tells the view how to play them (`jump` for people,
   `clap` for winter's penguins). Both are built in the world like any other
   model, so the view animates plain data across the worker boundary.
+- **Workout figures are a biome hook too.** `biome.workout` supplies the 13
+  part builders (`parts`) and a `scale` for the figure training on the gym mat
+  and for the statues cast from the same exercise clips; winter builds them as
+  penguins on the rider's skeleton. Without the hook the human rider rig is
+  used. The bike still parks at the rack, and the mat, spots and plinths stay
+  exactly where they were.
 - **Palette details stay with the season.** Crowd shirt colours
   (`people.shirts`), barrier posts/stripes (`road.barrier`), the start-line
   chequer (`arch.chequer`) and the water surfaces (`water`, `river`) are biome
