@@ -48,6 +48,6 @@ promise about what leaves the server.
   OpenBikeNet outage only removes the remote riders.
 - Power and cadence are shared with other apps while riding the velodrome.
   A per-rider switch to stop sharing them is planned as a follow-up (the spec
-  says apps SHOULD offer one).
+  says apps SHOULD offer one): #36.
 - Positions are approximate: lap counting and distances are scaled to the
   250 m oval, which is good enough for v0 presence.
