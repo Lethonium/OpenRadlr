@@ -154,6 +154,18 @@ pub(crate) fn sanitise_name(name: &str) -> Option<String> {
     valid.then(|| name.to_owned())
 }
 
+/// Like [`sanitise_name`] for text from another app: instead of refusing a name
+/// that is too long or has control characters, drops those characters and cuts
+/// it to [`MAX_NAME_CHARS`]. `None` if nothing is left.
+pub(crate) fn clean_foreign_name(name: &str) -> Option<String> {
+    let name: String = name
+        .chars()
+        .filter(|c| !c.is_control() && !is_invisible(*c))
+        .collect();
+    let name: String = name.trim().chars().take(MAX_NAME_CHARS).collect();
+    sanitise_name(&name)
+}
+
 pub(crate) fn valid_weight(weight_kg: f64) -> bool {
     weight_kg.is_finite() && (30.0..=200.0).contains(&weight_kg)
 }
