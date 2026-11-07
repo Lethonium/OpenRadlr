@@ -6,6 +6,7 @@
 | Heart rate straps | Bluetooth Heart Rate `0x180D` | Supported, shown locally only |
 | Zwift Cog (single gear) | none — a passive sprocket | Supported via virtual shifting over FTMS |
 | Zwift Click v2 (two-piece), Ride, Play, Click v1 | proprietary Bluetooth protocol (unencrypted mode) | Supported: shifting, lanes, menus. Verified with a Click v2 on Android and macOS Chrome (its left half locks after ~1 min: see below); Play and Click v1 are untested |
+| OpenBikeControl controllers (and apps such as BikeControl that act as one) | [OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol) over Bluetooth | Supported: shifting, lanes, menus, power ±, camera, photo. Tested with byte fixtures only |
 | ANT+ FE-C | ANT+ USB stick | Planned for native clients |
 
 ## FTMS
@@ -78,7 +79,7 @@ in simulation mode, Cog or not:
 - Gears only change how hard a pedal stroke feels. Power still decides the speed
   on the server, exactly like real gears.
 
-Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift controller or the on-screen buttons.
+Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift or OpenBikeControl controller or the on-screen buttons.
 
 ## Zwift Click, Play and Ride
 
@@ -156,6 +157,57 @@ press acts once.
 only comes back by rebooting. `?debug=controller` keeps every controller
 packet in the diagnostics report. Junction choices (#15) will use the lane
 buttons once junctions exist.
+
+## OpenBikeControl
+
+[OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol)
+is an open protocol for cycling controllers. *Connect controller* lists
+OpenBikeControl devices next to Zwift's; once connected, a device that offers
+the OpenBikeControl service is used as one (`ble/controllers.js`), anything else
+as a Zwift controller. Only the Bluetooth transport is used (browsers can't
+use the network one).
+
+**Protocol** (`ble/openBikeControlProtocol.js`, unit-tested with byte fixtures):
+
+- Service `d273f680-d548-419d-b9d1-fa0472345229`; button states are
+  notified on `…f681`: `0x01`, then button ID and state pairs for the buttons
+  that changed (`0` released, `1` pressed, `2`–`255` analog).
+- After connecting, the client writes *App Information* to `…f683` (optional
+  on the device): app ID `openradlr`, the build, and the button IDs below, so a
+  controller can leave out the others. Haptics are not used.
+
+**Button IDs → buttons.** They become the same button names as a Zwift
+controller's, so they act as in the table above:
+
+| ID | OpenBikeControl action | Acts as |
+| --- | --- | --- |
+| `0x01` / `0x02` | Shift up / down | + / − (and both together) |
+| `0x10`–`0x13` | Up, down, left, right | D-pad |
+| `0x18` / `0x19` | Steer left / right | D-pad left / right |
+| `0x14` | Select | select (menus only) |
+| `0x15` | Back | B |
+| `0x16` | Menu | Y |
+| `0x24` | Screenshot | Z |
+| `0x30` / `0x31` | Increase / decrease difficulty | power or ERG target ± (riding only) |
+| `0x40` | Camera view | change camera (riding only) |
+
+A controller may send several IDs for one press (BikeControl sends e.g. Shift
+Up, Increase Difficulty and Select for one button, so every app finds one it
+knows). IDs pressed in one message are one press, held until all of them are
+released, and it acts **once**, as the first of its buttons that does
+something here:
+
+- riding: shift, then difficulty, then d-pad and steering, then select, back
+  and menu (select does nothing while riding);
+- riding in ERG: difficulty first, then shift (ERG holds the power, so a
+  shift would do nothing); a press without difficulty still shifts as before;
+- in menus: d-pad, select, back and menu, then shift, then difficulty.
+
+So that button shifts while riding, changes the ERG target in ERG, and selects in a menu. The choice holds
+until the press is released, also when the press itself opens the menu; both
+shift buttons together still open the menu. Other IDs are ignored and appear in
+hex in the diagnostics and the live check. Reconnecting works as for Zwift
+controllers; packets appear under *Device diagnostics* as source `obc`.
 
 ## Browser support
 

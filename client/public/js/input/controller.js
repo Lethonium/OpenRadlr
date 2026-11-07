@@ -7,6 +7,12 @@
  * dialog or the start screen is in front) or riding. Pressing both shift
  * buttons together is a chord: it opens the menu while riding and selects
  * while navigating, so a two-button Zwift Click can do both.
+ *
+ * OpenBikeControl controllers (ble/openBikeControlProtocol.js) also press
+ * select, harder, easier and camera, which act only where they make sense.
+ * One of their presses may stand for several buttons ("shiftUp/harder/select"):
+ * it acts once, as the first of them by PRIORITY that does something here.
+ * In ERG a shift does nothing, so there difficulty comes first.
  */
 
 export const RIDING_ACTIONS = Object.freeze({
@@ -20,6 +26,9 @@ export const RIDING_ACTIONS = Object.freeze({
   b: "closePanels",
   y: "toggleMenu",
   z: "takePhoto",
+  harder: "powerUp",
+  easier: "powerDown",
+  camera: "cycleCamera",
   chord: "toggleMenu",
 });
 
@@ -33,6 +42,7 @@ export const NAVIGATING_ACTIONS = Object.freeze({
   a: "select",
   b: "closePanels",
   y: "toggleMenu",
+  select: "select",
   chord: "select",
 });
 
@@ -46,16 +56,33 @@ const OPPOSITE = Object.freeze({
 
 const CHORD = ["shiftUp", "shiftDown"];
 
+/** Which button a press standing for several acts as: riding shifts first (in ERG: difficulty), menus navigate first. */
+export const PRIORITY = Object.freeze({
+  riding: ["shiftUp", "shiftDown", "harder", "easier", "up", "down", "left", "right", "select", "b", "y", "a", "z", "camera"],
+  erg: ["harder", "easier", "shiftUp", "shiftDown", "up", "down", "left", "right", "select", "b", "y", "a", "z", "camera"],
+  navigating: ["up", "down", "left", "right", "select", "a", "b", "y", "shiftUp", "shiftDown", "harder", "easier"],
+});
+
+/** The buttons a press stands for: "shiftUp/harder" → ["shiftUp", "harder"]. */
+export const alternatives = (button) => button.split("/");
+
 export class ControllerInput {
   /** button → { at, action } for buttons held down right now */
   #held = new Map();
+  /** press standing for several buttons → the one it acts as, kept while it is held */
+  #chosen = new Map();
   #now;
   #chordMs;
+  #erg;
 
-  /** @param {{now?: () => number, chordMs?: number}} [options] now in milliseconds */
-  constructor({ now = () => performance.now(), chordMs = 250 } = {}) {
+  /**
+   * @param {{now?: () => number, chordMs?: number, erg?: () => boolean}} [options] now in milliseconds;
+   *   `erg`: whether ERG holds the power now (shifts do nothing then)
+   */
+  constructor({ now = () => performance.now(), chordMs = 250, erg = () => false } = {}) {
     this.#now = now;
     this.#chordMs = chordMs;
+    this.#erg = erg;
   }
 
   /**
@@ -70,7 +97,9 @@ export class ControllerInput {
   update(pressed, navigating) {
     const map = navigating ? NAVIGATING_ACTIONS : RIDING_ACTIONS;
     const now = this.#now();
-    const down = new Set(pressed);
+    for (const press of [...this.#chosen.keys()]) if (!pressed.includes(press)) this.#chosen.delete(press);
+    const priority = () => (navigating ? PRIORITY.navigating : this.#erg() ? PRIORITY.erg : PRIORITY.riding);
+    const down = new Set(pressed.map((press) => this.#choose(press, map, priority)));
     for (const button of [...this.#held.keys()]) if (!down.has(button)) this.#held.delete(button);
 
     const fresh = [...down].filter((button) => !this.#held.has(button));
@@ -92,6 +121,18 @@ export class ControllerInput {
       if (action) actions.push(action);
     }
     return actions;
+  }
+
+  /** The button a press acts as: itself, or the first of its buttons by priority (asked only for a new press) that has an action. */
+  #choose(press, map, priority) {
+    if (!press.includes("/")) return press;
+    if (!this.#chosen.has(press)) {
+      const buttons = alternatives(press);
+      const order = priority();
+      const ranked = buttons.filter((button) => order.includes(button)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      this.#chosen.set(press, ranked.find((button) => map[button]) ?? buttons[0]);
+    }
+    return this.#chosen.get(press);
   }
 }
 

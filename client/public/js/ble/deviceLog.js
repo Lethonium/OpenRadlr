@@ -14,7 +14,7 @@ export const toHex = (dataView) =>
  * or their four packets a second would push the controller's out.
  */
 export function deviceLogOptions(search) {
-  return new URLSearchParams(search).get("debug") === "controller" ? { capture: ["zwift"], maxEntries: 3000 } : {};
+  return new URLSearchParams(search).get("debug") === "controller" ? { capture: ["zwift", "obc"], maxEntries: 3000 } : {};
 }
 
 export class DeviceLog extends Emitter {

@@ -8,8 +8,8 @@ import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
-import { ZwiftController } from "./ble/zwiftController.js";
-import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
+import { connectController, openController } from "./ble/controllers.js";
+import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { viewControls } from "./view/viewControls.js";
@@ -1070,8 +1070,8 @@ const DEVICES = {
   },
   controller: {
     statusId: "controller-status",
-    connect: (names) => ZwiftController.connect(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
-    open: (device) => ZwiftController.open(device, { log: deviceLog }),
+    connect: (names) => connectController(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
+    open: (device) => openController(device, { log: deviceLog }),
     use: (controller) => useController(controller),
     // Any trainer or strap will do; controllers count one by one (a Play is two).
     has: (id) => hasController(id),
@@ -1319,14 +1319,17 @@ function useController(controller) {
     renderReconnectButtons();
   }, 3000);
   // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
-  app.controllerInput ??= new MergedControllers(new ControllerInput());
+  // In ERG a combined OpenBikeControl press changes the target instead of shifting (shift() ignores it there).
+  app.controllerInput ??= new MergedControllers(new ControllerInput({ erg: () => app.training?.mode === "erg" || Boolean(app.studio?.erg) }));
   $("controller-live").hidden = false;
   renderControllerCheck();
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
       const known = controller.seen.size;
-      for (const button of pressed) controller.seen.add(button);
-      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      // An OpenBikeControl press may stand for several buttons: each counts as seen.
+      const each = pressed.flatMap(alternatives);
+      for (const button of each) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: each };
       renderControllerCheck();
       // The first shift tells the half's side: the line names it.
       if (controller.seen.size !== known) {
