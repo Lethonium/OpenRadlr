@@ -43,12 +43,25 @@ function corners(positions) {
   return [...seen.values()];
 }
 
+/** Corner caches of biome rigs, keyed by the rig's map of built parts. */
+const RIG_SHAPES = new WeakMap();
+/** The corners of every part in `parts` (a Map of name → built mesh), cached per map. */
+function shapesOf(parts) {
+  let shapes = RIG_SHAPES.get(parts);
+  if (!shapes) {
+    shapes = new Map([...parts].map(([name, mesh]) => [name, corners(mesh.positions)]));
+    RIG_SHAPES.set(parts, shapes);
+  }
+  return shapes;
+}
+
 /** Lowest point of the body over the ground and the Z of a body point (`{mesh, at}`), for a pose as `bodyTransforms` takes it. */
-function measure(pose, plant) {
+function measure(pose, plant, shapes = SHAPES) {
   let lowest = Infinity;
   let z = 0;
   for (const { mesh, model: m } of bodyTransforms(pose)) {
-    for (const [x, y, w] of SHAPES.get(mesh)) lowest = Math.min(lowest, m[1] * x + m[5] * y + m[9] * w + m[13]);
+    const part = shapes.get(mesh);
+    if (part) for (const [x, y, w] of part) lowest = Math.min(lowest, m[1] * x + m[5] * y + m[9] * w + m[13]);
     if (plant?.mesh === mesh) z = transformPoint(m, plant.at)[2];
   }
   return { lowest, z };
@@ -59,10 +72,13 @@ function measure(pose, plant) {
  * lifted or lowered so its lowest point is that high, and with a clip's
  * `plant` (a body point that holds still, such as the feet in a squat) moved
  * back along Z to where the clip's first key has it.
+ *
+ * `parts` is a biome's rig (a Map of the same part names → built meshes); the
+ * default measures the human rider's shapes.
  */
-export function settle(pose, plant = null) {
+export function settle(pose, plant = null, parts = null) {
   const at = { ...pose, root: { ...pose.root, y: 0 } };
-  const { lowest, z } = measure(at, plant);
+  const { lowest, z } = measure(at, plant, parts ? shapesOf(parts) : SHAPES);
   const root = { ...pose.root, y: pose.root.y - lowest };
   if (plant) root.z = (pose.root.z ?? 0) + plant.z - z;
   return { ...pose, root };
