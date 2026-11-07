@@ -202,9 +202,14 @@ export function gymCameraPose(gym, settings = GYM_CAMERA, focus = gym.center) {
   return { eye: [fx + dx * settings.back, fy + settings.up, fz + dz * settings.back], target: [fx, fy + settings.aim, fz] };
 }
 
-/** A fixed camera on the gym mat; swings over from where the last camera was (`from`), unless that is null. */
+/**
+ * A fixed camera on the gym mat; swings over from where the last camera was
+ * (`from`), unless that is null. With `cut` (reduced motion) a new spot is
+ * framed at once instead of swung to.
+ */
 export class GymCamera {
   mode = "gym";
+  #cut;
   #gym;
   #settings;
   #focus;
@@ -212,7 +217,8 @@ export class GymCamera {
   #from;
   #blend;
 
-  constructor(gym, from = null, settings = GYM_CAMERA) {
+  constructor(gym, from = null, settings = GYM_CAMERA, { cut = false } = {}) {
+    this.#cut = cut;
     this.#gym = gym;
     this.#settings = settings;
     this.#focus = gym.center;
@@ -235,7 +241,7 @@ export class GymCamera {
     this.#from = { eye: [...this.eye], target: [...this.target] };
     this.#focus = position;
     this.#pose = gymCameraPose(this.#gym, this.#settings, position);
-    this.#blend = 0;
+    this.#blend = this.#cut ? 1 : 0;
   }
 
   /** Same signature as the chase camera's; only the time step matters. */
@@ -413,7 +419,7 @@ export class View3D {
    * camera, or is there at once with reduced motion.
    */
   workoutMode(gym, { reducedMotion = false } = {}) {
-    this.camera = new GymCamera(gym, reducedMotion ? null : this.camera);
+    this.camera = new GymCamera(gym, reducedMotion ? null : this.camera, GYM_CAMERA, { cut: reducedMotion });
     this.viewOffset = [0, GYM_CAMERA.screenY];
   }
 

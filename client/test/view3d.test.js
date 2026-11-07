@@ -492,6 +492,15 @@ test("the gym camera swings to my spot when it changes", () => {
   assert.deepEqual([half[0] > old[0] && half[0] < goal[0], camera.eye], [true, goal]);
 });
 
+test("with reduced motion the gym camera cuts to my spot", () => {
+  const gym = testGym();
+  const spot = [101.8, 100.4, 30.9];
+  const camera = new GymCamera(gym, null, GYM_CAMERA, { cut: true });
+  camera.focusOn(spot);
+  camera.update(0, 0, 0);
+  assert.deepEqual(camera.eye, gymCameraPose(gym, GYM_CAMERA, spot).eye);
+});
+
 test("focusing on the same spot again does not restart the swing", () => {
   const gym = testGym();
   const p1 = [101.8, 100.4, 30.9];
