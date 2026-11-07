@@ -325,7 +325,9 @@ mod tests {
 
         let after_reset = outbox.frame(&[rider(7, 0.5)]);
         assert_eq!(kinds(&after_reset), ["join"]);
-        let AppMessage::Join { state, .. } = &after_reset[0] else { unreachable!() };
+        let AppMessage::Join { state, .. } = &after_reset[0] else {
+            unreachable!()
+        };
         assert_eq!(state.lap, 0);
     }
 }
