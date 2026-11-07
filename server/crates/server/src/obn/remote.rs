@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use openradlr_sim::RiderId;
 
+use crate::game::clean_foreign_name;
+
 use super::wire::{RemoteUpdate, RemoteView, ServerMessage};
 use super::OBN_LENGTH_M;
 
@@ -143,10 +145,13 @@ impl Remotes {
     }
 
     fn insert(&mut self, id: RiderId, view: RemoteView, now_s: f64) {
+        // Names and app ids come from strangers: same filter as local names.
+        let app = clean_foreign_name(&view.app).unwrap_or_else(|| "?".into());
+        let name = clean_foreign_name(&view.name).unwrap_or_else(|| app.clone());
         let known = Known {
             id,
-            app: view.app,
-            name: view.name,
+            app,
+            name,
             distance: self.local(view.distance),
             speed: view.speed,
             power: view.power.unwrap_or(0.0),
@@ -336,5 +341,51 @@ mod tests {
         let mut r = Remotes::new(500.0);
         r.apply(joined(view("a", "Ann", 100.0, 0.0)), 0.0);
         assert_eq!(r.riders(0.0)[0].distance, 200.0);
+    }
+
+    fn first(r: &mut Remotes) -> RemoteRider {
+        r.riders(0.0).remove(0)
+    }
+
+    #[test]
+    fn names_lose_invisible_and_control_characters() {
+        let mut r = remotes();
+        r.apply(joined(view("a", "Ben\u{202E}na\u{200B}mow\u{7}\n", 1.0, 0.0)), 0.0);
+        assert_eq!(first(&mut r).name, "Bennamow");
+    }
+
+    #[test]
+    fn names_are_cut_to_24_characters() {
+        let mut r = remotes();
+        r.apply(joined(view("a", &"x".repeat(32), 1.0, 0.0)), 0.0);
+        assert_eq!(first(&mut r).name, "x".repeat(24));
+    }
+
+    #[test]
+    fn an_empty_name_becomes_the_app_id() {
+        let mut r = remotes();
+        r.apply(joined(view("a", " \u{200B}\u{202E} ", 1.0, 0.0)), 0.0);
+        assert_eq!(first(&mut r).name, "incyclist");
+    }
+
+    #[test]
+    fn app_ids_are_cleaned_too() {
+        let mut r = remotes();
+        let mut rider = view("a", "Ann", 1.0, 0.0);
+        rider.app = format!("in\u{202E}cy{}", "z".repeat(40));
+        r.apply(joined(rider), 0.0);
+        let shown = first(&mut r);
+        assert_eq!(shown.app.chars().count(), 24);
+        assert!(shown.app.starts_with("incyzzz"));
+    }
+
+    #[test]
+    fn a_name_and_app_that_are_both_empty_show_a_question_mark() {
+        let mut r = remotes();
+        let mut rider = view("a", "\u{200B}", 1.0, 0.0);
+        rider.app = "\u{200B}".into();
+        r.apply(joined(rider), 0.0);
+        let shown = first(&mut r);
+        assert_eq!((shown.name.as_str(), shown.app.as_str()), ("?", "?"));
     }
 }
