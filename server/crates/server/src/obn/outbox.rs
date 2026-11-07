@@ -11,7 +11,6 @@ use openradlr_sim::RiderId;
 use super::wire::{AppMessage, RiderEntry, RiderState};
 use super::{OBN_LENGTH_M, OBN_ROOM};
 
-
 /// One of this server's riders, as the game loop sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalRider {
@@ -176,7 +175,7 @@ mod tests {
                 AppMessage::Join { .. } => "join",
                 AppMessage::Update { .. } => "update",
                 AppMessage::Leave { .. } => "leave",
-                AppMessage::Hello { .. } | AppMessage::Subscribe { .. } => "other",
+                AppMessage::Hello { .. } | AppMessage::Subscribe { .. } | AppMessage::Ping { .. } => "other",
             })
             .collect()
     }

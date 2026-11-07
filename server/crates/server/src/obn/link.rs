@@ -4,6 +4,8 @@
 //! sends to the game and what the game reports (frames of local riders) to the
 //! server. Whenever the connection drops, the game forgets the remote riders, the
 //! outbox forgets the joined ones, and the task reconnects after a growing pause.
+//! A server that goes quiet gets a `ping`; if it stays quiet, the connection counts as
+//! dropped, which also catches a half-open TCP connection (spec 3.5).
 //! The game loop never waits for this task: frames go through a bounded channel
 //! with `try_send`, commands to the game are the only thing it awaits.
 
@@ -12,6 +14,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -26,6 +29,25 @@ const MAX_BACKOFF_UNITS: u32 = 60;
 /// Longest wait for the TCP and WebSocket handshake.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// When to check that a quiet server is still there (spec 3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Heartbeat {
+    /// Silence after which the app sends `ping`.
+    pub idle: Duration,
+    /// Further silence after which the connection counts as dropped.
+    pub grace: Duration,
+}
+
+impl Default for Heartbeat {
+    /// The spec's 20 s and 10 s.
+    fn default() -> Self {
+        Self {
+            idle: Duration::from_secs(20),
+            grace: Duration::from_secs(10),
+        }
+    }
+}
+
 /// The pause before reconnect number `attempt` (0 = first): `unit`, doubling up to 60 `unit`s.
 pub fn backoff(attempt: u32, unit: Duration) -> Duration {
     let factor = 1u32 << attempt.min(6);
@@ -38,6 +60,7 @@ pub fn spawn_link(
     route: String,
     route_length_m: f64,
     backoff_unit: Duration,
+    heartbeat: Heartbeat,
     mut frames: mpsc::Receiver<Vec<LocalRider>>,
     game: GameHandle,
 ) -> JoinHandle<()> {
@@ -47,7 +70,7 @@ pub fn spawn_link(
         loop {
             // Frames queued while disconnected are stale: the next one tells the whole story.
             while frames.try_recv().is_ok() {}
-            let end = session(&url, &route, &mut outbox, &mut frames, &game).await;
+            let end = session(&url, &route, heartbeat, &mut outbox, &mut frames, &game).await;
             if end.stopped {
                 return;
             }
@@ -101,6 +124,7 @@ fn text(message: &AppMessage) -> Message {
 async fn session(
     url: &str,
     route: &str,
+    heartbeat: Heartbeat,
     outbox: &mut Outbox,
     frames: &mut mpsc::Receiver<Vec<LocalRider>>,
     game: &GameHandle,
@@ -133,9 +157,16 @@ async fn session(
             return end;
         }
     }
+    let mut quiet_until = Instant::now() + heartbeat.idle;
+    let mut pings = 0u32;
+    let mut awaiting_answer = false;
     loop {
         tokio::select! {
-            incoming = stream.next() => match incoming {
+            incoming = stream.next() => {
+                // Anything at all, WebSocket pings included, shows the server is there.
+                quiet_until = Instant::now() + heartbeat.idle;
+                awaiting_answer = false;
+                match incoming {
                 Some(Ok(Message::Text(raw))) => {
                     // Messages this version does not know are skipped (spec 3).
                     let message = match serde_json::from_str::<ServerMessage>(raw.as_str()) {
@@ -148,6 +179,7 @@ async fn session(
                     };
                     match &message {
                         ServerMessage::Welcome {} => end.welcomed = true,
+                        ServerMessage::Pong {} => continue,
                         ServerMessage::Error { code, fatal, .. } => {
                             tracing::info!(code = %code, fatal, "OpenBikeNet: error from the server");
                             if *fatal {
@@ -171,7 +203,22 @@ async fn session(
                     tracing::info!("OpenBikeNet: connection dropped: {e}");
                     return end;
                 }
+                }
             },
+            () = tokio::time::sleep_until(quiet_until) => {
+                if awaiting_answer {
+                    tracing::info!("OpenBikeNet: the server stopped answering");
+                    return end;
+                }
+                pings += 1;
+                let ping = AppMessage::Ping { reference: format!("hb-{pings}") };
+                if sink.send(text(&ping)).await.is_err() {
+                    tracing::info!("OpenBikeNet: connection dropped");
+                    return end;
+                }
+                awaiting_answer = true;
+                quiet_until = Instant::now() + heartbeat.grace;
+            }
             frame = frames.recv() => {
                 let Some(riders) = frame else {
                     end.stopped = true;

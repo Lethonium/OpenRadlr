@@ -116,14 +116,15 @@ impl Remotes {
             RemoteEvent::Message(ServerMessage::Left { id, .. }) => {
                 self.riders.remove(&id);
             }
-            RemoteEvent::Message(ServerMessage::Welcome {} | ServerMessage::Error { .. }) => {}
+            RemoteEvent::Message(ServerMessage::Welcome {} | ServerMessage::Error { .. } | ServerMessage::Pong {}) => {}
         }
     }
 
     /// Everyone heard of lately, positions extrapolated to `now_s`. A rider silent for
     /// a while is left out but kept, so that an update after a stall brings them back.
     pub fn riders(&mut self, now_s: f64) -> Vec<RemoteRider> {
-        self.riders.retain(|_, known| now_s - known.heard_at_s <= FORGET_AFTER_S);
+        self.riders
+            .retain(|_, known| now_s - known.heard_at_s <= FORGET_AFTER_S);
         let length = self.route_length_m;
         let mut out: Vec<RemoteRider> = self
             .riders
@@ -358,7 +359,10 @@ mod tests {
         assert!(r.riders(11.0).is_empty());
         r.apply(updated("a", 60.0, 0.0), 12.0);
         let riders = r.riders(12.0);
-        assert_eq!((riders[0].id, riders[0].name.as_str(), riders[0].distance), (id, "Ann", 60.0));
+        assert_eq!(
+            (riders[0].id, riders[0].name.as_str(), riders[0].distance),
+            (id, "Ann", 60.0)
+        );
     }
 
     #[test]
@@ -392,7 +396,10 @@ mod tests {
     fn a_snapshot_of_another_room_does_not_replace_ours() {
         let mut r = remotes();
         r.apply(snapshot(vec![view("a", "Ann", 10.0, 0.0)]), 0.0);
-        r.apply(elsewhere(snapshot(vec![view("x", "Xan", 1.0, 0.0)]), "velodrome-250", "club"), 0.0);
+        r.apply(
+            elsewhere(snapshot(vec![view("x", "Xan", 1.0, 0.0)]), "velodrome-250", "club"),
+            0.0,
+        );
         r.apply(elsewhere(snapshot(vec![]), "hill-climb", "public"), 0.0);
         let riders = r.riders(0.0);
         assert_eq!(riders.len(), 1);
@@ -403,7 +410,10 @@ mod tests {
     fn riders_of_another_route_or_room_are_ignored() {
         let mut r = remotes();
         r.apply(joined(view("a", "Ann", 10.0, 0.0)), 0.0);
-        r.apply(elsewhere(joined(view("x", "Xan", 1.0, 0.0)), "hill-climb", "public"), 0.0);
+        r.apply(
+            elsewhere(joined(view("x", "Xan", 1.0, 0.0)), "hill-climb", "public"),
+            0.0,
+        );
         r.apply(elsewhere(updated("a", 99.0, 0.0), "velodrome-250", "club"), 1.0);
         r.apply(elsewhere(left("a"), "hill-climb", "public"), 1.0);
         let riders = r.riders(1.0);

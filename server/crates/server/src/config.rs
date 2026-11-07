@@ -4,6 +4,7 @@
 //! lookup as a function. Production passes `std::env::var`, tests pass a map.
 
 use crate::guard::ConnectionLimits;
+use crate::obn::link::Heartbeat;
 use crate::strava::StravaConfig;
 use openradlr_sim::SimConfig;
 use std::fmt;
@@ -106,6 +107,9 @@ pub struct Config {
     pub obn_url: Option<String>,
     /// Base of the reconnect delay to OpenBikeNet (no environment variable; for tests).
     pub obn_backoff_unit: Duration,
+    /// When a quiet OpenBikeNet server is pinged and given up on (no environment variable;
+    /// the spec's 20 s and 10 s, shorter in tests).
+    pub obn_heartbeat: Heartbeat,
 }
 
 /// A Plausible-compatible analytics script the client loads on request of the operator.
@@ -448,6 +452,7 @@ impl Config {
             privacy_url,
             obn_url,
             obn_backoff_unit: Duration::from_secs(1),
+            obn_heartbeat: Heartbeat::default(),
         })
     }
 

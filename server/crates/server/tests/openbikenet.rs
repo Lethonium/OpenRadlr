@@ -3,6 +3,7 @@
 use futures_util::{SinkExt, StreamExt};
 use openradlr_server::app;
 use openradlr_server::config::{Config, EventsSetting};
+use openradlr_server::obn::link::Heartbeat;
 use serde_json::Value;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -273,4 +274,45 @@ async fn remote_riders_vanish_when_the_link_drops() {
     // Well before the 10 s after which a silent rider is dropped anyway.
     let gone = state_where(&mut anna, "Ben is gone", Duration::from_secs(3), |s| !shows_ben(s)).await;
     assert!(gone["route_riders"].get("remote").is_none_or(|n| n == 0));
+}
+
+fn quick_heartbeat(obn_url: String) -> Config {
+    Config {
+        obn_heartbeat: Heartbeat {
+            idle: Duration::from_millis(200),
+            grace: Duration::from_millis(200),
+        },
+        ..velodrome_config(Some(obn_url))
+    }
+}
+
+#[tokio::test]
+async fn pings_a_quiet_server_and_reconnects_when_it_stays_silent() {
+    let (listener, url) = fake_server().await;
+    let _addr = serve(quick_heartbeat(url)).await;
+    let mut fake = accept(&listener).await;
+    expect_hello_and_subscribe(&mut fake).await;
+
+    let ping = recv_type(&mut fake, "ping").await;
+    assert!(ping["ref"].is_string(), "{ping}");
+    // No pong, and the socket stays open: a half-open connection as the app sees it.
+    let mut second = accept(&listener).await;
+    expect_hello_and_subscribe(&mut second).await;
+    drop(fake);
+}
+
+#[tokio::test]
+async fn a_pong_keeps_the_connection() {
+    let (listener, url) = fake_server().await;
+    let _addr = serve(quick_heartbeat(url)).await;
+    let mut fake = accept(&listener).await;
+    expect_hello_and_subscribe(&mut fake).await;
+
+    for _ in 0..3 {
+        let ping = recv_type(&mut fake, "ping").await;
+        let pong = serde_json::json!({"type": "pong", "ref": ping["ref"]});
+        fake.send(Message::text(pong.to_string())).await.unwrap();
+    }
+    let again = tokio::time::timeout(Duration::from_millis(300), listener.accept()).await;
+    assert!(again.is_err(), "the app reconnected although the server answered");
 }

@@ -188,6 +188,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
                 obn_route,
                 routes[index].length(),
                 config.obn_backoff_unit,
+                config.obn_heartbeat,
                 receiver,
                 game.clone(),
             );

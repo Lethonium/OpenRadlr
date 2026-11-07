@@ -2567,7 +2567,10 @@ mod tests {
 
     fn obn_game(target_riders: usize, capacity: usize) -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
         let (frames, receiver) = mpsc::channel(capacity);
-        (game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames), receiver)
+        (
+            game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames),
+            receiver,
+        )
     }
 
     fn snapshot_of_ben() -> RemoteEvent {

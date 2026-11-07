@@ -206,7 +206,9 @@ drops, the other apps' riders vanish and the server reconnects with a growing pa
 a minute). `/api/info` marks the route with `"shared": true` while the link is configured.
 
 - Riders doing a workout, riders off the route and bots are never sent.
-- A rider of another app that is silent for 10 s is dropped.
+- A rider of another app that is silent for 10 s is hidden until they send again.
+- A server that stays silent for 20 s gets a ping; after 10 s more without an answer the
+  connection counts as dropped and is reopened.
 - `ws://` is unencrypted: rider names and values cross the network in the clear. Use `wss://`
   whenever the OpenBikeNet server is not on your own machine or network.
 

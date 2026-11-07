@@ -27,12 +27,15 @@ promise about what leaves the server.
   and riders off the route are not sent either. `ws://` is unencrypted: use
   `wss://` beyond a trusted network.
 - **One outgoing connection per server**, room `public`, reconnecting with
-  backoff from 1 s to 60 s. Local riding never waits for it.
+  backoff from 1 s to 60 s. Local riding never waits for it. After 20 s without
+  anything from the server the link sends `ping`; 10 s more of silence count as a
+  dropped connection (spec 3.5), which also catches a half-open one.
 - **Remote riders live in the game core, not the sim.** They have no physics,
   don't draft, can't race and don't count towards caps. The core keeps their
   last state, moves them on by their speed (at most 2 s) and adds them to the
-  state messages of riders on the velodrome. A remote rider silent for 10 s,
-  or all of them when the link drops, is removed.
+  state messages of riders on the velodrome. A remote rider silent for 10 s
+  is hidden until their next update (forgotten after 5 minutes); all of them
+  go when the link drops. Messages for another route or room are ignored.
 - **Wire (additive, protocol version stays 2):** a remote rider is a normal
   `RiderState` with `is_bot: false`, an `app` field and an id from `0xF000_0000`;
   `route_riders` gains `remote`; `/api/info` routes gain `shared`.

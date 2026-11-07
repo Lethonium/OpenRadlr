@@ -25,6 +25,11 @@ pub enum AppMessage {
     Leave {
         rider: String,
     },
+    /// Asks a quiet server whether it is still there (spec 6.6); it answers with `pong`.
+    Ping {
+        #[serde(rename = "ref")]
+        reference: String,
+    },
 }
 
 /// The app's identification, sent once in `hello`.
@@ -88,6 +93,8 @@ pub enum ServerMessage {
         message: String,
         fatal: bool,
     },
+    /// The answer to `ping`.
+    Pong {},
 }
 
 /// A rider of another app, as seen in `snapshot` and `joined`.
@@ -227,6 +234,19 @@ mod tests {
             }
             other => panic!("expected error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn ping_and_pong_match_the_spec() {
+        let ping = AppMessage::Ping {
+            reference: "hb-17".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&ping).unwrap(),
+            serde_json::json!({"type": "ping", "ref": "hb-17"})
+        );
+        let pong = serde_json::from_str::<ServerMessage>(r#"{"type": "pong", "ref": "hb-17"}"#).unwrap();
+        assert_eq!(pong, ServerMessage::Pong {});
     }
 
     #[test]
