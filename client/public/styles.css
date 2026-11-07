@@ -17,6 +17,7 @@
   --me: #ff7a1a;
   --human: #4cc3ff;
   --bot: #8f99a8;
+  --remote: #2ec4a6;
   --climb: rgba(255, 93, 93, 0.12);
   --sprint: rgba(76, 195, 255, 0.12);
   --radius: 10px;
@@ -2946,6 +2947,12 @@ body.riding {
   font-weight: 400;
 }
 
+.badge.badge-remote,
+.label3d .badge.badge-remote {
+  color: var(--remote);
+  border-color: var(--remote);
+}
+
 .dot {
   display: inline-block;
   width: 8px;
@@ -2957,6 +2964,10 @@ body.riding {
 
 .dot.bot {
   background: var(--bot);
+}
+
+.dot.remote {
+  background: var(--remote);
 }
 
 .race-controls {

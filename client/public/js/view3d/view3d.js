@@ -39,6 +39,7 @@ import { buildWorld, riderPosition } from "./world.js";
 import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
+import { isRemote } from "../view/remoteRiders.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -73,6 +74,26 @@ export function projectToScreen(viewProjection, point, width, height) {
 }
 
 /**
+ * The label over a rider: the name, plus a badge for a bot or the app of a
+ * remote rider. Names come from other players and apps: text only.
+ */
+export function riderLabelElement(rider, myId) {
+  const element = document.createElement("div");
+  element.className = rider.id === myId ? "label3d me" : "label3d";
+  const name = document.createElement("span");
+  name.textContent = rider.name;
+  element.append(name);
+  const badgeText = rider.is_bot ? "bot" : isRemote(rider) ? rider.app : null;
+  if (badgeText) {
+    const badge = document.createElement("span");
+    badge.className = isRemote(rider) ? "badge badge-remote" : "badge";
+    badge.textContent = badgeText;
+    element.append(badge);
+  }
+  return element;
+}
+
+/**
  * Chooses which name labels to show: the nearest riders first, skipping
  * labels that would overlap one already placed. My own rider gets no label
  * (it is always right in front of the camera and would cover the others).
@@ -83,7 +104,7 @@ export function visibleLabels(candidates, myId, { charWidth = 7, padding = 22, h
   const placed = [];
   const shown = [];
   for (const candidate of ordered) {
-    const badge = candidate.rider.is_bot ? 4 : candidate.rider.device === "paddle" ? 3 : 0;
+    const badge = candidate.rider.is_bot ? 4 : isRemote(candidate.rider) ? candidate.rider.app.length + 1 : candidate.rider.device === "paddle" ? 3 : 0;
     const width = (candidate.rider.name.length + badge) * charWidth + padding;
     const box = { left: candidate.screen.x - width / 2, right: candidate.screen.x + width / 2, top: candidate.screen.y - height, bottom: candidate.screen.y };
     const overlaps = placed.some((o) => box.left < o.right && o.left < box.right && box.top < o.bottom && o.top < box.bottom);
@@ -531,7 +552,7 @@ export class View3D {
       const seatModel = multiply(base, placement(seat.hip, seat.yaw));
       // The hip stays put when the rider is scaled: scale about it, then bring the solo hip to the origin.
       const legsModel = multiply(seatModel, multiply(scaling(look.scale), placement([0, -hy, -hz])));
-      const tint = rider.id === myId ? tints.me : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
       bodies.push({ variant: look.variant, model: multiply(seatModel, scaling(look.scale)), tint });
       limbs.push(...this.#legs(legsModel, look, this.#pedal(rider.id, seatCadence(rider), dt)));
       heads.set(rider.id, transformPoint(seatModel, [0, 0.62 * look.scale + 0.55, 0]).slice(0, 3));
@@ -585,14 +606,14 @@ export class View3D {
     const viewProjection = multiply(projection, lookAt(this.camera.eye, this.camera.target));
     const inverseViewProjection = invert(viewProjection);
 
-    const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot) };
+    const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
     const visible = [];
     for (const { rider, position, forward, gym } of placed.filter((p) => !p.rider.vehicle)) {
       const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
-      const tint = rider.id === myId ? tints.me : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
       const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
       visible.push({ rider, position, forward, fromCamera, tint, ...parts });
     }
@@ -787,17 +808,7 @@ export class View3D {
   #label(rider, myId) {
     let element = this.#labels.get(rider.id);
     if (!element) {
-      element = document.createElement("div");
-      element.className = rider.id === myId ? "label3d me" : "label3d";
-      const name = document.createElement("span");
-      name.textContent = rider.name;
-      element.append(name);
-      if (rider.is_bot) {
-        const badge = document.createElement("span");
-        badge.className = "badge";
-        badge.textContent = "bot";
-        element.append(badge);
-      }
+      element = riderLabelElement(rider, myId);
       this.labelLayer.append(element);
       this.#labels.set(rider.id, element);
     }
