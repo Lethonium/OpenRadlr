@@ -618,6 +618,25 @@ test("joining takes the view over only when it was built for the joined route", 
   assert.ok(other.log.views[0].disposed);
 });
 
+test("joining takes the view over when it shows the joined route's map", async () => {
+  const { stage, log } = fakeStage();
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  const view = stage.takeView("riverside-flats", "valley");
+  assert.equal(view, log.views[0], "the valley's world serves every route on the valley map");
+  assert.ok(!view.disposed);
+});
+
+test("joining a route on another map releases the view", async () => {
+  const { stage, log } = fakeStage();
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(stage.takeView("riverside-flats", "other-map"), null);
+  assert.ok(log.views[0].disposed);
+});
+
 test("joining takes the view over only when it was built in the season picked", async () => {
   const { stage, log } = fakeStage();
   let biome = "temperate";
