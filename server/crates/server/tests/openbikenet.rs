@@ -145,7 +145,9 @@ async fn hello_subscribe_and_join() {
     assert_eq!(join["name"], "Anna");
     assert_eq!(join["route"], "velodrome-250");
     assert_eq!(join["room"], "public");
-    recv_type(&mut fake, "update").await;
+    // The join carries the starting state; updates follow from the next frame.
+    let update = recv_type(&mut fake, "update").await;
+    assert_eq!(update["riders"][0]["rider"], join["rider"]);
 }
 
 #[tokio::test]
