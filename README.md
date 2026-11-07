@@ -118,11 +118,14 @@ Run `make` to list everything. The most important ones:
 | `make update` | `git pull`, rebuild, restart, wait until healthy |
 | `make test` | All tests (Rust and JavaScript) |
 | `make lint` | rustfmt, clippy (`-D warnings`), ESLint |
-| `make check` | Everything CI runs |
+| `make check` | Lint and test everything |
+| `make hooks` | Install the `pre-commit` and `pre-push` git hooks |
 | `make dev` | Run the server with local cargo, no Docker |
 | `make lock` | Create `server/Cargo.lock` — run once and commit it |
 
 If `cargo` or `npm` is not installed, the test and lint targets run them in Docker.
+Run `make hooks` once per clone to install the [pre-commit](https://pre-commit.com)
+and pre-push hooks (see [CONTRIBUTING.md](CONTRIBUTING.md#git-hooks)).
 
 ## Deploying to a server
 

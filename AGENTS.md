@@ -15,8 +15,9 @@ repeat it. Here is the operational knowledge on top of that.
   route list. A meaningful UI check requires the real server (or Docker).
 
 ## Testing
-- `make check` = lint + all tests; it runs exactly what CI runs. Run it before
-  claiming anything is done.
+- `make check` = lint + all tests; it runs exactly what the CI lint and test jobs
+  run. Run it before claiming anything is done. CI also runs the hygiene hooks
+  with `pre-commit run --all-files`; `make hooks` installs them locally.
 - Client: `node --test "test/**/*.test.js"` (plain node, fakes for sockets/timers/
   storage/devices — no browser needed). Server: `cargo test --workspace`, including
   the end-to-end WebSocket tests in `server/crates/server/tests/`.

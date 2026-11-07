@@ -827,4 +827,3 @@ function cafeModel(biome) {
   }
   return cafe;
 }
-
