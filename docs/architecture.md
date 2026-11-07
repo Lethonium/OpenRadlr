@@ -34,6 +34,7 @@ From the outside in. Each layer only depends on the ones below it.
 | Runtime | `runtime.rs` | One Tokio task owns the game (anything implementing `Game`); timer ticks and a command channel drive it |
 | Game core | `game.rs`, `studio.rs` | Connected clients, state culled per client to the riders in view, events per route, resistance updates, input validation; `studio.rs` does the same per studio room |
 | Protocol | `protocol.rs` | Message types and mapping from simulation state |
+| OpenBikeNet | `obn/` | Optional link to an OpenBikeNet server (`OPENRADLR_OBN_URL`): wire format, outbox, remote riders and the reconnecting link; remote riders live in the game core, not the sim |
 | Vehicles | `vehicle_codes.rs` | Boarding codes of all worlds, so a code finds its world |
 | Reconnecting | `resume.rs` | Resume tokens of all worlds, so a token finds its rider's world; per game the detached riders and their grace period |
 | Simulation | `crates/sim` | Route, physics, drafting, lanes, bots, races, shared vehicles, the studio's timetable and rooms — deterministic, no I/O |

@@ -1,3 +1,4 @@
+import { isRemote } from "./remoteRiders.js";
 /** Shared canvas helpers. */
 
 /** Resizes the backing store to the element size × devicePixelRatio. */
@@ -29,6 +30,7 @@ export function themeColors(element = document.documentElement) {
     me: read("--me"),
     human: read("--human"),
     bot: read("--bot"),
+    remote: read("--remote"),
     climb: read("--climb"),
     sprint: read("--sprint"),
   };
@@ -36,5 +38,6 @@ export function themeColors(element = document.documentElement) {
 
 export function riderColor(rider, myId, colors) {
   if (rider.id === myId) return colors.me;
+  if (isRemote(rider)) return colors.remote;
   return rider.is_bot ? colors.bot : colors.human;
 }
