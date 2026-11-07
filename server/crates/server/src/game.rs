@@ -2588,6 +2588,19 @@ mod tests {
     }
 
     #[test]
+    fn workout_riders_are_not_in_the_frame() {
+        let (mut game, mut frames) = obn_game(0, 4);
+        let (anna, _) = join_workout(&mut game, "Anna");
+        game.workout(anna, Some(Exercise::Plank));
+        assert!(game.world().rider(anna).unwrap().workout);
+        for _ in 0..game.settings().tick_hz {
+            game.tick();
+        }
+        let frame = frames.try_recv().expect("one frame after a second");
+        assert!(frame.is_empty(), "workout riders are never shared: {frame:?}");
+    }
+
+    #[test]
     fn full_link_channel_never_blocks_the_tick() {
         let (mut game, _frames) = obn_game(0, 1);
         join(&mut game, "Anna");
