@@ -195,6 +195,15 @@ Things to know:
   processed an upload, the server sets the sport type to *Virtual Ride*,
   which keeps it off real-world segments.
 
+## OpenBikeNet (optional)
+
+Set `OPENRADLR_OBN_URL` (a `ws://` or `wss://` URL of an OpenBikeNet server) to share the
+velodrome with riders of other apps. The server then sends the name, position, speed, power
+and cadence of the riders on the velodrome, and shows the riders of other apps next to yours
+(they have no bots there). Empty or unset = not connected; nothing is sent. If the connection
+drops, the other apps' riders vanish and the server reconnects with a growing pause (1 s up to
+a minute). `/api/info` marks the route with `"shared": true` while the link is configured.
+
 ## Protection against floods and scripts
 
 | Setting | Default | What it limits |

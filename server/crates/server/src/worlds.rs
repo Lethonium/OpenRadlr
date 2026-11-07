@@ -16,6 +16,8 @@ pub struct WorldEntry {
     pub elevation_gain_m: f64,
     /// The game of the route's map (shared with the map's other routes).
     pub game: GameHandle,
+    /// The route is shared with other apps through a connected OpenBikeNet link.
+    pub shared: bool,
 }
 
 impl WorldEntry {
@@ -163,6 +165,7 @@ mod tests {
                 length_m: 1200.0,
                 elevation_gain_m: 0.0,
                 game: game.clone(),
+                shared: false,
             })
             .collect();
         (game, entries)
