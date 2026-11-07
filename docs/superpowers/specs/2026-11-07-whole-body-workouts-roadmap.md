@@ -18,7 +18,7 @@ sequence of figures (poses), and the avatar shows each one.
 
 | # | Sub-project | State |
 |---|---|---|
-| 0 | UI fixes for the shipped workout | next |
+| 0 | UI fixes for the shipped workout | in review (`fix/workout-ui`) |
 | 1 | Yoga | after 0 |
 | 2 | Cycling (ERG) library | after 1 |
 | 3 | Bodyweight exercises and research-based presets | after 2 |
@@ -41,8 +41,9 @@ Reported on a real device after #35:
   usual 2D view or another preview.
 - **Empty blue rectangle** beside the statue in the menu preview (already
   visible in the #35 screenshots as a dark rectangle in the middle).
-- **Workout card list**: the top card is clipped mid-text when scrolled, and
-  the category tag on each card runs off the panel's right edge.
+- ~~Workout card list clipped and running off the right edge~~: not a bug. The
+  list scrolls inside its panel, and nothing overflows at 1024–1366 px in
+  German; the photo was cropped.
 
 These are bugs in existing code: debug each, then a short design, no spec. One
 PR.
