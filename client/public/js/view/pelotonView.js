@@ -1,5 +1,7 @@
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { prepareCanvas, riderColor } from "./canvas.js";
+import { isRemote, riderLabel } from "./remoteRiders.js";
+import { t } from "../i18n/i18n.js";
 
 /**
  * Close-up of the road around me: distance runs left to right, lanes are
@@ -27,7 +29,7 @@ export function pelotonItems(me, riders, route, window = PELOTON_WINDOW) {
   const solo = ridersInWindow(me, soloRiders(riders), route, window).map(({ rider, gap }) => ({
     rider,
     gap,
-    label: rider.is_bot ? `${rider.name} · bot` : rider.name,
+    label: isRemote(rider) ? riderLabel(rider, t) : rider.is_bot ? `${rider.name} · bot` : rider.name,
     lengthM: 1.8,
     big: false,
     mine: rider.id === me.id,

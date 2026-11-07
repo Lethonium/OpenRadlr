@@ -28,6 +28,7 @@ OPENRADLR_ALLOW_SIMULATED_TRAINER=false    # only real trainers on the start scr
 OPENRADLR_ALLOW_PADDLE_MODE=true           # phone paddles (marked 📱, no Strava, no ride files)
 OPENRADLR_PRIVACY_URL=https://ride.example.org/privacy/  # your privacy policy, linked in the start menu
 OPENRADLR_ANALYTICS_DOMAIN=              # optional Plausible analytics, off when empty (see .env.example)
+# OPENRADLR_OBN_URL=wss://obn.example/v0   # optional: share the velodrome with other apps (see OpenBikeNet below)
 OPENRADLR_HTTP_BIND=127.0.0.1              # only the proxy on this machine can reach it
 OPENRADLR_HTTP_PORT=8080
 COMPOSE_PROFILES=                         # leave the bundled Caddy off
@@ -194,6 +195,20 @@ Things to know:
   [routes](routes.md#on-the-map)), so Strava shows a map. Once Strava has
   processed an upload, the server sets the sport type to *Virtual Ride*,
   which keeps it off real-world segments.
+
+## OpenBikeNet (optional)
+
+Set `OPENRADLR_OBN_URL` (a `ws://` or `wss://` URL of an OpenBikeNet server) to share the
+velodrome with riders of other apps. The server then sends the name, position, speed, power
+and cadence of the riders on the velodrome, and shows the riders of other apps next to yours
+(they have no bots there). Empty or unset = not connected; nothing is sent. If the connection
+drops, the other apps' riders vanish and the server reconnects with a growing pause (1 s up to
+a minute). `/api/info` marks the route with `"shared": true` while the link is configured.
+
+- Riders doing a workout, riders off the route and bots are never sent.
+- A rider of another app that is silent for 10 s is dropped.
+- `ws://` is unencrypted: rider names and values cross the network in the clear. Use `wss://`
+  whenever the OpenBikeNet server is not on your own machine or network.
 
 ## Protection against floods and scripts
 

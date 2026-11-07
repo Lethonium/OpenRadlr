@@ -31,10 +31,17 @@ test("zones from the route file are used as given", () => {
 });
 
 test("a network road has exactly its zones: none means none", () => {
-  const road = new RouteGeometry({ id: "r", name: "r", lanes: 4, seed: 1, loop: false, points: [[0, 0, 10], [3000, 0, 10]], zones: [] });
+  const file = { id: "r", name: "r", lanes: 4, seed: 1, loop: false, points: [[0, 0, 10], [3000, 0, 10]] };
+  const road = new RouteGeometry(file);
   assert.ok(resolveZones(road).villages.length > 0, "a plain route without zones gets defaults");
   road.explicitZones = true;
   assert.deepEqual(resolveZones(road), { villages: [], rivers: [], forests: [], cliffs: [] });
+});
+
+test("an explicit empty zones list means no scenery", () => {
+  const file = { id: "v", name: "v", lanes: 4, seed: 1, points: [[0, 0, 10], [3000, 0, 10]], zones: [] };
+  assert.ok(resolveZones(new RouteGeometry({ ...file, zones: undefined })).villages.length > 0, "without the list: defaults");
+  assert.deepEqual(resolveZones(new RouteGeometry(file)), { villages: [], rivers: [], forests: [], cliffs: [] });
 });
 
 test("cliff zones resolve to ranges and plain roads have none", () => {
@@ -54,8 +61,9 @@ test("invalid and unknown zones are ignored", () => {
 });
 
 test("default zones are deterministic and keep clear of the start and climbs", () => {
-  const r = new RouteGeometry(JSON.parse(readFileSync(new URL("../../routes/col-de-la-forge.json", import.meta.url))));
-  r.zones = [];
+  const file = JSON.parse(readFileSync(new URL("../../routes/col-de-la-forge.json", import.meta.url)));
+  delete file.zones;
+  const r = new RouteGeometry(file);
   const a = resolveZones(r);
   const b = resolveZones(r);
   assert.deepEqual(a, b);

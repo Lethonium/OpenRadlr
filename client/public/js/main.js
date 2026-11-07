@@ -78,7 +78,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
@@ -942,6 +942,9 @@ function renderStartMenu() {
     renderStartMenu();
   });
   $("stage-stats").textContent = activity === "events" ? "" : stageStats(selected);
+  const shared = sharedNote(selected);
+  $("shared-note").hidden = !shared;
+  $("shared-note").textContent = shared;
   const cards = routesFor(activity, routes);
   $("route-list").hidden = !showsCards(activity, cards);
   renderRoutes($("route-list"), cards, selected?.id ?? null, (id) => {

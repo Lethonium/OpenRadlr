@@ -23,6 +23,8 @@ test("race status and online summary", () => {
   assert.equal(raceStatus({ phase: "countdown", remaining_s: 9.2, laps: 1 }), "Rennen startet in 10 s · 1 Runde");
   assert.equal(raceStatus({ phase: "countdown", remaining_s: 9, laps: 3 }), "Rennen startet in 9 s · 3 Runden");
   assert.equal(onlineSummary(4, [], { humans: 2, bots: 1 }).text, "4 Fahrer online · 2 auf dieser Strecke · 1 Bot");
+  assert.equal(onlineSummary(1, [], { humans: 1, bots: 0, remote: 1 }).text, "1 Fahrer online · 1 aus einer anderen App");
+  assert.equal(onlineSummary(1, [], { humans: 1, bots: 0, remote: 3 }).text, "1 Fahrer online · 3 aus anderen Apps");
 });
 
 test("event banner, FTP offer, split labels and vehicle label", () => {

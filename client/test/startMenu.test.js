@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction, routeDescription } from "../public/js/view/startMenu.js";
+import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction, routeDescription, sharedNote } from "../public/js/view/startMenu.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 const routes = [
@@ -218,6 +218,7 @@ test("a route card: name, character, figures and riders; its description waits u
     riders: "2 riders",
     active: true,
     special: false,
+    shared: false,
   });
   assert.equal(routeCard({ id: "workout", kind: "workout", name: "Workout" }).riders, null);
   assert.equal(routeCard({ ...studio, kind: "studio" }).tag, "Class");
@@ -251,4 +252,17 @@ test("a bundled route's description comes from the dictionary, else the server's
   assert.equal(routeDescription({ id: "riverside-flats", description: "Server text." }), "Fast and flat down the river valley, made for drafting and sprints.");
   assert.equal(routeDescription({ id: "someone-elses-route", description: "Server text." }), "Server text.");
   assert.equal(routeDescription({ id: "someone-elses-route" }), "");
+});
+
+test("a shared route shows the shared badge and note", () => {
+  const velodrome = { id: "velodrome", name: "Velodrome", length_m: 250, players: 0, shared: true };
+  assert.equal(routeCard(velodrome).shared, true);
+  assert.equal(sharedNote(velodrome), "Riders from other apps ride here too. Shared with them: your name, position, speed, power and cadence.");
+});
+
+test("other routes don't", () => {
+  assert.equal(routeCard(routes[0]).shared, false);
+  assert.equal(sharedNote(routes[0]), "");
+  assert.equal(sharedNote(null), "");
+  assert.equal(sharedNote({ id: "x", shared: false }), "");
 });

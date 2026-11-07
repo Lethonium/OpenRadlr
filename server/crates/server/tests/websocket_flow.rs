@@ -204,7 +204,15 @@ async fn info_lists_every_route_with_the_default_first() {
     assert_eq!(routes[0]["id"], "rolling-hills");
     assert_eq!(info["route"]["id"], "rolling-hills");
     assert_eq!(info["players"], 0);
-    assert!(routes.iter().all(|r| r["length_m"].as_f64().unwrap() > 3000.0));
+    // The velodrome is a 250 m oval; every other bundled route is a road route.
+    assert!(routes
+        .iter()
+        .filter(|r| r["id"] != "velodrome")
+        .all(|r| r["length_m"].as_f64().unwrap() > 3000.0));
+    assert!(
+        routes.iter().any(|r| r["id"] == "velodrome"),
+        "the velodrome is bundled"
+    );
 
     let other = routes[1]["id"].as_str().unwrap();
     let (status, body) = http_get(addr, &format!("/api/route?id={other}")).await;
