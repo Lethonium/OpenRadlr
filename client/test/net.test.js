@@ -25,6 +25,7 @@ test("builds protocol messages", () => {
   assert.deepEqual(ClientMessages.boardVehicle("ABC234"), { type: "board_vehicle", code: "ABC234" });
   assert.deepEqual(ClientMessages.leaveVehicle(), { type: "leave_vehicle" });
   assert.deepEqual(ClientMessages.pause(), { type: "pause" });
+  assert.deepEqual(ClientMessages.stay(), { type: "stay" });
   assert.deepEqual(ClientMessages.resume(), { type: "resume" });
   assert.deepEqual(ClientMessages.joinRace(), { type: "join_race" });
   assert.deepEqual(ClientMessages.joinEvent("e1"), { type: "join_event", event_id: "e1" });
@@ -33,6 +34,10 @@ test("builds protocol messages", () => {
   assert.deepEqual(ClientMessages.telemetry({ power: 200, cadence: null }), { type: "telemetry", power: 200 });
   assert.deepEqual(ClientMessages.telemetry({ power: NaN, cadence: 90 }), { type: "telemetry", power: 0, cadence: 90 });
   assert.deepEqual(ClientMessages.laneLeft(), { type: "input", action: "lane_left" });
+});
+
+test("parses the AFK warning from the server", () => {
+  assert.notEqual(parseServerMessage('{"type":"afk_warning","leave_in_s":120,"can_stay":true}'), null);
 });
 
 test("workout messages carry the exercise or null", () => {
@@ -168,4 +173,25 @@ test("workout sends the current exercise after joining", async () => {
     { type: "workout", exercise: "squats" },
     { type: "workout", exercise: null },
   ]);
+});
+
+test("keeps the physics from joined", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 90 });
+  socket().open();
+  socket().receive({ type: "welcome", server_name: "Test", route_id: "loop" });
+  const physics = { mass_kg: 100, cda_m2: 0.452, crr: 0.005, air_density: 1.225 };
+  socket().receive({ type: "joined", rider_id: 7, physics });
+  await joined;
+  assert.deepEqual(connection.physics, physics);
+});
+
+test("physics is null when the server sends none", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 90 });
+  socket().open();
+  socket().receive({ type: "welcome", server_name: "Test", route_id: "loop" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.equal(connection.physics, null);
 });

@@ -8,7 +8,7 @@ import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { buildTerrain, buildWorld, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -234,6 +234,27 @@ test("the outdoor gym stands beside the café, off the road, with eight spots fa
   assert.equal(buildOutdoorGym(route, null, { structures, bright, occupancy: new Occupancy(), avoid: () => true }), null, "never in a river or on a road");
 });
 
+test("a gym knows its café and where its statue row stands behind the pad", () => {
+  const make = (extra) => {
+    const occupancy = new Occupancy();
+    const gym = buildOutdoorGym(route, null, { structures: new MeshBuilder(), bright: new MeshBuilder(), occupancy, ...extra });
+    return { gym, occupancy };
+  };
+  assert.equal(make({ cafeId: "valley-cafe" }).gym.cafeId, "valley-cafe");
+  const { gym, occupancy } = make({});
+  assert.equal(gym.cafeId, null, "no café id without a network");
+  const frame = roadFrame(route, GYM_DISTANCE);
+  const row = gym.statueRow;
+  assert.ok(Math.abs(Math.hypot(row.position[0] - gym.center[0], row.position[2] - gym.center[2]) - 8) < 0.01, "8 m behind the mat");
+  assert.ok(lateralOf(frame, row.position) > lateralOf(frame, gym.center), "on the side away from the road");
+  assert.equal(row.yaw, gym.yaw);
+  for (const x of [-7.5, 7.5]) {
+    const px = row.position[0] + x * Math.cos(gym.yaw);
+    const pz = row.position[2] - x * Math.sin(gym.yaw);
+    assert.ok(occupancy.blocked(px, pz), `the row's end at x ${x} is reserved`);
+  }
+});
+
 // --- one map for all routes: the road network (ADR 0010, #26) ---------------------
 
 import { RoadNetwork } from "../public/js/route/network.js";
@@ -387,6 +408,22 @@ test("the map world: terrain hugs every road and rivers cross them only at bridg
 test("junction pads lie under every road and over the road bed", () => {
   assert.ok(JUNCTION_LIFT < ROAD_LIFT.other - depthStep(RIDE_LENS, 150), "under the other roads");
   assert.ok(JUNCTION_LIFT > -0.35 + 0.1, "over the terrain's road bed");
+});
+
+test("the ploughed bank opens at forks and corners, not where a road runs through", () => {
+  const clearings = junctionClearings(network);
+  const cleared = (id) => {
+    const node = network.nodes.get(id);
+    return clearings.some(([x, z]) => Math.hypot(x - node.x, z + node.y) < 1);
+  };
+  for (const id of ["hill-cafe", "east-fork", "west-fork", "south-east", "north-east", "north-west"]) assert.ok(cleared(id), `${id} opens the bank`);
+  assert.ok(!cleared("valley-cafe"), "two roads continue straight through the café");
+  assert.ok(!cleared("beach-cafe"), "the coast road runs straight through its café");
+
+  const hill = network.nodes.get("hill-cafe");
+  assert.equal(junctionBankAt(clearings, hill.x, -hill.y), 0, "flat on the apron");
+  const beyond = -hill.y - (JUNCTION_BANK_CLEAR + JUNCTION_BANK_FADE);
+  assert.equal(junctionBankAt(clearings, hill.x, beyond), 1, "the full bank resumes beyond the fade");
 });
 
 test("every café of the map gets its café, whichever route you ride", () => {
@@ -605,7 +642,8 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["chunks", "clouds", "gyms", "meshes", "overview", "rivers", "rotors", "spectators", "water"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "clouds", "gyms", "meshes", "overview", "rivers", "rotors", "spectatorMeshes", "spectators", "water", "weather"]);
+  assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));
   assert.equal(new Set(buffers).size, buffers.length, "each buffer once");
@@ -738,4 +776,11 @@ test("on the real map the cliff rail is on the side the sea is nearer", () => {
     assert.ok(here < away, `post at ${best.d} m is on the land side (${here} m / ${away} m to the sea)`);
   }
   assert.ok(checked > 100, `${checked} rail posts by the sea`);
+});
+
+test("every gym on the map knows a distinct café of the network", () => {
+  const ids = mapWorld.gyms.map((g) => g.cafeId);
+  const cafeIds = network.cafes().map((c) => c.id);
+  for (const id of ids) assert.ok(cafeIds.includes(id), `${id} is a café of the network`);
+  assert.equal(new Set(ids).size, ids.length, "distinct");
 });

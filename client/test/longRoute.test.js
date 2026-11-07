@@ -5,6 +5,7 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { FloatBuffer } from "../public/js/view3d/meshBuilder.js";
 import { buildTerrain, terrainModel } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
+import { BIOME_IDS } from "../public/js/view3d/biomes/index.js";
 
 const rollingHills = () => new RouteGeometry(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
 
@@ -73,6 +74,18 @@ test("a long route's world is thinned to a size a browser can build", () => {
   const scene = buildSceneNow({ id: "big", name: "Big", lanes: 4, seed: 9, points: route.nodes.map((n) => [n.x, n.y, n.elevation]) });
   const perKm = chunkTriangles(scene) / (route.length / 1000);
   assert.ok(perKm < 12_000, `${Math.round(perKm)} triangles per km`);
+});
+
+test("a long route stays inside the triangle budget in every biome", () => {
+  const route = bigLoop(30000, 20000);
+  const file = { id: "big", name: "Big", lanes: 4, seed: 9, points: route.nodes.map((n) => [n.x, n.y, n.elevation]) };
+  const temperate = chunkTriangles(buildSceneNow(file));
+  for (const id of BIOME_IDS) {
+    const triangles = chunkTriangles(buildSceneNow(file, [], null, id));
+    const perKm = triangles / (route.length / 1000);
+    assert.ok(perKm < 12_000, `${id}: ${Math.round(perKm)} triangles per km`);
+    assert.ok(triangles <= temperate * 1.1, `${id}: ${triangles} triangles vs temperate ${temperate}`);
+  }
 });
 
 test("FloatBuffer grows and trims", () => {

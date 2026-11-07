@@ -8,14 +8,17 @@
 
 pub const GRAVITY: f64 = 9.806_65;
 
-/// Tunable physical constants. Defaults are reasonable starting points for a
-/// road bike on asphalt; tune them with real riders.
+/// Tunable physical constants. Defaults are calibrated against the rider table
+/// in [`crate::calibration`] (#22); a retune must keep its tests passing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PhysicsParams {
     /// Rolling resistance coefficient.
     pub crr: f64,
-    /// Drag area of an undrafted rider in m².
+    /// Drag area in m² of an undrafted rider weighing `cda_reference_kg`;
+    /// other riders scale from it, see [`rider_cda`].
     pub cda: f64,
+    /// Rider weight in kg at which the drag area is `cda`.
+    pub cda_reference_kg: f64,
     /// Air density in kg/m³.
     pub air_density: f64,
     /// Mass of the bike in kg, added to the rider's mass.
@@ -29,10 +32,11 @@ pub struct PhysicsParams {
 impl Default for PhysicsParams {
     fn default() -> Self {
         Self {
-            crr: 0.004,
-            cda: 0.32,
+            crr: 0.005,
+            cda: 0.40,
+            cda_reference_kg: 75.0,
             air_density: 1.225,
-            bike_mass_kg: 9.0,
+            bike_mass_kg: 10.0,
             min_speed_for_power: 1.0,
             max_speed: 30.0,
         }
@@ -49,13 +53,47 @@ pub struct Body {
 }
 
 impl Body {
-    /// An ordinary bike as described by the physics parameters.
-    pub fn bike(params: &PhysicsParams) -> Body {
+    /// An ordinary bike as described by the physics parameters, with the drag
+    /// area of a rider weighing `rider_mass_kg`.
+    pub fn bike(params: &PhysicsParams, rider_mass_kg: f64) -> Body {
         Body {
             frame_mass_kg: params.bike_mass_kg,
-            cda: params.cda,
+            cda: rider_cda(params, rider_mass_kg),
             crr: params.crr,
         }
+    }
+}
+
+/// Lightest and heaviest rider weights (kg) the drag area scales between: the
+/// weights a join accepts.
+const CDA_MASS_RANGE: (f64, f64) = (30.0, 200.0);
+
+/// Drag area of a solo rider: `cda · (m / cda_reference_kg)^(2/3)`.
+/// The rider grows alike in every direction: frontal area scales with
+/// length², length with mass^(1/3). `m` is clamped to 30–200 kg.
+pub fn rider_cda(params: &PhysicsParams, rider_mass_kg: f64) -> f64 {
+    let mass = rider_mass_kg.clamp(CDA_MASS_RANGE.0, CDA_MASS_RANGE.1);
+    params.cda * (mass / params.cda_reference_kg).powf(2.0 / 3.0)
+}
+
+/// The numbers a solo rider is ridden with, as the client needs them for
+/// virtual shifting.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RiderPhysics {
+    /// Rider plus bike.
+    pub mass_kg: f64,
+    pub cda_m2: f64,
+    pub crr: f64,
+    pub air_density: f64,
+}
+
+pub fn rider_physics(params: &PhysicsParams, rider_mass_kg: f64) -> RiderPhysics {
+    let body = Body::bike(params, rider_mass_kg);
+    RiderPhysics {
+        mass_kg: rider_mass_kg + body.frame_mass_kg,
+        cda_m2: body.cda,
+        crr: body.crr,
+        air_density: params.air_density,
     }
 }
 
@@ -110,7 +148,7 @@ mod tests {
                 &params,
                 &StepInput {
                     rider_mass_kg: 75.0,
-                    body: Body::bike(&params),
+                    body: Body::bike(&params, 75.0),
                     speed,
                     power_watts: power,
                     grade_percent: grade,
@@ -150,12 +188,6 @@ mod tests {
     }
 
     #[test]
-    fn two_hundred_watts_on_the_flat_is_a_realistic_speed() {
-        let v = kmh(ride(200.0, 0.0, 1.0, 300.0));
-        assert!((32.0..37.0).contains(&v), "speed was {v} km/h");
-    }
-
-    #[test]
     fn climbing_is_slower_than_riding_flat() {
         let flat = ride(250.0, 0.0, 1.0, 300.0);
         let climb = ride(250.0, 6.0, 1.0, 300.0);
@@ -180,7 +212,7 @@ mod tests {
                 &params,
                 &StepInput {
                     rider_mass_kg: 75.0,
-                    body: Body::bike(&params),
+                    body: Body::bike(&params, 75.0),
                     speed,
                     power_watts: 0.0,
                     grade_percent: 0.0,
@@ -205,5 +237,40 @@ mod tests {
     #[test]
     fn speed_is_capped() {
         assert!(ride(5000.0, -20.0, 1.0, 120.0) <= PhysicsParams::default().max_speed);
+    }
+
+    #[test]
+    fn rider_cda_is_cda_at_the_reference_weight() {
+        let p = PhysicsParams::default();
+        assert_eq!(rider_cda(&p, 75.0), p.cda);
+    }
+
+    #[test]
+    fn rider_cda_grows_with_two_thirds_of_mass() {
+        let p = PhysicsParams::default();
+        assert!((rider_cda(&p, 150.0) - p.cda * 2f64.powf(2.0 / 3.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rider_cda_clamps_light_riders() {
+        let p = PhysicsParams::default();
+        assert_eq!(rider_cda(&p, 10.0), rider_cda(&p, 30.0));
+    }
+
+    #[test]
+    fn rider_cda_clamps_heavy_riders() {
+        let p = PhysicsParams::default();
+        assert_eq!(rider_cda(&p, 500.0), rider_cda(&p, 200.0));
+    }
+
+    #[test]
+    fn rider_physics_adds_the_bike() {
+        assert_eq!(rider_physics(&PhysicsParams::default(), 90.0).mass_kg, 100.0);
+    }
+
+    #[test]
+    fn rider_physics_uses_the_rider_cda() {
+        let p = PhysicsParams::default();
+        assert_eq!(rider_physics(&p, 90.0).cda_m2, rider_cda(&p, 90.0));
     }
 }

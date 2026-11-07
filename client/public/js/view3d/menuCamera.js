@@ -41,6 +41,11 @@ export const MENU_CAMERA = Object.freeze({
   gymRate: 0.09,
   gymDistance: 38,
   gymHeight: 17,
+  /** Close on one gym statue: metres in front of the plinth and above its top, the sideways swing (rad) and its rate (rad/s). */
+  statueDistance: 4.5,
+  statueHeight: 2,
+  statueSwing: 0.349,
+  statueRate: 0.25,
 });
 
 /** Smootherstep: speed and acceleration both start and end at zero. */
@@ -110,6 +115,20 @@ export function gymPose(gym, overview, angle, settings = MENU_CAMERA) {
   return { eye, target: [cx, cy + 1.2, cz] };
 }
 
+/**
+ * Close in front of a gym statue (`{position, yaw, top}` from `View3D.statueTargets`),
+ * on the road side, looking at the figure's chest; `phase` swings the eye sideways.
+ */
+export function statuePose(target, overview, phase, settings = MENU_CAMERA) {
+  const [px, py, pz] = target.position;
+  // The figures face the row's local −z: yaw 0 looks down −z.
+  const angle = Math.atan2(-Math.cos(target.yaw), -Math.sin(target.yaw)) + settings.statueSwing * Math.sin(phase);
+  const eye = [px + Math.cos(angle) * settings.statueDistance, py + settings.statueHeight, pz + Math.sin(angle) * settings.statueDistance];
+  // A hill in front of the plinth lifts the camera, never into it.
+  eye[1] = Math.max(eye[1], groundAt(overview, eye[0], eye[2]) + 1.2);
+  return { eye, target: [px, py + 0.9, pz] };
+}
+
 // --- shots: each view keeps moving by itself ---------------------------------
 // `ctx` holds the overview, the settings and whether anything moves (reduced motion).
 // advance(step, landed): the follow and the gym orbit only start once the camera is there.
@@ -176,6 +195,20 @@ function gymShot(ctx, gym) {
   };
 }
 
+function statueShot(ctx, target) {
+  return {
+    view: "statue",
+    target,
+    phase: 0,
+    advance(step, landed) {
+      if (ctx.moving && landed) this.phase = (this.phase + ctx.settings.statueRate * step) % (2 * Math.PI);
+    },
+    pose() {
+      return statuePose(target, ctx.overview, this.phase, ctx.settings);
+    },
+  };
+}
+
 /** Holds a pose: the start of a flight that interrupts flights already interrupted. */
 function stillShot(pose) {
   return { view: "still", advance() {}, pose: () => ({ eye: pose.eye.slice(), target: pose.target.slice() }) };
@@ -234,7 +267,7 @@ export class MenuCamera {
     ({ eye: this.eye, target: this.target } = this.#shot.pose());
   }
 
-  /** "intro", "island", "route" or "gym": where the camera is, or is flying to. */
+  /** "intro", "island", "route", "gym" or "statue": where the camera is, or is flying to. */
   get view() {
     return this.#shot.view;
   }
@@ -266,6 +299,12 @@ export class MenuCamera {
   showGym(gym) {
     if (this.#goal.view === "gym" && this.#goal.gym === gym) return;
     this.#go(gymShot(this.#ctx, gym));
+  }
+
+  /** Glide down to a gym statue (`{position, yaw, top}`) and look at it from the road side. */
+  showStatue(target) {
+    if (this.#goal.view === "statue" && this.#goal.target === target) return;
+    this.#go(statueShot(this.#ctx, target));
   }
 
   #go(next) {

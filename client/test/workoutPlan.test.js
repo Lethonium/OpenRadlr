@@ -37,3 +37,9 @@ test("the position knows how many blocks the plan has", () => {
   const plan = createPlan({ id: "p", name: "P", blocks: [{ kind: "exercise", exercise: "squats", seconds: 40 }, { kind: "rest", seconds: 20 }] });
   assert.deepEqual([planPositionAt(plan, 5).count, planPositionAt(plan, 99).count], [2, 2]);
 });
+test("a plan refuses an unknown venue", () => {
+  assert.throws(() => createPlan({ id: "p", name: "P", venue: "nowhere", blocks: [{ kind: "rest", seconds: 1 }] }), /Unknown venue/);
+});
+test("a plan without a venue has none", () => {
+  assert.equal(createPlan({ id: "p", name: "P", blocks: [{ kind: "rest", seconds: 1 }] }).venue, null);
+});

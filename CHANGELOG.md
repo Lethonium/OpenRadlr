@@ -7,10 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A rider who sits at 0 W for 30 minutes gets a "Still riding?" warning with Stay and Leave now, two minutes to answer. Stay gives three more reminders 10 minutes apart, then a final one with Leave now only; no answer removes the rider, so an idle rider no longer holds a seat. Pedalling resets the clock, and workouts are exempt. `OPENRADLR_AFK_TIMEOUT_S=0` turns it off. Outcomes are counted in `openradlr_afk_events_total`.
+- Seasons: a rider can pick how the world looks (Settings, or the Season picker in the ride menu) without changing the road, the café, the gym or where anything stands. Temperate and Winter are available; trees, road, buildings and terrain change shape, never place. Winter re-dresses its world: posts become snowmen (yellow-scarfed every kilometre), farm animals become caribou, polar bears and walruses, hay bales become firewood stacks, village lamps become wooden lanterns, roadside spectators become clapping penguins in winter coats, event barriers change colour, the sky and light turn pale and cold with a lower, broader cloud ceiling and falling snow, the river freezes into opaque ice with wind-blown snow patches, and ploughed snow banks open up where roads meet instead of crossing them. The season pickers preview each season with colour swatches. A season changed at any time — also while a world is still building, or in the start menu just before a ride — carries into the ride; the last pick wins. The pick is remembered per browser, and `?biome=<id>` previews one. See ADR 0018.
 - German translation and a language selector (start menu and Rider panel). The language follows the browser by default and the choice is remembered. Server content such as route names stays as the server sends it.
 - The in-game menu is a dialog centred over the dimmed ride: a page list (Overview, View, Vehicle, Race, Events, Training, Settings) next to the open page, full screen with the list first on a phone. Photo and Finish ride stay pinned at its foot (#19).
 - The menu's Overview shows the ride so far: power over the last 10 minutes, weighted power, load and best efforts, with a live power, speed and grade strip on top (#19).
 - A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
+- Workouts at their own café gym with statues of their figures, and workout cards with a block strip (#26)
+
+### Changed
+
+- Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
+- Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
 - Name labels no longer float over houses and hills: a rider out of sight (the GPU checks each one) has no label, with a short delay so labels don't flicker at an edge. Labels point at their rider with a small tail and get smaller and fainter with distance (#15).

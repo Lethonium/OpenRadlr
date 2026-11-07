@@ -11,6 +11,7 @@
 //! | `/auth/*`, `/api/me`, `/api/strava/*` | Strava account and uploads (see [`crate::auth`]) |
 //! | `/*`               | Browser client (only if a static dir is set)         |
 
+use crate::afk::{AfkCounts, AfkStats};
 use crate::app::unix_now_s;
 use crate::auth::{self, Strava};
 use crate::connection;
@@ -82,6 +83,8 @@ pub struct AppState {
     pub allow_paddle_mode: bool,
     /// Community distance totals (#65).
     pub stats: DistanceStats,
+    /// AFK warning counters, shared by all connections.
+    pub afk: AfkStats,
 }
 
 #[derive(Debug, Serialize)]
@@ -323,6 +326,7 @@ async fn metrics(State(state): State<AppState>) -> ([(header::HeaderName, &'stat
         state.max_paddle_players,
         distance.trainer_m,
         distance.paddle_m,
+        state.afk.snapshot(),
     );
     (
         [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
@@ -337,6 +341,7 @@ fn metrics_body(
     phone_capacity: usize,
     trainer_m: f64,
     paddle_m: f64,
+    afk: AfkCounts,
 ) -> String {
     format!(
         "# HELP openradlr_players Current connected riders, including bots.\n# TYPE openradlr_players gauge\nopenradlr_players {}\n\
@@ -344,6 +349,8 @@ fn metrics_body(
          # HELP openradlr_player_capacity Configured capacity for trainer riders.\n# TYPE openradlr_player_capacity gauge\nopenradlr_player_capacity {}\n\
          # HELP openradlr_phone_player_capacity Configured capacity for phone riders.\n# TYPE openradlr_phone_player_capacity gauge\nopenradlr_phone_player_capacity {}\n\
          # HELP openradlr_distance_metres_total Community distance recorded by device.\n# TYPE openradlr_distance_metres_total counter\nopenradlr_distance_metres_total{{device=\"trainer\"}} {}\nopenradlr_distance_metres_total{{device=\"paddle\"}} {}\n\
+         # HELP openradlr_afk_events_total AFK warnings and their outcomes since the server started.\n# TYPE openradlr_afk_events_total counter\n\
+         openradlr_afk_events_total{{event=\"warning\"}} {}\nopenradlr_afk_events_total{{event=\"stayed\"}} {}\nopenradlr_afk_events_total{{event=\"left\"}} {}\nopenradlr_afk_events_total{{event=\"timeout\"}} {}\n\
          ",
         players,
         phone_players,
@@ -351,21 +358,37 @@ fn metrics_body(
         phone_capacity,
         trainer_m,
         paddle_m,
+        afk.warning,
+        afk.stayed,
+        afk.left,
+        afk.timeout,
     )
 }
 
 #[cfg(test)]
 mod metrics_tests {
     use super::metrics_body;
+    use crate::afk::AfkCounts;
 
     #[test]
     fn metrics_export_only_aggregate_operational_stats() {
-        let output = metrics_body(4, 1, 50, 20, 12_500.0, 750.0);
+        let afk = AfkCounts {
+            warning: 3,
+            stayed: 2,
+            left: 1,
+            timeout: 0,
+        };
+        let output = metrics_body(4, 1, 50, 20, 12_500.0, 750.0, afk);
 
         assert!(output.contains("openradlr_players 4\n"));
         assert!(output.contains("openradlr_phone_players 1\n"));
         assert!(output.contains("openradlr_distance_metres_total{device=\"trainer\"} 12500\n"));
         assert!(output.contains("openradlr_distance_metres_total{device=\"paddle\"} 750\n"));
+        assert!(output.contains("# TYPE openradlr_afk_events_total counter\n"));
+        assert!(output.contains("openradlr_afk_events_total{event=\"warning\"} 3\n"));
+        assert!(output.contains("openradlr_afk_events_total{event=\"stayed\"} 2\n"));
+        assert!(output.contains("openradlr_afk_events_total{event=\"left\"} 1\n"));
+        assert!(output.contains("openradlr_afk_events_total{event=\"timeout\"} 0\n"));
         assert!(!output.contains("name="));
         assert!(!output.contains("token"));
     }

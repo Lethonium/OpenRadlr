@@ -14,6 +14,8 @@ export class GameConnection extends Emitter {
   serverInfo = null;
   /** Brings this rider back after a dropped connection (from `joined`, #73). */
   resumeToken = null;
+  /** The server's physics for this rider (`joined.physics`, #22), `null` from an older server. */
+  physics = null;
   /** How long the server keeps a dropped rider, in seconds (from `welcome`). */
   graceS = 0;
 
@@ -48,6 +50,7 @@ export class GameConnection extends Emitter {
             joined = true;
             this.riderId = message.rider_id;
             this.resumeToken = message.resume_token ?? null;
+            this.physics = message.physics ?? null;
             resolve(message.rider_id);
             break;
           case "error":
@@ -120,6 +123,11 @@ export class GameConnection extends Emitter {
 
   resume() {
     this.#send(ClientMessages.resume());
+  }
+
+  /** Tells the server the rider is still there after an AFK warning. */
+  stay() {
+    this.#send(ClientMessages.stay());
   }
 
   /** Picks the road for the next junction (`null`: stay on the route). */

@@ -58,6 +58,17 @@ export function resolvePreset(mode, date = new Date()) {
 }
 
 /**
+ * A time preset with the biome's optional overrides for that time of day, and
+ * the lens's haze applied to the fog. A biome only overrides what it needs:
+ * the sun stays where the time of day put it, while the sky, bounce light,
+ * tint and visibility can all change with the season.
+ */
+export function resolvedLight(preset, biome, haze = 1) {
+  const merged = { ...preset, ...(biome?.light?.[preset.key] ?? {}) };
+  return { ...merged, fog: merged.fog.map((f) => f * haze) };
+}
+
+/**
  * Light view-projection for the shadow map: an orthographic box of
  * ±`halfSize` metres around `focus`, looking along the sun. The focus is
  * snapped to whole shadow-map texels so shadows do not shimmer as you ride.

@@ -111,8 +111,8 @@
 
             <fieldset id="workout-setup" hidden>
               <legend data-i18n="workout.title">Workout</legend>
-              <label><span data-i18n="workout.circuit">Circuit</span> <select id="workout-preset" name="workout-preset"></select></label>
-              <p id="workout-preset-summary" class="field-hint"></p>
+              <div id="workout-cards" class="workout-cards" role="radiogroup" aria-label="Workout" data-i18n-attr="aria-label:workout.title"></div>
+              <p id="workout-hint" class="field-hint" aria-live="polite"></p>
               <label class="check"><input id="workout-cues" type="checkbox" checked /> <span data-i18n="workout.cues">Beep in the last 3 seconds</span></label>
             </fieldset>
 
@@ -210,6 +210,9 @@
                   <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
                   <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
                 </div>
+                <label><span data-i18n="drawer.biome">Season</span>
+                  <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
+                </label>
                 <label class="ride-only"><span data-i18n="rider.splits">Splits</span>
                   <select id="split-mode" name="split-mode">
                     <option value="auto" data-i18n="layout.auto">Auto</option>
@@ -221,10 +224,10 @@
                   </select>
                 </label>
                 <label class="check"><input id="auto-pause" type="checkbox" /> <span data-i18n="rider.autoPause">Auto-pause when I stop</span></label>
-                <label class="ride-only">
+                <label id="difficulty-row" class="ride-only">
                   <span class="label-text"><span data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value">50 %</output></span>
                   <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
-                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu.</span>
+                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.</span>
                 </label>
               </fieldset>
               <details id="diagnostics" class="diagnostics">
@@ -616,6 +619,7 @@
                         <option value="golden" data-i18n="drawer.timeGolden">Golden hour</option>
                         <option value="dusk" data-i18n="drawer.timeDusk">Dusk</option>
                       </select>
+                      <select id="biome-mode" aria-label="Season" title="Season: changes how the world looks, not where anything is" data-i18n-attr="title:drawer.biomeHint,aria-label:drawer.biome"></select>
                     </div>
                   </div>
                 </div>
@@ -701,12 +705,19 @@
                     <h2><span data-i18n="drawer.simulatedPower">Simulated power</span> <output id="sim-power-value">150 W</output></h2>
                     <input id="sim-power" type="range" min="0" max="600" step="5" value="150" aria-label="Simulated power" data-i18n-attr="aria-label:drawer.simulatedPower" />
                   </div>
-                  <div class="panel">
+                  <div id="ride-difficulty-panel" class="panel">
                     <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
                     <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="drawer.biome">Season</h2>
+                    <label><span class="visually-hidden" data-i18n="drawer.biome">Season</span>
+                      <select id="menu-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
+                    </label>
+                    <p class="hint" data-i18n="drawer.biomeHint">Season: changes how the world looks, not where anything is</p>
+                  </div>
                   <div class="panel">
                     <h2 data-i18n="rider.units">Units</h2>
                     <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
@@ -790,6 +801,14 @@
         <p id="split-toast" class="toast-split glass" role="status" hidden></p>
         <p id="trainer-warning" class="warning toast-warning" hidden data-i18n="ride.noDataFromYour">No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
         <div id="pause-pill" class="pause-pill" role="status" hidden></div>
+        <div id="afk-prompt" class="afk-prompt" role="alertdialog" aria-labelledby="afk-title" aria-describedby="afk-text" hidden>
+          <h2 id="afk-title" data-i18n="afk.title">Still riding?</h2>
+          <p id="afk-text"></p>
+          <div class="workout-actions">
+            <button type="button" id="afk-stay" class="primary" data-i18n="afk.stay">Stay</button>
+            <button type="button" id="afk-leave" class="secondary" data-i18n="afk.leave">Leave now</button>
+          </div>
+        </div>
         <div id="reconnecting" class="reconnecting" role="status" hidden data-i18n="ride.reconnecting">Reconnecting…</div>
         <div id="disconnected" class="banner" hidden>
           <span data-i18n="ride.connectionLost">Connection lost.</span>

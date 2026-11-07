@@ -18,7 +18,7 @@ use crate::bot::{pack_levels, BotBrain, BotProfile, BotSituation, BotTuning, Lan
 use crate::drafting::DraftParams;
 use crate::names;
 use crate::network::{Network, RoadKey};
-use crate::physics::{self, Body, PhysicsParams, StepInput};
+use crate::physics::{self, Body, PhysicsParams, RiderPhysics, StepInput};
 use crate::race::{Race, RaceError, RaceEvent, RacePhase};
 use crate::rng::{RandomSource, SplitMix64};
 use crate::route::Route;
@@ -422,6 +422,12 @@ impl World {
 
     pub fn rider(&self, id: RiderId) -> Option<&Rider> {
         self.riders.get(&id)
+    }
+
+    /// The numbers a rider is ridden with on a solo bike.
+    pub fn rider_physics(&self, id: RiderId) -> Option<RiderPhysics> {
+        self.rider(id)
+            .map(|r| physics::rider_physics(&self.config.physics, r.mass_kg))
     }
 
     /// Sets a human's riding level in W/kg; new bots are matched to it.
@@ -884,7 +890,7 @@ impl World {
                 &self.config.physics,
                 &StepInput {
                     rider_mass_kg: rider.mass_kg,
-                    body: Body::bike(&self.config.physics),
+                    body: Body::bike(&self.config.physics, rider.mass_kg),
                     speed: rider.speed,
                     power_watts,
                     grade_percent: grade,
@@ -2525,5 +2531,18 @@ mod tests {
         assert_eq!(world.choose_turn(me, Some("bd")), Err(WorldError::Racing));
         world.lock_turns(me, false);
         world.choose_turn(me, Some("bd")).unwrap();
+    }
+
+    #[test]
+    fn rider_physics_adds_the_bike_to_the_rider() {
+        let mut world = empty_world(flat_loop(1000.0));
+        let id = world.join_human("Anna", 90.0);
+        assert_eq!(world.rider_physics(id).unwrap().mass_kg, 100.0);
+    }
+
+    #[test]
+    fn rider_physics_of_an_unknown_rider_is_none() {
+        let world = empty_world(flat_loop(1000.0));
+        assert_eq!(world.rider_physics(9_999), None);
     }
 }

@@ -26,5 +26,7 @@ the server keeps simulating from power only.
   shift, often at the 20 % limit. It now follows the rider's speed in the game
   (`k · F_road(v)`, with a floor for descents), and the trainer adds no air
   drag of its own (`cw` 0). See [devices](../devices.md#virtual-shifting-zwift-cog-and-single-gear-setups).
+- 2026-11-04: drag area, Crr and mass come from the server (`joined.physics`);
+  Climb feel does not apply with gears (#22).
 - Shifting input is action-based, so a future Zwift Click adapter plugs in
   without touching ride logic.

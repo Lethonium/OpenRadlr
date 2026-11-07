@@ -5,6 +5,7 @@
  */
 
 import { t } from "../i18n/i18n.js";
+import { VENUES } from "./venues.js";
 
 /** The exercise ids the server and the 3D gym know about, with display names. */
 export const EXERCISES = Object.freeze({
@@ -24,11 +25,12 @@ const GET_READY_S = 30;
 /**
  * @typedef {{kind: "exercise", exercise: string, seconds: number, label: string}
  *   | {kind: "rest", seconds: number, label: string}} Block
- * @typedef {{id: string, name: string, description: string, blocks: Block[]}} Plan
+ * @typedef {{id: string, name: string, description: string, venue: string | null, blocks: Block[]}} Plan
  */
 
 /** Validates and normalises a plan; throws an Error with a readable message. */
-export function createPlan({ id, name, description = "", blocks }) {
+export function createPlan({ id, name, description = "", blocks, venue = null }) {
+  if (venue !== null && !Object.hasOwn(VENUES, venue)) throw new Error("Unknown venue.");
   if (!Array.isArray(blocks) || blocks.length === 0) throw new Error("A plan needs at least one block.");
   if (blocks.length > MAX_BLOCKS) throw new Error(`A plan may have at most ${MAX_BLOCKS} blocks.`);
   const clean = blocks.map((block, index) => {
@@ -44,7 +46,7 @@ export function createPlan({ id, name, description = "", blocks }) {
   });
   const total = clean.reduce((sum, b) => sum + b.seconds, 0);
   if (total > MAX_TOTAL_S) throw new Error("A plan may last at most 2 hours.");
-  return { id: String(id), name: String(name || t("workout.defaultName")).slice(0, 80), description: String(description).slice(0, 500), blocks: clean };
+  return { id: String(id), name: String(name || t("workout.defaultName")).slice(0, 80), description: String(description).slice(0, 500), venue, blocks: clean };
 }
 
 /** A new plan with a 30 s "Get ready" rest in front; the original is untouched. */

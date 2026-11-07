@@ -101,6 +101,20 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
+.biome-preview {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.biome-preview i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%);
+}
+
 kbd {
   border: 1px solid var(--border);
   border-bottom-width: 2px;
@@ -5198,6 +5212,31 @@ body.working-out #paddles {
   z-index: 5;
 }
 
+.afk-prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  width: min(90vw, 24rem);
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  z-index: 7;
+}
+
+.afk-prompt[hidden] {
+  display: none;
+}
+
+.afk-prompt h2,
+.afk-prompt p {
+  margin: 0;
+}
+
 .finish-confirm {
   display: grid;
   gap: 0.5rem;
@@ -5205,4 +5244,79 @@ body.working-out #paddles {
 
 .finish-confirm p {
   margin: 0;
+}
+
+/* Workout cards (start menu) */
+.workout-cards {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.workout-card {
+  display: grid;
+  gap: 8px;
+}
+
+.workout-card-body {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.workout-card-body:hover {
+  border-color: var(--muted);
+}
+
+.workout-card.selected .workout-card-body {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 8px 30px rgba(255, 122, 26, 0.12);
+}
+
+.block-strip {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+}
+
+.strip-segment {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 2px;
+}
+
+.strip-segment.rest {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.figure-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.figure-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.figure-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.figure-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }

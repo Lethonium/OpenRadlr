@@ -20,6 +20,7 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
@@ -30,7 +31,8 @@ import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
 import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
-import { Gearbox, SHIFTING_CW, effectiveGrade, referenceRatio } from "./ride/virtualShifting.js";
+import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
+import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -78,14 +80,16 @@ import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
 import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
-import { planDuration, planSummary } from "./workout/plan.js";
+import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
-import { WorkoutStudioView, blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
+import { statueRows } from "./workout/venues.js";
+import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
+import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
@@ -107,6 +111,7 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+const BIOME_KEY = "openride.biome";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
@@ -130,6 +135,105 @@ const writeSetting = (key, value) => {
   }
 };
 
+/**
+ * The biome to draw: `?biome=winter` previews one (not saved), else the
+ * rider's saved pick, else the default.
+ */
+function biomeSetting() {
+  const param = new URLSearchParams(location.search).get("biome");
+  if (param) return resolveBiome(param).id;
+  const saved = readSetting(BIOME_KEY);
+  return saved && resolveBiome(saved).id === saved ? saved : DEFAULT_BIOME;
+}
+
+/** Adds the three swatches that preview a season next to its picker. */
+function paintBiomePreview(select, id) {
+  let preview = select.biomePreview;
+  if (!preview) {
+    preview = document.createElement("span");
+    preview.className = "biome-preview";
+    preview.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i += 1) preview.append(document.createElement("i"));
+    select.after(preview);
+    select.biomePreview = preview;
+  }
+  const { sky, ground, accent } = resolveBiome(id).preview;
+  [sky, ground, accent].forEach((color, i) => {
+    preview.children[i].style.backgroundColor = `rgb(${color.map((c) => Math.round(c * 255)).join(" ")})`;
+  });
+}
+
+/** Fills the season pickers from the biome registry and binds them once. */
+function initBiomePicker() {
+  for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
+    const select = $(id);
+    if (!select) continue;
+    select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
+    select.value = app.biome;
+    paintBiomePreview(select, app.biome);
+    // The menu picker stays on the page between rides, so bind it only once.
+    if (!select.biomeListening) {
+      select.addEventListener("change", (event) => setBiome(event.target.value));
+      select.biomeListening = true;
+    }
+  }
+}
+
+/**
+ * Changes the season: saved for next time, the menu world rebuilt behind the
+ * menu, or the ride's world rebuilt in the background. Only the look changes,
+ * never the road, the café or where anything stands.
+ */
+function setBiome(id) {
+  const biome = resolveBiome(id);
+  app.biome = biome.id;
+  writeSetting(BIOME_KEY, biome.id);
+  for (const picker of ["biome-mode", "start-biome", "menu-biome"]) {
+    const select = $(picker);
+    if (select) {
+      select.value = biome.id;
+      paintBiomePreview(select, biome.id);
+    }
+  }
+  if (app.studio) return;
+  if (app.view3d) buildRideWorld();
+  else app.menu?.biomeChanged();
+}
+
+/** The newest ride-world build; a later request makes an earlier one's result stale. */
+let rideWorldBuild = 0;
+
+/**
+ * Builds the ride's world for the current biome and swaps it in. Only the latest
+ * request may swap, and it drops whatever view is on screen then, not the one
+ * that was there when it started.
+ */
+function buildRideWorld() {
+  const ride = app.ride;
+  const routeFile = app.routeFile;
+  const biome = app.biome;
+  if (!ride || !routeFile) return;
+  const build = ++rideWorldBuild;
+  $("view-note").textContent = t("view.building");
+  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then((scene) => {
+      if (app.ride !== ride || build !== rideWorldBuild) return;
+      // The season changed while this was building: build the picked one instead.
+      if (app.biome !== biome) return buildRideWorld();
+      // Drop the old world's buffers before the new one is uploaded: two full
+      // maps at once are too much for a low-end GPU.
+      app.view3d?.dispose();
+      app.view3d = null;
+      show3d(scene);
+    })
+    .catch((error) => {
+      if (app.ride !== ride || build !== rideWorldBuild) return;
+      console.error(error);
+      $("view-note").textContent = t("view.unavailable");
+    });
+}
+
 const profiles = new ProfileStore();
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
@@ -140,6 +244,12 @@ const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
   profile: profiles.load(),
+  /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
+  workoutPick: null,
+  workoutFigure: null,
+  /** The gym the workout trains at and the figures of its statue row, in row order (set with the ride's 3D view). */
+  workoutGym: null,
+  workoutRowFigures: [],
   redrawStage: null,
   trainer: null,
   heartRateMonitor: null,
@@ -149,6 +259,9 @@ const app = {
   actions: null,
   connection: null,
   session: null,
+  /** The "Still riding?" prompt and what it last drew (null outside a ride). */
+  afkPrompt: null,
+  afkShown: null,
   route: null,
   /** The route file as served (the 3D world is built from it in a worker). */
   routeFile: null,
@@ -269,6 +382,8 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
+  /** The biome this rider sees; every client may pick its own (cosmetic only). */
+  biome: biomeSetting(),
   /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
   activity: null,
   /** The route the Ride tab goes back to. */
@@ -454,7 +569,7 @@ function renderDeviceStatuses() {
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, fillWorkoutPresets, summariseWorkoutPreset, renderStartMenu);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, renderWorkoutPick, renderStartMenu, initBiomePicker);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -491,7 +606,7 @@ function initSetup() {
   $("cog").value = app.profile.cog;
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
-  $("virtual-shifting").addEventListener("change", (e) => ($("gear-settings").hidden = !e.target.checked));
+  $("virtual-shifting").addEventListener("change", showShiftingSettings);
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
   for (const card of document.querySelectorAll(".mode-card")) {
@@ -545,33 +660,45 @@ function initSetup() {
   });
 }
 
-/** The preset picker of the Workout card: the saved choice, a summary under it. */
+/** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
 function initWorkoutSetup() {
-  const select = $("workout-preset");
-  fillWorkoutPresets();
-  select.value = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutFigure = null;
   $("workout-cues").checked = app.profile.workoutCues !== false;
-  select.addEventListener("change", summariseWorkoutPreset);
-  summariseWorkoutPreset();
+  $("workout-cards").addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */ && app.workoutFigure !== null) pickWorkoutFigure(app.workoutPick, null);
+  });
+  renderWorkoutPick();
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-function summariseWorkoutPreset() {
-  $("workout-preset-summary").textContent = planSummary(PRESETS.find((plan) => plan.id === $("workout-preset").value));
+/** The picked plan; an unknown saved id falls back to the first preset. */
+const pickedWorkout = () => PRESETS.find((plan) => plan.id === app.workoutPick) ?? PRESETS[0];
+
+/** Draws the cards in the current language (also after a language switch); the pick stays. */
+function renderWorkoutPick() {
+  renderWorkoutCards($("workout-cards"), PRESETS, {
+    selectedId: app.workoutPick,
+    cafeNames: app.menu?.cafeNames?.() ?? new Map(),
+    figureIndex: app.workoutFigure,
+    onSelect: pickWorkout,
+    onFigure: pickWorkoutFigure,
+  });
+  $("workout-hint").textContent = t("workout.figureHint");
 }
 
-/** The options with their names in the current language; the choice stays. */
-function fillWorkoutPresets() {
-  const select = $("workout-preset");
-  const chosen = select.value;
-  select.replaceChildren(
-    ...PRESETS.map((plan) => {
-      const option = document.createElement("option");
-      option.value = plan.id;
-      option.textContent = t("workout.option", { name: plan.name, min: Math.round(planDuration(plan) / 60) });
-      return option;
-    }),
-  );
-  if (PRESETS.some((plan) => plan.id === chosen)) select.value = chosen;
+function pickWorkout(id) {
+  app.workoutPick = id;
+  app.workoutFigure = null;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), null);
+}
+
+function pickWorkoutFigure(id, index) {
+  app.workoutPick = id;
+  app.workoutFigure = index;
+  renderWorkoutPick();
+  app.menu?.showWorkout?.(pickedWorkout(), index);
 }
 
 function setDifficultyInputs(difficulty) {
@@ -630,6 +757,8 @@ function openStartMenu() {
     renderStartMenu();
   };
   initMenuStage();
+  // The menu learns the pick, so opening the Workout tab shows its gym.
+  app.menu?.showWorkout(pickedWorkout(), app.workoutFigure);
   renderStartMenu();
   refresh();
   clearInterval(app.infoTimer);
@@ -642,6 +771,7 @@ function openStartMenu() {
  * the menu's background until joining, so the built world carries over.
  */
 function initMenuStage() {
+  initBiomePicker();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
   const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -670,6 +800,7 @@ function initMenuStage() {
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
+    biome: () => app.biome,
     createView: use3d
       ? (route, scene) => {
           const view = new View3D(canvas, $("labels3d"), route, scene);
@@ -679,13 +810,14 @@ function initMenuStage() {
           return view;
         }
       : null,
-    lensFor: (kind, overview) => (kind === "gym" ? gymLens(overview) : droneLens(overview)),
+    lensFor: (kind, overview) => (kind === "gym" || kind === "statue" ? gymLens(overview) : droneLens(overview)),
     // The first world opens with a descent from high over the island.
     createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
       ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
       { mesh: buildHighlight(route), glow: 1 },
     ],
+    onCafes: () => renderWorkoutPick(),
     onRoute: (stage) => {
       shown = stage;
       drawStage();
@@ -1053,7 +1185,15 @@ function dropTrainer() {
   delete $("trainer-status").dataset.note;
   $("power-only-note").hidden = true;
   $("virtual-shifting-row").hidden = true;
-  $("gear-settings").hidden = true;
+  showShiftingSettings();
+}
+
+/** Gear settings show while virtual shifting is offered and on; Climb feel then hides (#22). */
+function showShiftingSettings() {
+  const offered = !$("virtual-shifting-row").hidden && !$("virtual-shifting").disabled;
+  const checked = $("virtual-shifting").checked;
+  $("gear-settings").hidden = !offered || !checked;
+  $("difficulty-row").hidden = !climbFeelVisible({ shiftingOffered: offered, shiftingChecked: checked });
 }
 
 /**
@@ -1114,7 +1254,7 @@ function showTrainerControl(trainer) {
   $("virtual-shifting").disabled = !could;
   $("virtual-shifting-row").hidden = !could;
   if (!could) $("virtual-shifting").checked = false;
-  $("gear-settings").hidden = !could || !$("virtual-shifting").checked;
+  showShiftingSettings();
   // In a ride, the HUD says it too.
   $("power-only").hidden = controllable || paddles;
   $("power-only").textContent = blocked ? t("hud.resistanceBlocked") : t("hud.powerOnly");
@@ -1459,6 +1599,7 @@ async function joinRide(restored = null) {
   }
 
   app.gearbox = app.profile.virtualShifting && controllable ? new Gearbox() : null;
+  $("ride-difficulty-panel").hidden = Boolean(app.gearbox);
   app.training = new TrainingControl({ ftp: app.profile.ftp, canControl: controllable });
   // Per ride, so its test flag lives and dies with the ride record
   app.ftpTest = new FtpTestSession({ training: app.training, getSamples: () => app.recorder?.samples ?? [] });
@@ -1470,18 +1611,13 @@ async function joinRide(restored = null) {
     resistanceModel: (roadGrade) => {
       // The road (flat in the studio: no grades arrive), with virtual gears if on.
       const road = () => {
-        if (!app.gearbox) return applyDifficulty(roadGrade, app.profile.difficulty);
+        // The server's Crr, so the trainer's rolling resistance matches the game's (#22).
+        const physics = app.connection?.physics ?? null;
+        if (!app.gearbox) return { grade: applyDifficulty(roadGrade, app.profile.difficulty), ...(physics?.crr && { crr: physics.crr }) };
         const me = app.state ? myRider(app.state.riders) : null;
         const draft = me && !app.studio ? draftInfo(me, app.state.riders, app.route) : null;
-        const grade = effectiveGrade({
-          gradePercent: applyDifficulty(roadGrade, app.profile.difficulty, { descents: 1 }),
-          ratio: app.gearbox.ratio,
-          referenceRatio: referenceRatio(app.profile.chainring, app.profile.cog),
-          speed: me?.speed ?? 0,
-          dragFactor: 1 - (draft?.savingPercent ?? 0) / 100,
-          massKg: app.profile.weightKg + 9,
-        });
-        return { grade, cw: SHIFTING_CW };
+        const dragFactor = 1 - (draft?.savingPercent ?? 0) / 100;
+        return shiftingCommand({ roadGrade, gearbox: app.gearbox, profile: app.profile, physics, me, dragFactor });
       };
       return app.studio ? app.studio.command(road, now()) : app.training.command(road);
     },
@@ -1493,10 +1629,11 @@ async function joinRide(restored = null) {
 
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
 async function joinWorkout(profile, errors) {
-  const routeId = workoutRoute(app.info);
+  const plan = pickedWorkout();
+  // The route that starts at the workout's café, else the default route (its gym shows the workout's statues).
+  const routeId = app.menu?.workoutRouteId(plan) ?? workoutRoute(app.info);
   if (!routeId) errors.push(t("join.error.noRoute"));
   if (errors.length) return showSetupError(errors.join("\n"));
-  const plan = PRESETS.find((preset) => preset.id === $("workout-preset").value) ?? PRESETS[0];
   // No "discard your unfinished ride?" prompt: a workout never touches the autosave
   // (no recorder, so saveRide() does nothing), the unfinished ride is still offered afterwards.
   app.restored = null;
@@ -1568,6 +1705,7 @@ function endRide() {
   app.workoutAudio?.close?.().catch?.(() => {});
   app.workoutAudio = null;
   app.workoutView?.dispose();
+  app.view3d?.setStatueGlow(null, null);
   document.body.classList.remove("working-out");
   $("workout-note").hidden = true;
   ride.unbindKeyboard?.();
@@ -1642,6 +1780,8 @@ function endRide() {
     studioView: null,
     workout: null,
     workoutPlan: null,
+    workoutGym: null,
+    workoutRowFigures: [],
     workoutView: null,
     workoutCue: null,
     workoutHeartRate: null,
@@ -1660,6 +1800,8 @@ function endRide() {
   const fresh = rideTemplate.cloneNode(true);
   for (const id of ["world3d", "labels3d", "studio3d", "studio-labels"]) fresh.querySelector(`#${id}`).replaceWith($(id));
   $("ride").replaceWith(fresh);
+  // The template predates the pickers being filled: build the fresh screen's options too.
+  initBiomePicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
   delete $("join").dataset.busy;
@@ -1706,7 +1848,19 @@ function wireConnection(connection) {
     if (text) notify(text);
   });
   on("chat", ({ name, text }) => notify(`${name}: ${text}`, "chat"));
+  on("afk_warning", (warning) => {
+    app.afkPrompt?.open(warning);
+    // Show it now, not on the next frame, so focus can land on a visible button.
+    renderAfkPrompt();
+    $(warning.can_stay === false ? "afk-leave" : "afk-stay").focus();
+  });
   on("error", ({ code, message }) => {
+    // The server removed me for not pedalling: end the ride before the socket closes, so nothing reconnects.
+    if (code === "afk_timeout") {
+      app.afkPrompt?.pressLeave();
+      notify(t("afk.removed"), "error");
+      return;
+    }
     // The server won't pause here (a race, an event or a vehicle): ride on (#89).
     if (code === "pause_rejected") {
       performPause(app.pause?.rejected() ?? [], now());
@@ -1799,6 +1953,7 @@ function startRide() {
   if (app.restored) restoreRide(app.restored);
   startSplits();
   initFinish();
+  initAfkPrompt();
   initPhotos();
   startAutosave();
   notify(t("ride.welcome", { server: info.server_name }));
@@ -1809,6 +1964,7 @@ function startRide() {
     if (app.ride !== ride) return;
     requestAnimationFrame(loop);
     draw();
+    renderAfkPrompt();
   };
   requestAnimationFrame(loop);
 }
@@ -2018,9 +2174,13 @@ function workoutFrame() {
   if (workout.state !== "done") {
     const position = workout.position();
     app.workoutView.render(workoutHudText(position, { state: workout.state, heartRate: app.workoutHeartRate }), blockProgress(position));
+    // The next figure's statue glows during rests only (get-ready included); local to this screen.
+    app.view3d?.setStatueGlow(app.workoutGym, highlightedFigure(position, app.workoutRowFigures));
     $("workout-pause").textContent = workout.state === "paused" ? t("workout.resume") : t("workout.pause");
     // Paused, the plan clock is frozen: the avatar's idle clip keeps the server's start so it keeps moving.
     if (position.block && workout.state !== "paused") blockStart = time - (position.block.seconds - position.blockRemainingS);
+  } else {
+    app.view3d?.setStatueGlow(null, null);
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
@@ -2241,6 +2401,31 @@ function showFinishConfirm() {
   app.menuDialog?.showConfirm();
 }
 
+/** The "Still riding?" prompt: the server's warnings open it, pedalling or an answer closes it. */
+function initAfkPrompt() {
+  app.afkPrompt = new AfkPrompt({ stay: () => app.connection?.stay(), leave: () => finishRide(), now: () => Date.now() });
+  app.afkShown = { visible: false, canStay: true, text: "" };
+  // Safe once per ride: endRide swaps #ride for a fresh clone, so these buttons (and their listeners) are new each time.
+  $("afk-stay").addEventListener("click", () => app.afkPrompt.pressStay());
+  $("afk-leave").addEventListener("click", () => app.afkPrompt.pressLeave());
+}
+
+/** Per frame: feeds the power to the prompt and touches the DOM only when something changed. */
+function renderAfkPrompt() {
+  const prompt = app.afkPrompt;
+  if (!prompt) return;
+  if (app.session) prompt.power(app.session.latest.power);
+  // An ended ride or a lost connection (the server starts a fresh clock on resume) has no prompt.
+  const visible = prompt.visible && !app.finished && !app.offline;
+  const canStay = prompt.canStay;
+  const text = visible ? t(canStay ? "afk.body" : "afk.finalBody", { time: formatDuration(prompt.secondsLeft()) }) : "";
+  const shown = app.afkShown;
+  if (visible !== shown.visible) $("afk-prompt").hidden = !visible;
+  if (canStay !== shown.canStay) $("afk-stay").hidden = !canStay;
+  if (text !== shown.text) $("afk-text").textContent = text;
+  app.afkShown = { visible, canStay, text };
+}
+
 function initFinish() {
   $("finish-ride").addEventListener("click", () => showFinishConfirm());
   $("finish-confirm-cancel").addEventListener("click", () => app.menuDialog?.cancelConfirm());
@@ -2298,6 +2483,7 @@ function finishRide() {
   app.viewPopover?.close();
   $("reconnecting").hidden = true;
   $("disconnected").hidden = true;
+  $("afk-prompt").hidden = true;
   // Captured before detachConnection clears app.connection: leaving goes through this one.
   const connection = app.connection;
   app.finishController = createFinishController({
@@ -3493,17 +3679,9 @@ function initViews() {
     return;
   }
   // Building the world (with the other routes on its map) takes a moment,
-  // off the main thread where possible; ride in 2D meanwhile.
-  $("view-note").textContent = t("view.building");
-  const ride = app.ride;
-  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(app.routeFile, others, { network }))
-    .then((scene) => app.ride === ride && show3d(scene))
-    .catch((error) => {
-      if (app.ride !== ride) return;
-      console.error(error);
-      $("view-note").textContent = t("view.unavailable");
-    });
+  // off the main thread where possible; ride in 2D meanwhile. A season changed
+  // meanwhile is picked up when this build lands.
+  buildRideWorld();
 }
 
 /** A route file from the server (the default route without an id). */
@@ -3545,8 +3723,17 @@ function show3d(scene, view = null) {
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
   setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
+  // Each gym's statues (also on a view taken over from the menu, which had its own rows).
+  // A workout whose café this route does not start at shows its figures at the gym here.
+  const rideGym = gymOfRoute(app.view3d.gyms, app.route);
+  const plan = app.workoutPlan;
+  const override = app.workout && rideGym && plan && rideGym.cafeId !== plan.venue ? { gym: rideGym, plan } : null;
+  const rows = statueRows(app.view3d.gyms, PRESETS, override);
+  app.view3d.setStatues(rows);
+  app.workoutGym = app.workout ? rideGym : null;
+  app.workoutRowFigures = app.workout ? (rows.find((row) => row.gym === rideGym)?.figures ?? []) : [];
   // The workout watches my avatar on the gym mat (#77).
-  const gym = app.workout ? gymOfRoute(app.view3d.gyms, app.route) : null;
+  const gym = app.workout ? rideGym : null;
   if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
 }
 

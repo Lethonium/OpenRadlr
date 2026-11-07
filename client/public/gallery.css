@@ -1,0 +1,53 @@
+/* Dev-only model gallery (/gallery.html). Not part of the app's styles. */
+:root {
+  color-scheme: dark;
+  --gallery-bg: #12161a;
+  --gallery-panel: #1b2127;
+  --gallery-text: #e8ecef;
+  --gallery-muted: #93a0aa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--gallery-bg);
+  color: var(--gallery-text);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+.gallery-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid #2a323a;
+}
+
+.gallery-head h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.gallery-hint {
+  color: var(--gallery-muted);
+}
+
+.gallery-head select {
+  background: var(--gallery-panel);
+  color: var(--gallery-text);
+  border: 1px solid #39424b;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.gallery-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}

@@ -24,7 +24,9 @@ import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
+import { buildStatues } from "../public/js/view3d/statues.js";
 import { GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
+import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 
@@ -343,6 +345,12 @@ class StubRenderer {
   drawBright() {}
   drawCloudLayer() {}
   drawTransparent() {}
+  uploadWeather(data) {
+    return { data };
+  }
+  drawWeather(handle, options) {
+    this.weather = { handle, options };
+  }
 }
 
 const emptyMesh = () => ({ positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), vertexCount: 0 });
@@ -353,24 +361,61 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms) {
+function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer()) {
   const route = squareRoute();
   const world = {
+    biome,
     meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
-    chunks: {},
+    chunks: { scenery: [], structures: [] },
     clouds: emptyMesh(),
+    weather,
     water: emptyMesh(),
     rivers: emptyMesh(),
     rotors: [],
     spectators: [],
     gyms,
   };
-  const renderer = new StubRenderer();
   const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
   return { view, renderer };
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("the view resolves the scene's biome for its sky", () => {
+  assert.equal(gymView([]).view.biome.id, "temperate");
+  assert.equal(gymView([], "winter").view.biome.id, "winter");
+});
+
+test("the view draws the biome's weather around the camera", () => {
+  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
+  const { view, renderer } = gymView([], "winter", weather);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(renderer.weather, "snow is drawn");
+  assert.equal(renderer.weather.options.style.kind, "snow");
+  assert.equal(renderer.weather.handle.data, weather.data);
+});
+
+/** Evaluates the weather shader's vertical placement, with GLSL's mod semantics. */
+function weatherFlakeY({ seedY, timeS, speed, cameraY, boxY }) {
+  const expression = WEATHER_VERTEX.match(/world\.y = ([^;]+);/)?.[1];
+  assert.ok(expression, "the vertex shader places the weather");
+  const mod = (x, y) => x - y * Math.floor(x / y);
+  return new Function("seed", "u_time", "speed", "u_cameraPosition", "u_box", "mod", `return ${expression};`)({ y: seedY }, timeS, speed, { y: cameraY }, { y: boxY }, mod);
+}
+
+test("snow falls past the camera instead of rising with it", () => {
+  const boxY = 100;
+  const seedY = 60;
+  const speed = 8;
+  const first = weatherFlakeY({ seedY, timeS: 0, speed, cameraY: 30, boxY });
+  const later = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 30, boxY });
+  assert.ok(later < first, "the flake falls as time passes");
+  assert.ok(Math.abs(first - later - speed) < 1e-9, "at its fall speed");
+  // The field is wrapped around the camera: climbing must not drag it along.
+  const climbed = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 40, boxY });
+  assert.ok(Math.abs(climbed - later) < 1e-9, "climbing leaves the flake where it is");
+});
 
 test("a workout rider is drawn at its gym spot, not on the road", () => {
   const gym = testGym();
@@ -423,4 +468,112 @@ test("with reduced motion the gym camera is there at once", () => {
   const { view } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true });
   assert.deepEqual(view.camera.eye, gymCameraPose(gym).eye);
+});
+
+/** Records shadow casters, bright draws and disposals on top of the stub. */
+class RecordingRenderer extends StubRenderer {
+  casters = [];
+  brights = [];
+  disposed = [];
+  upload(mesh) {
+    return { mesh };
+  }
+  dispose(handle) {
+    this.disposed.push(handle);
+  }
+  createShadowMap() {
+    return true;
+  }
+  beginShadows() {}
+  endShadows() {}
+  drawShadowCaster(handle, model) {
+    this.casters.push({ handle, model });
+  }
+  drawBright(handle, model, glow) {
+    this.brights.push({ handle, model, glow });
+  }
+}
+
+function statueView() {
+  const gym = { ...testGym(), cafeId: "valley-cafe", statueRow: { position: [100, 100.4, 38], yaw: 0 } };
+  const { view, renderer } = gymView([gym], "temperate", null, new RecordingRenderer());
+  view.camera.update(100, 1, 0);
+  gym.statueRow.position = [view.camera.target[0], view.camera.target[1], view.camera.target[2]];
+  return { view, renderer, gym };
+}
+const renderStatues = (view) => view.render({ riders: [], myId: null, timeS: 12, colors });
+
+test("a statue row is drawn lit and casts a shadow", () => {
+  const { view, renderer, gym } = statueView();
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  renderStatues(view);
+  const mesh = buildStatues(["squats", "plank"], "marble").mesh;
+  const drawn = renderer.draws.filter((d) => d.handle.mesh.vertexCount === mesh.vertexCount);
+  assert.equal(drawn.length, 1);
+  const cast = renderer.casters.filter((d) => d.handle === drawn[0].handle);
+  assert.equal(cast.length, 1);
+  assert.deepEqual([...drawn[0].model], [...placement(gym.statueRow.position, gym.statueRow.yaw)]);
+});
+
+test("no glow is drawn until one is set, then exactly that ring", () => {
+  const { view, renderer, gym } = statueView();
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  const ring = buildStatues(["squats", "plank"], "marble").glows[1];
+  const glows = () => renderer.brights.filter((b) => b.handle !== view.meshes.arches);
+  renderStatues(view);
+  assert.equal(glows().length, 0);
+  view.setStatueGlow(gym, 1);
+  renderer.brights.length = 0;
+  renderStatues(view);
+  assert.equal(glows().length, 1);
+  assert.equal(glows()[0].glow, 0.9);
+  assert.deepEqual([...glows()[0].handle.mesh.positions], [...ring.positions]);
+  view.setStatueGlow(null, null);
+  renderer.brights.length = 0;
+  renderStatues(view);
+  assert.equal(glows().length, 0);
+});
+
+test("replacing the statues disposes the previous handles", () => {
+  const { view, renderer, gym } = statueView();
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  renderer.disposed.length = 0;
+  view.setStatues([]);
+  assert.equal(renderer.disposed.length, 3, "one mesh and two rings");
+  renderStatues(view);
+  assert.equal(view.statueTargets(gym).length, 0);
+});
+
+test("disposing the view disposes the statue handles too", () => {
+  const { view, renderer, gym } = statueView();
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  const uploaded = buildStatues(["squats", "plank"], "marble");
+  renderer.disposed.length = 0;
+  view.dispose();
+  const sizes = renderer.disposed.filter((h) => h.mesh).map((h) => h.mesh.positions.length);
+  assert.ok(sizes.includes(uploaded.mesh.positions.length), "the statue mesh");
+  assert.ok(sizes.filter((n) => n === uploaded.glows[0].positions.length).length >= 2, "both rings");
+});
+
+test("statue targets are the world-space plinth tops of the row", () => {
+  const { view, gym } = statueView();
+  gym.statueRow = { position: [100, 100.4, 38], yaw: 0 };
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  const targets = view.statueTargets(gym);
+  assert.equal(targets.length, 2);
+  const tops = buildStatues(["squats", "plank"], "marble").tops;
+  closeVec(targets[0].position, [100 - 1.5, 100.4 + tops[0], 38]);
+  closeVec(targets[1].position, [100 + 1.5, 100.4 + tops[1], 38]);
+  assert.equal(targets[0].yaw, 0);
+  assert.equal(targets[0].top, tops[0]);
+  assert.deepEqual(view.statueTargets({ statueRow: null }), []);
+});
+
+test("statue targets follow the row's yaw", () => {
+  const { view, gym } = statueView();
+  gym.statueRow = { position: [0, 0, 0], yaw: Math.PI / 2 };
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  const [first] = view.statueTargets(gym);
+  assert.equal(first.yaw, Math.PI / 2);
+  closeVec([first.position[0], first.position[2]], transformPoint(placement([0, 0, 0], Math.PI / 2), [-1.5, 0, 0]).filter((_, i) => i !== 1).slice(0, 2));
 });

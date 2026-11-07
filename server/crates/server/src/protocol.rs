@@ -4,6 +4,7 @@
 //! for the full description. Bump [`PROTOCOL_VERSION`] on breaking changes.
 
 use openradlr_sim::events::{EventInfo, EventKind, EventLength, EventNotice, EventResult, EventView};
+use openradlr_sim::physics::RiderPhysics;
 use openradlr_sim::race::{RaceEvent, RacePhase, RaceResult};
 use openradlr_sim::schedule::Phase;
 use openradlr_sim::sharing::Flow;
@@ -124,6 +125,8 @@ pub enum ClientMessage {
         #[serde(default)]
         exercise: Option<String>,
     },
+    /// Answer to an `afk_warning`: the rider is still there.
+    Stay,
     /// Leave the game now; the server removes the rider and closes the
     /// connection.
     Leave,
@@ -210,10 +213,19 @@ pub enum ServerMessage {
         /// removed; `0` removes at once.
         grace_s: f64,
     },
+    /// The rider has sent 0 W for a long time. Answer with `stay` (if
+    /// `can_stay`) or the ride ends in `leave_in_s` seconds with `afk_timeout`.
+    AfkWarning {
+        leave_in_s: u32,
+        can_stay: bool,
+    },
     Joined {
         rider_id: RiderId,
         /// Send it in a later `join` to come back as the same rider (#73).
         resume_token: String,
+        /// What the server rides you with on a solo bike, for the client's
+        /// virtual shifting (#22).
+        physics: PhysicsWire,
     },
     /// The riders around you (and everyone in your route's race), and your
     /// route's race.
@@ -369,6 +381,26 @@ pub struct EventInfoWire {
     /// `upcoming`, `lobby` or `running`.
     pub phase: String,
     pub entrants: usize,
+}
+
+/// A rider's physics numbers on the wire; `mass_kg` is rider plus bike.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct PhysicsWire {
+    pub mass_kg: f64,
+    pub cda_m2: f64,
+    pub crr: f64,
+    pub air_density: f64,
+}
+
+impl From<RiderPhysics> for PhysicsWire {
+    fn from(p: RiderPhysics) -> Self {
+        Self {
+            mass_kg: p.mass_kg,
+            cda_m2: p.cda_m2,
+            crr: p.crr,
+            air_density: p.air_density,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1211,6 +1243,21 @@ mod tests {
     }
 
     #[test]
+    fn stay_parses() {
+        assert_eq!(ClientMessage::parse(r#"{"type":"stay"}"#).unwrap(), ClientMessage::Stay);
+    }
+
+    #[test]
+    fn afk_warning_serialises() {
+        let json = ServerMessage::AfkWarning {
+            leave_in_s: 120,
+            can_stay: false,
+        }
+        .to_json();
+        assert_eq!(json, r#"{"type":"afk_warning","leave_in_s":120,"can_stay":false}"#);
+    }
+
+    #[test]
     fn solo_riders_have_no_vehicle_field() {
         let json = ServerMessage::State {
             tick: 1,
@@ -1226,10 +1273,36 @@ mod tests {
     }
 
     #[test]
+    fn joined_carries_the_rider_physics() {
+        let json = ServerMessage::Joined {
+            rider_id: 3,
+            resume_token: "t".into(),
+            physics: PhysicsWire {
+                mass_kg: 100.0,
+                cda_m2: 0.452,
+                crr: 0.005,
+                air_density: 1.225,
+            },
+        }
+        .to_json();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["physics"],
+            serde_json::json!({ "mass_kg": 100.0, "cda_m2": 0.452, "crr": 0.005, "air_density": 1.225 })
+        );
+    }
+
+    #[test]
     fn joined_and_welcome_carry_the_new_fields() {
         let json = ServerMessage::Joined {
             rider_id: 3,
             resume_token: "t".into(),
+            physics: PhysicsWire {
+                mass_kg: 100.0,
+                cda_m2: 0.452,
+                crr: 0.005,
+                air_density: 1.225,
+            },
         }
         .to_json();
         assert!(json.contains(r#""resume_token":"t""#));
