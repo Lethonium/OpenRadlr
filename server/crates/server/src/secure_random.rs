@@ -5,17 +5,15 @@
 
 use openradlr_sim::rng::RandomSource;
 use std::fmt::Write as _;
-use std::io::Read;
 
-/// Fills `bytes` from the system's random source.
+/// Fills `bytes` from the system's random source (`getrandom` on Linux,
+/// `ProcessPrng` on Windows, `getentropy` on macOS).
 ///
 /// # Panics
-/// If `/dev/urandom` can't be read. There is no safe fallback: a predictable
-/// token would be worse than a crash.
+/// If the system's random source fails. There is no safe fallback: a
+/// predictable token would be worse than a crash.
 pub fn random_bytes(bytes: &mut [u8]) {
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(bytes))
-        .expect("the system's random source (/dev/urandom) must be readable");
+    getrandom::fill(bytes).expect("the system's random source must be readable");
 }
 
 /// 32 random bytes as hex, for session ids and OAuth states.

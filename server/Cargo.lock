@@ -847,6 +847,7 @@ dependencies = [
  "aes-gcm",
  "axum",
  "futures-util",
+ "getrandom 0.3.4",
  "openradlr-sim",
  "reqwest",
  "rusqlite",

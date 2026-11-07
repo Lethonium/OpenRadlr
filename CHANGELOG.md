@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- The server runs on Windows. Session ids, OAuth states, resume tokens and boarding codes were read from `/dev/urandom`, which Windows doesn't have, so the first token panicked. They now come from the operating system's random source on every platform (`getrandom`).
 - Name labels no longer float over houses and hills: a rider out of sight (the GPU checks each one) has no label, with a short delay so labels don't flicker at an edge. Labels point at their rider with a small tail and get smaller and fainter with distance (#15).
 - A finished ride is no longer stored twice in the ride history when it was finished, continued and finished again (#19).
 - Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
