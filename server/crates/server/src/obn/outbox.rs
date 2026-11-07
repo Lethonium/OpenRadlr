@@ -9,10 +9,8 @@ use std::collections::BTreeMap;
 use openradlr_sim::RiderId;
 
 use super::wire::{AppMessage, RiderEntry, RiderState};
-use super::OBN_LENGTH_M;
+use super::{OBN_LENGTH_M, OBN_ROOM};
 
-/// Room every rider joins. Spec 6.2: apps SHOULD use `public`.
-const ROOM: &str = "public";
 
 /// One of this server's riders, as the game loop sees it.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,7 +80,7 @@ impl Outbox {
                     joins.push(AppMessage::Join {
                         rider: rider_key(rider.id),
                         route: self.route.clone(),
-                        room: ROOM.into(),
+                        room: OBN_ROOM.into(),
                         name: rider.name.clone(),
                         state: state_of(0, rider, self.route_length_m),
                     });

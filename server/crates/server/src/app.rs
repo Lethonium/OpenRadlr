@@ -171,15 +171,17 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             .iter()
             .position(|f| f.openbikenet.is_some())
             .filter(|_| config.obn_url.is_some());
+        let obn_route = shared_index.map(|index| group[index].openbikenet.clone().unwrap_or_default());
         let mut link_frames = None;
-        if let Some(index) = shared_index {
+        if let (Some(index), Some(obn_route)) = (shared_index, &obn_route) {
             let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
-            core = core.with_openbikenet(index, frames);
+            core = core.with_openbikenet(index, obn_route, frames);
             link_frames = Some(receiver);
         }
         let game = spawn_game(core);
-        if let (Some(index), Some(receiver), Some(url)) = (shared_index, link_frames, &config.obn_url) {
-            let obn_route = group[index].openbikenet.clone().unwrap_or_default();
+        if let (Some(index), Some(obn_route), Some(receiver), Some(url)) =
+            (shared_index, obn_route, link_frames, &config.obn_url)
+        {
             tracing::info!(route = %obn_route, "sharing the route through OpenBikeNet");
             spawn_link(
                 url.clone(),

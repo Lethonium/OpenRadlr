@@ -290,11 +290,16 @@ impl GameCore {
         self
     }
 
-    /// Shares `route` with other apps through OpenBikeNet: once a second the humans on it go
+    /// Shares `route` with other apps through OpenBikeNet as `shared_route`: once a second the humans on it go
     /// out as a frame on `frames` (dropped if the link is behind), and riders coming back
     /// arrive through [`GameCore::remote`].
-    pub fn with_openbikenet(mut self, route: RouteIndex, frames: mpsc::Sender<Vec<LocalRider>>) -> Self {
-        let remotes = Remotes::new(self.world.route(route).length());
+    pub fn with_openbikenet(
+        mut self,
+        route: RouteIndex,
+        shared_route: &str,
+        frames: mpsc::Sender<Vec<LocalRider>>,
+    ) -> Self {
+        let remotes = Remotes::new(shared_route, self.world.route(route).length());
         self.obn = Some(Obn {
             route,
             frames,
@@ -2562,7 +2567,7 @@ mod tests {
 
     fn obn_game(target_riders: usize, capacity: usize) -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
         let (frames, receiver) = mpsc::channel(capacity);
-        (game(target_riders, 10).with_openbikenet(0, frames), receiver)
+        (game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames), receiver)
     }
 
     fn snapshot_of_ben() -> RemoteEvent {

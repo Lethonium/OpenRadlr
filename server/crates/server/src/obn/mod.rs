@@ -10,3 +10,6 @@ pub mod wire;
 
 /// Length of the shared route, in metres. The OpenBikeNet route `velodrome-250` is 250 m.
 pub const OBN_LENGTH_M: f64 = 250.0;
+
+/// The room every rider joins (spec 6.2).
+pub const OBN_ROOM: &str = "public";

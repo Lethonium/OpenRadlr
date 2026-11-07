@@ -10,14 +10,17 @@ use openradlr_sim::RiderId;
 use crate::game::clean_foreign_name;
 
 use super::wire::{RemoteUpdate, RemoteView, ServerMessage};
-use super::OBN_LENGTH_M;
+use super::{OBN_LENGTH_M, OBN_ROOM};
 
 /// Remote riders get ids from here upwards, far from the sim's own (which count up from 1).
 const FIRST_REMOTE_ID: RiderId = 0xF000_0000;
 /// Longest time a position is extrapolated from the last update.
 const MAX_EXTRAPOLATION_S: f64 = 2.0;
-/// A rider without an update for longer than this is gone.
+/// A rider without an update for longer than this is hidden until the next one.
 const STALE_AFTER_S: f64 = 10.0;
+/// A rider without an update for longer than this is forgotten. Riders normally go
+/// with `left` or a reset of the link; this only bounds what a lost `left` leaves behind.
+const FORGET_AFTER_S: f64 = 300.0;
 
 /// What happened on the link, as the game sees it.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,15 +59,19 @@ struct Known {
 /// The riders of other apps currently on the route.
 #[derive(Debug)]
 pub struct Remotes {
+    /// The shared route subscribed to; messages about any other route or room are ignored.
+    route: String,
     route_length_m: f64,
     next_id: RiderId,
     riders: HashMap<String, Known>,
 }
 
 impl Remotes {
-    /// `route_length_m` is the length of the local route the shared one is drawn onto.
-    pub fn new(route_length_m: f64) -> Self {
+    /// `route` is the shared route's id, `route_length_m` the length of the local route
+    /// it is drawn onto.
+    pub fn new(route: impl Into<String>, route_length_m: f64) -> Self {
         Self {
+            route: route.into(),
             route_length_m,
             next_id: FIRST_REMOTE_ID,
             riders: HashMap::new(),
@@ -80,6 +87,11 @@ impl Remotes {
     }
 
     pub fn apply(&mut self, event: RemoteEvent, now_s: f64) {
+        if let RemoteEvent::Message(message) = &event {
+            if !self.subscribed_to(message) {
+                return;
+            }
+        }
         match event {
             RemoteEvent::Reset => self.riders.clear(),
             RemoteEvent::Message(ServerMessage::Snapshot { riders, .. }) => {
@@ -108,14 +120,15 @@ impl Remotes {
         }
     }
 
-    /// Everyone still around, positions extrapolated to `now_s`. Forgets riders
-    /// that have been silent for too long.
+    /// Everyone heard of lately, positions extrapolated to `now_s`. A rider silent for
+    /// a while is left out but kept, so that an update after a stall brings them back.
     pub fn riders(&mut self, now_s: f64) -> Vec<RemoteRider> {
-        self.riders.retain(|_, known| now_s - known.heard_at_s <= STALE_AFTER_S);
+        self.riders.retain(|_, known| now_s - known.heard_at_s <= FORGET_AFTER_S);
         let length = self.route_length_m;
         let mut out: Vec<RemoteRider> = self
             .riders
             .values()
+            .filter(|known| now_s - known.heard_at_s <= STALE_AFTER_S)
             .map(|known| {
                 let age = (now_s - known.heard_at_s).clamp(0.0, MAX_EXTRAPOLATION_S);
                 RemoteRider {
@@ -131,6 +144,18 @@ impl Remotes {
             .collect();
         out.sort_by_key(|r| r.id);
         out
+    }
+
+    /// Whether `message` is about the route and room subscribed to. Messages without
+    /// either (welcome, error) are.
+    fn subscribed_to(&self, message: &ServerMessage) -> bool {
+        match message {
+            ServerMessage::Snapshot { route, room, .. }
+            | ServerMessage::Joined { route, room, .. }
+            | ServerMessage::Updated { route, room, .. }
+            | ServerMessage::Left { route, room, .. } => *route == self.route && room == OBN_ROOM,
+            _ => true,
+        }
     }
 
     fn new_id(&mut self) -> RiderId {
@@ -230,7 +255,7 @@ mod tests {
     }
 
     fn remotes() -> Remotes {
-        Remotes::new(250.0)
+        Remotes::new("velodrome-250", 250.0)
     }
 
     fn named<'a>(riders: &'a [RemoteRider], name: &str) -> &'a RemoteRider {
@@ -318,12 +343,72 @@ mod tests {
     }
 
     #[test]
-    fn stale_riders_are_dropped() {
+    fn stale_riders_are_hidden() {
         let mut r = remotes();
         r.apply(joined(view("a", "Ann", 10.0, 0.0)), 0.0);
         assert_eq!(r.riders(10.0).len(), 1);
         assert!(r.riders(10.1).is_empty());
+    }
+
+    #[test]
+    fn an_update_brings_a_stale_rider_back() {
+        let mut r = remotes();
+        r.apply(joined(view("a", "Ann", 10.0, 0.0)), 0.0);
+        let id = r.riders(0.0)[0].id;
+        assert!(r.riders(11.0).is_empty());
+        r.apply(updated("a", 60.0, 0.0), 12.0);
+        let riders = r.riders(12.0);
+        assert_eq!((riders[0].id, riders[0].name.as_str(), riders[0].distance), (id, "Ann", 60.0));
+    }
+
+    #[test]
+    fn silent_riders_are_forgotten_after_five_minutes() {
+        let mut r = remotes();
+        r.apply(joined(view("a", "Ann", 10.0, 0.0)), 0.0);
+        r.riders(300.0);
+        assert_eq!(r.len(), 1);
+        r.riders(300.1);
         assert_eq!(r.len(), 0);
+    }
+
+    fn elsewhere(event: RemoteEvent, route: &str, room: &str) -> RemoteEvent {
+        let RemoteEvent::Message(mut message) = event else {
+            panic!("not a message")
+        };
+        match &mut message {
+            ServerMessage::Snapshot { route: a, room: b, .. }
+            | ServerMessage::Joined { route: a, room: b, .. }
+            | ServerMessage::Updated { route: a, room: b, .. }
+            | ServerMessage::Left { route: a, room: b, .. } => {
+                *a = route.into();
+                *b = room.into();
+            }
+            _ => panic!("no route or room"),
+        }
+        RemoteEvent::Message(message)
+    }
+
+    #[test]
+    fn a_snapshot_of_another_room_does_not_replace_ours() {
+        let mut r = remotes();
+        r.apply(snapshot(vec![view("a", "Ann", 10.0, 0.0)]), 0.0);
+        r.apply(elsewhere(snapshot(vec![view("x", "Xan", 1.0, 0.0)]), "velodrome-250", "club"), 0.0);
+        r.apply(elsewhere(snapshot(vec![]), "hill-climb", "public"), 0.0);
+        let riders = r.riders(0.0);
+        assert_eq!(riders.len(), 1);
+        assert_eq!(riders[0].name, "Ann");
+    }
+
+    #[test]
+    fn riders_of_another_route_or_room_are_ignored() {
+        let mut r = remotes();
+        r.apply(joined(view("a", "Ann", 10.0, 0.0)), 0.0);
+        r.apply(elsewhere(joined(view("x", "Xan", 1.0, 0.0)), "hill-climb", "public"), 0.0);
+        r.apply(elsewhere(updated("a", 99.0, 0.0), "velodrome-250", "club"), 1.0);
+        r.apply(elsewhere(left("a"), "hill-climb", "public"), 1.0);
+        let riders = r.riders(1.0);
+        assert_eq!(riders.len(), 1);
+        assert_eq!(riders[0].distance, 10.0);
     }
 
     #[test]
@@ -338,7 +423,7 @@ mod tests {
 
     #[test]
     fn distance_is_scaled_to_the_local_length() {
-        let mut r = Remotes::new(500.0);
+        let mut r = Remotes::new("velodrome-250", 500.0);
         r.apply(joined(view("a", "Ann", 100.0, 0.0)), 0.0);
         assert_eq!(r.riders(0.0)[0].distance, 200.0);
     }

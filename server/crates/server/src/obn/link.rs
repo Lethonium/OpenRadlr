@@ -18,10 +18,9 @@ use tokio_tungstenite::tungstenite::Message;
 use super::outbox::{LocalRider, Outbox};
 use super::remote::RemoteEvent;
 use super::wire::{AppInfo, AppMessage, ServerMessage};
+use super::OBN_ROOM;
 use crate::runtime::{Command, GameHandle};
 
-/// Room every rider joins (spec 6.2).
-const ROOM: &str = "public";
 /// Longest pause between connection attempts, in units.
 const MAX_BACKOFF_UNITS: u32 = 60;
 /// Longest wait for the TCP and WebSocket handshake.
@@ -126,7 +125,7 @@ async fn session(
     let (mut sink, mut stream) = socket.split();
     let subscribe = AppMessage::Subscribe {
         route: route.to_owned(),
-        room: ROOM.into(),
+        room: OBN_ROOM.into(),
     };
     for message in [hello(), subscribe] {
         if sink.send(text(&message)).await.is_err() {
