@@ -24,9 +24,9 @@ const SCALE = 1.15;
 const ROW_HALF = 7.5;
 const MAX_SPACING = 3;
 /** Plinth sizes `[x, height, z]`; a lying figure's long axis runs along X, the row's. */
-const PLINTHS = Object.freeze({ upright: [0.9, 1.0, 0.9], lying: [2.0, 0.6, 0.8] });
+export const PLINTHS = Object.freeze({ upright: [0.9, 1.0, 0.9], lying: [2.0, 0.6, 0.8] });
 const GLOW_BAR = 0.06;
-const GLOW_MARGIN = 0.05;
+const GLOW_MARGIN = 0.08;
 /** Per-face brightness of granite. */
 const SPECKLE = [0.9, 1.08, 0.96, 1.04, 0.92, 1.0];
 
@@ -80,7 +80,7 @@ function plinthMesh([sx, sy, sz], x, material) {
 /** A thin band round the plinth's top edge (bronze patina). */
 function bandMesh([sx, sy, sz], x, colour) {
   const m = new MeshBuilder();
-  m.box([x, sy - 0.04, 0], [sx + 0.02, 0.08, sz + 0.02], colour);
+  m.box([x, sy - 0.05, 0], [sx + 0.02, 0.08, sz + 0.02], colour);
   return m.build();
 }
 

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
-import { STATUE_MATERIALS, buildStatues, statueSlots } from "../public/js/view3d/statues.js";
+import { PLINTHS, STATUE_MATERIALS, buildStatues, statueSlots } from "../public/js/view3d/statues.js";
+import { STATUE_MOMENT } from "../public/js/view3d/clips.js";
 
 const colorAt = (mesh, i) => [0, 1, 2].map((k) => Math.fround(mesh.colors[i * 4 + k]));
 const near = (a, b) => a.every((v, k) => Math.abs(v - b[k]) < 1e-5);
@@ -66,6 +67,27 @@ test("a biome rig casts its own figures on the same plinths", () => {
     const low = Math.min(...mine.map((p) => p[1]));
     assert.ok(Math.abs(low - row.tops[i]) < 0.01, `${name}: lowest ${low}, plinth ${row.tops[i]}`);
   });
+});
+
+test("the bronze band stays below the plinth top", () => {
+  const row = buildStatues(["squats"], "bronze");
+  const band = painted(row.mesh, STATUE_MATERIALS.bronze.accent);
+  assert.ok(band.length > 0);
+  const highest = Math.max(...band.map((p) => p[1]));
+  assert.ok(highest <= row.tops[0] - 0.005, `band top ${highest}, plinth top ${row.tops[0]}`);
+});
+
+test("the glow ring lies outside the plinth", () => {
+  const row = buildStatues(["squats"], "marble");
+  const [sx, , sz] = PLINTHS[STATUE_MOMENT.squats.plinth];
+  const { positions, vertexCount } = row.glows[0];
+  assert.ok(vertexCount > 0);
+  for (let i = 0; i < vertexCount; i += 1) {
+    const x = positions[i * 3];
+    const z = positions[i * 3 + 2];
+    const outside = Math.abs(x) >= sx / 2 + 0.005 || Math.abs(z) >= sz / 2 + 0.005;
+    assert.ok(outside, `glow vertex (${x}, ${z}) inside the plinth footprint`);
+  }
 });
 
 test("an unknown material throws", () => {
