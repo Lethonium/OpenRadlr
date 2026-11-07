@@ -3,6 +3,7 @@
 //! [`wire`] holds the JSON messages of protocol v0 (spec in the OpenBikeNet repository),
 //! [`outbox`] turns this server's riders into the messages an app sends.
 
+pub mod link;
 pub mod outbox;
 pub mod remote;
 pub mod wire;
