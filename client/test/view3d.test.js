@@ -25,6 +25,7 @@ import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { buildStatues } from "../public/js/view3d/statues.js";
+import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
@@ -440,6 +441,25 @@ test("a workout rider's bike stands at the gym's bike rack", () => {
   closeVec([bike[12], bike[13], bike[14]], [104.6, 100.34, 27], 0.01);
 });
 
+test("in winter a workout rider is a penguin, and its bike still waits at the rack", () => {
+  const gym = testGym();
+  const { view, renderer } = gymView([gym], "winter");
+  view.workoutMode(gym, { reducedMotion: true });
+  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  const penguin = view.workoutParts.get("pelvis");
+  assert.ok(renderer.draws.some((d) => d.handle === penguin), "the penguin is drawn");
+  const human = view.bodyParts[riderLook(7).variant].get("pelvis");
+  assert.ok(!renderer.draws.some((d) => d.handle === human), "the human rider is not");
+  assert.ok(renderer.draws.some((d) => d.handle === view.bodies[riderLook(7).variant]), "the bike is parked");
+});
+
+test("disposing a winter view frees the penguin rig", () => {
+  const { view, renderer } = gymView([], "winter", null, new RecordingRenderer());
+  const handles = [...view.workoutParts.values()];
+  view.dispose();
+  for (const handle of handles) assert.ok(renderer.disposed.includes(handle));
+});
+
 test("a workout rider with no gym in reach stays on its bike on the road", () => {
   const { view, renderer } = gymView([]);
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
@@ -513,6 +533,21 @@ test("a statue row is drawn lit and casts a shadow", () => {
   const cast = renderer.casters.filter((d) => d.handle === drawn[0].handle);
   assert.equal(cast.length, 1);
   assert.deepEqual([...drawn[0].model], [...placement(gym.statueRow.position, gym.statueRow.yaw)]);
+});
+
+test("a winter view casts its statue rows as penguins", () => {
+  const gym = { ...testGym(), cafeId: "valley-cafe", statueRow: { position: [100, 100.4, 38], yaw: 0 } };
+  const { view, renderer } = gymView([gym], "winter", null, new RecordingRenderer());
+  view.camera.update(100, 1, 0);
+  gym.statueRow.position = [view.camera.target[0], view.camera.target[1], view.camera.target[2]];
+  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
+  renderStatues(view);
+  const winter = buildStatues(["squats", "plank"], "marble", resolveBiome("winter").workout).mesh;
+  const human = buildStatues(["squats", "plank"], "marble").mesh;
+  assert.notEqual(winter.vertexCount, human.vertexCount, "the figures differ from the human row");
+  const drawn = renderer.draws.filter((d) => d.handle.mesh?.vertexCount === winter.vertexCount);
+  assert.equal(drawn.length, 1, "the penguin row is drawn");
+  assert.deepEqual([...drawn[0].handle.mesh.positions], [...winter.positions]);
 });
 
 test("no glow is drawn until one is set, then exactly that ring", () => {
