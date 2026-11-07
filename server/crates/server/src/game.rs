@@ -158,10 +158,7 @@ pub(crate) fn sanitise_name(name: &str) -> Option<String> {
 /// that is too long or has control characters, drops those characters and cuts
 /// it to [`MAX_NAME_CHARS`]. `None` if nothing is left.
 pub(crate) fn clean_foreign_name(name: &str) -> Option<String> {
-    let name: String = name
-        .chars()
-        .filter(|c| !c.is_control() && !is_invisible(*c))
-        .collect();
+    let name: String = name.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
     let name: String = name.trim().chars().take(MAX_NAME_CHARS).collect();
     sanitise_name(&name)
 }
