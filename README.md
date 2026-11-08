@@ -186,6 +186,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 | `OPENRADLR_REQUIRE_STRAVA` | `false` | Riders must connect Strava to join |
 | `OPENRADLR_ALLOW_SIMULATED_TRAINER` | `true` | Offer the simulated trainer (set `false` in production) |
 | `OPENRADLR_ALLOW_PADDLE_MODE` | `true` | Offer phone paddles (tap left/right for power; no Strava, no ride files) |
+| `OPENRADLR_OBN_URL` | – | `wss://` URL of an OpenBikeNet server: shares the velodrome with riders of other apps (see [deploy.md](docs/deploy.md#openbikenet-optional)) |
 | `OPENRADLR_PRIVACY_URL` | – | Link to your privacy policy in the start menu |
 | `OPENRADLR_ANALYTICS_DOMAIN` / `_SCRIPT` | – | Opt-in Plausible analytics for the client: your site name, and the script URL if you self-host Plausible (off when the domain is empty) |
 | `OPENRADLR_STUDIO` | `true` | Host the spin studio (group classes) next to the routes |

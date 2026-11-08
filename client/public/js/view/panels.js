@@ -1,6 +1,7 @@
 import { formatCountdown } from "./events.js";
 import { formatDuration, formatGap } from "../util/format.js";
 import { t, tn } from "../i18n/i18n.js";
+import { isRemote, riderLabel } from "./remoteRiders.js";
 
 /**
  * Side panels (rider list, race status, event feed). Pure functions decide
@@ -72,12 +73,14 @@ export function raceStatus(race, myLap) {
  */
 export function onlineSummary(serverPlayers, riders, routeRiders = null) {
   // The server counts everyone on the route (#14); the riders listed are only those in view.
-  const humans = routeRiders?.humans ?? riders.filter((rider) => !rider.is_bot).length;
-  const bots = routeRiders?.bots ?? riders.length - humans;
+  const remote = routeRiders?.remote ?? riders.filter(isRemote).length;
+  const humans = routeRiders?.humans ?? riders.filter((rider) => !rider.is_bot && !isRemote(rider)).length;
+  const bots = routeRiders?.bots ?? riders.length - humans - remote;
   const online = Math.max(serverPlayers ?? humans, humans);
   const parts = [t("panels.online", { riders: tn("menu.riders", online) })];
   if (online !== humans) parts.push(t("panels.onRoute", { n: humans }));
   if (bots > 0) parts.push(tn("panels.bots", bots));
+  if (remote > 0) parts.push(tn("panels.remote", remote));
   return { count: online, text: parts.join(" · ") };
 }
 
@@ -142,7 +145,7 @@ function paddleBadge() {
 
 /** "Anna (bot)", "Ben 📱" for plain-text lists. */
 export function riderName(rider) {
-  if (rider.is_bot) return `${rider.name} ${t("panels.botSuffix")}`;
+  if (rider.is_bot || isRemote(rider)) return riderLabel(rider, t);
   return isPaddler(rider) ? `${rider.name} ${PADDLE_BADGE}` : rider.name;
 }
 
@@ -152,6 +155,7 @@ export function renderRiderList(list, entries, myId) {
       const item = element("li", rider.id === myId ? "rider me" : "rider");
       const name = element("span", "rider-name", rider.name);
       if (rider.is_bot) name.append(element("span", "badge", t("panels.bot")));
+      if (isRemote(rider)) name.append(element("span", "badge badge-remote", rider.app));
       if (isPaddler(rider)) name.append(paddleBadge());
       item.append(name, element("span", "rider-power", `${Math.round(rider.power)} W`), element("span", "rider-gap", rider.id === myId ? "" : gap === null ? routeName : formatGap(gap)));
       return item;

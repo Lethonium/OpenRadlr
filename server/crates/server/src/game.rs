@@ -6,9 +6,11 @@
 //! [`MessageSink`], so tests can plug in an in-memory sink while production
 //! plugs in a channel to the WebSocket writer (see [`crate::runtime`]).
 
+use crate::obn::outbox::LocalRider;
+use crate::obn::remote::{RemoteEvent, RemoteRider, Remotes};
 use crate::protocol::{
     event_info, event_message, event_notice_message, event_state, state_message, DeviceKind, EventInfoWire, EventState,
-    Exercise, InputAction, PhysicsWire, RiderTags, ServerMessage,
+    Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage,
 };
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
@@ -21,6 +23,7 @@ use openradlr_sim::world::{VehicleChange, WorldError};
 use openradlr_sim::{RiderId, RouteIndex, World, WorldEvent};
 use std::collections::HashMap;
 use std::fmt;
+use tokio::sync::mpsc;
 
 /// The client is gone and should be removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,6 +154,15 @@ pub(crate) fn sanitise_name(name: &str) -> Option<String> {
     valid.then(|| name.to_owned())
 }
 
+/// Like [`sanitise_name`] for text from another app: instead of refusing a name
+/// that is too long or has control characters, drops those characters and cuts
+/// it to [`MAX_NAME_CHARS`]. `None` if nothing is left.
+pub(crate) fn clean_foreign_name(name: &str) -> Option<String> {
+    let name: String = name.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
+    let name: String = name.trim().chars().take(MAX_NAME_CHARS).collect();
+    sanitise_name(&name)
+}
+
 pub(crate) fn valid_weight(weight_kg: f64) -> bool {
     weight_kg.is_finite() && (30.0..=200.0).contains(&weight_kg)
 }
@@ -193,6 +205,17 @@ pub struct GameCore {
     departed: HashMap<RiderId, String>,
     /// Resume tokens and who is detached (#73).
     attachments: Attachments,
+    /// The shared OpenBikeNet route, if this world has one.
+    obn: Option<Obn>,
+}
+
+/// What a world with an OpenBikeNet route needs: where it is, the way out and the riders in.
+struct Obn {
+    route: RouteIndex,
+    frames: mpsc::Sender<Vec<LocalRider>>,
+    remotes: Remotes,
+    /// The remote riders as of the last tick, shared by all viewers.
+    shown: Vec<RemoteRider>,
 }
 
 /// The wire code of a vehicle refusal.
@@ -231,6 +254,7 @@ impl GameCore {
             attachments: Attachments::new(settings.grace_s, ResumeTokens::new(), world_id.clone()),
             world_id,
             departed: HashMap::new(),
+            obn: None,
         }
     }
 
@@ -264,6 +288,97 @@ impl GameCore {
     pub fn with_events(mut self, events: Events, wall_clock: fn() -> f64) -> Self {
         self.events = Some((events, wall_clock));
         self
+    }
+
+    /// Shares `route` with other apps through OpenBikeNet as `shared_route`: once a second the humans on it go
+    /// out as a frame on `frames` (dropped if the link is behind), and riders coming back
+    /// arrive through [`GameCore::remote`].
+    pub fn with_openbikenet(
+        mut self,
+        route: RouteIndex,
+        shared_route: &str,
+        frames: mpsc::Sender<Vec<LocalRider>>,
+    ) -> Self {
+        let remotes = Remotes::new(shared_route, self.world.route(route).length());
+        self.obn = Some(Obn {
+            route,
+            frames,
+            remotes,
+            shown: Vec::new(),
+        });
+        self
+    }
+
+    /// Takes what the OpenBikeNet link reports.
+    pub fn remote(&mut self, event: RemoteEvent) {
+        let now = self.clock_s();
+        if let Some(obn) = &mut self.obn {
+            obn.remotes.apply(event, now);
+            obn.shown = obn.remotes.riders(now);
+        }
+    }
+
+    /// Hands this second's humans on the shared route to the link, without waiting for it.
+    fn send_obn_frame(&self) {
+        let Some(obn) = &self.obn else {
+            return;
+        };
+        if !self.tick.is_multiple_of(u64::from(self.settings.tick_hz.max(1))) {
+            return;
+        }
+        let frame = self
+            .world
+            .riders()
+            .filter(|r| r.route == obn.route && r.off_route.is_none() && !r.is_bot() && !r.workout)
+            .map(|r| LocalRider {
+                id: r.id,
+                name: r.name.clone(),
+                position: r.position,
+                speed: r.speed,
+                power: r.power,
+                cadence: r.cadence,
+            })
+            .collect();
+        // A full or closed channel loses the frame; the next one supersedes it.
+        let _ = obn.frames.try_send(frame);
+    }
+
+    /// `state` with the riders of other apps added, if it is for a rider on the shared route.
+    fn with_remotes(&self, viewer: RiderId, state: ServerMessage) -> ServerMessage {
+        let (Some(obn), Some(me)) = (&self.obn, self.world.rider(viewer)) else {
+            return state;
+        };
+        if me.route != obn.route || obn.shown.is_empty() {
+            return state;
+        }
+        let ServerMessage::State {
+            tick,
+            mut riders,
+            race,
+            mut route_riders,
+            event,
+            vehicle,
+        } = state
+        else {
+            return state;
+        };
+        let route = self.world.route(obn.route);
+        let room = self.settings.max_visible_riders.saturating_sub(riders.len());
+        riders.extend(
+            obn.shown
+                .iter()
+                .take(room)
+                .map(|r| RiderState::remote(r, route.id(), route.lanes())),
+        );
+        route_riders.remote = obn.shown.len();
+        ServerMessage::State {
+            tick,
+            riders,
+            race,
+            route_riders,
+            event,
+            vehicle,
+        }
     }
 
     /// The event of the rider's route, as their state message carries it.
@@ -404,7 +519,7 @@ impl GameCore {
             event,
             &|id| self.tags_of(id),
         ) {
-            let _ = sink.deliver(state);
+            let _ = sink.deliver(self.with_remotes(rider_id, state));
         }
         self.clients.insert(
             rider_id,
@@ -660,7 +775,7 @@ impl GameCore {
             event,
             &|id| self.tags_of(id),
         ) {
-            let _ = client.sink.deliver(state);
+            let _ = client.sink.deliver(self.with_remotes(rider_id, state));
         }
     }
 
@@ -792,6 +907,13 @@ impl GameCore {
             }
         }
 
+        let now = self.clock_s();
+        if let Some(obn) = &mut self.obn {
+            // Once per tick for everybody, not per viewer.
+            obn.shown = obn.remotes.riders(now);
+        }
+        self.send_obn_frame();
+
         let mut closed = Vec::new();
         if self.tick.is_multiple_of(self.settings.broadcast_every()) {
             // Everyone gets their own view: the riders around them.
@@ -807,7 +929,7 @@ impl GameCore {
                 ) else {
                     continue;
                 };
-                if client.sink.deliver(state).is_err() {
+                if client.sink.deliver(self.with_remotes(rider_id, state)).is_err() {
                     closed.push(rider_id);
                 }
             }
@@ -1010,6 +1132,10 @@ impl Game for GameCore {
 
     fn tick(&mut self) {
         GameCore::tick(self);
+    }
+
+    fn remote(&mut self, event: RemoteEvent) {
+        GameCore::remote(self, event);
     }
 }
 
@@ -1481,11 +1607,25 @@ mod tests {
         let (mut seen, _, route_riders) = last_state(&west_sink);
         seen.sort_unstable();
         assert_eq!(seen, vec![west, east, near], "the east loop is 3 km away, still listed");
-        assert_eq!(route_riders, RouteRiders { humans: 1, bots: 0 });
+        assert_eq!(
+            route_riders,
+            RouteRiders {
+                humans: 1,
+                bots: 0,
+                remote: 0
+            }
+        );
         let (mut seen, _, route_riders) = last_state(&east_sink);
         seen.sort_unstable();
         assert_eq!(seen, vec![west, east, near]);
-        assert_eq!(route_riders, RouteRiders { humans: 2, bots: 0 });
+        assert_eq!(
+            route_riders,
+            RouteRiders {
+                humans: 2,
+                bots: 0,
+                remote: 0
+            }
+        );
     }
 
     #[test]
@@ -2421,5 +2561,111 @@ mod tests {
         assert!(rider.workout && rider.parked);
         assert_eq!(game.device_of(anna), DeviceKind::Workout);
         assert!(exercise_json(&fresh).contains(r#""exercise":"plank""#));
+    }
+
+    // --- OpenBikeNet -----------------------------------------------------
+
+    fn obn_game(target_riders: usize, capacity: usize) -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
+        let (frames, receiver) = mpsc::channel(capacity);
+        (
+            game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames),
+            receiver,
+        )
+    }
+
+    fn snapshot_of_ben() -> RemoteEvent {
+        RemoteEvent::Message(crate::obn::wire::ServerMessage::Snapshot {
+            route: "velodrome-250".into(),
+            room: "public".into(),
+            riders: vec![crate::obn::wire::RemoteView {
+                id: "ben-1".into(),
+                app: "incyclist".into(),
+                name: "Ben".into(),
+                lap: 0,
+                distance: 10.0,
+                speed: 0.0,
+                power: Some(180.0),
+                cadence: None,
+            }],
+        })
+    }
+
+    #[test]
+    fn sends_a_frame_per_second_of_humans_on_the_shared_route() {
+        let (mut game, mut frames) = obn_game(1, 4);
+        let (anna, _) = join(&mut game, "Anna");
+        for _ in 0..game.settings().tick_hz {
+            game.tick();
+        }
+        let frame = frames.try_recv().expect("one frame after a second");
+        assert_eq!(frame.len(), 1);
+        assert_eq!(frame[0].id, anna);
+        assert_eq!(frame[0].name, "Anna");
+        assert!(frames.try_recv().is_err());
+    }
+
+    #[test]
+    fn workout_riders_are_not_in_the_frame() {
+        let (mut game, mut frames) = obn_game(0, 4);
+        let (anna, _) = join_workout(&mut game, "Anna");
+        game.workout(anna, Some(Exercise::Plank));
+        assert!(game.world().rider(anna).unwrap().workout);
+        for _ in 0..game.settings().tick_hz {
+            game.tick();
+        }
+        let frame = frames.try_recv().expect("one frame after a second");
+        assert!(frame.is_empty(), "workout riders are never shared: {frame:?}");
+    }
+
+    #[test]
+    fn full_link_channel_never_blocks_the_tick() {
+        let (mut game, _frames) = obn_game(0, 1);
+        join(&mut game, "Anna");
+        for _ in 0..5 * game.settings().tick_hz {
+            game.tick();
+        }
+    }
+
+    #[test]
+    fn remote_riders_appear_in_state() {
+        let (mut game, _frames) = obn_game(0, 4);
+        let (_, sink) = join(&mut game, "Anna");
+        sink.take();
+        game.remote(snapshot_of_ben());
+        for _ in 0..game.settings().broadcast_every() {
+            game.tick();
+        }
+        let messages = sink.take();
+        let Some(ServerMessage::State {
+            riders, route_riders, ..
+        }) = messages.iter().rev().find(|m| matches!(m, ServerMessage::State { .. }))
+        else {
+            panic!("expected a state message");
+        };
+        let ben = riders.iter().find(|r| r.name == "Ben").expect("Ben is shown");
+        assert_eq!(ben.app.as_deref(), Some("incyclist"));
+        assert!(!ben.is_bot);
+        assert_eq!(route_riders.remote, 1);
+    }
+
+    #[test]
+    fn reset_removes_remote_riders_from_state() {
+        let (mut game, _frames) = obn_game(0, 4);
+        let (_, sink) = join(&mut game, "Anna");
+        game.remote(snapshot_of_ben());
+        game.remote(RemoteEvent::Reset);
+        sink.take();
+        for _ in 0..game.settings().broadcast_every() {
+            game.tick();
+        }
+        let messages = sink.take();
+        let Some(ServerMessage::State {
+            riders, route_riders, ..
+        }) = messages.iter().rev().find(|m| matches!(m, ServerMessage::State { .. }))
+        else {
+            panic!("expected a state message");
+        };
+        assert!(riders.iter().all(|r| r.app.is_none()));
+        assert_eq!(route_riders.remote, 0);
     }
 }

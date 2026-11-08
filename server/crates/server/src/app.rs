@@ -8,6 +8,7 @@ use crate::game::{GameCore, GameSettings};
 use crate::guard::Slots;
 use crate::http::{router, AppState, Protection};
 use crate::map_file::load_maps;
+use crate::obn::link::spawn_link;
 use crate::resume::ResumeTokens;
 use crate::route_file::{load_routes, RouteFile};
 use crate::runtime::spawn_game;
@@ -20,16 +21,29 @@ use axum::Router;
 use openradlr_sim::events::Events;
 use openradlr_sim::rng::SplitMix64;
 use openradlr_sim::studio::{builtin_classes, Studio, StudioConfig, Timetable};
-use openradlr_sim::World;
+use openradlr_sim::{SimConfig, World};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+/// Frames the OpenBikeNet link may lag behind before the game drops one.
+const OBN_FRAME_BACKLOG: usize = 8;
+
 /// How often the community totals are written to disk.
 const STATS_SAVE_EVERY: Duration = Duration::from_secs(60);
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// The simulation settings of one world. A world with a route shared through
+/// OpenBikeNet has no bots: its riders come from other apps.
+fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
+    let mut sim = config.sim_config();
+    if group.iter().any(|file| file.openbikenet.is_some()) {
+        sim.target_riders = 0;
+    }
+    sim
+}
 
 /// Builds the application. Must be called inside a Tokio runtime because it
 /// starts one game loop task per route.
@@ -139,21 +153,46 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         let mut world = World::with_network(
             routes.clone(),
             network,
-            config.sim_config(),
+            sim_config_for(config, &group),
             Box::new(SplitMix64::new(world_seed)),
         );
         // Boarding codes guard private vehicles: never from the logged, seedable sim RNG.
         world.set_code_source(Box::new(crate::secure_random::OsRandom));
         let route_ids: Vec<String> = group.iter().map(|f| f.id.clone()).collect();
         let defs = resolve(&event_entries, &route_ids, config.event_lobby_s)?;
-        let game = spawn_game(
-            GameCore::new(world, settings)
-                .with_events(Events::new(defs), unix_now_s)
-                .with_stats(stats.clone())
-                // The map's first route stands for the world: a route id clients can rejoin with.
-                .with_vehicle_codes(vehicle_codes.clone(), route_ids[0].clone())
-                .with_resume_tokens(resume_tokens.clone()),
-        );
+        let mut core = GameCore::new(world, settings)
+            .with_events(Events::new(defs), unix_now_s)
+            .with_stats(stats.clone())
+            // The map's first route stands for the world: a route id clients can rejoin with.
+            .with_vehicle_codes(vehicle_codes.clone(), route_ids[0].clone())
+            .with_resume_tokens(resume_tokens.clone());
+        // The world with the OpenBikeNet route shares it, if a server is configured.
+        let shared_index = group
+            .iter()
+            .position(|f| f.openbikenet.is_some())
+            .filter(|_| config.obn_url.is_some());
+        let obn_route = shared_index.map(|index| group[index].openbikenet.clone().unwrap_or_default());
+        let mut link_frames = None;
+        if let (Some(index), Some(obn_route)) = (shared_index, &obn_route) {
+            let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
+            core = core.with_openbikenet(index, obn_route, frames);
+            link_frames = Some(receiver);
+        }
+        let game = spawn_game(core);
+        if let (Some(index), Some(obn_route), Some(receiver), Some(url)) =
+            (shared_index, obn_route, link_frames, &config.obn_url)
+        {
+            tracing::info!(route = %obn_route, "sharing the route through OpenBikeNet");
+            spawn_link(
+                url.clone(),
+                obn_route,
+                routes[index].length(),
+                config.obn_backoff_unit,
+                config.obn_heartbeat,
+                receiver,
+                game.clone(),
+            );
+        }
         tracing::info!(
             map = map.as_deref().unwrap_or("-"),
             routes = %group.iter().map(|f| f.id.as_str()).collect::<Vec<_>>().join(", "),
@@ -162,8 +201,9 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             turns,
             "world created"
         );
-        for (file, route) in group.into_iter().zip(routes) {
+        for (position, (file, route)) in group.into_iter().zip(routes).enumerate() {
             entries.push(WorldEntry {
+                shared: shared_index == Some(position),
                 length_m: route.length(),
                 elevation_gain_m: file.elevation_gain_m(),
                 file: Arc::new(file),
@@ -310,4 +350,35 @@ pub async fn run(config: Config, shutdown: impl Future<Output = ()> + Send + 'st
     }
     tracing::info!("server stopped");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    const ROUTES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes");
+
+    fn world_of(config: &Config, id: &str) -> World {
+        let file = RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap();
+        let route = file.to_route().unwrap();
+        let sim = sim_config_for(config, std::slice::from_ref(&file));
+        World::new(route, sim, Box::new(SplitMix64::new(1)))
+    }
+
+    #[test]
+    fn shared_route_world_has_no_bots() {
+        let config = Config {
+            target_riders: 3,
+            ..Config::default()
+        };
+        let mut velodrome = world_of(&config, "velodrome");
+        let mut other = world_of(&config, "rolling-hills");
+        for _ in 0..20 {
+            velodrome.tick(0.1);
+            other.tick(0.1);
+        }
+        assert_eq!(velodrome.bot_count(), 0);
+        assert_eq!(other.bot_count(), 3);
+    }
 }
