@@ -2129,7 +2129,7 @@ function startWorkout() {
   app.workoutHeartRate = null;
   app.workoutAudio = "AudioContext" in globalThis ? new AudioContext() : null;
   // The server drops a joined connection after 120 s of silence: repeat the exercise as a keepalive.
-  app.workoutKeepalive = startKeepalive({ send: (exercise) => app.connection?.workout(exercise), current: () => app.workout?.currentExercise() ?? null });
+  app.workoutKeepalive = startKeepalive({ send: (exercise, side) => app.connection?.workout(exercise, side), current: () => [app.workout?.currentExercise() ?? null, app.workout?.currentSide() ?? null] });
   app.workoutCue = createCue({
     audioContext: app.workoutAudio,
     vibrate: navigator.vibrate ? (ms) => navigator.vibrate(ms) : null,
@@ -2166,8 +2166,8 @@ function startWorkout() {
 
 /** Carries out what the workout session decided. */
 function runWorkoutActions(actions) {
-  for (const [kind, value] of actions) {
-    if (kind === "send") app.connection.workout(value);
+  for (const [kind, value, side] of actions) {
+    if (kind === "send") app.connection.workout(value, side);
     else if (kind === "cue") {
       if (app.profile.workoutCues !== false) app.workoutCue?.();
     } else if (kind === "finished") finishWorkout();
@@ -2193,7 +2193,7 @@ function workoutFrame() {
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart } : rider));
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
     app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
   }
 }

@@ -373,6 +373,7 @@ export default {
   "ride.finishToBoard": "Finish your ride to board that vehicle",
   "workout.resume": "Resume",
   "workout.pause": "Pause",
+  "workout.switchSides": "Switch sides",
   "workout.ended": "Workout ended",
   "studio.ergTitle": "ERG: the trainer holds the target",
   "studio.powerOnlyTitle": "Your trainer only sends power: follow the targets yourself",

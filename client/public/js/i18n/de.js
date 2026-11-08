@@ -373,6 +373,7 @@ export default {
   "ride.finishToBoard": "Beende deine Fahrt, um in dieses Fahrzeug einzusteigen",
   "workout.resume": "Weiter",
   "workout.pause": "Pause",
+  "workout.switchSides": "Seite wechseln",
   "workout.ended": "Workout beendet",
   "studio.ergTitle": "ERG: Die Rolle hält die Zielleistung",
   "studio.powerOnlyTitle": "Deine Rolle sendet nur Leistung: Folge den Zielen selbst",
