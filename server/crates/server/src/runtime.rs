@@ -5,7 +5,7 @@
 
 use crate::game::{JoinError, MessageSink, SinkClosed};
 use crate::obn::remote::RemoteEvent;
-use crate::protocol::{DeviceKind, EventInfoWire, Exercise, InputAction, ServerMessage};
+use crate::protocol::{DeviceKind, EventInfoWire, Exercise, InputAction, ServerMessage, Side};
 use crate::resume::JoinedRider;
 use openradlr_sim::RiderId;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -100,7 +100,7 @@ pub trait Game: Send + 'static {
     /// Parks (`on`) or unparks the rider (a pause, #89); the studio ignores it.
     fn pause(&mut self, _rider_id: RiderId, _on: bool) {}
     /// The exercise a workout rider does now (`None`: rest); the studio ignores it.
-    fn workout(&mut self, _rider_id: RiderId, _exercise: Option<Exercise>) {}
+    fn workout(&mut self, _rider_id: RiderId, _exercise: Option<Exercise>, _side: Option<Side>) {}
     fn chat(&mut self, rider_id: RiderId, text: &str);
     fn tick(&mut self);
     /// What the OpenBikeNet link reports; worlds without a shared route ignore it.
@@ -192,6 +192,7 @@ pub enum Command {
     Workout {
         rider_id: RiderId,
         exercise: Option<Exercise>,
+        side: Option<Side>,
     },
     /// Riders of other apps arriving or leaving on the shared route.
     Remote(RemoteEvent),
@@ -425,7 +426,11 @@ pub(crate) fn apply<G: Game>(core: &mut G, command: Command) {
         Command::BoardVehicle { rider_id, code } => core.board_vehicle(rider_id, &code),
         Command::LeaveVehicle { rider_id } => core.leave_vehicle(rider_id),
         Command::Pause { rider_id, on } => core.pause(rider_id, on),
-        Command::Workout { rider_id, exercise } => core.workout(rider_id, exercise),
+        Command::Workout {
+            rider_id,
+            exercise,
+            side,
+        } => core.workout(rider_id, exercise, side),
         Command::Remote(event) => core.remote(event),
     }
 }
