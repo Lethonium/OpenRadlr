@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { encodeSetTargetPower } from "../public/js/ble/ftms.js";
 import { SimulatedTrainer, SmartTrainer } from "../public/js/ble/devices.js";
@@ -8,16 +8,22 @@ import {
   WorkoutPlayer,
   createWorkout,
   intervals,
+  overUnders,
   parseZwo,
   positionAt,
   ramp,
+  segmentLabel,
+  series,
   steady,
   totalDuration,
   zoneFor,
 } from "../public/js/ride/workout.js";
+import { setLocale } from "../public/js/i18n/i18n.js";
 import { Emitter } from "../public/js/util/emitter.js";
 import { fakeScheduler } from "./helpers.js";
 import { fakeTrainer } from "./fakeBluetooth.js";
+
+afterEach(() => setLocale("en"));
 
 // --- FTMS ERG ---------------------------------------------------------------
 
@@ -274,4 +280,55 @@ test("a locked workout ignores adjust and skipSegment until it stops", () => {
   assert.equal(control.adjust(1), true);
   control.skipSegment();
   assert.equal(control.tick(0).finished, true);
+});
+
+// --- ERG session building blocks ---------------------------------------------
+
+test("intervals can leave out the recovery after the last rep", () => {
+  const segments = intervals(3, 30, 1.2, 15, 0.6, { lastRecovery: false });
+  assert.equal(segments.length, 5);
+  assert.equal(segments.at(-1).label, "Interval 3/3");
+  assert.equal(intervals(3, 30, 1.2, 15, 0.6).at(-1).label, "Recovery 3/3");
+});
+
+test("an imported .zwo keeps the recovery after its last interval", () => {
+  const workout = parseZwo('<workout_file><workout><IntervalsT Repeat="2" OnDuration="30" OnPower="1.2" OffDuration="15" OffPower="0.6"/></workout></workout_file>');
+  assert.equal(workout.segments.at(-1).kind, "off");
+});
+
+test("series prefixes labels and puts a break only between sets", () => {
+  const segments = series(2, 180, 0.6, () => intervals(2, 30, 1.2, 15, 0.6, { lastRecovery: false }));
+  assert.deepEqual(segments.map((s) => s.label), [
+    "Series 1/2 · Interval 1/2", "Series 1/2 · Recovery 1/2", "Series 1/2 · Interval 2/2",
+    "Series break",
+    "Series 2/2 · Interval 1/2", "Series 2/2 · Recovery 1/2", "Series 2/2 · Interval 2/2",
+  ]);
+  assert.deepEqual([segments[3].durationS, segments[3].from, segments[3].to, segments[3].kind], [180, 0.6, 0.6, "off"]);
+});
+
+test("a single series has no break", () => {
+  assert.equal(series(1, 180, 0.6, () => intervals(1, 30, 1.2, 15, 0.6)).length, 2);
+});
+
+test("overUnders alternates under and over blocks", () => {
+  const segments = overUnders(2, 120, 0.95, 60, 1.05);
+  assert.deepEqual(segments.map((s) => [s.label, s.durationS, s.from, s.kind]), [
+    ["Under 1/2", 120, 0.95, "on"], ["Over 1/2", 60, 1.05, "on"],
+    ["Under 2/2", 120, 0.95, "on"], ["Over 2/2", 60, 1.05, "on"],
+  ]);
+});
+
+test("segmentLabel translates series, under, over and the break", () => {
+  assert.equal(segmentLabel("Series 2/3 · Interval 5/13"), "Series 2/3 · Interval 5/13");
+  setLocale("de");
+  assert.equal(segmentLabel("Series 2/3 · Interval 5/13"), "Serie 2/3 · Intervall 5/13");
+  assert.equal(segmentLabel("Series 1/3 · Under 2/3"), "Serie 1/3 · Unter 2/3");
+  assert.equal(segmentLabel("Over 1/3"), "Über 1/3");
+  assert.equal(segmentLabel("Series break"), "Serienpause");
+});
+
+test("segmentLabel leaves labels it does not know alone", () => {
+  setLocale("de");
+  assert.equal(segmentLabel("Series 1/2 · Hill repeat"), "Serie 1/2 · Hill repeat");
+  assert.equal(segmentLabel("Series of hills"), "Series of hills");
 });

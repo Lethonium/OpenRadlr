@@ -25,6 +25,7 @@ const LIBRARY_KEYS = {
 const LABEL_KEYS = {
   Steady: "workout.label.steady", Ramp: "workout.label.ramp", Block: "workout.label.block", "Warm-up": "workout.label.warmup", "Cool-down": "workout.label.cooldown",
   Endurance: "workout.label.endurance", Tempo: "workout.label.tempo", Easy: "workout.label.easy", "Max effort": "workout.label.maxEffort", "Free ride": "workout.label.freeRide", // i18n-ok
+  "Series break": "workout.label.seriesBreak", // i18n-ok
 };
 
 /** The name to show for a workout: the library ones are translated, imported ones are the file's own. */
@@ -38,6 +39,10 @@ export function segmentLabel(label) {
   if (step) return t("workout.label.step", { n: step[1] });
   const round = /^(Interval|Recovery) (\d+)\/(\d+)$/.exec(label);
   if (round) return t(round[1] === "Interval" ? "workout.label.interval" : "workout.label.recovery", { i: round[2], n: round[3] }); // i18n-ok
+  const set = /^Series (\d+)\/(\d+) · (.+)$/.exec(label); // i18n-ok
+  if (set) return t("workout.label.series", { i: set[1], n: set[2], label: segmentLabel(set[3]) }); // i18n-ok
+  const under = /^(Under|Over) (\d+)\/(\d+)$/.exec(label); // i18n-ok
+  if (under) return t(under[1] === "Under" ? "workout.label.under" : "workout.label.over", { i: under[2], n: under[3] }); // i18n-ok
   return label;
 }
 const MAX_DURATION_S = 6 * 3600;
@@ -45,12 +50,35 @@ const MAX_DURATION_S = 6 * 3600;
 export const steady = (durationS, power, label = "Steady") => ({ durationS, from: power, to: power, label, kind: "steady" }); // i18n-ok
 export const ramp = (durationS, from, to, label = "Ramp", kind = "ramp") => ({ durationS, from, to, label, kind }); // i18n-ok
 
-/** `repeat` times (on, off), labelled "Interval 1/5" etc. */
-export function intervals(repeat, onS, onPower, offS, offPower) {
+/**
+ * `repeat` times (on, off), labelled "Interval 1/5" etc. With `lastRecovery: false`
+ * the final rep has no recovery after it (a series ends on work, the next set's rest follows).
+ */
+export function intervals(repeat, onS, onPower, offS, offPower, { lastRecovery = true } = {}) {
   const segments = [];
   for (let i = 1; i <= repeat; i += 1) {
     segments.push({ durationS: onS, from: onPower, to: onPower, label: `Interval ${i}/${repeat}`, kind: "on" });
-    if (offS > 0) segments.push({ durationS: offS, from: offPower, to: offPower, label: `Recovery ${i}/${repeat}`, kind: "off" });
+    if (offS > 0 && (lastRecovery || i < repeat)) segments.push({ durationS: offS, from: offPower, to: offPower, label: `Recovery ${i}/${repeat}`, kind: "off" });
+  }
+  return segments;
+}
+
+/** `count` sets from `makeSet()`, each block prefixed "Series 1/3 · ", with `restS` at `restPower` between sets. */
+export function series(count, restS, restPower, makeSet) {
+  const segments = [];
+  for (let s = 1; s <= count; s += 1) {
+    if (s > 1) segments.push({ durationS: restS, from: restPower, to: restPower, label: "Series break", kind: "off" }); // i18n-ok
+    for (const segment of makeSet()) segments.push({ ...segment, label: `Series ${s}/${count} · ${segment.label}` }); // i18n-ok
+  }
+  return segments;
+}
+
+/** `repeat` times an under block then an over block, labelled "Under 1/5", "Over 1/5". */
+export function overUnders(repeat, underS, underPower, overS, overPower) {
+  const segments = [];
+  for (let i = 1; i <= repeat; i += 1) {
+    segments.push({ durationS: underS, from: underPower, to: underPower, label: `Under ${i}/${repeat}`, kind: "on" }); // i18n-ok
+    segments.push({ durationS: overS, from: overPower, to: overPower, label: `Over ${i}/${repeat}`, kind: "on" }); // i18n-ok
   }
   return segments;
 }
