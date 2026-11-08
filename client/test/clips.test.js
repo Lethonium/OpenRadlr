@@ -36,7 +36,7 @@ const minus = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 test("every clip is valid and loops", () => {
   const loops = Object.fromEntries(Object.entries(CLIPS).map(([name, clip]) => [name, validClip(clip) && clip.loopS]));
-  assert.deepEqual(loops, { idle: 4, squats: 2.5, situps: 2.5, pushups: 2, jumping_jacks: 1, plank: 4, burpees: 3.5 });
+  assert.deepEqual(loops, { idle: 4, squats: 2.5, situps: 2.5, pushups: 2, jumping_jacks: 1, plank: 4, burpees: 3.5, sun_salutation: 36, forward_fold: 5, downward_dog: 5, cobra: 5, child_pose: 6, low_lunge: 5, pigeon: 6 });
 });
 
 test("unknown exercises fall back to idle", () => {

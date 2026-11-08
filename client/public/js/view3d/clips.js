@@ -195,6 +195,64 @@ const burpees = {
   ],
 };
 
+/*
+ * Yoga. Sided poses are keyed on the RIGHT side (the view mirrors a rider on
+ * their left). A held pose breathes on a 4 to 6 s loop: at its middle the
+ * spine and neck move a few hundredths, like the plank.
+ */
+
+/** A held pose: `root` and `joints` at rest, `breath` added to them at the loop's middle. */
+function hold(loopS, root, joints, breath) {
+  const deep = Object.fromEntries(Object.entries(joints).map(([name, angle]) => [name, angle + (breath[name] ?? 0)]));
+  for (const [name, delta] of Object.entries(breath)) deep[name] ??= delta;
+  return { loopS, keys: [key(0, root, joints), key(loopS / 2, root, deep), key(loopS, root, joints)] };
+}
+
+/** Arms overhead: the upward salute. */
+const SALUTE = { "shoulder#": 2.9, "shoulder#z": 0.2, "elbow#": 0.1, spine: 0.08, neck: -0.1 };
+/** Standing forward fold: legs straight, the torso hanging, the hands to the mat. */
+const FOLD = { spine: -2.1, "shoulder#": 2.1, "shoulder#z": 0.1, "elbow#": 0.1, neck: 0.3 };
+/** Half lift: back flat and parallel to the mat, the hands on the shins. */
+const HALF_LIFT = { spine: -1.45, "shoulder#": 1.45, "shoulder#z": 0.1, neck: 0.5 };
+/** Upward dog: the tops of the feet and the hands on the mat, thighs just off it, chest open, arms straight. */
+const UP_DOG_ROOT = { pitch: -1.45 };
+const UP_DOG = { spine: 0.85, neck: 0.4, "shoulder#": 0.6, "shoulder#z": 0.1, "ankle#": -1.2 };
+/** Downward dog: hips high, heels near the mat, arms by the ears. */
+const DOWN_DOG_ROOT = { pitch: -0.7 };
+const DOWN_DOG = { spine: -1.3, neck: 0.3, "shoulder#": 2.8, "shoulder#z": 0.15, "ankle#": 0.6 };
+
+/** Sun Salutation A, one breath (4 s) a position: salute, fold, half lift, plank, chaturanga, upward dog, downward dog, half lift, fold, salute. */
+const sunSalutation = {
+  loopS: 36,
+  keys: [
+    key(0, {}, SALUTE),
+    key(4, {}, FOLD),
+    key(8, {}, HALF_LIFT),
+    pushUp(12, PLANK_Z),
+    pushDown(16, PLANK_Z),
+    key(20, UP_DOG_ROOT, UP_DOG),
+    key(24, DOWN_DOG_ROOT, DOWN_DOG),
+    key(28, {}, HALF_LIFT),
+    key(32, {}, FOLD),
+    key(36, {}, SALUTE),
+  ],
+};
+const forwardFold = hold(5, {}, FOLD, { spine: -0.06, neck: 0.04 });
+const downwardDog = hold(5, DOWN_DOG_ROOT, DOWN_DOG, { spine: -0.04, neck: 0.04 });
+/** Cobra: face down, hips and legs on the mat, the chest lifted on bent arms with the hands beside the ribs. */
+const cobra = hold(5, { pitch: -1.45 }, { spine: 0.6, neck: 0.3, "shoulder#": 0.15, "elbow#": 1, "shoulder#z": 0.1, "ankle#": -1.4 }, { spine: 0.05, neck: -0.03 });
+/** Child's pose: kneeling, hips back on the heels, the chest on the thighs, arms stretched forward on the mat. */
+const childPose = hold(6, {}, { "hip#": 1.25, "knee#": -2.82, "ankle#": -1.2, spine: -1.7, neck: 0.3, "shoulder#": 3.1, "shoulder#z": 0.1 }, { spine: 0.04, neck: -0.03 });
+/** Low lunge (right foot forward): front shin upright, back knee and the top of the back foot on the mat, arms raised. */
+const lowLunge = hold(5, {}, { hipR: 1.6, kneeR: -1.6, hipL: -0.4, kneeL: -1.2, ankleL: -1.2, ...SALUTE }, { spine: 0.04, neck: -0.03 });
+/** Pigeon (right shin folded in front, left leg long behind): folded forward, the hands on the mat. */
+const pigeon = hold(
+  6,
+  { pitch: -1.5 },
+  { hipR: 1.1, hipRz: 0.6, kneeR: -2.4, hipL: 0.2, ankleL: -1.2, spine: -0.1, neck: 0.3, "shoulder#": 2.7, "shoulder#z": 0.1 },
+  { spine: -0.04, neck: 0.03 },
+);
+
 /** Every exercise's clip, plus `idle` (rest, get-ready, paused). */
 export const CLIPS = Object.freeze({
   idle,
@@ -204,6 +262,13 @@ export const CLIPS = Object.freeze({
   jumping_jacks: jumpingJacks,
   plank: planted(plank, "footR", TOES),
   burpees,
+  sun_salutation: planted(sunSalutation, "footR", TOES),
+  forward_fold: planted(forwardFold, "footR", ANKLE),
+  downward_dog: planted(downwardDog, "footR", ANKLE),
+  cobra: planted(cobra, "footR", TOES),
+  child_pose: planted(childPose, "footR", ANKLE),
+  low_lunge: planted(lowLunge, "footR", ANKLE),
+  pigeon: planted(pigeon, "footR", ANKLE),
 });
 
 /** The clip for an exercise; no or an unknown exercise stands idle. */
@@ -223,4 +288,11 @@ export const STATUE_MOMENT = Object.freeze({
   situps: Object.freeze({ t: 0.6, plinth: "lying" }),
   jumping_jacks: Object.freeze({ t: 0.5, plinth: "upright" }),
   burpees: Object.freeze({ t: 2.75, plinth: "upright" }),
+  sun_salutation: Object.freeze({ t: 0, plinth: "upright" }),
+  forward_fold: Object.freeze({ t: 0, plinth: "upright" }),
+  downward_dog: Object.freeze({ t: 0, plinth: "lying" }),
+  cobra: Object.freeze({ t: 0, plinth: "lying" }),
+  child_pose: Object.freeze({ t: 0, plinth: "lying" }),
+  low_lunge: Object.freeze({ t: 0, plinth: "lying" }),
+  pigeon: Object.freeze({ t: 0, plinth: "lying" }),
 });
