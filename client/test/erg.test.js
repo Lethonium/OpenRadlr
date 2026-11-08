@@ -180,7 +180,7 @@ test("rejects files that are not workouts", () => {
 // --- training control -------------------------------------------------------
 
 import { TrainingControl } from "../public/js/ride/trainingControl.js";
-import { workoutShapes } from "../public/js/view/workoutView.js";
+import { drawWorkout, drawWorkoutPreview, workoutShapes } from "../public/js/view/workoutView.js";
 
 test("training control: sim by default, manual ERG with clamped steps", () => {
   const control = new TrainingControl({ ftp: 250 });
@@ -360,4 +360,41 @@ test("sessions are shown with a translated name and description", () => {
   assert.match(workoutDescription(preset("Over-unders 3×9")), /nicht aus einer veröffentlichten Studie/);
   assert.equal(workoutName(preset("40/20 4×8")), "40/20 4×8");
   assert.equal(PRESET_WORKOUTS.at(-1).name, "ERG check 10");
+});
+
+function fakeCanvas(clientWidth = 200) {
+  const log = { fills: [], strokes: 0, clears: 0 };
+  const ctx = {
+    globalAlpha: 1, setTransform() {}, clearRect() { log.clears += 1; }, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+    fill() { log.fills.push(ctx.globalAlpha); }, stroke() { log.strokes += 1; },
+  };
+  return { canvas: { clientWidth, clientHeight: 56, width: 0, height: 0, getContext: () => ctx }, log };
+}
+const previewWorkout = () => createWorkout({ name: "P", segments: [steady(60, 0.5), steady(60, 1.2)] });
+
+test("the preview draws every block at full alpha and no now-line", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkoutPreview(canvas, previewWorkout());
+  assert.deepEqual(log.fills, [0.9, 0.9]);
+  assert.equal(log.strokes, 0);
+});
+
+test("the in-ride chart still dims finished blocks and draws the now-line", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkout(canvas, { workout: previewWorkout(), elapsedS: 60, colors: { text: "#fff" } });
+  assert.deepEqual(log.fills, [0.35, 0.9]);
+  assert.equal(log.strokes, 1);
+});
+
+test("the preview survives a hidden canvas", () => {
+  const { canvas, log } = fakeCanvas(0);
+  assert.doesNotThrow(() => drawWorkoutPreview(canvas, previewWorkout()));
+  assert.equal(log.fills.length, 2);
+});
+
+test("the preview clears when no workout is selected", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkoutPreview(canvas, undefined);
+  assert.equal(log.clears, 1);
+  assert.equal(log.fills.length, 0);
 });

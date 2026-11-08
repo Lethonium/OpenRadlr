@@ -165,6 +165,7 @@ export default {
   "drawer.ftpTest": "FTP test",
   "drawer.startWorkout": "Start workout",
   "drawer.importZwo": "Import .zwo",
+  "drawer.workoutPreview": "Power profile of the selected workout",
   "drawer.stopWorkout": "Stop workout",
   "drawer.finishRide": "Finish ride",
   "drawer.finishConfirm": "Finish this ride? You can't continue it afterwards.",
