@@ -12,7 +12,7 @@
  */
 import { buildForearm, buildHead, buildPelvis, buildShin, buildShoe, buildThigh, buildTorso, buildUpperArm, variantLook } from "./riderModel.js";
 import { transformPoint } from "./math.js";
-import { bodyTransforms, poseAt } from "./riderPose.js";
+import { JOINTS, bodyTransforms, poseAt } from "./riderPose.js";
 
 const look = variantLook(0);
 /** The corners of each body part's mesh (the same for every look), to find the lowest point of a pose. */
@@ -82,6 +82,25 @@ export function settle(pose, plant = null, parts = null) {
   const root = { ...pose.root, y: pose.root.y - lowest };
   if (plant) root.z = (pose.root.z ?? 0) + plant.z - z;
   return { ...pose, root };
+}
+
+const OTHER_SIDE = (joint) => joint.replace(/^(.*)([LR])(z?)$/, (_, base, side, z) => `${base}${side === "L" ? "R" : "L"}${z}`);
+
+/**
+ * `pose` seen in a mirror: every left joint takes its right partner's angle and
+ * vice versa. The sideways (`…z`) angles count outward on both sides, the spine
+ * and neck have no sideways joint, and the root no sideways part, so swapping is
+ * all it takes.
+ */
+export function mirrorPose(pose) {
+  return { root: { ...pose.root }, joints: Object.fromEntries(JOINTS.map((joint) => [joint, pose.joints[OTHER_SIDE(joint)]])) };
+}
+
+/** A clip's `plant` for the mirrored pose: the other foot (or its mesh's partner), the same Z; `null` stays `null`. */
+export function mirrorPlant(plant) {
+  if (!plant) return plant;
+  const mesh = OTHER_SIDE(plant.mesh);
+  return Object.freeze({ ...plant, mesh, at: [-plant.at[0], plant.at[1], plant.at[2]] });
 }
 
 /** `clip` whose `plant` point stays where its first key puts it. */

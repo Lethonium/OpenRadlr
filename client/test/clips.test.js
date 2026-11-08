@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { invert, transformPoint } from "../public/js/view3d/math.js";
 import * as model from "../public/js/view3d/riderModel.js";
-import { CLIPS, STATUE_MOMENT, clipFor, settle } from "../public/js/view3d/clips.js";
+import { CLIPS, STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose, settle } from "../public/js/view3d/clips.js";
 import { EXERCISES } from "../public/js/workout/plan.js";
 import { bodyTransforms, poseAt, validClip } from "../public/js/view3d/riderPose.js";
 
@@ -146,4 +146,25 @@ test("every exercise has a statue moment inside its clip", () => {
     assert.ok(t >= 0 && t <= CLIPS[name].loopS, `${name} at ${t}`);
     assert.ok(["upright", "lying"].includes(plinth), `${name} plinth ${plinth}`);
   }
+});
+
+test("mirroring swaps every left and right joint", () => {
+  const p = poseAt(CLIPS.pigeon, 1);
+  const m = mirrorPose(p);
+  for (const [l, r] of [["hipL", "hipR"], ["hipLz", "hipRz"], ["kneeL", "kneeR"], ["shoulderLz", "shoulderRz"], ["elbowL", "elbowR"], ["ankleLz", "ankleRz"]]) {
+    assert.equal(m.joints[l], p.joints[r], l);
+    assert.equal(m.joints[r], p.joints[l], r);
+  }
+  assert.ok(p.joints.hipL !== p.joints.hipR, "the pose is one-sided, so the swap shows");
+  assert.deepEqual([m.joints.spine, m.joints.neck, m.root], [p.joints.spine, p.joints.neck, p.root]);
+});
+
+test("mirroring twice gives the pose back", () => {
+  const p = poseAt(CLIPS.low_lunge, 2);
+  assert.deepEqual(mirrorPose(mirrorPose(p)), p);
+});
+
+test("a mirrored plant names the other foot", () => {
+  assert.deepEqual(mirrorPlant({ mesh: "footR", at: [0.1, -0.06, -0.2], z: 0.3 }), { mesh: "footL", at: [-0.1, -0.06, -0.2], z: 0.3 });
+  assert.equal(mirrorPlant(null), null);
 });
