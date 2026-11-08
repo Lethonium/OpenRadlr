@@ -20,6 +20,10 @@ const LIBRARY_KEYS = {
   "Endurance 45": ["workout.lib.endurance.name", "workout.lib.endurance.description"],
   "Sweet Spot 3×8": ["workout.lib.sweetSpot.name", "workout.lib.sweetSpot.description"], // i18n-ok
   "VO2max 5×3": ["workout.lib.vo2.name", "workout.lib.vo2.description"],
+  "Seiler 4×8": ["workout.lib.seiler.name", "workout.lib.seiler.description"], // i18n-ok
+  "Rønnestad 30/15": ["workout.lib.ronnestad.name", "workout.lib.ronnestad.description"], // i18n-ok
+  "40/20 4×8": ["workout.lib.fortyTwenty.name", "workout.lib.fortyTwenty.description"], // i18n-ok
+  "Over-unders 3×9": ["workout.lib.overUnders.name", "workout.lib.overUnders.description"], // i18n-ok
   "ERG check 10": ["workout.lib.erg.name", "workout.lib.erg.description"], // i18n-ok
 };
 const LABEL_KEYS = {
@@ -246,6 +250,26 @@ export const PRESET_WORKOUTS = Object.freeze([
     name: "VO2max 5×3",
     description: "Five hard 3-minute efforts with equal recovery.", // i18n-ok
     segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...intervals(5, 180, 1.15, 180, 0.5), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Seiler 4×8", // i18n-ok
+    description: "Four 8-minute efforts with 2 minutes easy between them. Based on Seiler et al. 2013, where riders held the hardest effort they could sustain. 105 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...intervals(4, 480, 1.05, 120, 0.5, { lastRecovery: false }), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Rønnestad 30/15", // i18n-ok
+    description: "Three series of 13 × 30 s on, 15 s off, with 3 minutes between series. From Rønnestad et al. 2015, where riders held the hardest effort they could sustain. 120 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(3, 180, 0.6, () => intervals(13, 30, 1.2, 15, 0.6, { lastRecovery: false })), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "40/20 4×8", // i18n-ok
+    description: "Four sets of 8 × 40 s on, 20 s off, with 2 minutes between sets. Format from clinical trial NCT04075929. 115 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(4, 120, 0.58, () => intervals(8, 40, 1.15, 20, 0.58, { lastRecovery: false })), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Over-unders 3×9", // i18n-ok
+    description: "Three sets of 2 minutes just under and 1 minute just over threshold, with 5 minutes between sets. Common coaching practice, not from a published study.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(3, 300, 0.5, () => overUnders(3, 120, 0.95, 60, 1.05)), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
   }),
   createWorkout({
     name: "ERG check 10", // i18n-ok

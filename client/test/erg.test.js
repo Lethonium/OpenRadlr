@@ -16,6 +16,8 @@ import {
   series,
   steady,
   totalDuration,
+  workoutDescription,
+  workoutName,
   zoneFor,
 } from "../public/js/ride/workout.js";
 import { setLocale } from "../public/js/i18n/i18n.js";
@@ -331,4 +333,31 @@ test("segmentLabel leaves labels it does not know alone", () => {
   setLocale("de");
   assert.equal(segmentLabel("Series 1/2 · Hill repeat"), "Serie 1/2 · Hill repeat");
   assert.equal(segmentLabel("Series of hills"), "Series of hills");
+});
+
+// --- sourced ERG sessions -----------------------------------------------------
+
+const preset = (name) => PRESET_WORKOUTS.find((w) => w.name === name);
+
+test("the sourced sessions have the planned shape", () => {
+  const expected = { "Seiler 4×8": [9, 3180, 1.05], "Rønnestad 30/15": [79, 2970, 1.2], "40/20 4×8": [65, 3100, 1.15], "Over-unders 3×9": [22, 3120, 1.05] }; // i18n-ok
+  for (const [name, [blocks, seconds, peak]] of Object.entries(expected)) {
+    const workout = preset(name);
+    assert.equal(workout.segments.length, blocks, name);
+    assert.equal(totalDuration(workout), seconds, name);
+    assert.equal(Math.max(...workout.segments.map((s) => s.from)), peak, name);
+  }
+});
+
+test("Rønnestad 30/15 has 12 reliefs per series and 3 minutes between series", () => {
+  const { segments } = preset("Rønnestad 30/15");
+  assert.equal(segments.filter((s) => s.label.startsWith("Series 2/3 · Recovery")).length, 12);
+  assert.equal(segments.filter((s) => s.label === "Series break" && s.durationS === 180).length, 2);
+});
+
+test("sessions are shown with a translated name and description", () => {
+  setLocale("de");
+  assert.match(workoutDescription(preset("Over-unders 3×9")), /nicht aus einer veröffentlichten Studie/);
+  assert.equal(workoutName(preset("40/20 4×8")), "40/20 4×8");
+  assert.equal(PRESET_WORKOUTS.at(-1).name, "ERG check 10");
 });
