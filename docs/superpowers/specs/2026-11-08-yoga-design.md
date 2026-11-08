@@ -89,8 +89,9 @@ behaves as for any block: the midpoint is plan time.
 cue, or "Switch sides". It is empty at rest.
 
 **View.** A new pure function `mirrorPose(pose)` in `view3d/clips.js` swaps
-every L/R joint pair and negates the sideways (`#z`) angles; the root has no
-sideways component, so it stays. `#workoutParts` mirrors a rider whose `side` is
+every L/R joint pair (the sideways `#z` angles count outward on both sides, so
+swapping is enough; the spine and neck have no sideways joint and the root no
+sideways component). The clip's `plant` is mirrored with it (`footR` ↔ `footL`). `#workoutParts` mirrors a rider whose `side` is
 `"left"`; a side change does **not** restart the clip (`exerciseSince` stays)
 and crossfades over `CLIP_FADE_S` like a clip change. My own rider uses the
 session's side at once instead of waiting for the server's echo, in the way my
@@ -135,7 +136,7 @@ Client (`node --test`):
 - workoutSession: a sided block sends `side: "right"` at its start and exactly
   one `side: "left"` at the midpoint, with one beep; the position reports the
   side; a non-sided block sends no side.
-- clips: `mirrorPose(mirrorPose(p))` equals `p`; L/R swapped and `#z` negated;
+- clips: `mirrorPose(mirrorPose(p))` equals `p`; every L/R pair swapped;
   every exercise has a clip and a `STATUE_MOMENT`.
 - view3d: another rider with `side: "left"` is mirrored; a side change keeps
   the clip time.
