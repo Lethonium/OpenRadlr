@@ -6,8 +6,9 @@ import { PRESETS } from "../public/js/workout/presets.js";
 test("the figures at a venue are the distinct exercises of its presets, in order", () => {
   assert.deepEqual(figuresAt("valley-cafe", PRESETS), ["squats", "situps", "pushups", "jumping_jacks", "plank", "burpees"]);
   assert.deepEqual(figuresAt("hill-cafe", PRESETS), ["squats", "burpees"]);
-  assert.deepEqual(figuresAt("beach-cafe", PRESETS), ["situps", "plank", "pushups"]);
-  assert.deepEqual(figuresAt("forge-hut", PRESETS), []);
+  assert.deepEqual(figuresAt("beach-cafe", PRESETS), ["sun_salutation", "child_pose", "forward_fold", "low_lunge", "pigeon", "downward_dog", "cobra"]);
+  assert.deepEqual(figuresAt("forge-hut", PRESETS), ["situps", "plank", "pushups"]);
+  assert.equal(VENUES["beach-cafe"].category, "yoga");
 });
 
 test("the venue route is the first offered route that starts at the café", () => {
@@ -36,7 +37,7 @@ const mapGyms = () => ["valley-cafe", "hill-cafe", "forge-hut"].map((cafeId) => 
 test("each gym with a known café and figures gets a statue row in its venue's material", () => {
   const gyms = mapGyms();
   const rows = statueRows(gyms, PRESETS);
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 3);
   assert.equal(rows[0].gym, gyms[0]);
   assert.deepEqual(rows[0].figures, figuresAt("valley-cafe", PRESETS));
   assert.equal(rows[0].figures.length, 6);
@@ -44,6 +45,9 @@ test("each gym with a known café and figures gets a statue row in its venue's m
   assert.equal(rows[1].gym, gyms[1]);
   assert.deepEqual(rows[1].figures, ["squats", "burpees"]);
   assert.equal(rows[1].material, "bronze");
+  assert.equal(rows[2].gym, gyms[2]);
+  assert.deepEqual(rows[2].figures, ["situps", "plank", "pushups"]);
+  assert.equal(rows[2].material, "granite");
 });
 
 test("a gym without a café id or a statue row gets no statues", () => {
@@ -57,8 +61,8 @@ test("an override shows the plan's figures in its venue's material at the given 
   const rows = statueRows(gyms, PRESETS, { gym: gyms[0], plan: core });
   assert.equal(rows[0].gym, gyms[0]);
   assert.deepEqual(rows[0].figures, ["situps", "plank", "pushups"]);
-  assert.equal(rows[0].material, "sandstone");
-  assert.equal(rows.length, 2);
+  assert.equal(rows[0].material, "granite");
+  assert.equal(rows.length, 3);
 });
 
 test("an override works on a gym that has no café id of its own", () => {

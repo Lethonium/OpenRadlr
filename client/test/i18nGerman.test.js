@@ -38,7 +38,7 @@ test("event banner, FTP offer, split labels and vehicle label", () => {
 test("stage headline and workout presets read in German", () => {
   setLocale("de");
   assert.equal(stageHeadline({ kind: "workout" }), "Wähle dein Workout");
-  assert.equal(workoutTagline(PRESETS), "3 Workouts · 4–12 Min.");
+  assert.equal(workoutTagline(PRESETS), "6 Workouts · 4–15 Min.");
   assert.equal(PRESETS[0].name, "Ganzkörper");
   assert.match(planSummary(PRESETS[0]), /^Kniebeugen 40 s · Pause 20 s/);
 });

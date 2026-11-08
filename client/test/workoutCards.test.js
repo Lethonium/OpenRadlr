@@ -75,6 +75,11 @@ test("a card names its tag, café, length and figures in order", () => {
   assert.equal(card.figures[0].label, "Squats");
 });
 
+test("a yoga card carries the Yoga tag", () => {
+  const sunSalutation = PRESETS.find((p) => p.id === "sun-salutation");
+  assert.equal(workoutCard(sunSalutation, {}).tag, "Yoga");
+});
+
 test("a card without a known café has an empty café line", () => {
   assert.equal(workoutCard(core, {}).cafe, "");
 });
@@ -86,13 +91,13 @@ test("every exercise has a colour", () => {
 test("the selected card is checked and the only one with figure chips", () => {
   const { radios, chips, render } = draw();
   render({ selectedId: "core" });
-  assert.deepEqual(radios().map((r) => r.getAttribute("aria-checked")), ["false", "true", "false"]);
+  assert.deepEqual(radios().map((r) => r.getAttribute("aria-checked")), ["false", "true", "false", "false", "false", "false"]);
   assert.equal(chips().length, 3);
 });
 
 test("a saved workout that no longer exists selects the first card", () => {
   const { radios } = draw({ selectedId: "gone" });
-  assert.deepEqual(radios().map((r) => r.getAttribute("aria-checked")), ["true", "false", "false"]);
+  assert.deepEqual(radios().map((r) => r.getAttribute("aria-checked")), ["true", "false", "false", "false", "false", "false"]);
   assert.equal(draw({ selectedId: null }).radios()[0].getAttribute("aria-checked"), "true");
 });
 
@@ -108,12 +113,12 @@ test("clicking a card selects it; arrow keys move in preset order and wrap", () 
   radios()[0].fire("keydown", { key: "ArrowRight" });
   radios()[0].fire("keydown", { key: "ArrowLeft" });
   radios()[1].fire("keydown", { key: "ArrowDown" });
-  assert.deepEqual(calls.select, ["tabata", "core", "tabata", "tabata"]);
+  assert.deepEqual(calls.select, ["tabata", "core", "hip-flow", "tabata"]);
 });
 
 test("only the selected card is in the tab order", () => {
   const { radios } = draw({ selectedId: "core" });
-  assert.deepEqual(radios().map((r) => r.tabIndex), [-1, 0, -1]);
+  assert.deepEqual(radios().map((r) => r.tabIndex), [-1, 0, -1, -1, -1, -1]);
 });
 
 test("a figure chip flies to its statue; the pressed chip goes back", () => {
@@ -140,8 +145,8 @@ test("the language switch re-renders the texts and the selection stays", () => {
   setLocale("de");
   render({ selectedId: "core" });
   const texts = container.all().map((el) => el.textContent);
-  assert.ok(texts.includes(t("workout.category.core")));
-  assert.notEqual(t("workout.category.core"), "Core");
+  assert.ok(texts.includes(t("workout.category.strength")));
+  assert.notEqual(t("workout.category.strength"), "Strength");
   assert.ok(texts.includes("Kniebeugen") || texts.includes(EXERCISES.situps.name));
   assert.equal(radios()[1].getAttribute("aria-checked"), "true");
 });

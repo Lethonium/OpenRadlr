@@ -30,6 +30,10 @@ test("presets validate and last as long as they say", () => {
   assert.equal(minutes.tabata, 4);
   assert.ok(minutes.core >= 7 && minutes.core <= 9);
 });
+test("the yoga classes last as the spec says, without get-ready", () => {
+  const seconds = Object.fromEntries(["sun-salutation", "cool-down", "hip-flow"].map((id) => [id, planDuration(PRESETS.find((p) => p.id === id))]));
+  assert.deepEqual(seconds, { "sun-salutation": 240, "cool-down": 545, "hip-flow": 902 });
+});
 test("the summary lists the first blocks", () => {
   assert.match(planSummary(PRESETS.find((p) => p.id === "tabata")), /^Squats 20 s · Rest 10 s · Burpees 20 s/);
 });

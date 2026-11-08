@@ -104,13 +104,13 @@ test("the workout joins the first route", () => {
 });
 
 test("the workout tagline counts presets and their lengths", () => {
-  assert.equal(workoutTagline(PRESETS), "3 workouts · 4–12 min");
+  assert.equal(workoutTagline(PRESETS), "6 workouts · 4–15 min");
 });
 
 test("the stage stats under the headline: character, figures and riders, the class running or the workouts", () => {
   assert.equal(stageStats({ id: "x", length_m: 4828, elevation_gain_m: 64, players: 2 }), "Rolling · 4.8 km · 64 m up · 2 riders");
   assert.equal(stageStats({ ...studio, kind: "studio" }, 10_000), "HIIT 30/30 starts in 5:00 · 3 riders");
-  assert.equal(stageStats({ kind: "workout" }), "3 workouts · 4–12 min");
+  assert.equal(stageStats({ kind: "workout" }), "6 workouts · 4–15 min");
   assert.equal(stageStats(null), "");
 });
 

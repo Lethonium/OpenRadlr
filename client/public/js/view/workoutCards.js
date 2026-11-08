@@ -27,7 +27,7 @@ export const EXERCISE_COLORS = Object.freeze({
 
 /** The translated tag per venue category (literal keys, so the key sweep sees them). */
 const categoryTag = (category) =>
-  ({ fullBody: () => t("workout.category.fullBody"), hiit: () => t("workout.category.hiit"), core: () => t("workout.category.core"), strength: () => t("workout.category.strength") })[category]?.() ?? "";
+  ({ fullBody: () => t("workout.category.fullBody"), hiit: () => t("workout.category.hiit"), core: () => t("workout.category.core"), strength: () => t("workout.category.strength"), yoga: () => t("workout.category.yoga") })[category]?.() ?? "";
 
 /** The blocks of a plan as fractions of its length (the get-ready rest is not part of a stored plan). */
 export function blockStrip(plan) {
