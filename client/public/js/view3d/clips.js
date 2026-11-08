@@ -264,12 +264,12 @@ const cobra = hold(5, { pitch: -1.45 }, { spine: 0.6, neck: 0.3, "shoulder#": 0.
 const childPose = hold(6, {}, { "hip#": 1.25, "knee#": -2.82, "ankle#": -1.2, spine: -1.7, neck: 0.3, "shoulder#": 3.1, "shoulder#z": 0.1 }, { spine: 0.04, neck: -0.03 });
 /** Low lunge (right foot forward): front shin upright, back knee and the top of the back foot on the mat, arms raised. */
 const lowLunge = hold(5, {}, { hipR: 1.6, kneeR: -1.6, hipL: -0.4, kneeL: -1.2, ankleL: -1.2, ...SALUTE }, { spine: 0.04, neck: -0.03 });
-/** Pigeon (right shin folded in front, left leg long behind): folded forward, the hands on the mat. */
+/** Pigeon, upright: right thigh forward and turned out with the shin folded in, left leg long behind with the knee and the top of the foot on the mat, hands beside the hips. */
 const pigeon = hold(
   6,
-  { pitch: -1.5 },
-  { hipR: 1.1, hipRz: 0.6, kneeR: -2.4, hipL: 0.2, ankleL: -1.2, spine: -0.1, neck: 0.3, "shoulder#": 2.7, "shoulder#z": 0.1 },
-  { spine: -0.04, neck: 0.03 },
+  {},
+  { hipR: 1.45, hipRz: 0.9, kneeR: -2.7, hipL: -1.3, kneeL: -0.05, ankleL: -1.2, spine: 0.05, neck: -0.05, "shoulder#": 0.25, "shoulder#z": 0.2, "elbow#": 0.25 },
+  { spine: 0.04, neck: -0.03 },
 );
 
 /** Every exercise's clip, plus `idle` (rest, get-ready, paused). */
