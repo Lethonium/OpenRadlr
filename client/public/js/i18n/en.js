@@ -456,6 +456,7 @@ export default {
   "training.lastBlock": "Last block",
   "view.needsWebgl": "3D needs WebGL 2",
   "view.unavailable": "3D view unavailable on this device",
+  "workout.buildingGym": "Building the gym…",
   "view.gymNeeds3d": "The gym needs 3D (WebGL2), which this device lacks. The timer and cues still work.",
   "join.error.network": "No road network for map {mapId} (HTTP {status}).",
   "camera.label": "Camera: {mode}",

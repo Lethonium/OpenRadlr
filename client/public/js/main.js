@@ -792,6 +792,8 @@ function initMenuStage() {
   const drawStage = () => {
     const { route, routes } = shown;
     $("menu-profile").hidden = !route;
+    // Docked in the corner, the map points at the picked route; with none (Workout, Studio) it is an empty box.
+    $("menu-map").hidden = !route && $("setup").classList.contains("map-docked");
     drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
@@ -856,10 +858,10 @@ function stageOffset(stage) {
   return [clamp(((rect.left + rect.width / 2) / window.innerWidth) * 2 - 1), clamp(1 - ((rect.top + rect.height / 2) / window.innerHeight) * 2)];
 }
 
-/** Ends the menu; keeps its 3D view for the ride if it shows `routeId`. */
-function closeMenuStage(routeId) {
+/** Ends the menu; keeps its 3D view for the ride if it shows `routeId` or a route of `map`. */
+function closeMenuStage(routeId, map = null) {
   if (!app.menu) return;
-  app.menuView = app.menu.takeView(routeId);
+  app.menuView = app.menu.takeView(routeId, map);
   app.menu = null;
   clearTimeout(app.mapDockTimer);
   $("setup").classList.remove("world-ready", "map-docked", "world-building");
@@ -1594,7 +1596,8 @@ async function joinRide(restored = null) {
     resumeToken: restored?.snapshot.resumeToken,
     resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
   });
-  closeMenuStage(route?.kind === "studio" ? null : route?.id);
+  const studio = route?.kind === "studio";
+  closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
   if (app.pendingEventId) {
     connection.joinEvent(app.pendingEventId);
     app.pendingEventId = null;
@@ -1662,7 +1665,7 @@ async function joinWorkout(profile, errors) {
   wireConnection(connection);
   app.connection = connection;
   app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
-  closeMenuStage(routeId);
+  closeMenuStage(routeId, app.routeFile.map?.id ?? null);
   app.workoutPlan = plan;
   app.workout = new WorkoutSession({ plan, now, wallNow: () => Date.now() });
   startRide();
@@ -3687,6 +3690,11 @@ function initViews() {
   // Building the world (with the other routes on its map) takes a moment,
   // off the main thread where possible; ride in 2D meanwhile. A season changed
   // meanwhile is picked up when this build lands.
+  if (app.workout) {
+    // A workout has no 2D view: say what the empty screen is waiting for.
+    $("workout-note").textContent = t("workout.buildingGym");
+    $("workout-note").hidden = false;
+  }
   buildRideWorld();
 }
 
@@ -3722,6 +3730,7 @@ function show3d(scene, view = null) {
   app.view3d.network = app.network;
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
+  if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
   $("view-3d").disabled = false;
   const camera = readSetting(CAMERA_KEY);
   if (CAMERA_MODES[camera]) app.view3d.setCameraMode(camera);

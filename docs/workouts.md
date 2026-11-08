@@ -110,8 +110,9 @@ reduced motion the camera cuts instead of flying.
   the current block (counted as skipped); **End workout** finishes early.
 - A beep (60 ms) and a short vibration in each of the last three seconds of a
   block, if you left it on.
-- The camera swings to a fixed side view of the gym mat with your avatar on it;
-  with reduced motion it cuts instead of swinging. The clips still play.
+- The camera swings to a close side view framing your own spot on the gym mat,
+  with the picture shifted down clear of the timer card; with reduced motion it
+  cuts instead of swinging. The clips still play.
 
 A dropped connection comes back like a ride does: the plan clock keeps running
 on the client, the client re-sends its current `workout`, and the avatar is
