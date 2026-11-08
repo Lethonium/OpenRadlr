@@ -34,7 +34,7 @@ published numbers. Riders correct them with the existing ERG intensity control
 |---|---|---|
 | Rønnestad, Hansen, Vegge, Tønnessen, Slettaløkken 2015, Scand J Med Sci Sports 25:143–151, doi 10.1111/sms.12165 | 3 series of 13 × 30 s on / 15 s off, 3 min between series; recovery at 50 % of work power; first intervals at power at VO2max, then adjusted to each rider's highest sustainable power; trained to well-trained cyclists | Full text, Methods and Table 2 |
 | Seiler, Jøranson, Olesen, Hetlelid 2013, Scand J Med Sci Sports 23:74–83, PMID 21812820 | 4 × 8 min at "maximal tolerable intensity" (90 ± 2 % of peak heart rate) gave greater gains than 4 × 4, 4 × 16 or low intensity only, in trained recreational cyclists | Abstract only |
-| ClinicalTrials.gov NCT04075929 | 4 sets of 8 or 12 × 40/20 s with 2 min between sets, compared with 4 × 8 min with 2 min recovery; completed 2017 | Registry record. Its arm labels are swapped against their descriptions; we use the 8-rep sets, which total 32 min like the 4 × 8 |
+| ClinicalTrials.gov NCT04075929 | 4 sets of 8 or 12 × 40/20 s with 2 min between sets, compared with 4 × 8 min with 2 min recovery; completed 2017 | Registry record. Its arm labels are swapped against their descriptions; we use the 8-rep sets, which take about as long as the 4 × 8 |
 | INSCYD and BikeTips articles on over-unders | 2 min around 95 % and 1 min around 105 % of threshold, in sets | Coaching articles; no peer-reviewed protocol found |
 
 Not confirmed: the 2 min recovery of Seiler's 4 × 8 is not in the abstract. It
@@ -51,7 +51,7 @@ check 10 stays last.
 |---|---|---|---|---|
 | Seiler 4×8 | 4 × 8 min, 2 min between | 105 % | 50 % | 53 min |
 | Rønnestad 30/15 | 3 series of 13 × 30 s / 15 s, 3 min between series | 120 % | 60 % (half of work) | 49.5 min |
-| 40/20 4×8 | 4 sets of 8 × 40 s / 20 s, 2 min between sets | 115 % | 58 % (half of work) | 53 min |
+| 40/20 4×8 | 4 sets of 8 × 40 s / 20 s, 2 min between sets | 115 % | 58 % (half of work) | 52 min |
 | Over-unders 3×9 | 3 sets of 3 × (2 min under, 1 min over), 5 min between sets | 95 % / 105 % | 50 % | 52 min |
 
 No recovery follows the last rep of a series or the last series, as in the
@@ -61,7 +61,7 @@ Descriptions (English; German is a direct translation in `de.js`):
 
 - **Seiler 4×8:** "Four 8-minute efforts with 2 minutes easy between them. Based on Seiler et al. 2013, where riders held the hardest effort they could sustain. 105 % FTP is our estimate: adjust it to your effort."
 - **Rønnestad 30/15:** "Three series of 13 × 30 s on, 15 s off, with 3 minutes between series. From Rønnestad et al. 2015, where riders held the hardest effort they could sustain. 120 % FTP is our estimate: adjust it to your effort."
-- **40/20 4×8:** "Four 8-minute sets of 40 s on, 20 s off, with 2 minutes between sets. Format from clinical trial NCT04075929. 115 % FTP is our estimate: adjust it to your effort."
+- **40/20 4×8:** "Four sets of 8 × 40 s on, 20 s off, with 2 minutes between sets. Format from clinical trial NCT04075929. 115 % FTP is our estimate: adjust it to your effort."
 - **Over-unders 3×9:** "Three sets of 2 minutes just under and 1 minute just over threshold, with 5 minutes between sets. Common coaching practice, not from a published study."
 
 ## Building blocks (`ride/workout.js`)
