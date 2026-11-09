@@ -41,7 +41,7 @@ test("Living carries a ground map and a life group", () => {
   assert.equal(groundMap.width, 2048);
   assert.equal(groundMap.data.length, 2048 * 2048 * 4);
   assert.ok(living.chunks.life.reduce((sum, chunk) => sum + chunk.mesh.vertexCount, 0) > 100_000, "the life group is dressed");
-  assert.deepEqual(living.living.movers, []);
+  assert.ok(living.living.movers.length > 100, "the island has movers");
 });
 
 test("the living scene crosses the worker boundary", () => {

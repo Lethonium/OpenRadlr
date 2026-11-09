@@ -466,6 +466,51 @@ test("a device too small for the map keeps vertex colours", () => {
   assert.deepEqual(renderer.ground.freed, []);
 });
 
+const circling = (kind, x) => ({ kind, model: "bird", path: { type: "circle", center: [x, 0], radius: 20, height: 30 }, speed: 10, phase: 0, flap: 0, scale: 1, tint: null });
+const moverWorld = (movers) => ({ groundMap, movers, models: { bird: [emptyMesh(), emptyMesh()] } });
+const moverDraws = (renderer, view) => {
+  const poses = new Set(view.moverModels.bird);
+  return renderer.draws.filter((d) => poses.has(d.handle));
+};
+
+test("reduced motion freezes the movers", () => {
+  const renderer = new StubRenderer();
+  const view = livingView(renderer, moverWorld([circling("bird", 100)]));
+  view.reducedMotion = true;
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const first = [...moverDraws(renderer, view).at(-1).model];
+  renderer.draws.length = 0;
+  view.render({ riders: [], myId: null, timeS: 500, colors });
+  assert.deepEqual([...moverDraws(renderer, view).at(-1).model], first);
+});
+
+test("movers move with time", () => {
+  const renderer = new StubRenderer();
+  const view = livingView(renderer, moverWorld([circling("bird", 100)]));
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const first = [...moverDraws(renderer, view).at(-1).model];
+  renderer.draws.length = 0;
+  view.render({ riders: [], myId: null, timeS: 15, colors });
+  assert.notDeepEqual([...moverDraws(renderer, view).at(-1).model], first);
+});
+
+test("movers are drawn within the frame cap", () => {
+  const renderer = new StubRenderer();
+  const view = livingView(renderer, moverWorld(Array.from({ length: 300 }, (_, i) => circling("bird", 100 + i))));
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(moverDraws(renderer, view).length, 150);
+});
+
+test("mover models are freed on dispose", () => {
+  const renderer = new StubRenderer();
+  const freed = [];
+  renderer.dispose = (handle) => freed.push(handle);
+  const view = livingView(renderer, moverWorld([circling("bird", 100)]));
+  const handles = [...view.moverModels.bird];
+  view.dispose();
+  for (const handle of handles) assert.ok(freed.includes(handle));
+});
+
 test("fitsGroundMap needs at least the map's width", () => {
   assert.equal(fitsGroundMap(1024, 2048), false);
   assert.equal(fitsGroundMap(2048, 2048), true);

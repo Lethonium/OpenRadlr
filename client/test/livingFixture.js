@@ -16,6 +16,7 @@ function fakeRoute(radius) {
     wrap: (d) => d,
     positionAt: (d) => ({ x: d - radius, y: 0 }),
     elevationAt: () => 20,
+    gradeAt: () => 0,
   };
 }
 

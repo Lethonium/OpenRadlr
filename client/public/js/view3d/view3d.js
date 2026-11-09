@@ -30,6 +30,7 @@ import {
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
 import { buildRotor, buildSpectator } from "./structures.js";
+import { moverPose, selectMovers } from "./living/movers.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
@@ -308,6 +309,11 @@ export class View3D {
     /** The Living ground texture; null on plain worlds and devices too small for it. */
     this.groundMap = world.living?.groundMap ? this.renderer.uploadGroundMap(world.living.groundMap) : null;
     this.hasLiving = Boolean(world.living);
+    /** Whatever moves on a Living island: plain data, posed anew each frame. */
+    this.movers = world.living?.movers ?? [];
+    this.moverModels = Object.fromEntries(Object.entries(world.living?.models ?? {}).map(([name, poses]) => [name, poses.map((mesh) => this.renderer.upload(mesh))]));
+    /** Holds the movers still, for riders who ask for less motion. */
+    this.reducedMotion = false;
 
     this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
     this.chunks = Object.fromEntries(
@@ -742,6 +748,13 @@ export class View3D {
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+    for (const mover of selectMovers(this.movers, eye)) {
+      const { position, yaw, pose } = moverPose(mover, this.reducedMotion ? 0 : timeS);
+      const matrix = mover.scale === 1 ? placement(position, yaw) : multiply(placement(position, yaw), scaling(mover.scale));
+      const handle = this.moverModels[mover.model][pose];
+      if (mover.bright) this.renderer.drawBright(handle, matrix, 0.9);
+      else this.renderer.draw(handle, matrix, mover.tint ?? undefined);
+    }
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -860,6 +873,7 @@ export class View3D {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
+    handles.push(...Object.values(this.moverModels).flat());
     if (this.groundMap) this.renderer.disposeGroundMap(this.groundMap);
     this.groundMap = null;
     this.#highlights = [];

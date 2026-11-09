@@ -9,6 +9,7 @@ import { VERGE, roadHalfWidth } from "../world.js";
 import { buildFences, buildHedges, buildOrchards, buildProps, buildWoods, treeBlocked } from "./dressing.js";
 import { buildCoast } from "./coast.js";
 import { buildFields, groundGrid } from "./fields.js";
+import { buildMovers } from "./movers.js";
 import { paintGroundMap } from "./groundMap.js";
 
 /** One 2048² ground map stays finer than 8 m per pixel only up to this box. */
@@ -52,12 +53,12 @@ export function planLiving({ terrain, biome, network, box, zonesOf, ordered, wat
   if (!livingEligible({ biome, network, box })) return null;
   const grid = groundGrid(terrain, box);
   const fields = buildFields(terrain, grid, { seed, sea: water, villages: villageLookup(ordered, zonesOf) });
-  return { biome, box, grid, fields, terrain, zonesOf, ordered, water, seed, junctions, treeBlocked: (x, z) => treeBlocked(fields, x, z) };
+  return { biome, box, grid, fields, terrain, zonesOf, ordered, water, seed, junctions, treeBlocked: (x, z) => treeBlocked(fields, x, z), animals: [] };
 }
 
 /** Everything that places things on the land needs this. */
 function livingContext(plan, { mesh, occupancy, cafes = [] }) {
-  const { terrain, junctions, grid, fields, biome, zonesOf, ordered, water, box, seed } = plan;
+  const { animals, terrain, junctions, grid, fields, biome, zonesOf, ordered, water, box, seed } = plan;
   const keepClear = (x, z, radius = 0) => {
     const near = terrain.index.nearest(x, z);
     if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + radius + 1) return true;
@@ -65,7 +66,7 @@ function livingContext(plan, { mesh, occupancy, cafes = [] }) {
     if (occupancy.blocked(x, z, radius)) return true;
     return junctions.some(([px, pz]) => Math.hypot(px - x, pz - z) < JUNCTION_SIGHT + radius);
   };
-  return { mesh, cafes, fields, grid, terrain, occupancy, keepClear, random: seededRandom(seed ^ 0x11fe), biome, zonesOf, ordered, water, box, seed };
+  return { mesh, cafes, animals, fields, grid, terrain, occupancy, keepClear, random: seededRandom(seed ^ 0x11fe), biome, zonesOf, ordered, water, box, seed };
 }
 
 /** Dresses the land and paints the ground map, once the world's buildings stand. */
@@ -79,5 +80,6 @@ export function finishLiving(plan, placed) {
   buildFences(ctx, budgets.fences);
   buildProps(ctx, budgets.props);
   buildCoast(ctx, budgets.coast);
-  return { groundMap: paintGroundMap({ fields, grid, box, crops: biome.living.crops }), movers: [], models: {} };
+  const { movers, models } = buildMovers(ctx);
+  return { groundMap: paintGroundMap({ fields, grid, box, crops: biome.living.crops }), movers, models };
 }

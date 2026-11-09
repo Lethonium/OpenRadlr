@@ -102,7 +102,7 @@ export function buildHedges(ctx, limit) {
 }
 
 /** The parcels reachable from a road, each once, in a stable order. */
-function nearParcels(ctx, reach) {
+export function nearParcels(ctx, reach) {
   const { fields, grid, box } = ctx;
   const seen = new Map();
   for (let z = box.z0; z < box.z1; z += 45) {
@@ -116,7 +116,7 @@ function nearParcels(ctx, reach) {
 }
 
 /** A point of `parcel`, `u` and `v` metres from its corner. */
-function parcelPoint(parcel, u, v) {
+export function parcelPoint(parcel, u, v) {
   const cos = Math.cos(parcel.angle);
   const sin = Math.sin(parcel.angle);
   const du = u - parcel.width / 2;
@@ -213,7 +213,7 @@ function buildShed(mesh, x, y, z, yaw, biome) {
   mesh.orientedBox([x, y + 2.5, z], [4.0 * cos, 0, 4.0 * sin], [0, 0.2, 0], [-3.4 * sin, 0, 3.4 * cos], woodLight);
 }
 
-function buildParkedTractor(mesh, x, y, z, yaw, biome) {
+export function buildParkedTractor(mesh, x, y, z, yaw, biome) {
   const { paint } = biome.living;
   const dark = [0.14, 0.14, 0.15];
   const cos = Math.cos(yaw);

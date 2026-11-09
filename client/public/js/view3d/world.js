@@ -1054,7 +1054,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
-  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome });
+  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome, ...(plan ? { movingAnimal: (animal) => plan.animals.push(animal) } : {}) });
   const rotors = buildWindTurbines(route, terrain, {
     structures: chunks.structures,
     occupancy,

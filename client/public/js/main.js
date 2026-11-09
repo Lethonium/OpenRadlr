@@ -830,6 +830,7 @@ function initMenuStage() {
       ? (route, scene) => {
           const view = new View3D(canvas, $("labels3d"), route, scene);
           view.lens = droneLens(scene.overview);
+          view.reducedMotion = reducedMotion;
           view.setQuality("low");
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
@@ -3752,6 +3753,7 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
+  app.view3d.reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   $("view-note").textContent = app.living && !app.view3d.hasLiving ? t("view.livingUnavailable") : "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
   $("view-3d").disabled = false;
