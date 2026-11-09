@@ -28,6 +28,7 @@ import {
   buildWarningSign,
 } from "../structures.js";
 import { fbm, valueNoise } from "../noise.js";
+import { temperateLiving } from "../living/temperate.js";
 
 export const COLORS = Object.freeze({
   road: [0.25, 0.26, 0.28],
@@ -203,6 +204,8 @@ const models = Object.freeze({
 export const temperate = Object.freeze({
   id: "temperate",
   label: "biome.temperate",
+  /** The Living tier's look of this season (see ADR 0021). */
+  living: temperateLiving,
   road: Object.freeze({
     surface: COLORS.road,
     verge: COLORS.verge,

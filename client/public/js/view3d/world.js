@@ -35,6 +35,7 @@ import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
+import { finishLiving, planLiving } from "./living/index.js";
 
 export const LANE_WIDTH = 1.4;
 export const SHOULDER = 0.9;
@@ -954,7 +955,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, living = false } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -981,6 +982,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const long = route.length > LONG_ROUTE_M;
   const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+  const plan = living && terrain.island ? planLiving({ terrain, biome, network, box: islandBox(terrain.island), zonesOf, ordered, water: ground.water, seed }) : null;
+  if (plan) chunks.life = new ChunkedMesh();
 
   // Nodes where a network's roads meet, for the junction pads.
   const degree = new Map();
@@ -1131,6 +1134,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     rotors,
     spectators,
     spectatorMeshes,
-    living: null,
+    living: plan ? finishLiving(plan) : null,
   };
 }

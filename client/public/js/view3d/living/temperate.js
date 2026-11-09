@@ -1,0 +1,32 @@
+/** Temperate's Living look: what its fields, moors and beaches are coloured like. */
+export const temperateLiving = Object.freeze({
+  crops: Object.freeze({
+    meadow: [0.42, 0.62, 0.27],
+    pasture: [0.34, 0.54, 0.24],
+    wheat: [0.82, 0.69, 0.33],
+    rapeseed: [0.92, 0.82, 0.18],
+    ploughed: [0.45, 0.34, 0.24],
+    hay: [0.74, 0.7, 0.38],
+    lavender: [0.54, 0.44, 0.7],
+    sunflower: [0.9, 0.72, 0.16],
+    woods: [0.17, 0.32, 0.17],
+    woodsDeep: [0.11, 0.24, 0.13],
+    garden: [
+      [0.38, 0.5, 0.26],
+      [0.5, 0.4, 0.3],
+      [0.6, 0.58, 0.3],
+      [0.32, 0.56, 0.32],
+    ],
+    river: [0.32, 0.58, 0.28],
+    rough: [0.46, 0.53, 0.3],
+    moor: [0.52, 0.36, 0.5],
+    moorHeath: [0.44, 0.5, 0.28],
+    scree: [0.54, 0.52, 0.5],
+    rock: [0.48, 0.47, 0.45],
+    sand: [0.86, 0.79, 0.59],
+    wetSand: [0.69, 0.61, 0.44],
+    dunes: [0.6, 0.65, 0.4],
+    track: [0.76, 0.7, 0.56],
+    edge: [0.26, 0.36, 0.18],
+  }),
+});

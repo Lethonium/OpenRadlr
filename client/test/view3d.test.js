@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fitsGroundMap } from "../public/js/view3d/renderer.js";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { identity, lookAt, multiply, perspective, placement, rotationXAbout, transformPoint, yawFor } from "../public/js/view3d/math.js";
 import { fbm, seededRandom, valueNoise } from "../public/js/view3d/noise.js";
@@ -331,6 +332,18 @@ test("grass and flowers grow beside the road, not on it", () => {
 /** A renderer that draws nothing and remembers every draw call. */
 class StubRenderer {
   draws = [];
+  /** Ground map calls, in order among the draws. */
+  log = [];
+  ground = { freed: [] };
+  uploadGroundMap(map) {
+    return { map };
+  }
+  disposeGroundMap(handle) {
+    this.ground.freed.push(handle);
+  }
+  useGroundMap(handle) {
+    this.log.push({ use: handle });
+  }
   upload(mesh) {
     return { mesh };
   }
@@ -339,9 +352,12 @@ class StubRenderer {
     return false;
   }
   resize() {}
-  begin() {}
+  begin(options) {
+    this.beginOptions = options;
+  }
   draw(handle, model) {
     this.draws.push({ handle, model });
+    this.log.push({ draw: handle });
   }
   drawBright() {}
   drawCloudLayer() {}
@@ -381,6 +397,80 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+const groundMap = { width: 2, height: 2, data: new Uint8Array(16), x0: 0, z0: 0, size: 100 };
+
+/** A view of a world with one terrain and one scenery chunk beside the camera's start. */
+function livingView(renderer, living = { groundMap, movers: [], models: {} }) {
+  const chunk = () => ({ mesh: emptyMesh(), center: [100, 0, 0], radius: 500 });
+  const world = {
+    biome: "temperate",
+    meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
+    chunks: { terrain: [chunk()], scenery: [chunk()], life: [chunk()] },
+    clouds: emptyMesh(),
+    weather: null,
+    water: emptyMesh(),
+    rivers: emptyMesh(),
+    rotors: [],
+    spectators: [],
+    gyms: [],
+    living,
+  };
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), world, { renderer });
+  view.camera.update(100, 1, 0);
+  return view;
+}
+
+test("the ground map is used for terrain only and freed on dispose", () => {
+  const renderer = new StubRenderer();
+  const view = livingView(renderer);
+  assert.equal(view.hasLiving, true);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const terrain = view.chunks.terrain[0].handle;
+  const scenery = view.chunks.scenery[0].handle;
+  const entries = renderer.log;
+  const position = (match) => entries.findIndex(match);
+  const on = position((e) => e.use?.map === groundMap);
+  const off = position((e) => "use" in e && e.use === null);
+  const terrainAt = position((e) => e.draw === terrain);
+  const sceneryAt = position((e) => e.draw === scenery);
+  assert.ok(on >= 0 && on < terrainAt && terrainAt < off, "terrain draws with the map bound");
+  assert.ok(off < sceneryAt, "the rest does not");
+  view.dispose();
+  assert.equal(renderer.ground.freed.length, 1);
+});
+
+test("a Living scene turns the sky on; a plain one leaves it alone", () => {
+  const renderer = new StubRenderer();
+  livingView(renderer).render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(renderer.beginOptions.sky, true);
+  const plain = new StubRenderer();
+  livingView(plain, null).render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(plain.beginOptions.sky, false);
+});
+
+test("the life group is drawn", () => {
+  const renderer = new StubRenderer();
+  const view = livingView(renderer);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(renderer.draws.some((d) => d.handle === view.chunks.life[0].handle));
+});
+
+test("a device too small for the map keeps vertex colours", () => {
+  const renderer = new StubRenderer();
+  renderer.uploadGroundMap = () => null;
+  const view = livingView(renderer);
+  assert.doesNotThrow(() => view.render({ riders: [], myId: null, timeS: 12, colors }));
+  assert.deepEqual(renderer.log.filter((e) => "use" in e && e.use !== null), []);
+  assert.doesNotThrow(() => view.dispose());
+  assert.deepEqual(renderer.ground.freed, []);
+});
+
+test("fitsGroundMap needs at least the map's width", () => {
+  assert.equal(fitsGroundMap(1024, 2048), false);
+  assert.equal(fitsGroundMap(2048, 2048), true);
+  assert.equal(fitsGroundMap(4096, 2048), true);
+});
 
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");

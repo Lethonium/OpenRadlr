@@ -3690,12 +3690,12 @@ function renderWorkoutProgress(time) {
 // ---------------------------------------------------------------- views ---
 
 function initViews() {
-  $("view-3d").addEventListener("click", () => setViewMode("3d"));
-  $("view-2d").addEventListener("click", () => setViewMode("2d"));
+  for (const id of ["2d", "3d", "living"]) $(`view-${id}`).addEventListener("click", () => setViewChoice(id));
   $("camera-mode").addEventListener("click", () => cycleCamera());
   $("quality-mode").addEventListener("click", () => setQuality(app.view3d.quality === "high" ? "low" : "high"));
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
+  $("view-living").disabled = true;
   setViewMode("2d", { remember: false });
 
   if (!isWebGl2Available()) {
@@ -3752,9 +3752,10 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
-  $("view-note").textContent = "";
+  $("view-note").textContent = app.living && !app.view3d.hasLiving ? t("view.livingUnavailable") : "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
   $("view-3d").disabled = false;
+  $("view-living").disabled = false;
   const camera = readSetting(CAMERA_KEY);
   if (CAMERA_MODES[camera]) app.view3d.setCameraMode(camera);
   renderCameraButton();
@@ -3830,8 +3831,8 @@ function setViewMode(mode, { remember = true } = {}) {
   app.viewMode = use3d ? "3d" : "2d";
   $("world-wrap").hidden = !use3d;
   $("peloton").hidden = use3d;
-  $("view-3d").setAttribute("aria-pressed", String(use3d));
-  $("view-2d").setAttribute("aria-pressed", String(!use3d));
+  const choice = viewChoice(app.viewMode, app.living);
+  for (const id of ["2d", "3d", "living"]) $(`view-${id}`).setAttribute("aria-pressed", String(choice === id));
   $("scene-controls").hidden = !use3d;
   if (remember) writeSetting(VIEW_KEY, app.viewMode);
   app.viewPopover?.refresh();

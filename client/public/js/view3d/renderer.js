@@ -34,6 +34,9 @@ void main() {
 const MESH_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp sampler2DShadow;
+uniform sampler2D u_groundMap;
+uniform vec4 u_groundBox;
+uniform float u_groundOn;
 in vec3 v_normal;
 in vec3 v_color;
 in vec3 v_world;
@@ -76,6 +79,18 @@ float sunVisibility() {
   return mix(1.0, mix(1.0 - u_shadowStrength, 1.0, lit), edge);
 }
 
+// A Living island's ground replaces the terrain colour before lighting; premultiplied, so alpha 0 keeps the vertex colour.
+vec3 albedo() {
+  if (u_groundOn < 0.5) return v_color;
+  vec4 g = texture(u_groundMap, (v_world.xz - u_groundBox.xy) * u_groundBox.z);
+  vec3 ground = g.rgb + v_color * (1.0 - g.a);
+  float near = 1.0 - smoothstep(60.0, 150.0, length(v_world - u_cameraPosition));
+  if (near <= 0.0) return ground;
+  // Fine speckle, so the ground isn't a blurry pixel grid at road level.
+  float speck = fract(sin(dot(floor(v_world.xz * 2.0), vec2(127.1, 311.7))) * 43758.5453);
+  return ground * (1.0 + (speck - 0.5) * 0.12 * near);
+}
+
 void main() {
   vec3 n = normalize(v_normal);
   if (!gl_FrontFacing) n = -n;
@@ -84,8 +99,9 @@ void main() {
   vec3 toCamera = normalize(u_cameraPosition - v_world);
   // Soft rim light keeps silhouettes readable against the terrain.
   float rim = pow(1.0 - max(dot(n, toCamera), 0.0), 3.0) * 0.18;
-  vec3 lit = v_color * (ambient * 0.62 + u_sunColor * sun * 0.85) + rim * u_skyColor;
-  lit = mix(lit, v_color, u_unlit);
+  vec3 color = albedo();
+  vec3 lit = color * (ambient * 0.62 + u_sunColor * sun * 0.85) + rim * u_skyColor;
+  lit = mix(lit, color, u_unlit);
   float distance = length(v_world - u_cameraPosition);
   float fog = smoothstep(u_fogRange.x, u_fogRange.y, distance);
   // Height fog: distant valleys get hazier than mountain tops.
@@ -175,6 +191,9 @@ export function createContext(canvas) {
   return canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance" });
 }
 
+/** Whether a device whose largest texture is `maxTextureSize` can hold a ground map `width` wide. */
+export const fitsGroundMap = (maxTextureSize, width) => maxTextureSize >= width;
+
 export class Renderer {
   /** Occlusion queries by key: `{query, pending, seen}`. */
   #queries = new Map();
@@ -219,6 +238,9 @@ export class Renderer {
       "u_shadowMap",
       "u_shadowStrength",
       "u_shadowTexel",
+      "u_groundMap",
+      "u_groundBox",
+      "u_groundOn",
     ]);
     this.depthUniforms = uniforms(gl, this.depthProgram, ["u_lightViewProjection", "u_model"]);
     this.weatherAttributes = {
@@ -250,6 +272,41 @@ export class Renderer {
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // Kept on texture unit 1: a sampler2D and the sampler2DShadow on one unit is a GL error.
+    this.noGroundMap = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.noGroundMap);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+  }
+
+  /** Uploads a Living ground map; null when this device cannot hold one (the terrain then keeps its vertex colours). */
+  uploadGroundMap(map) {
+    const gl = this.gl;
+    if (!fitsGroundMap(gl.getParameter(gl.MAX_TEXTURE_SIZE), map.width)) return null;
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, map.width, map.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, map.data);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const anisotropy = gl.getExtension("EXT_texture_filter_anisotropic");
+    if (anisotropy) gl.texParameterf(gl.TEXTURE_2D, anisotropy.TEXTURE_MAX_ANISOTROPY_EXT, 4);
+    return { texture, x0: map.x0, z0: map.z0, size: map.size };
+  }
+
+  disposeGroundMap(handle) {
+    this.gl.deleteTexture(handle.texture);
+  }
+
+  /** Draws terrain from a ground map from now on, or from vertex colours again (null). */
+  useGroundMap(handle) {
+    const gl = this.gl;
+    const u = this.uniforms;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, handle?.texture ?? this.noGroundMap);
+    gl.uniform1f(u.u_groundOn, handle ? 1 : 0);
+    if (handle) gl.uniform4f(u.u_groundBox, handle.x0, handle.z0, 1 / handle.size, 0);
   }
 
   /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
@@ -390,7 +447,7 @@ export class Renderer {
    *          zenith: number[], horizon: number[], ground: number[], sun: number[], sunColor: number[], fog: number[],
    *          shadowStrength?: number}} frame
    */
-  begin({ viewProjection, inverseViewProjection, camera, zenith, horizon, ground, sun, sunColor, fog, shadowStrength = 0.6 }) {
+  begin({ viewProjection, inverseViewProjection, camera, zenith, horizon, ground, sun, sunColor, fog, shadowStrength = 0.6, sky = false }) {
     const gl = this.gl;
     gl.clearColor(horizon[0], horizon[1], horizon[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -404,8 +461,11 @@ export class Renderer {
     gl.uniform3fv(s.u_horizonColor, horizon);
     gl.uniform3fv(s.u_sunColor, sunColor);
     gl.depthMask(false);
+    // The sky sits at the far plane, where a depth test of LESS rejects it.
+    if (sky) gl.depthFunc(gl.LEQUAL);
     gl.bindVertexArray(this.emptyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (sky) gl.depthFunc(gl.LESS);
     gl.depthMask(true);
 
     gl.useProgram(this.program);
@@ -428,6 +488,9 @@ export class Renderer {
     gl.uniform1f(u.u_shadowStrength, shadow?.lightViewProjection ? shadowStrength : 0);
     gl.uniform1f(u.u_shadowTexel, shadow ? 1 / shadow.size : 0);
     gl.uniformMatrix4fv(u.u_lightViewProjection, false, shadow?.lightViewProjection ?? IDENTITY);
+    gl.uniform1i(u.u_groundMap, 1);
+    this.useGroundMap(null);
+    gl.activeTexture(gl.TEXTURE0);
   }
 
   /** Draws with partial self-illumination (signage that should read in shade). */
