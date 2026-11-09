@@ -22,6 +22,6 @@ ARG PUBLIC_PLAUSIBLE_SCRIPT=
 ENV ASTRO_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM caddy:2-alpine@sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3
+FROM caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
 COPY landing/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/landing/dist /srv
