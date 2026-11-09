@@ -87,7 +87,7 @@ import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
-import { drawWorkout } from "./view/workoutView.js";
+import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
@@ -3454,6 +3454,7 @@ function initTraining({ simulated, setSimPower }) {
   const training = app.training;
   renderWorkoutOptions(0);
   $("workout-select").addEventListener("change", () => renderWorkoutDescription());
+  new ResizeObserver(renderWorkoutDescription).observe($("workout-preview"));
 
   $("mode-sim").addEventListener("click", () => training.setMode("sim"));
   $("mode-erg").addEventListener("click", () => training.setMode("erg"));
@@ -3581,6 +3582,7 @@ function renderWorkoutOptions(selected) {
 function renderWorkoutDescription() {
   const chosen = app.workouts[Number($("workout-select").value)];
   $("workout-description").textContent = chosen ? workoutDescription(chosen) : "";
+  drawWorkoutPreview($("workout-preview"), chosen);
 }
 
 function renderTraining({ simulated }) {

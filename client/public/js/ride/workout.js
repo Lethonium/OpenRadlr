@@ -20,11 +20,16 @@ const LIBRARY_KEYS = {
   "Endurance 45": ["workout.lib.endurance.name", "workout.lib.endurance.description"],
   "Sweet Spot 3×8": ["workout.lib.sweetSpot.name", "workout.lib.sweetSpot.description"], // i18n-ok
   "VO2max 5×3": ["workout.lib.vo2.name", "workout.lib.vo2.description"],
+  "Seiler 4×8": ["workout.lib.seiler.name", "workout.lib.seiler.description"], // i18n-ok
+  "Rønnestad 30/15": ["workout.lib.ronnestad.name", "workout.lib.ronnestad.description"], // i18n-ok
+  "40/20 4×8": ["workout.lib.fortyTwenty.name", "workout.lib.fortyTwenty.description"], // i18n-ok
+  "Over-unders 3×9": ["workout.lib.overUnders.name", "workout.lib.overUnders.description"], // i18n-ok
   "ERG check 10": ["workout.lib.erg.name", "workout.lib.erg.description"], // i18n-ok
 };
 const LABEL_KEYS = {
   Steady: "workout.label.steady", Ramp: "workout.label.ramp", Block: "workout.label.block", "Warm-up": "workout.label.warmup", "Cool-down": "workout.label.cooldown",
   Endurance: "workout.label.endurance", Tempo: "workout.label.tempo", Easy: "workout.label.easy", "Max effort": "workout.label.maxEffort", "Free ride": "workout.label.freeRide", // i18n-ok
+  "Series break": "workout.label.seriesBreak", // i18n-ok
 };
 
 /** The name to show for a workout: the library ones are translated, imported ones are the file's own. */
@@ -38,6 +43,10 @@ export function segmentLabel(label) {
   if (step) return t("workout.label.step", { n: step[1] });
   const round = /^(Interval|Recovery) (\d+)\/(\d+)$/.exec(label);
   if (round) return t(round[1] === "Interval" ? "workout.label.interval" : "workout.label.recovery", { i: round[2], n: round[3] }); // i18n-ok
+  const set = /^Series (\d+)\/(\d+) · (.+)$/.exec(label); // i18n-ok
+  if (set) return t("workout.label.series", { i: set[1], n: set[2], label: segmentLabel(set[3]) }); // i18n-ok
+  const under = /^(Under|Over) (\d+)\/(\d+)$/.exec(label); // i18n-ok
+  if (under) return t(under[1] === "Under" ? "workout.label.under" : "workout.label.over", { i: under[2], n: under[3] }); // i18n-ok
   return label;
 }
 const MAX_DURATION_S = 6 * 3600;
@@ -45,12 +54,35 @@ const MAX_DURATION_S = 6 * 3600;
 export const steady = (durationS, power, label = "Steady") => ({ durationS, from: power, to: power, label, kind: "steady" }); // i18n-ok
 export const ramp = (durationS, from, to, label = "Ramp", kind = "ramp") => ({ durationS, from, to, label, kind }); // i18n-ok
 
-/** `repeat` times (on, off), labelled "Interval 1/5" etc. */
-export function intervals(repeat, onS, onPower, offS, offPower) {
+/**
+ * `repeat` times (on, off), labelled "Interval 1/5" etc. With `lastRecovery: false`
+ * the final rep has no recovery after it (a series ends on work, the next set's rest follows).
+ */
+export function intervals(repeat, onS, onPower, offS, offPower, { lastRecovery = true } = {}) {
   const segments = [];
   for (let i = 1; i <= repeat; i += 1) {
     segments.push({ durationS: onS, from: onPower, to: onPower, label: `Interval ${i}/${repeat}`, kind: "on" });
-    if (offS > 0) segments.push({ durationS: offS, from: offPower, to: offPower, label: `Recovery ${i}/${repeat}`, kind: "off" });
+    if (offS > 0 && (lastRecovery || i < repeat)) segments.push({ durationS: offS, from: offPower, to: offPower, label: `Recovery ${i}/${repeat}`, kind: "off" });
+  }
+  return segments;
+}
+
+/** `count` sets from `makeSet()`, each block prefixed "Series 1/3 · ", with `restS` at `restPower` between sets. */
+export function series(count, restS, restPower, makeSet) {
+  const segments = [];
+  for (let s = 1; s <= count; s += 1) {
+    if (s > 1) segments.push({ durationS: restS, from: restPower, to: restPower, label: "Series break", kind: "off" }); // i18n-ok
+    for (const segment of makeSet()) segments.push({ ...segment, label: `Series ${s}/${count} · ${segment.label}` }); // i18n-ok
+  }
+  return segments;
+}
+
+/** `repeat` times an under block then an over block, labelled "Under 1/5", "Over 1/5". */
+export function overUnders(repeat, underS, underPower, overS, overPower) {
+  const segments = [];
+  for (let i = 1; i <= repeat; i += 1) {
+    segments.push({ durationS: underS, from: underPower, to: underPower, label: `Under ${i}/${repeat}`, kind: "on" }); // i18n-ok
+    segments.push({ durationS: overS, from: overPower, to: overPower, label: `Over ${i}/${repeat}`, kind: "on" }); // i18n-ok
   }
   return segments;
 }
@@ -218,6 +250,26 @@ export const PRESET_WORKOUTS = Object.freeze([
     name: "VO2max 5×3",
     description: "Five hard 3-minute efforts with equal recovery.", // i18n-ok
     segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...intervals(5, 180, 1.15, 180, 0.5), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Seiler 4×8", // i18n-ok
+    description: "Four 8-minute efforts with 2 minutes easy between them. Based on Seiler et al. 2013, where riders held the hardest effort they could sustain. 105 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...intervals(4, 480, 1.05, 120, 0.5, { lastRecovery: false }), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Rønnestad 30/15", // i18n-ok
+    description: "Three series of 13 × 30 s on, 15 s off, with 3 minutes between series. From Rønnestad et al. 2015, where riders held the hardest effort they could sustain. 120 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(3, 180, 0.6, () => intervals(13, 30, 1.2, 15, 0.6, { lastRecovery: false })), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "40/20 4×8", // i18n-ok
+    description: "Four sets of 8 × 40 s on, 20 s off, with 2 minutes between sets. Format from clinical trial NCT04075929. 115 % FTP is our estimate: adjust it to your effort.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(4, 120, 0.58, () => intervals(8, 40, 1.15, 20, 0.58, { lastRecovery: false })), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+  }),
+  createWorkout({
+    name: "Over-unders 3×9", // i18n-ok
+    description: "Three sets of 2 minutes just under and 1 minute just over threshold, with 5 minutes between sets. Common coaching practice, not from a published study.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...series(3, 300, 0.5, () => overUnders(3, 120, 0.95, 60, 1.05)), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
   }),
   createWorkout({
     name: "ERG check 10", // i18n-ok
