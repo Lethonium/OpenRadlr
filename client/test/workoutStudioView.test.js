@@ -3,7 +3,44 @@ import assert from "node:assert/strict";
 import { createPlan, planPositionAt, withGetReady } from "../public/js/workout/plan.js";
 import { WorkoutSession } from "../public/js/workout/workoutSession.js";
 import { createCue } from "../public/js/workout/cue.js";
-import { blockProgress, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "../public/js/view/workoutStudioView.js";
+import { blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "../public/js/view/workoutStudioView.js";
+import { EXERCISES } from "../public/js/workout/plan.js";
+import { t } from "../public/js/i18n/i18n.js";
+import { PRESETS } from "../public/js/workout/presets.js";
+
+// The full-body preset with get-ready: squats 30-70, rest 70-90, sit-ups 90-130, rest 130-150, …
+const fullBody = PRESETS.find((preset) => preset.id === "full-body");
+const valleyFigures = ["squats", "situps", "pushups", "jumping_jacks", "plank", "burpees"];
+const fullBodyAt = (elapsed) => planPositionAt(withGetReady(fullBody), elapsed);
+
+test("get-ready lights the first exercise's statue", () => {
+  assert.equal(highlightedFigure(fullBodyAt(0), valleyFigures), 0);
+});
+
+test("the first exercise has no statue lit", () => {
+  assert.equal(highlightedFigure(fullBodyAt(30), valleyFigures), null);
+});
+
+test("a rest lights the statue of the next exercise by its index in the row", () => {
+  assert.equal(highlightedFigure(fullBodyAt(75), valleyFigures), 1);
+});
+
+test("a finished plan has no statue lit", () => {
+  assert.equal(highlightedFigure(fullBodyAt(1e6), valleyFigures), null);
+});
+
+test("a rest whose next exercise has no statue at this gym lights nothing", () => {
+  assert.equal(highlightedFigure(fullBodyAt(75), ["squats"]), null);
+});
+
+test("skipping out of a rest into an exercise turns the glow off", () => {
+  const clock = { t: 0 };
+  const session = new WorkoutSession({ plan: fullBody, now: () => clock.t });
+  clock.t = 75;
+  assert.equal(highlightedFigure(session.position(), valleyFigures), 1);
+  session.skip();
+  assert.equal(highlightedFigure(session.position(), valleyFigures), null);
+});
 
 // Get ready 0-30, squats 30-65, rest 65-80, burpees 80-120
 const plan = () =>
@@ -171,4 +208,33 @@ test("the workout opens in 3D whatever view was saved; a ride follows the saved 
   assert.equal(startingViewMode("2d", { workout: true }), "3d");
   assert.equal(startingViewMode("2d"), "2d");
   assert.equal(startingViewMode(null), "3d");
+});
+
+const yogaAt = (elapsed) =>
+  planPositionAt(
+    withGetReady(
+      createPlan({
+        id: "y",
+        name: "Yoga",
+        blocks: [
+          { kind: "exercise", exercise: "cobra", seconds: 60 },
+          { kind: "rest", seconds: 10 },
+          { kind: "exercise", exercise: "pigeon", seconds: 60 },
+        ],
+      }),
+    ),
+    elapsed,
+  );
+
+test("the cue line shows the exercise's cue", () => {
+  assert.equal(workoutHudText(yogaAt(40), { state: "block", heartRate: null }).cue, EXERCISES.cobra.cue);
+});
+
+test("the second half of a sided block says switch sides", () => {
+  const position = { ...yogaAt(130), side: "left" };
+  assert.equal(workoutHudText(position, { state: "block", heartRate: null }).cue, t("workout.switchSides"));
+});
+
+test("rest has no cue", () => {
+  assert.equal(workoutHudText(yogaAt(95), { state: "block", heartRate: null }).cue, "");
 });

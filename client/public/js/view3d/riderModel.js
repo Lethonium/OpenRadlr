@@ -357,6 +357,13 @@ export function buildWheel() {
 }
 
 /** Soft contact shadow under the bike (ambient occlusion on the road). */
+/** An invisible box around a rider and bike: the GPU tells from it whether the rider is in sight (for its label). */
+export function buildLabelProbe() {
+  const m = new MeshBuilder();
+  m.box([0, 0.9, 0], [1.2, 1.8, 1.2], [0, 0, 0]);
+  return m.build();
+}
+
 export function buildRiderShadow() {
   const m = new MeshBuilder();
   m.disc([0, 0.07, 0], [0.32, 0.8], [0.03, 0.04, 0.05], 14);

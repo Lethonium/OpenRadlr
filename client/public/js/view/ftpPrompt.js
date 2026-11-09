@@ -1,6 +1,8 @@
+import { t } from "../i18n/i18n.js";
+
 /** Wording of the "new FTP" offer on the finish screen. */
 export function ftpPromptText({ ftp, delta, basis, source }) {
   const sign = delta < 0 ? "−" : "+";
-  const detail = source === "test" ? "Measured by the ramp test." : basis === "twenty" ? "From your best 20 minutes." : "From your best efforts of the last 90 days.";
-  return { title: `New FTP detected: ${ftp} W (${sign}${Math.abs(delta)})`, detail };
+  const detail = source === "test" ? t("ftp.prompt.test") : basis === "twenty" ? t("ftp.prompt.twenty") : t("ftp.prompt.recent");
+  return { title: t("ftp.prompt.title", { ftp, delta: `${sign}${Math.abs(delta)}` }), detail };
 }

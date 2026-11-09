@@ -133,11 +133,52 @@ void main() {
   outColor = vec4(sky, 1.0);
 }`;
 
+export const WEATHER_VERTEX = `#version 300 es
+in vec2 a_corner;
+in vec4 a_seed;
+uniform mat4 u_viewProjection;
+uniform vec3 u_cameraPosition;
+uniform vec3 u_cameraRight;
+uniform vec3 u_cameraUp;
+uniform vec3 u_box;
+uniform vec2 u_fall;
+uniform vec2 u_drift;
+uniform vec2 u_size;
+uniform float u_time;
+out vec2 v_corner;
+void main() {
+  float speed = mix(u_fall.x, u_fall.y, a_seed.w);
+  vec3 seed = a_seed.xyz * u_box;
+  vec3 drift = vec3(u_drift.x, 0.0, u_drift.y) * u_time;
+  vec3 world;
+  world.x = mod(seed.x + drift.x - u_cameraPosition.x, u_box.x) + u_cameraPosition.x - u_box.x * 0.5;
+  world.z = mod(seed.z + drift.z - u_cameraPosition.z, u_box.z) + u_cameraPosition.z - u_box.z * 0.5;
+  world.y = u_cameraPosition.y - u_box.y * 0.5 + mod(seed.y - u_time * speed - u_cameraPosition.y, u_box.y);
+  float size = mix(u_size.x, u_size.y, fract(a_seed.w * 7.13));
+  world += (u_cameraRight * a_corner.x + u_cameraUp * a_corner.y) * size;
+  v_corner = a_corner;
+  gl_Position = u_viewProjection * vec4(world, 1.0);
+}`;
+
+const WEATHER_FRAGMENT = `#version 300 es
+precision highp float;
+in vec2 v_corner;
+uniform vec4 u_color;
+out vec4 outColor;
+void main() {
+  float d = length(v_corner);
+  if (d > 1.0) discard;
+  outColor = vec4(u_color.rgb, u_color.a * (1.0 - smoothstep(0.55, 1.0, d)));
+}`;
+
 export function createContext(canvas) {
   return canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance" });
 }
 
 export class Renderer {
+  /** Occlusion queries by key: `{query, pending, seen}`. */
+  #queries = new Map();
+
   /** @param {WebGL2RenderingContext} gl */
   constructor(gl) {
     this.gl = gl;
@@ -147,6 +188,10 @@ export class Renderer {
       a_color: 2,
     });
     this.skyProgram = link(gl, compile(gl, gl.VERTEX_SHADER, SKY_VERTEX), compile(gl, gl.FRAGMENT_SHADER, SKY_FRAGMENT));
+    this.weatherProgram = link(gl, compile(gl, gl.VERTEX_SHADER, WEATHER_VERTEX), compile(gl, gl.FRAGMENT_SHADER, WEATHER_FRAGMENT), {
+      a_corner: 0,
+      a_seed: 1,
+    });
     // The depth program shares attribute 0 for positions with the mesh program.
     this.depthProgram = link(gl, compile(gl, gl.VERTEX_SHADER, DEPTH_VERTEX), compile(gl, gl.FRAGMENT_SHADER, DEPTH_FRAGMENT), {
       a_position: 0,
@@ -176,6 +221,22 @@ export class Renderer {
       "u_shadowTexel",
     ]);
     this.depthUniforms = uniforms(gl, this.depthProgram, ["u_lightViewProjection", "u_model"]);
+    this.weatherAttributes = {
+      corner: gl.getAttribLocation(this.weatherProgram, "a_corner"),
+      seed: gl.getAttribLocation(this.weatherProgram, "a_seed"),
+    };
+    this.weatherUniforms = uniforms(gl, this.weatherProgram, [
+      "u_viewProjection",
+      "u_cameraPosition",
+      "u_cameraRight",
+      "u_cameraUp",
+      "u_box",
+      "u_fall",
+      "u_drift",
+      "u_size",
+      "u_time",
+      "u_color",
+    ]);
     this.shadow = null;
     this.skyUniforms = uniforms(gl, this.skyProgram, [
       "u_inverseViewProjection",
@@ -267,6 +328,48 @@ export class Renderer {
     return { vao, buffers, count: mesh.vertexCount };
   }
 
+  /** Uploads camera-local weather particles: six vertices per flake, six floats each. */
+  uploadWeather(data) {
+    const gl = this.gl;
+    const vao = gl.createVertexArray();
+    const buffer = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    const stride = 6 * 4;
+    gl.enableVertexAttribArray(this.weatherAttributes.corner);
+    gl.vertexAttribPointer(this.weatherAttributes.corner, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(this.weatherAttributes.seed);
+    gl.vertexAttribPointer(this.weatherAttributes.seed, 4, gl.FLOAT, false, stride, 2 * 4);
+    gl.bindVertexArray(null);
+    return { vao, buffers: [buffer], count: data.length / 6 };
+  }
+
+  /** Draws the weather field around the camera; `style` is the biome's weather data. */
+  drawWeather(handle, { viewProjection, camera, right, up, timeS, style }) {
+    const gl = this.gl;
+    gl.useProgram(this.weatherProgram);
+    const u = this.weatherUniforms;
+    gl.uniformMatrix4fv(u.u_viewProjection, false, viewProjection);
+    gl.uniform3fv(u.u_cameraPosition, camera);
+    gl.uniform3fv(u.u_cameraRight, right);
+    gl.uniform3fv(u.u_cameraUp, up);
+    gl.uniform3fv(u.u_box, style.box);
+    gl.uniform2fv(u.u_fall, style.fall);
+    gl.uniform2fv(u.u_drift, style.drift);
+    gl.uniform2fv(u.u_size, style.size);
+    gl.uniform1f(u.u_time, timeS);
+    gl.uniform4fv(u.u_color, style.color);
+    gl.enable(gl.BLEND);
+    gl.depthMask(false);
+    gl.bindVertexArray(handle.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, handle.count);
+    gl.bindVertexArray(null);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    gl.useProgram(this.program);
+  }
+
   dispose(handle) {
     this.gl.deleteVertexArray(handle.vao);
     handle.buffers.forEach((buffer) => this.gl.deleteBuffer(buffer));
@@ -350,6 +453,49 @@ export class Renderer {
     this.draw(handle, model, tint);
     gl.uniform1f(this.uniforms.u_fogScale, 1);
     gl.uniform1f(this.uniforms.u_unlit, 0);
+  }
+
+  /**
+   * Asks the GPU whether any of `handle` at `model` is in sight, against the
+   * depth drawn so far (call after the opaque meshes). Nothing is drawn. The
+   * answer comes a frame or two later through `occlusion(key)`; one query
+   * per key is in flight at a time, so this is cheap to call every frame.
+   */
+  queryOcclusion(key, handle, model) {
+    const gl = this.gl;
+    let entry = this.#queries.get(key);
+    if (!entry) {
+      entry = { query: gl.createQuery(), pending: false, seen: undefined };
+      this.#queries.set(key, entry);
+    }
+    if (entry.pending) {
+      // Never block on the GPU: read only what is ready.
+      if (!gl.getQueryParameter(entry.query, gl.QUERY_RESULT_AVAILABLE)) return;
+      entry.seen = gl.getQueryParameter(entry.query, gl.QUERY_RESULT) > 0;
+      entry.pending = false;
+    }
+    gl.colorMask(false, false, false, false);
+    gl.depthMask(false);
+    gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, entry.query);
+    this.draw(handle, model);
+    gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+    gl.depthMask(true);
+    gl.colorMask(true, true, true, true);
+    entry.pending = true;
+  }
+
+  /** The latest answer for `key`: true (partly in sight), false (hidden) or undefined (none yet). */
+  occlusion(key) {
+    return this.#queries.get(key)?.seen;
+  }
+
+  /** Drops the queries of keys not in `keys`. */
+  keepOcclusion(keys) {
+    for (const [key, entry] of this.#queries) {
+      if (keys.has(key)) continue;
+      this.gl.deleteQuery(entry.query);
+      this.#queries.delete(key);
+    }
   }
 
   /**

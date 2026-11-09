@@ -26,8 +26,13 @@ pub struct RouteFile {
     pub markers: Vec<MarkerFile>,
     /// Scenery zones (village, river, forest, …). Pure decoration for clients:
     /// the server passes them through unchanged and never interprets them.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub zones: Vec<ZoneFile>,
+    /// An explicit empty list means "no scenery" and is passed on as such.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zones: Option<Vec<ZoneFile>>,
+    /// The id of the OpenBikeNet track this route is shared on: riders of
+    /// other apps ride it too, so the world has no bots. Passed through unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openbikenet: Option<String>,
     /// The shared map this route belongs to: clients draw all routes with the
     /// same map id as one world (ADR 0010, stage 1). Passed through unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -265,14 +270,40 @@ mod tests {
         let json = r#"{"id":"z","name":"z","lanes":2,"seed":1,"points":[[0,0,0],[100,0,0]],
             "zones":[{"type":"village","from":10,"to":60},{"type":"river","at":80},{"type":"future_thing","at":5}]}"#;
         let file = RouteFile::parse(json).unwrap();
-        assert_eq!(file.zones.len(), 3);
-        assert_eq!(file.zones[1].kind, "river");
+        let zones = file.zones.as_ref().unwrap();
+        assert_eq!(zones.len(), 3);
+        assert_eq!(zones[1].kind, "river");
         let out = serde_json::to_string(&file).unwrap();
         assert!(
             out.contains(r#""zones":[{"type":"village","from":10.0,"to":60.0}"#),
             "{out}"
         );
         assert!(out.contains(r#"{"type":"future_thing","at":5.0}"#));
+    }
+
+    #[test]
+    fn an_explicit_empty_zones_list_is_passed_on() {
+        let base = r#""id":"x","name":"x","lanes":2,"seed":1,"points":[[0,0,0],[9,0,0]]"#;
+        let explicit = RouteFile::parse(&format!("{{{base},\"zones\":[]}}")).unwrap();
+        assert!(serde_json::to_string(&explicit).unwrap().contains(r#""zones":[]"#));
+        let absent = RouteFile::parse(&format!("{{{base}}}")).unwrap();
+        assert!(!serde_json::to_string(&absent).unwrap().contains("zones"));
+    }
+
+    #[test]
+    fn routes_without_openbikenet_serialise_without_the_key() {
+        let file = RouteFile::parse(r#"{"id":"x","name":"x","lanes":2,"seed":1,"points":[[0,0,0],[9,0,0]]}"#).unwrap();
+        assert_eq!(file.openbikenet, None);
+        assert!(!serde_json::to_string(&file).unwrap().contains("openbikenet"));
+    }
+
+    #[test]
+    fn velodrome_is_250_m_and_shared() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes/velodrome.json");
+        let file = RouteFile::load(Path::new(path)).unwrap();
+        assert_eq!(file.openbikenet.as_deref(), Some("velodrome-250"));
+        let route = file.to_route().unwrap();
+        assert!((route.length() - 250.0).abs() < 0.01, "{}", route.length());
     }
 
     #[test]
@@ -356,7 +387,9 @@ mod tests {
             }
             let file = RouteFile::load(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
             let route = file.to_route().unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-            assert!(route.length() > 3000.0, "{} is too short", path.display());
+            if file.openbikenet.is_none() {
+                assert!(route.length() > 3000.0, "{} is too short", path.display());
+            }
             assert!(!ids.contains(&file.id), "duplicate route id {}", file.id);
             ids.push(file.id);
         }

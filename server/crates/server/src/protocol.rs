@@ -3,7 +3,9 @@
 //! Every message is a JSON object with a `type` field. See `docs/protocol.md`
 //! for the full description. Bump [`PROTOCOL_VERSION`] on breaking changes.
 
+use crate::obn::remote::RemoteRider;
 use openradlr_sim::events::{EventInfo, EventKind, EventLength, EventNotice, EventResult, EventView};
+use openradlr_sim::physics::RiderPhysics;
 use openradlr_sim::race::{RaceEvent, RacePhase, RaceResult};
 use openradlr_sim::schedule::Phase;
 use openradlr_sim::sharing::Flow;
@@ -123,7 +125,12 @@ pub enum ClientMessage {
     Workout {
         #[serde(default)]
         exercise: Option<String>,
+        /// Which side a sided pose is held on (`right` or `left`); the session checks it.
+        #[serde(default)]
+        side: Option<String>,
     },
+    /// Answer to an `afk_warning`: the rider is still there.
+    Stay,
     /// Leave the game now; the server removes the rider and closes the
     /// connection.
     Leave,
@@ -164,11 +171,38 @@ pub enum Exercise {
     JumpingJacks,
     Plank,
     Burpees,
+    SunSalutation,
+    ForwardFold,
+    DownwardDog,
+    Cobra,
+    ChildPose,
+    LowLunge,
+    Pigeon,
 }
 
 impl Exercise {
+    /// Whether the pose is held on one side, then the other.
+    pub fn sided(self) -> bool {
+        matches!(self, Exercise::LowLunge | Exercise::Pigeon)
+    }
+
     /// The exercise with this wire id.
     pub fn from_id(id: &str) -> Option<Exercise> {
+        serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
+    }
+}
+
+/// Which side of a sided pose a rider holds; the view mirrors the left one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    Right,
+    Left,
+}
+
+impl Side {
+    /// The side with this wire id.
+    pub fn from_id(id: &str) -> Option<Side> {
         serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
     }
 }
@@ -178,6 +212,7 @@ impl Exercise {
 pub struct RiderTags {
     pub device: DeviceKind,
     pub exercise: Option<Exercise>,
+    pub side: Option<Side>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -210,10 +245,19 @@ pub enum ServerMessage {
         /// removed; `0` removes at once.
         grace_s: f64,
     },
+    /// The rider has sent 0 W for a long time. Answer with `stay` (if
+    /// `can_stay`) or the ride ends in `leave_in_s` seconds with `afk_timeout`.
+    AfkWarning {
+        leave_in_s: u32,
+        can_stay: bool,
+    },
     Joined {
         rider_id: RiderId,
         /// Send it in a later `join` to come back as the same rider (#73).
         resume_token: String,
+        /// What the server rides you with on a solo bike, for the client's
+        /// virtual shifting (#22).
+        physics: PhysicsWire,
     },
     /// The riders around you (and everyone in your route's race), and your
     /// route's race.
@@ -305,6 +349,13 @@ pub struct SeatRef {
 pub struct RouteRiders {
     pub humans: usize,
     pub bots: usize,
+    /// Riders of other apps on the shared route (OpenBikeNet); left out when none.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub remote: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// The scheduled event of the viewer's route (lobby or running).
@@ -371,6 +422,26 @@ pub struct EventInfoWire {
     pub entrants: usize,
 }
 
+/// A rider's physics numbers on the wire; `mass_kg` is rider plus bike.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct PhysicsWire {
+    pub mass_kg: f64,
+    pub cda_m2: f64,
+    pub crr: f64,
+    pub air_density: f64,
+}
+
+impl From<RiderPhysics> for PhysicsWire {
+    fn from(p: RiderPhysics) -> Self {
+        Self {
+            mass_kg: p.mass_kg,
+            cda_m2: p.cda_m2,
+            crr: p.crr,
+            air_density: p.air_density,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RiderState {
     pub id: RiderId,
@@ -406,6 +477,37 @@ pub struct RiderState {
     /// The exercise a workout rider does now (#77); left out at rest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exercise: Option<Exercise>,
+    /// The app a rider from another app rides with (OpenBikeNet); left out for our own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+    /// The side of a sided pose; left out for any other.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<Side>,
+}
+
+impl RiderState {
+    /// A rider of another app on the shared route `route_id`, spread over `lanes` by id.
+    pub fn remote(r: &RemoteRider, route_id: &str, lanes: u8) -> RiderState {
+        RiderState {
+            id: r.id,
+            name: r.name.clone(),
+            is_bot: false,
+            route: Some(route_id.to_owned()),
+            distance: round2(r.distance),
+            road: None,
+            lap: None,
+            lane: f64::from(r.id % u32::from(lanes.max(1))),
+            speed: round2(r.speed),
+            power: r.power.round(),
+            device: DeviceKind::Trainer,
+            vehicle: None,
+            cadence: r.cadence.map(f64::round),
+            parked: false,
+            exercise: None,
+            app: Some(r.app.clone()),
+            side: None,
+        }
+    }
 }
 
 /// A position on the road network (ADR 0010): the road, the riding
@@ -763,6 +865,8 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         cadence: seat.map(|_| r.cadence.unwrap_or(if r.power > 0.0 { 85.0 } else { 0.0 }).round()),
         parked: r.parked,
         exercise: tags.exercise,
+        app: None,
+        side: tags.side,
     }
 }
 
@@ -804,7 +908,11 @@ pub fn state_message(
         tick,
         riders,
         race: race_state(world, me.route),
-        route_riders: RouteRiders { humans, bots },
+        route_riders: RouteRiders {
+            humans,
+            bots,
+            remote: 0,
+        },
         event,
         vehicle: own_vehicle.map(|v| vehicle_state(world, v)),
     })
@@ -1129,6 +1237,8 @@ mod tests {
             cadence,
             parked: false,
             exercise: None,
+            app: None,
+            side: None,
         }
     }
 
@@ -1141,7 +1251,21 @@ mod tests {
                 ..
             }
         ));
-        let ids = ["squats", "situps", "pushups", "jumping_jacks", "plank", "burpees"];
+        let ids = [
+            "squats",
+            "situps",
+            "pushups",
+            "jumping_jacks",
+            "plank",
+            "burpees",
+            "sun_salutation",
+            "forward_fold",
+            "downward_dog",
+            "cobra",
+            "child_pose",
+            "low_lunge",
+            "pigeon",
+        ];
         for id in ids {
             let exercise = Exercise::from_id(id).unwrap_or_else(|| panic!("{id} parses"));
             assert_eq!(serde_json::to_string(&exercise).unwrap(), format!("\"{id}\""));
@@ -1184,7 +1308,11 @@ mod tests {
                 Some(85.0),
             )],
             race: RaceState::Idle,
-            route_riders: RouteRiders { humans: 1, bots: 0 },
+            route_riders: RouteRiders {
+                humans: 1,
+                bots: 0,
+                remote: 0,
+            },
             event: None,
             vehicle: Some(VehicleState {
                 id: 3,
@@ -1211,12 +1339,31 @@ mod tests {
     }
 
     #[test]
+    fn stay_parses() {
+        assert_eq!(ClientMessage::parse(r#"{"type":"stay"}"#).unwrap(), ClientMessage::Stay);
+    }
+
+    #[test]
+    fn afk_warning_serialises() {
+        let json = ServerMessage::AfkWarning {
+            leave_in_s: 120,
+            can_stay: false,
+        }
+        .to_json();
+        assert_eq!(json, r#"{"type":"afk_warning","leave_in_s":120,"can_stay":false}"#);
+    }
+
+    #[test]
     fn solo_riders_have_no_vehicle_field() {
         let json = ServerMessage::State {
             tick: 1,
             riders: vec![rider_json(None, None)],
             race: RaceState::Idle,
-            route_riders: RouteRiders { humans: 1, bots: 0 },
+            route_riders: RouteRiders {
+                humans: 1,
+                bots: 0,
+                remote: 0,
+            },
             event: None,
             vehicle: None,
         }
@@ -1226,10 +1373,36 @@ mod tests {
     }
 
     #[test]
+    fn joined_carries_the_rider_physics() {
+        let json = ServerMessage::Joined {
+            rider_id: 3,
+            resume_token: "t".into(),
+            physics: PhysicsWire {
+                mass_kg: 100.0,
+                cda_m2: 0.452,
+                crr: 0.005,
+                air_density: 1.225,
+            },
+        }
+        .to_json();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["physics"],
+            serde_json::json!({ "mass_kg": 100.0, "cda_m2": 0.452, "crr": 0.005, "air_density": 1.225 })
+        );
+    }
+
+    #[test]
     fn joined_and_welcome_carry_the_new_fields() {
         let json = ServerMessage::Joined {
             rider_id: 3,
             resume_token: "t".into(),
+            physics: PhysicsWire {
+                mass_kg: 100.0,
+                cda_m2: 0.452,
+                crr: 0.005,
+                air_density: 1.225,
+            },
         }
         .to_json();
         assert!(json.contains(r#""resume_token":"t""#));
@@ -1267,7 +1440,11 @@ mod tests {
             tick: 1,
             riders: vec![],
             race: RaceState::Idle,
-            route_riders: RouteRiders { humans: 1, bots: 2 },
+            route_riders: RouteRiders {
+                humans: 1,
+                bots: 2,
+                remote: 0,
+            },
             event: None,
             vehicle: None,
         }
@@ -1323,7 +1500,11 @@ mod tests {
             tick: 1,
             riders: vec![],
             race: RaceState::Idle,
-            route_riders: RouteRiders { humans: 0, bots: 0 },
+            route_riders: RouteRiders {
+                humans: 0,
+                bots: 0,
+                remote: 0,
+            },
             event: None,
             vehicle: None,
         }

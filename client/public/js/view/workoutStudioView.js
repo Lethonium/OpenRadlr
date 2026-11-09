@@ -3,6 +3,8 @@
  * and the view that writes it into `#workout-hud`. Only textContent is used.
  */
 import { formatDuration } from "../util/format.js";
+import { t } from "../i18n/i18n.js";
+import { EXERCISES } from "../workout/plan.js";
 
 /** The planned exercise time (rests excluded): what a workout's active time is measured against. */
 const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (block.kind === "exercise" ? block.seconds : 0), 0);
@@ -25,15 +27,30 @@ export function workoutHudText(position, { state, heartRate }) {
   const next = position.next;
   return {
     exercise: position.block?.label ?? "",
-    paused: state === "paused" ? "Paused" : "",
+    paused: state === "paused" ? t("workout.hud.paused") : "",
     time: formatDuration(Math.ceil(position.blockRemainingS)),
-    next: next ? `Next: ${next.label} ${next.seconds} s` : "Last block",
-    block: `Block ${Math.min(position.index + 1, position.count)}/${position.count}`,
+    cue: position.block?.kind !== "exercise" ? "" : position.side === "left" ? t("workout.switchSides") : (EXERCISES[position.block.exercise]?.cue ?? ""),
+    next: next ? t("workout.hud.next", { label: next.label, s: next.seconds }) : t("workout.hud.last"),
+    block: t("workout.hud.block", { n: Math.min(position.index + 1, position.count), count: position.count }),
     // Elapsed rounds down and remaining up, like the ring: the first frame reads 0:00 and the full length.
     elapsed: formatDuration(Math.floor(position.elapsedS)),
     remaining: formatDuration(Math.ceil(position.remainingS)),
     hr: Number.isFinite(heartRate) ? `${Math.round(heartRate)} bpm` : "",
   };
+}
+
+/**
+ * The index in `figures` (the gym's statue row) of the exercise a rest leads
+ * into, or null: during an exercise, after the plan, or without a statue.
+ * @param {ReturnType<import("../workout/plan.js").planPositionAt>} position
+ * @param {string[]} figures exercise ids in the plinth order of the gym's row
+ */
+export function highlightedFigure(position, figures) {
+  if (position.finished || position.block?.kind !== "rest") return null;
+  const next = position.next;
+  if (next?.kind !== "exercise") return null;
+  const index = figures.indexOf(next.exercise);
+  return index < 0 ? null : index;
 }
 
 /** How much of the current block is over, 0..1 (the ring). */
@@ -45,11 +62,11 @@ export function blockProgress(position) {
 /** The summary card lines for a history record of a workout and the plan that was run; `finished` is true when the plan ran out. */
 export function summaryText(record, plan, { finished = false } = {}) {
   return {
-    title: finished ? "Workout complete" : "Workout ended",
+    title: finished ? t("workout.summary.complete") : t("workout.ended"),
     plan: record.planName,
-    worked: `${formatDuration(record.activeS)} of ${formatDuration(exerciseDuration(plan))}`,
-    blocks: record.blocksSkipped > 0 ? `${record.blocksDone} done · ${record.blocksSkipped} skipped` : `${record.blocksDone} done`,
-    hr: record.hr ? `Avg ${record.hr.avg} · max ${record.hr.max} bpm` : "",
+    worked: t("workout.summary.worked", { active: formatDuration(record.activeS), planned: formatDuration(exerciseDuration(plan)) }),
+    blocks: record.blocksSkipped > 0 ? t("workout.summary.blocksSkipped", { done: record.blocksDone, skipped: record.blocksSkipped }) : t("workout.summary.blocks", { done: record.blocksDone }),
+    hr: record.hr ? t("workout.summary.hr", { avg: record.hr.avg, max: record.hr.max }) : "",
   };
 }
 

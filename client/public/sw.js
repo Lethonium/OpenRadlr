@@ -5,8 +5,8 @@
  * Network first, so `make update` on the server reaches riders right away;
  * the cache is only a fallback. Live data is never cached: /api, /ws, /auth.
  */
-const CACHE = "openradlr-shell-v1";
-const SHELL = ["/", "/index.html", "/styles.css", "/manifest.webmanifest", "/js/main.js", "/icons/icon-192.png", "/icons/brand-mark.png"];
+const CACHE = "openradlr-shell-v2";
+const SHELL = ["/", "/index.html", "/styles.css", "/manifest.webmanifest", "/js/main.js", "/js/i18n/i18n.js", "/js/i18n/apply.js", "/js/i18n/en.js", "/js/i18n/de.js", "/js/i18n/selector.js", "/icons/icon-192.png", "/icons/brand-mark.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

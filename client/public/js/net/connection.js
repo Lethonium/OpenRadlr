@@ -1,5 +1,6 @@
 import { Emitter } from "../util/emitter.js";
 import { ClientMessages, parseServerMessage } from "./protocol.js";
+import { t } from "../i18n/i18n.js";
 
 /**
  * One connection to a game server.
@@ -13,6 +14,8 @@ export class GameConnection extends Emitter {
   serverInfo = null;
   /** Brings this rider back after a dropped connection (from `joined`, #73). */
   resumeToken = null;
+  /** The server's physics for this rider (`joined.physics`, #22), `null` from an older server. */
+  physics = null;
   /** How long the server keeps a dropped rider, in seconds (from `welcome`). */
   graceS = 0;
 
@@ -47,6 +50,7 @@ export class GameConnection extends Emitter {
             joined = true;
             this.riderId = message.rider_id;
             this.resumeToken = message.resume_token ?? null;
+            this.physics = message.physics ?? null;
             resolve(message.rider_id);
             break;
           case "error":
@@ -58,11 +62,11 @@ export class GameConnection extends Emitter {
         }
       });
       socket.addEventListener("close", () => {
-        if (!joined) reject(new Error("connection closed before joining"));
+        if (!joined) reject(new Error(t("net.closedBeforeJoin")));
         this.emit("close");
       });
       socket.addEventListener("error", () => {
-        if (!joined) reject(new Error(`could not connect to ${this.url}`));
+        if (!joined) reject(new Error(t("net.cannotConnect", { url: this.url })));
       });
     });
   }
@@ -108,8 +112,8 @@ export class GameConnection extends Emitter {
   }
 
   /** Tells the server which café workout exercise is under way (`null`: none). */
-  workout(exercise) {
-    this.#send(ClientMessages.workout(exercise));
+  workout(exercise, side = null) {
+    this.#send(ClientMessages.workout(exercise, side));
   }
 
   /** Parks the rider for a pause (#89). */
@@ -119,6 +123,11 @@ export class GameConnection extends Emitter {
 
   resume() {
     this.#send(ClientMessages.resume());
+  }
+
+  /** Tells the server the rider is still there after an AFK warning. */
+  stay() {
+    this.#send(ClientMessages.stay());
   }
 
   /** Picks the road for the next junction (`null`: stay on the route). */

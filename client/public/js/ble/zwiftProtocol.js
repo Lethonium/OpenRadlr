@@ -63,6 +63,15 @@ export function encodeHandshake() {
 }
 
 /**
+ * Reboots a Click v2 half: a lone 0x18 written to the command characteristic
+ * (zwiftboard's pod reset, github.com/thomaschampagne/zwiftboard). A rebooted
+ * left half sends plain buttons again for about a minute.
+ */
+export function encodePodReset() {
+  return Uint8Array.from([0x18]);
+}
+
+/**
  * Decodes one notification.
  * @param {DataView} view
  * @returns {{kind: "handshake"} | {kind: "buttons", buttons: string[]} | {kind: "battery", level: number} | {kind: "idle"} | {kind: "unknown", type: number}}
@@ -88,9 +97,23 @@ export function parseControllerMessage(view) {
       return { kind: "battery", level: fields().get(2) ?? fields().get(1) ?? 0 };
     case MESSAGE_TYPES.idle:
       return { kind: "idle" };
+    case 0xff:
+      return clickStatus(bytes) ?? { kind: "unknown", type };
     default:
       return { kind: "unknown", type };
   }
+}
+
+/**
+ * A Click v2's status message, "ff 05 00 ea 05 <length>" then protobuf: field 1
+ * names its partner half, field 2 looks like a mode. Seen in riders' reports:
+ * plain button messages arrive while it is 0 and stop once it is 1. Not
+ * documented anywhere; other 0xff messages (some look encrypted) stay unknown.
+ */
+function clickStatus(bytes) {
+  const header = [0xff, 0x05, 0x00, 0xea, 0x05];
+  if (bytes.length < 7 || !header.every((b, i) => bytes[i] === b)) return null;
+  return { kind: "status", mode: readFields(bytes, 6).get(2) ?? 0 };
 }
 
 function clickButtons(fields) {

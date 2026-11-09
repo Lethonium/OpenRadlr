@@ -34,6 +34,7 @@ From the outside in. Each layer only depends on the ones below it.
 | Runtime | `runtime.rs` | One Tokio task owns the game (anything implementing `Game`); timer ticks and a command channel drive it |
 | Game core | `game.rs`, `studio.rs` | Connected clients, state culled per client to the riders in view, events per route, resistance updates, input validation; `studio.rs` does the same per studio room |
 | Protocol | `protocol.rs` | Message types and mapping from simulation state |
+| OpenBikeNet | `obn/` | Optional link to an OpenBikeNet server (`OPENRADLR_OBN_URL`): wire format, outbox, remote riders and the reconnecting link; remote riders live in the game core, not the sim |
 | Vehicles | `vehicle_codes.rs` | Boarding codes of all worlds, so a code finds its world |
 | Reconnecting | `resume.rs` | Resume tokens of all worlds, so a token finds its rider's world; per game the detached riders and their grace period |
 | Simulation | `crates/sim` | Route, physics, drafting, lanes, bots, races, shared vehicles, the studio's timetable and rooms — deterministic, no I/O |
@@ -160,8 +161,13 @@ groups split at 15 m gaps, time gaps from my speed), `nextMarker` and the
 gauge maths. Each layout has its own copy of a metric; elements are marked
 `data-m="power"` and `MetricBinder` writes all copies, skipping unchanged
 values. Only the canvases of the visible layout are drawn each frame.
-Controls that aren't needed while riding live in two drawers: the menu
-(training, race, view, difficulty, diagnostics, keys) and riders/chat.
+Controls that aren't needed while riding live off the HUD. The menu (M) is a
+dialog over the dimmed ride: a page list (Overview with live ride stats, View,
+Vehicle, Race, Events, Training, Settings) next to the open page, full screen
+with the list first on a phone; `view/menuPages.js` models the pages and
+`view/menuDialog.js` handles opening, focus and the Finish-ride confirm step.
+The top bar's View popover holds the quick view switches. Riders and chat stay
+in the left drawer.
 
 ### Start menu, ride export and app install
 

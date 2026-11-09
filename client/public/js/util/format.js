@@ -6,6 +6,8 @@
  * state, set once from the profile with `setUnits`.
  */
 
+import { getLocale } from "../i18n/i18n.js";
+
 export const UNIT_SYSTEMS = Object.freeze(["metric", "imperial"]);
 
 const M_PER_MILE = 1609.344;
@@ -38,11 +40,24 @@ export const distanceUnit = () => (imperial() ? "mi" : "km");
 export const elevationUnit = () => (imperial() ? "ft" : "m");
 export const weightUnit = () => (imperial() ? "lb" : "kg");
 
+const numberFormats = new Map();
+
+/** A number with `digits` decimals in the active language ("36.0" / "36,0"). Display only: never for inputs, protocol or files. */
+export function formatNumber(value, digits) {
+  const key = `${getLocale()}|${digits}`;
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(getLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    numberFormats.set(key, format);
+  }
+  return format.format(value);
+}
+
 /** m/s → "36.0" (km/h or mph, see `speedUnit`). */
-export const formatSpeed = (metresPerSecond) => `${(metresPerSecond * (imperial() ? 3600 / M_PER_MILE : 3.6)).toFixed(1)}`;
+export const formatSpeed = (metresPerSecond) => formatNumber(metresPerSecond * (imperial() ? 3600 / M_PER_MILE : 3.6), 1);
 
 /** Metres → "12.35" in km or miles (see `distanceUnit`). */
-export const formatDistance = (metres, digits = 2) => `${(metres / (imperial() ? M_PER_MILE : 1000)).toFixed(digits)}`;
+export const formatDistance = (metres, digits = 2) => formatNumber(metres / (imperial() ? M_PER_MILE : 1000), digits);
 
 /** Metres → "12.35 km" / "7.67 mi". */
 export const formatDistanceWithUnit = (metres, digits = 2) => `${formatDistance(metres, digits)} ${distanceUnit()}`;
@@ -53,9 +68,9 @@ export const formatElevation = (metres) => `${Math.round(metres / (imperial() ? 
 /** A distance ahead: "120 m", "2.4 km", or "400 ft", "1.3 mi". */
 export function formatLength(metres) {
   if (imperial()) {
-    return metres < SHORT_LIMIT_M ? `${Math.round(metres / M_PER_FOOT / 10) * 10} ft` : `${(metres / M_PER_MILE).toFixed(1)} mi`;
+    return metres < SHORT_LIMIT_M ? `${Math.round(metres / M_PER_FOOT / 10) * 10} ft` : `${formatNumber(metres / M_PER_MILE, 1)} mi`;
   }
-  return metres < 1000 ? `${Math.round(metres / 10) * 10} m` : `${(metres / 1000).toFixed(1)} km`;
+  return metres < 1000 ? `${Math.round(metres / 10) * 10} m` : `${formatNumber(metres / 1000, 1)} km`;
 }
 
 /** Kilograms → the number shown in the weight field (one decimal). */
@@ -64,7 +79,7 @@ export const kgToDisplay = (kg) => Math.round(kg * (imperial() ? LB_PER_KG : 1) 
 /** The weight field's number → kilograms, to one decimal. */
 export const displayToKg = (value) => Math.round((value / (imperial() ? LB_PER_KG : 1)) * 10) / 10;
 
-export const formatGrade = (percent) => `${percent >= 0 ? "" : "−"}${Math.abs(percent).toFixed(1)}`;
+export const formatGrade = (percent) => `${percent >= 0 ? "" : "−"}${formatNumber(Math.abs(percent), 1)}`;
 
 /** Seconds → "m:ss" or "h:mm:ss". */
 export function formatDuration(totalSeconds) {
@@ -82,4 +97,4 @@ export function formatGap(metres) {
   return `${rounded > 0 ? "+" : "−"}${Math.abs(rounded)} ${elevationUnit()}`;
 }
 
-export const formatWkg = (watts, kg) => (kg > 0 ? (watts / kg).toFixed(1) : "–");
+export const formatWkg = (watts, kg) => (kg > 0 ? formatNumber(watts / kg, 1) : "–");

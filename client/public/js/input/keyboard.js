@@ -36,7 +36,7 @@ export function actionForKey(event) {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return null;
   if (event.altKey || event.ctrlKey || event.metaKey) return null;
   // Space presses a focused button; it must not also pause.
-  if (tag === "BUTTON" && event.code === "Space") return null;
+  if (tag === "BUTTON" && event.code === "Space") return null; // i18n-ok
   return KEY_BINDINGS[event.code] ?? null;
 }
 

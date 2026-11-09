@@ -70,8 +70,10 @@ test("smoother forgets riders that left", () => {
 
 class FakeTrainer extends Emitter {
   grades = [];
-  async setGrade(grade) {
+  options = [];
+  async setGrade(grade, options) {
     this.grades.push(grade);
+    this.options.push(options);
   }
 }
 
@@ -191,4 +193,29 @@ test("set connection moves telemetry and resistance to the new connection", () =
   second.emit("resistance", { grade_percent: 4 });
   assert.equal(session.serverGrade, 4);
   session.stop();
+});
+
+test("passes crr to the trainer with the grade", async () => {
+  const scheduler = fakeScheduler();
+  const trainer = new FakeTrainer();
+  const session = new RideSession({
+    connection: new FakeConnection(),
+    trainer,
+    resistanceModel: () => ({ grade: 2, cw: 0, crr: 0.005 }),
+    ...scheduler,
+  });
+  session.start();
+  session.connection.emit("resistance", { grade_percent: 2 });
+  await Promise.resolve();
+  assert.deepEqual(trainer.options.at(-1), { cw: 0, crr: 0.005 });
+});
+
+test("a command without cw or crr sends no trainer options", async () => {
+  const scheduler = fakeScheduler();
+  const trainer = new FakeTrainer();
+  const session = new RideSession({ connection: new FakeConnection(), trainer, resistanceModel: () => ({ grade: 2 }), ...scheduler });
+  session.start();
+  session.connection.emit("resistance", { grade_percent: 2 });
+  await Promise.resolve();
+  assert.deepEqual(trainer.options.at(-1), {});
 });

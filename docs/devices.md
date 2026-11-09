@@ -5,15 +5,17 @@
 | Smart trainers (e.g. Wahoo KICKR Core, Van Rysel D500) | Bluetooth FTMS `0x1826` and/or Cycling Power `0x1818` | Supported: power, cadence, simulation mode |
 | Heart rate straps | Bluetooth Heart Rate `0x180D` | Supported, shown locally only |
 | Zwift Cog (single gear) | none — a passive sprocket | Supported via virtual shifting over FTMS |
-| Zwift Click v2 (two-piece), Ride, Play, Click v1 | proprietary Bluetooth protocol (unencrypted mode) | Supported: shifting, lanes, menus. Verified with a Click v2 on Android Chrome; Play and Click v1 are untested |
+| Zwift Click v2 (two-piece), Ride, Play, Click v1 | proprietary Bluetooth protocol (unencrypted mode) | Supported: shifting, lanes, menus. Verified with a Click v2 on Android and macOS Chrome (its left half locks after ~1 min: see below); Play and Click v1 are untested |
+| OpenBikeControl controllers (and apps such as BikeControl that act as one) | [OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol) over Bluetooth | Supported: shifting, lanes, menus, power ±, camera, photo. Tested with byte fixtures only |
 | ANT+ FE-C | ANT+ USB stick | Planned for native clients |
 
 ## FTMS
 
 The client requests control (`0x00`), starts (`0x07`) and then sends
 *Set Indoor Bike Simulation Parameters* (`0x11`) whenever the server reports a
-new grade: wind 0 m/s, grade in 0.01 %, Crr 0.004, Cw 0.51 kg/m. The grade is
-scaled by the trainer difficulty first (positive grades × difficulty, descents × 0.5).
+new grade: wind 0 m/s, grade in 0.01 %, the server's Crr (`joined.physics`,
+0.005; 0.004 from an older server), Cw 0.51 kg/m. Without virtual shifting the
+grade is scaled by Climb feel first (positive grades × difficulty, descents × 0.5).
 
 In ERG mode the client sends *Set Target Power* (`0x05`, watts) instead; the
 trainer then holds that power regardless of cadence. Grade and power commands
@@ -61,18 +63,23 @@ in simulation mode, Cog or not:
   with `k · max(F_road(v), F_floor)`, where *v* is the rider's speed in the
   game: each gear changes the force by its own step (about 9 %), whatever the
   cadence. `F_floor` (1.5 % in the real gear) leaves something to push against
-  on descents, which count in full here (difficulty only eases climbs). The app
-  solves for the grade that produces this force and sends it with no air drag
-  of the trainer's own (`cw` 0), so the trainer adds nothing that depends on its
-  wheel speed (`ride/virtualShifting.js`, unit-tested). It is re-sent as the
-  speed changes.
+  on descents. The app solves for the grade that produces this force and sends
+  it with no air drag of the trainer's own (`cw` 0), so the trainer adds nothing
+  that depends on its wheel speed (`ride/virtualShifting.js`, unit-tested). It
+  is re-sent as the speed changes.
+- `F_road` uses the server's numbers for this rider: mass with the bike, drag
+  area, Crr and air density from `joined.physics` (see
+  [ADR 0019](adr/0019-calibrated-physics.md)). The same Crr goes to the trainer,
+  since the app assumes the trainer adds it.
+- Climb feel doesn't apply with gears, and its sliders hide: the gears make a
+  climb as easy as the rider wants (#22).
 - Changes of grade reach the trainer eased in over a few seconds (at most
   1.5 % per second), shifts at once. The server measures grades over 50 m of
   road, so they don't step at every point of the route.
 - Gears only change how hard a pedal stroke feels. Power still decides the speed
   on the server, exactly like real gears.
 
-Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift controller or the on-screen buttons.
+Shift with <kbd>E</kbd>/<kbd>Q</kbd>, <kbd>+</kbd>/<kbd>−</kbd>, a Zwift or OpenBikeControl controller or the on-screen buttons.
 
 ## Zwift Click, Play and Ride
 
@@ -132,9 +139,75 @@ and repeats the handshake; a button press wakes the controller. The status
 next to the button and a ride notification show it, and packets appear under
 *Device diagnostics* as source `zwift`.
 
-**Known limits.** Untested on encrypted-only firmware: if a controller never
-sends buttons after the handshake, the diagnostics report shows its answer.
-Junction choices (#15) will use the lane buttons once junctions exist.
+**Click v2: the left half locks.** The left half (manufacturer data type
+`0x0B`) relays the right half's presses and reports its status
+(`ff 05 00 ea 05 …`, protobuf field 2). About a minute after connecting it
+reports mode 1 and stops plain button messages, unless the Zwift app unlocked
+it within about a day (its `ff 03 …` crypto challenges are only answered by
+Zwift). OpenRadlr then reboots that half with a lone `0x18` (as
+[zwiftboard](https://github.com/thomaschampagne/zwiftboard) does) and
+reconnects; meanwhile and with the right half alone (type `0x0A`, never
+locked), B on the right half shifts down, as in BikeControl's right-side mode.
+Sending RideOn again, a 3 s RideOn keepalive, or zwiftboard's activation
+sequence did not unlock it on a rider's Click v2 (macOS Chrome, 2026-10).
+Both halves may be connected: `MergedControllers` merges them, so a relayed
+press acts once.
+
+**Known limits.** Zwift's encrypted mode isn't implemented: a locked left half
+only comes back by rebooting. `?debug=controller` keeps every controller
+packet in the diagnostics report. Junction choices (#15) will use the lane
+buttons once junctions exist.
+
+## OpenBikeControl
+
+[OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol)
+is an open protocol for cycling controllers. *Connect controller* lists
+OpenBikeControl devices next to Zwift's; once connected, a device that offers
+the OpenBikeControl service is used as one (`ble/controllers.js`), anything else
+as a Zwift controller. Only the Bluetooth transport is used (browsers can't
+use the network one).
+
+**Protocol** (`ble/openBikeControlProtocol.js`, unit-tested with byte fixtures):
+
+- Service `d273f680-d548-419d-b9d1-fa0472345229`; button states are
+  notified on `…f681`: `0x01`, then button ID and state pairs for the buttons
+  that changed (`0` released, `1` pressed, `2`–`255` analog).
+- After connecting, the client writes *App Information* to `…f683` (optional
+  on the device): app ID `openradlr`, the build, and the button IDs below, so a
+  controller can leave out the others. Haptics are not used.
+
+**Button IDs → buttons.** They become the same button names as a Zwift
+controller's, so they act as in the table above:
+
+| ID | OpenBikeControl action | Acts as |
+| --- | --- | --- |
+| `0x01` / `0x02` | Shift up / down | + / − (and both together) |
+| `0x10`–`0x13` | Up, down, left, right | D-pad |
+| `0x18` / `0x19` | Steer left / right | D-pad left / right |
+| `0x14` | Select | select (menus only) |
+| `0x15` | Back | B |
+| `0x16` | Menu | Y |
+| `0x24` | Screenshot | Z |
+| `0x30` / `0x31` | Increase / decrease difficulty | power or ERG target ± (riding only) |
+| `0x40` | Camera view | change camera (riding only) |
+
+A controller may send several IDs for one press (BikeControl sends e.g. Shift
+Up, Increase Difficulty and Select for one button, so every app finds one it
+knows). IDs pressed in one message are one press, held until all of them are
+released, and it acts **once**, as the first of its buttons that does
+something here:
+
+- riding: shift, then difficulty, then d-pad and steering, then select, back
+  and menu (select does nothing while riding);
+- riding in ERG: difficulty first, then shift (ERG holds the power, so a
+  shift would do nothing); a press without difficulty still shifts as before;
+- in menus: d-pad, select, back and menu, then shift, then difficulty.
+
+So that button shifts while riding, changes the ERG target in ERG, and selects in a menu. The choice holds
+until the press is released, also when the press itself opens the menu; both
+shift buttons together still open the menu. Other IDs are ignored and appear in
+hex in the diagnostics and the live check. Reconnecting works as for Zwift
+controllers; packets appear under *Device diagnostics* as source `obc`.
 
 ## Browser support
 

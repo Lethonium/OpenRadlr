@@ -13,6 +13,7 @@ const STORAGE_KEY = "openride.profile.v1";
 
 import { defaultUnits, UNIT_SYSTEMS } from "../util/format.js";
 import { SPLIT_SETTINGS } from "../ride/splits.js";
+import { t } from "../i18n/i18n.js";
 
 export const DEFAULT_PROFILE = Object.freeze({
   name: "",
@@ -38,17 +39,17 @@ export const DEFAULT_PROFILE = Object.freeze({
 export function validateProfile({ name, weightKg, units = "metric", ftp = 200, splitMode = "auto", autoPause = false, difficulty, virtualShifting = false, chainring = 34, cog = 14 }) {
   const errors = [];
   const trimmed = (name ?? "").trim();
-  if (trimmed.length < 1 || trimmed.length > 24) errors.push("Name must be 1 to 24 characters.");
-  if (!(weightKg >= 30 && weightKg <= 200)) errors.push(units === "imperial" ? "Weight must be between 66 and 440 lb." : "Weight must be between 30 and 200 kg.");
-  if (!UNIT_SYSTEMS.includes(units)) errors.push("Units must be metric or imperial.");
-  if (!(ftp >= 50 && ftp <= 600)) errors.push("FTP must be between 50 and 600 W.");
-  if (!SPLIT_SETTINGS.includes(splitMode)) errors.push("Splits must be auto, lap, 1, 5, 10 or off.");
-  if (typeof autoPause !== "boolean") errors.push("Auto-pause must be on or off.");
-  if (!(difficulty >= 0 && difficulty <= 1)) errors.push("Difficulty must be between 0 and 100 %.");
+  if (trimmed.length < 1 || trimmed.length > 24) errors.push(t("profile.error.name"));
+  if (!(weightKg >= 30 && weightKg <= 200)) errors.push(t(units === "imperial" ? "profile.error.weightImperial" : "profile.error.weightMetric"));
+  if (!UNIT_SYSTEMS.includes(units)) errors.push(t("profile.error.units"));
+  if (!(ftp >= 50 && ftp <= 600)) errors.push(t("profile.error.ftp"));
+  if (!SPLIT_SETTINGS.includes(splitMode)) errors.push(t("profile.error.splits"));
+  if (typeof autoPause !== "boolean") errors.push(t("profile.error.autoPause"));
+  if (!(difficulty >= 0 && difficulty <= 1)) errors.push(t("profile.error.difficulty"));
   if (virtualShifting && !(Number.isInteger(chainring) && chainring >= 20 && chainring <= 60)) {
-    errors.push("Chainring must be 20 to 60 teeth.");
+    errors.push(t("profile.error.chainring"));
   }
-  if (virtualShifting && !(Number.isInteger(cog) && cog >= 10 && cog <= 36)) errors.push("Rear cog must be 10 to 36 teeth.");
+  if (virtualShifting && !(Number.isInteger(cog) && cog >= 10 && cog <= 36)) errors.push(t("profile.error.cog"));
   return errors;
 }
 
@@ -58,7 +59,7 @@ export function validateProfile({ name, weightKg, units = "metric", ftp = 200, s
  */
 export function keepValid(previous, edited) {
   // A valid profile that checks every field, the gears included.
-  const base = { ...DEFAULT_PROFILE, name: "Rider", virtualShifting: true };
+  const base = { ...DEFAULT_PROFILE, name: "Rider", virtualShifting: true }; // i18n-ok (placeholder for validation only)
   const kept = { ...previous };
   for (const [key, raw] of Object.entries(edited)) {
     const value = key === "name" ? String(raw ?? "").trim() : raw;

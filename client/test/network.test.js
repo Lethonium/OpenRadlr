@@ -128,6 +128,9 @@ test("the scene is built with the network, in a worker too", async () => {
   };
   assert.equal(await buildScene(tinyLoopFile(), [], { network: file, createWorker: () => worker }), scene);
   assert.equal(posted.network, file, "the worker gets the network file");
+  assert.equal(posted.biome, "temperate", "and the rider's biome, as an id");
+  await buildScene(tinyLoopFile(), [], { biome: { id: "temperate" }, createWorker: () => worker });
+  assert.equal(posted.biome, "temperate", "a biome object is sent by id");
   const inPlace = await buildScene(tinyLoopFile(), [], { network: file, createWorker: () => null });
   assert.ok(inPlace.chunks.road.length > 0);
 });

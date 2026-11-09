@@ -152,7 +152,7 @@ export class RideSession {
     }
     this.lastSent = command;
     const write =
-      "power" in command ? this.trainer.setTargetPower?.(command.power) : this.trainer.setGrade(command.grade, "cw" in command ? { cw: command.cw } : {});
+      "power" in command ? this.trainer.setTargetPower?.(command.power) : this.trainer.setGrade(command.grade, trainerOptions(command));
     Promise.resolve(write).catch(this.onError);
   }
 
@@ -168,4 +168,9 @@ export class RideSession {
     this.#offResistance?.();
     this.#offResistance = null;
   }
+}
+
+/** The trainer options a grade command carries: its `cw` and `crr`, if any. */
+function trainerOptions(command) {
+  return { ...("cw" in command && { cw: command.cw }), ...("crr" in command && { crr: command.crr }) };
 }

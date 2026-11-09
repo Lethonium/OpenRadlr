@@ -204,7 +204,15 @@ async fn info_lists_every_route_with_the_default_first() {
     assert_eq!(routes[0]["id"], "rolling-hills");
     assert_eq!(info["route"]["id"], "rolling-hills");
     assert_eq!(info["players"], 0);
-    assert!(routes.iter().all(|r| r["length_m"].as_f64().unwrap() > 3000.0));
+    // The velodrome is a 250 m oval; every other bundled route is a road route.
+    assert!(routes
+        .iter()
+        .filter(|r| r["id"] != "velodrome")
+        .all(|r| r["length_m"].as_f64().unwrap() > 3000.0));
+    assert!(
+        routes.iter().any(|r| r["id"] == "velodrome"),
+        "the velodrome is bundled"
+    );
 
     let other = routes[1]["id"].as_str().unwrap();
     let (status, body) = http_get(addr, &format!("/api/route?id={other}")).await;
@@ -903,4 +911,73 @@ async fn a_workout_is_seen_by_other_riders() {
         }
     }
     panic!("Anna never showed up doing squats");
+}
+
+fn afk_config() -> Config {
+    Config {
+        afk_timeout_s: 0.5,
+        afk_reminder_s: 0.5,
+        afk_answer_s: 0.5,
+        ..test_config(0)
+    }
+}
+
+async fn wait_for_close(socket: &mut Socket) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while let Some(Ok(message)) = socket.next().await {
+            if matches!(message, Message::Close(_)) {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the server closes the connection");
+}
+
+#[tokio::test]
+async fn afk_rider_is_warned_then_removed_without_grace() {
+    let addr = start_server_with(afk_config()).await;
+    let mut anna = connect(addr).await;
+    let (anna_id, _) = join_as(&mut anna, r#"{"type":"join","name":"Anna","weight_kg":70}"#).await;
+
+    let warning = expect_type(&mut anna, "afk_warning").await;
+    assert_eq!(warning["can_stay"], true);
+    let error = expect_type(&mut anna, "error").await;
+    assert_eq!(error["code"], "afk_timeout");
+    wait_for_close(&mut anna).await;
+
+    let mut ben = connect(addr).await;
+    join_as(&mut ben, r#"{"type":"join","name":"Ben","weight_kg":70}"#).await;
+    let state = expect_type(&mut ben, "state").await;
+    let riders = state["riders"].as_array().unwrap();
+    assert!(riders.iter().all(|r| r["id"].as_u64() != Some(anna_id)));
+
+    let (_, metrics) = http_get(addr, "/internal/metrics").await;
+    assert!(
+        metrics.contains(r#"openradlr_afk_events_total{event="timeout"} 1"#),
+        "{metrics}"
+    );
+    assert!(
+        metrics.contains(r#"openradlr_afk_events_total{event="warning"} 1"#),
+        "{metrics}"
+    );
+}
+
+#[tokio::test]
+async fn afk_stay_then_leave_counts_each_outcome() {
+    let addr = start_server_with(afk_config()).await;
+    let mut anna = connect(addr).await;
+    join_as(&mut anna, r#"{"type":"join","name":"Anna","weight_kg":70}"#).await;
+
+    expect_type(&mut anna, "afk_warning").await;
+    send(&mut anna, r#"{"type":"stay"}"#).await;
+    expect_type(&mut anna, "afk_warning").await;
+    send(&mut anna, r#"{"type":"leave"}"#).await;
+    wait_for_close(&mut anna).await;
+
+    let (_, metrics) = http_get(addr, "/internal/metrics").await;
+    for (event, count) in [("warning", 2), ("stayed", 1), ("left", 1), ("timeout", 0)] {
+        let line = format!(r#"openradlr_afk_events_total{{event="{event}"}} {count}"#);
+        assert!(metrics.contains(&line), "{line} missing in {metrics}");
+    }
 }

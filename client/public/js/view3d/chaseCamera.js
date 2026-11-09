@@ -8,10 +8,10 @@ import { add, lerp3, scale } from "./math.js";
 import { LANE_WIDTH, roadFrame, roadHalfWidth } from "./world.js";
 
 export const CAMERA_MODES = Object.freeze({
-  chase: { label: "Chase", back: 5.5, up: 2.2, lookAhead: 9, lookUp: 1.1 },
-  close: { label: "Close", back: 3.0, up: 1.55, lookAhead: 8, lookUp: 1.2 },
-  drone: { label: "Drone", back: 15, up: 7.5, lookAhead: 16, lookUp: 0.5 },
-  side: { label: "TV side", side: true, ahead: 3, up: 1.7, lookUp: 1.0 },
+  chase: { label: "Chase", back: 5.5, up: 2.2, lookAhead: 9, lookUp: 1.1 }, // i18n-ok (English id label; the UI translates by mode)
+  close: { label: "Close", back: 3.0, up: 1.55, lookAhead: 8, lookUp: 1.2 }, // i18n-ok (English id label; the UI translates by mode)
+  drone: { label: "Drone", back: 15, up: 7.5, lookAhead: 16, lookUp: 0.5 }, // i18n-ok (English id label; the UI translates by mode)
+  side: { label: "TV side", side: true, ahead: 3, up: 1.7, lookUp: 1.0 }, // i18n-ok (English id label; the UI translates by mode)
 });
 
 /** Backwards-compatible default (chase). */

@@ -31,6 +31,15 @@ connection that sends nothing for 120 s is closed (`handshake_timeout`,
 this only catches dead connections. A workout client sends no telemetry:
 it repeats its current `workout` message every 30 s as a keepalive.
 
+A rider who sends only 0 W telemetry for `OPENRADLR_AFK_TIMEOUT_S` seconds
+(default 1800; 0 turns this off) is warned with `afk_warning`. Each warning
+allows 120 s to answer: `stay` restarts the clock with `OPENRADLR_AFK_REMINDER_S`
+(default 600) until the next warning; `leave` ends the ride at once. Three
+warnings can be stayed, the fourth only allows leaving. An unanswered warning
+ends the connection with `afk_timeout` and removes the rider as `leave` does,
+without a grace period. Any telemetry with power above 0 resets everything.
+Workout riders are exempt.
+
 ## Client → server
 
 | `type` | Fields | When |
@@ -49,20 +58,22 @@ it repeats its current `workout` message every 30 s as a keepalive.
 | `leave_vehicle` | – | get off; you ride on solo |
 | `pause` | – | pull over for a pause: the rider brakes to a stop (even downhill), ignores power and moves onto the shoulder; `riders[].parked` is then true. Refused with `pause_rejected` in a race, an event or a vehicle; the spin studio ignores it |
 | `resume` | – | ride on after a pause |
-| `workout` | `exercise`: `squats` \| `situps` \| `pushups` \| `jumping_jacks` \| `plank` \| `burpees` \| `null` | the exercise being done now, or `null` for rest; only for a `workout` rider (others get `not_in_workout`, an unknown id `unknown_exercise`). A workout rider gets `in_workout` for `input`, `start_race`, `join_race`, `join_event`, `turn`, `create_vehicle`, `board_vehicle`, `pause` and `resume`; `telemetry` is ignored |
+| `workout` | `exercise`: `squats` \| `situps` \| `pushups` \| `jumping_jacks` \| `plank` \| `burpees` \| `sun_salutation` \| `forward_fold` \| `downward_dog` \| `cobra` \| `child_pose` \| `low_lunge` \| `pigeon` \| `null`, `side`?: `right` \| `left` | the exercise being done now, or `null` for rest; `side` applies to the sided poses `low_lunge` and `pigeon` only (default `right`; dropped for any other exercise or rest; an unknown one gets `unknown_side`); only for a `workout` rider (others get `not_in_workout`, an unknown id `unknown_exercise`). A workout rider gets `in_workout` for `input`, `start_race`, `join_race`, `join_event`, `turn`, `create_vehicle`, `board_vehicle`, `pause` and `resume`; `telemetry` is ignored |
 | `chat` | `text` (≤ 200 chars) | at most 5 in a row, then one every 2 s |
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
+| `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
 
 ## Server → client
 
 | `type` | Fields |
 | --- | --- |
 | `welcome` | `protocol_version`, `server_name`, `server_version`, `auth_mode`, `route_id`, `grace_s` (how long a dropped rider is kept) |
-| `joined` | `rider_id`, `resume_token` (send it back in `join` after a dropped connection) |
-| `state` | `tick`, `riders[]` (the riders around you), `race` (your route's, see below), `route_riders` (`humans`, `bots`: everyone on your route), `event`? (your route's scheduled event, see below), `vehicle`? (your own vehicle, see below) — about 4 Hz |
+| `joined` | `rider_id`, `resume_token` (send it back in `join` after a dropped connection), `physics` (`mass_kg` rider plus bike, `cda_m2`, `crr`, `air_density`: what the server rides you with on a solo bike) |
+| `state` | `tick`, `riders[]` (the riders around you), `race` (your route's, see below), `route_riders` (`humans`, `bots`, `remote`?: everyone on your route; `remote` counts riders of other apps, see below, and is left out when 0), `event`? (your route's scheduled event, see below), `vehicle`? (your own vehicle, see below) — about 4 Hz |
 | `studio_state` | spin studio only, for the rider's room: `tick`, `room` (0-based), `rooms`, `class` (`id`, `name`, `starts_at_s` Unix time, `elapsed_s` — negative in the lobby), `riders[]` — about 4 Hz |
 | `resistance` | `grade_percent` — when the grade under the rider changes |
 | `event` | `event` with a `kind` (see below) |
+| `afk_warning` | `leave_in_s` (the answer window), `can_stay` (false on the final warning) — see the paragraph on timeouts above |
 | `chat` | `rider_id`, `name`, `text` |
 | `error` | `code`, `message` |
 
@@ -78,7 +89,7 @@ entered it, `next` the road they take at the next junction: their pick, else
 their route's, straight on off every route),
 `lap` (in a race, else `null`), `lane` (continuous, 0 = leftmost in riding
 direction), `speed`, `power`, and `device` (`sim`, `paddle` or `workout`; left out for
-trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest). Riders of different routes draft each other
+trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest) and `side` (`right` or `left`, only for a sided pose, so the view can mirror the left side) and `app` (the id of the other app, for example `incyclist`, on a rider shared through OpenBikeNet; left out for riders of this server). Such a remote rider has `is_bot: false`, an `id` from `0xF000_0000` upwards (never reused while the server runs), no physics, no drafting and no `vehicle`; clients show the name as text and mark the app. They appear only on a shared route (see ADR 0020). Riders of different routes draft each other
 where they ride the same road the same way.
 
 Studio `riders[]` entries: `id`, `name`, `is_bot`, `seat` (0–7 front row,
@@ -155,8 +166,8 @@ server turned the simulated trainer or phone paddles off), `chat_rate_limited`,
 `unknown_vehicle` (no vehicle has this code), `vehicle_full`, `vehicle_elsewhere` (the code
 belongs to another world; `message` is `route:<id>` to rejoin with), `not_captain`, `in_event` (seated riders can't join events or races and the other way round),
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
-`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`,
-`rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
+`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`,
+`afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
 
 ### Reconnecting
 
@@ -197,7 +208,7 @@ when `OPENRADLR_ALLOWED_ORIGINS` is set and the page's origin isn't listed, and
 | Route | Response |
 | --- | --- |
 | `GET /healthz` | `ok` |
-| `GET /api/info` | name, version, protocol version, auth mode, `players` (all routes, phone riders included), `phone_players` (of those, on phone paddles), `max_players` (seats for the others) and `max_phone_players` (seats for phone riders, counted apart), `routes[]` (`id`, `name`, `description`, `length_m`, `elevation_gain_m`, `players` riding it and `phone_players` among them; default first), `route` (the default, for older clients), `studio` (`id`, `name`, `players`, `class` and `next` with `class_id`, `name`, `starts_at_s`; missing when closed), `strava` (`enabled`, `required`), `privacy_url` (the operator's privacy policy; missing unless `OPENRADLR_PRIVACY_URL` is set), `analytics` (`domain`, `script`: the page analytics the client loads, #12; missing unless the operator set `OPENRADLR_ANALYTICS_DOMAIN`), `distance_m` (`trainer`, `paddle`: metres ridden on this server in total, see below), `now_s` (the server clock, Unix time) and `events[]` (soonest first: `id`, `name`, `kind`, `route_id`, `lobby_opens_at_s`, `starts_at_s`, `phase` `upcoming` \| `lobby` \| `running`, `entrants`) |
+| `GET /api/info` | name, version, protocol version, auth mode, `players` (all routes, phone riders included), `phone_players` (of those, on phone paddles), `max_players` (seats for the others) and `max_phone_players` (seats for phone riders, counted apart), `routes[]` (`id`, `name`, `description`, `length_m`, `elevation_gain_m`, `players` riding it and `phone_players` among them, `shared`: true on a route shared with other apps through OpenBikeNet, left out otherwise; default first), `route` (the default, for older clients), `studio` (`id`, `name`, `players`, `class` and `next` with `class_id`, `name`, `starts_at_s`; missing when closed), `strava` (`enabled`, `required`), `privacy_url` (the operator's privacy policy; missing unless `OPENRADLR_PRIVACY_URL` is set), `analytics` (`domain`, `script`: the page analytics the client loads, #12; missing unless the operator set `OPENRADLR_ANALYTICS_DOMAIN`), `distance_m` (`trainer`, `paddle`: metres ridden on this server in total, see below), `now_s` (the server clock, Unix time) and `events[]` (soonest first: `id`, `name`, `kind`, `route_id`, `lobby_opens_at_s`, `starts_at_s`, `phase` `upcoming` \| `lobby` \| `running`, `entrants`) |
 | `GET /api/route?id=…` | a route file (see [routes](routes.md)); the default route without `id`, 404 for unknown ids |
 | `GET /api/map?id=…` | a shared map's road network file, unchanged (see [routes](routes.md#road-networks)); 404 for maps without one |
 | `GET /api/studio` | the spin studio: `slot_s` (1800), `lobby_s` (300), `seats_per_room`, `classes[]` (`id`, `name`, `description`, `duration_s`, `segments[]` with `duration_s`, `from`/`to` as a fraction of FTP, `cadence` `[lo, hi]`, `cue`), `schedule[]` (the current slot and the next five: `class_id`, `name`, `starts_at_s`); 404 when the studio is closed |
@@ -229,11 +240,13 @@ Shared vehicles (#55) added `create_vehicle`, `board_vehicle`, `leave_vehicle`,
 `vehicle_code` in `join`, `state.vehicle`, `riders[].vehicle` and `cadence`, the
 three vehicle game events and the vehicle error codes within version 2.
 Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` within version 2.
-Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2.
+Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.
 Community distance counters (#65) added `distance_m` to `/api/info` within version 2.
+Physics calibration (#22) added `physics` to `joined` within version 2.
+AFK warnings added `afk_warning`, `stay` and `afk_timeout` within version 2.
 Reconnecting (#73) added `leave`, `resume_token` and `resume` in `join`,
 `resume_token` in `joined` and `grace_s` in `welcome` within version 2. An
 older client that never sends `leave` is kept for `grace_s` after it leaves.

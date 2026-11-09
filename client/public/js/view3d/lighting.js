@@ -8,7 +8,7 @@ import { lookAt, multiply, normalize, orthographic } from "./math.js";
 
 export const TIME_PRESETS = Object.freeze({
   day: {
-    label: "Day",
+    label: "Day", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.55, 0.62, 0.32]),
     sunColor: [1.0, 0.94, 0.82],
     zenith: [0.3, 0.52, 0.84],
@@ -19,7 +19,7 @@ export const TIME_PRESETS = Object.freeze({
     shadowStrength: 0.62,
   },
   golden: {
-    label: "Golden hour",
+    label: "Golden hour", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.8, 0.2, 0.3]),
     sunColor: [1.0, 0.72, 0.45],
     zenith: [0.33, 0.45, 0.72],
@@ -30,7 +30,7 @@ export const TIME_PRESETS = Object.freeze({
     shadowStrength: 0.68,
   },
   dusk: {
-    label: "Dusk",
+    label: "Dusk", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([-0.7, 0.16, 0.45]),
     sunColor: [1.0, 0.6, 0.42],
     zenith: [0.3, 0.33, 0.55],
@@ -55,6 +55,17 @@ export function presetForHour(hour) {
 export function resolvePreset(mode, date = new Date()) {
   const key = mode === "auto" ? presetForHour(date.getHours() + date.getMinutes() / 60) : mode;
   return { key, ...(TIME_PRESETS[key] ?? TIME_PRESETS.day) };
+}
+
+/**
+ * A time preset with the biome's optional overrides for that time of day, and
+ * the lens's haze applied to the fog. A biome only overrides what it needs:
+ * the sun stays where the time of day put it, while the sky, bounce light,
+ * tint and visibility can all change with the season.
+ */
+export function resolvedLight(preset, biome, haze = 1) {
+  const merged = { ...preset, ...(biome?.light?.[preset.key] ?? {}) };
+  return { ...merged, fog: merged.fog.map((f) => f * haze) };
 }
 
 /**

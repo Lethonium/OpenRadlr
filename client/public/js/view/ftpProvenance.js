@@ -1,11 +1,13 @@
+import { t } from "../i18n/i18n.js";
+
 /** One line under the FTP field saying where the profile's FTP came from. */
 export function ftpProvenance(profile, { locale } = {}) {
   if (!profile.ftpSource || profile.ftpSource === "default") {
-    return "Default value: take the FTP test or ride a hard effort to measure it.";
+    return t("ftp.source.default");
   }
-  const how = { typed: "Entered by hand", estimated: "Estimated from your rides", tested: "Measured by the ramp test" }[profile.ftpSource];
+  const how = { typed: t("ftp.source.typed"), estimated: t("ftp.source.estimated"), tested: t("ftp.source.tested") }[profile.ftpSource];
   if (!how) return "";
-  if (!profile.ftpDate) return `${how}.`;
+  if (!profile.ftpDate) return t("ftp.source.plain", { how });
   const format = { day: "numeric", month: "short" };
   const when = new Date(profile.ftpDate);
   let date;
@@ -15,5 +17,5 @@ export function ftpProvenance(profile, { locale } = {}) {
     // A malformed browser locale (e.g. "en-US@posix") throws a RangeError
     date = when.toLocaleDateString(undefined, format);
   }
-  return `${how} on ${date}.`;
+  return t("ftp.source.dated", { how, date });
 }

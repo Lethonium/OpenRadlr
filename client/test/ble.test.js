@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { DeviceLog } from "../public/js/ble/deviceLog.js";
+import { DeviceLog, deviceLogOptions } from "../public/js/ble/deviceLog.js";
 import assert from "node:assert/strict";
 import {
   encodeRequestControl,
@@ -8,8 +8,9 @@ import {
   parseIndoorBikeData,
 } from "../public/js/ble/ftms.js";
 import { parseHeartRate } from "../public/js/ble/heartRate.js";
-import { PaddleTrainer, SimulatedTrainer, canExportRide, deviceKind, hasRealPowerSource } from "../public/js/ble/devices.js";
+import { PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, deviceKind, hasRealPowerSource } from "../public/js/ble/devices.js";
 import { dataView, fakeScheduler } from "./helpers.js";
+import { fakeTrainer } from "./fakeBluetooth.js";
 
 test("parses speed, cadence and power from indoor bike data", () => {
   // flags 0x0044: speed present (bit0 clear), cadence (bit2), power (bit6)
@@ -128,4 +129,27 @@ test("the device report counts packets it doesn't log, e.g. a controller's idle 
   assert.deepEqual(log.packets, { "zwift idle": 2 });
   assert.equal(log.entries.length, 0, "counted, not logged");
   assert.match(log.report(), /"zwift idle":2/);
+});
+
+test("?debug=controller captures every controller packet, the trainer's stay capped", () => {
+  assert.deepEqual(deviceLogOptions(""), {});
+  assert.deepEqual(deviceLogOptions("?route=col"), {});
+  const options = deviceLogOptions("?debug=controller");
+  const log = new DeviceLog(options);
+  const view = new DataView(new Uint8Array([0x19, 0x10, 0x46]).buffer);
+  for (let i = 0; i < 50; i += 1) log.packet("zwift", view, {});
+  for (let i = 0; i < 50; i += 1) log.packet("ftms", view, {});
+  const logged = (source) => log.entries.filter((e) => e.message.startsWith(`${source} #`)).length;
+  assert.equal(logged("zwift"), 50);
+  assert.equal(logged("ftms"), 20);
+  assert.match(log.report(), /Capturing: zwift/);
+});
+
+test("setGrade sends the given crr", async () => {
+  const fake = fakeTrainer({ services: { 0x1826: { 0x2ad2: {}, 0x2ad9: {} } } });
+  const trainer = await SmartTrainer.connect(fake.bluetooth);
+  const control = fake.characteristics[0x2ad9];
+  control.writes.length = 0;
+  await trainer.setGrade(2, { crr: 0.005 });
+  assert.equal(control.writes[0][5], 50);
 });

@@ -4,14 +4,24 @@
  * Pure functions only; the client runs the clock and the server never sees a plan.
  */
 
-/** The exercise ids the server and the 3D gym know about, with display names. */
+import { t } from "../i18n/i18n.js";
+import { VENUES } from "./venues.js";
+
+/** The exercise ids the server and the 3D gym know about, with display names, a one-line cue and whether a pose is sided (right half, then left). */
 export const EXERCISES = Object.freeze({
-  squats: { name: "Squats" },
-  situps: { name: "Sit-ups" },
-  pushups: { name: "Push-ups" },
-  jumping_jacks: { name: "Jumping jacks" },
-  plank: { name: "Plank" },
-  burpees: { name: "Burpees" },
+  squats: { get name() { return t("workout.exercise.squats"); }, get cue() { return t("workout.cue.squats"); } },
+  situps: { get name() { return t("workout.exercise.situps"); }, get cue() { return t("workout.cue.situps"); } },
+  pushups: { get name() { return t("workout.exercise.pushups"); }, get cue() { return t("workout.cue.pushups"); } },
+  jumping_jacks: { get name() { return t("workout.exercise.jumpingJacks"); }, get cue() { return t("workout.cue.jumpingJacks"); } },
+  plank: { get name() { return t("workout.exercise.plank"); }, get cue() { return t("workout.cue.plank"); } },
+  burpees: { get name() { return t("workout.exercise.burpees"); }, get cue() { return t("workout.cue.burpees"); } },
+  sun_salutation: { get name() { return t("workout.exercise.sunSalutation"); }, get cue() { return t("workout.cue.sunSalutation"); } },
+  forward_fold: { get name() { return t("workout.exercise.forwardFold"); }, get cue() { return t("workout.cue.forwardFold"); } },
+  downward_dog: { get name() { return t("workout.exercise.downwardDog"); }, get cue() { return t("workout.cue.downwardDog"); } },
+  cobra: { get name() { return t("workout.exercise.cobra"); }, get cue() { return t("workout.cue.cobra"); } },
+  child_pose: { get name() { return t("workout.exercise.childPose"); }, get cue() { return t("workout.cue.childPose"); } },
+  low_lunge: { get name() { return t("workout.exercise.lowLunge"); }, get cue() { return t("workout.cue.lowLunge"); }, sided: true },
+  pigeon: { get name() { return t("workout.exercise.pigeon"); }, get cue() { return t("workout.cue.pigeon"); }, sided: true },
 });
 
 const MAX_BLOCKS = 200;
@@ -22,32 +32,33 @@ const GET_READY_S = 30;
 /**
  * @typedef {{kind: "exercise", exercise: string, seconds: number, label: string}
  *   | {kind: "rest", seconds: number, label: string}} Block
- * @typedef {{id: string, name: string, description: string, blocks: Block[]}} Plan
+ * @typedef {{id: string, name: string, description: string, venue: string | null, blocks: Block[]}} Plan
  */
 
 /** Validates and normalises a plan; throws an Error with a readable message. */
-export function createPlan({ id, name, description = "", blocks }) {
+export function createPlan({ id, name, description = "", blocks, venue = null }) {
+  if (venue !== null && !Object.hasOwn(VENUES, venue)) throw new Error("Unknown venue.");
   if (!Array.isArray(blocks) || blocks.length === 0) throw new Error("A plan needs at least one block.");
   if (blocks.length > MAX_BLOCKS) throw new Error(`A plan may have at most ${MAX_BLOCKS} blocks.`);
   const clean = blocks.map((block, index) => {
     const n = index + 1;
     const seconds = Math.round(Number(block.seconds));
     if (!(seconds >= 1 && seconds <= MAX_BLOCK_S)) throw new Error(`Block ${n} must last between 1 and ${MAX_BLOCK_S} seconds.`);
-    if (block.kind === "rest") return { kind: "rest", seconds, label: "Rest" };
+    if (block.kind === "rest") return { kind: "rest", seconds, get label() { return t("workout.rest"); } };
     if (block.kind === "exercise") {
       if (!Object.hasOwn(EXERCISES, block.exercise)) throw new Error(`Block ${n} has an unknown exercise.`);
-      return { kind: "exercise", exercise: block.exercise, seconds, label: EXERCISES[block.exercise].name };
+      return { kind: "exercise", exercise: block.exercise, seconds, get label() { return EXERCISES[block.exercise].name; } };
     }
     throw new Error(`Block ${n} must be an exercise or a rest.`);
   });
   const total = clean.reduce((sum, b) => sum + b.seconds, 0);
   if (total > MAX_TOTAL_S) throw new Error("A plan may last at most 2 hours.");
-  return { id: String(id), name: String(name || "Workout").slice(0, 80), description: String(description).slice(0, 500), blocks: clean };
+  return { id: String(id), name: String(name || t("workout.defaultName")).slice(0, 80), description: String(description).slice(0, 500), venue, blocks: clean };
 }
 
 /** A new plan with a 30 s "Get ready" rest in front; the original is untouched. */
 export function withGetReady(plan) {
-  return { ...plan, blocks: [{ kind: "rest", seconds: GET_READY_S, label: "Get ready" }, ...plan.blocks] };
+  return { ...plan, blocks: [{ kind: "rest", seconds: GET_READY_S, get label() { return t("workout.getReady"); } }, ...plan.blocks] };
 }
 
 export const planDuration = (plan) => plan.blocks.reduce((sum, b) => sum + b.seconds, 0);
@@ -85,7 +96,7 @@ export function planPositionAt(plan, elapsedS) {
 
 /** "Squats 40 s · Rest 20 s · …" for the first six blocks. */
 export function planSummary(plan) {
-  const parts = plan.blocks.slice(0, 6).map((b) => `${b.label} ${b.seconds} s`);
+  const parts = plan.blocks.slice(0, 6).map((b) => t("workout.summary.seconds", { label: b.label, s: b.seconds }));
   if (plan.blocks.length > 6) parts.push("…");
   return parts.join(" · ");
 }

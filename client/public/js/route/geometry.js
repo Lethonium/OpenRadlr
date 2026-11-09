@@ -22,6 +22,8 @@ export class RouteGeometry {
     this.seed = file.seed;
     this.markers = file.markers ?? [];
     this.zones = Array.isArray(file.zones) ? file.zones : [];
+    // A zones array, even an empty one, is the route's own scenery: no seeded defaults.
+    this.explicitZones = Array.isArray(file.zones);
     // Routes with the same map id share one world (ADR 0010).
     const map = file.map;
     this.map = map && typeof map.id === "string" && Number.isFinite(map.seed) ? { id: map.id, seed: map.seed } : null;

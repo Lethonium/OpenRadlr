@@ -50,7 +50,7 @@ trainer (or pick *Simulated trainer*) and join. The first `make up` copies
 | `E` / `Q` or `+` / `−` | shift up / down (virtual shifting) |
 | `J` | join a race during its countdown / leave it |
 | `L` | cycle the HUD layout: auto, cockpit, broadcast, training, race |
-| `M` / `Esc` | open the menu (training, race, view, devices) / close panels |
+| `M` / `Esc` | open the menu (overview, view, race, training, settings) / close panels |
 | `V` | switch between 3D and 2D view |
 | `C` / `T` | cycle camera (chase, close, drone, TV side) / time of day |
 | `P` | take a photo (find them under *Menu → Finish ride*) |
@@ -138,7 +138,8 @@ make up
 Later, to deploy new commits: `make update`.
 
 The server exposes aggregate Prometheus metrics at `/internal/metrics` for
-connected riders, configured rider capacity and community distance totals. The
+connected riders, configured rider capacity, community distance totals and AFK
+warning outcomes (`openradlr_afk_events_total`). The
 endpoint contains no rider names, IDs, credentials or request details. The
 Monitoring stack scrapes it over the private `openradlr-metrics` Docker
 network; its Grafana dashboard also probes the public `/healthz` URL.
@@ -185,6 +186,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 | `OPENRADLR_REQUIRE_STRAVA` | `false` | Riders must connect Strava to join |
 | `OPENRADLR_ALLOW_SIMULATED_TRAINER` | `true` | Offer the simulated trainer (set `false` in production) |
 | `OPENRADLR_ALLOW_PADDLE_MODE` | `true` | Offer phone paddles (tap left/right for power; no Strava, no ride files) |
+| `OPENRADLR_OBN_URL` | – | `wss://` URL of an OpenBikeNet server: shares the velodrome with riders of other apps (see [deploy.md](docs/deploy.md#openbikenet-optional)) |
 | `OPENRADLR_PRIVACY_URL` | – | Link to your privacy policy in the start menu |
 | `OPENRADLR_ANALYTICS_DOMAIN` / `_SCRIPT` | – | Opt-in Plausible analytics for the client: your site name, and the script URL if you self-host Plausible (off when the domain is empty) |
 | `OPENRADLR_STUDIO` | `true` | Host the spin studio (group classes) next to the routes |
@@ -225,7 +227,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 - [Events](docs/events.md) — group rides, races, power sharing, events file
 - [Vehicles](docs/vehicles.md) — tandems and beer bikes, codes, captain, bots
 - [Workouts](docs/workouts.md) — café circuits, presets, exercises, history
-- [Devices](docs/devices.md) — FTMS, heart rate, Zwift Click/Play/Ride controllers
+- [Devices](docs/devices.md) — FTMS, heart rate, Zwift Click/Play/Ride and OpenBikeControl controllers
 - [Routes](docs/routes.md) — route file format
 - [Deploying](docs/deploy.md) — production behind a reverse proxy, Strava, limits
 - [Decisions](docs/adr/) — architecture decision records

@@ -7,16 +7,43 @@
  * into alternating on/off segments when the workout is created.
  */
 
+import { t } from "../i18n/i18n.js";
 /**
  * @typedef {{durationS: number, from: number, to: number, label: string, kind: string}} Segment
  * @typedef {{name: string, description?: string, segments: Segment[]}} Workout
  */
 
 const MAX_SEGMENTS = 500;
+
+// The built-in library keeps English names as data; these look up what to show.
+const LIBRARY_KEYS = {
+  "Endurance 45": ["workout.lib.endurance.name", "workout.lib.endurance.description"],
+  "Sweet Spot 3×8": ["workout.lib.sweetSpot.name", "workout.lib.sweetSpot.description"], // i18n-ok
+  "VO2max 5×3": ["workout.lib.vo2.name", "workout.lib.vo2.description"],
+  "ERG check 10": ["workout.lib.erg.name", "workout.lib.erg.description"], // i18n-ok
+};
+const LABEL_KEYS = {
+  Steady: "workout.label.steady", Ramp: "workout.label.ramp", Block: "workout.label.block", "Warm-up": "workout.label.warmup", "Cool-down": "workout.label.cooldown",
+  Endurance: "workout.label.endurance", Tempo: "workout.label.tempo", Easy: "workout.label.easy", "Max effort": "workout.label.maxEffort", "Free ride": "workout.label.freeRide", // i18n-ok
+};
+
+/** The name to show for a workout: the library ones are translated, imported ones are the file's own. */
+export const workoutName = (workout) => (LIBRARY_KEYS[workout.name] ? t(LIBRARY_KEYS[workout.name][0]) : workout.name);
+export const workoutDescription = (workout) => (LIBRARY_KEYS[workout.name] ? t(LIBRARY_KEYS[workout.name][1]) : workout.description);
+
+/** The label to show for a block of a library workout ("Step 2", "Interval 1/5", "Warm-up"). */
+export function segmentLabel(label) {
+  if (LABEL_KEYS[label]) return t(LABEL_KEYS[label]);
+  const step = /^Step (\d+)$/.exec(label);
+  if (step) return t("workout.label.step", { n: step[1] });
+  const round = /^(Interval|Recovery) (\d+)\/(\d+)$/.exec(label);
+  if (round) return t(round[1] === "Interval" ? "workout.label.interval" : "workout.label.recovery", { i: round[2], n: round[3] }); // i18n-ok
+  return label;
+}
 const MAX_DURATION_S = 6 * 3600;
 
-export const steady = (durationS, power, label = "Steady") => ({ durationS, from: power, to: power, label, kind: "steady" });
-export const ramp = (durationS, from, to, label = "Ramp", kind = "ramp") => ({ durationS, from, to, label, kind });
+export const steady = (durationS, power, label = "Steady") => ({ durationS, from: power, to: power, label, kind: "steady" }); // i18n-ok
+export const ramp = (durationS, from, to, label = "Ramp", kind = "ramp") => ({ durationS, from, to, label, kind }); // i18n-ok
 
 /** `repeat` times (on, off), labelled "Interval 1/5" etc. */
 export function intervals(repeat, onS, onPower, offS, offPower) {
@@ -30,19 +57,19 @@ export function intervals(repeat, onS, onPower, offS, offPower) {
 
 /** Validates and normalises a workout; throws with a readable message. */
 export function createWorkout({ name, description = "", segments }) {
-  if (!Array.isArray(segments) || segments.length === 0) throw new Error("A workout needs at least one block.");
-  if (segments.length > MAX_SEGMENTS) throw new Error(`A workout may have at most ${MAX_SEGMENTS} blocks.`);
+  if (!Array.isArray(segments) || segments.length === 0) throw new Error(t("workout.error.noBlocks"));
+  if (segments.length > MAX_SEGMENTS) throw new Error(t("workout.error.manyBlocks", { max: MAX_SEGMENTS }));
   const clean = segments.map((segment, index) => {
     const durationS = Math.round(Number(segment.durationS));
     const from = Number(segment.from);
     const to = Number(segment.to ?? segment.from);
-    if (!(durationS > 0)) throw new Error(`Block ${index + 1} has no duration.`);
-    if (![from, to].every((p) => Number.isFinite(p) && p >= 0 && p <= 3)) throw new Error(`Block ${index + 1} has an invalid power.`);
-    return { durationS, from, to, label: String(segment.label ?? "Block"), kind: String(segment.kind ?? "steady") };
+    if (!(durationS > 0)) throw new Error(t("workout.error.noDuration", { n: index + 1 }));
+    if (![from, to].every((p) => Number.isFinite(p) && p >= 0 && p <= 3)) throw new Error(t("workout.error.badPower", { n: index + 1 }));
+    return { durationS, from, to, label: String(segment.label ?? "Block"), kind: String(segment.kind ?? "steady") }; // i18n-ok
   });
   const total = clean.reduce((sum, s) => sum + s.durationS, 0);
-  if (total > MAX_DURATION_S) throw new Error("Workouts may be at most 6 hours long.");
-  return { name: String(name || "Workout").slice(0, 80), description: String(description).slice(0, 500), segments: clean };
+  if (total > MAX_DURATION_S) throw new Error(t("workout.error.tooLong"));
+  return { name: String(name || "Workout").slice(0, 80), description: String(description).slice(0, 500), segments: clean }; // i18n-ok
 }
 
 export const totalDuration = (workout) => workout.segments.reduce((sum, s) => sum + s.durationS, 0);
@@ -135,11 +162,11 @@ const number = (value, fallback = NaN) => {
  * @returns {Workout}
  */
 export function parseZwo(xml) {
-  if (typeof xml !== "string" || !/<workout_file[\s>]/i.test(xml)) throw new Error("This is not a .zwo workout file.");
-  const name = decodeEntities(/<name>([\s\S]*?)<\/name>/i.exec(xml)?.[1]?.trim() ?? "Imported workout");
+  if (typeof xml !== "string" || !/<workout_file[\s>]/i.test(xml)) throw new Error(t("workout.error.notZwo"));
+  const name = decodeEntities(/<name>([\s\S]*?)<\/name>/i.exec(xml)?.[1]?.trim() ?? t("workout.imported"));
   const description = decodeEntities(/<description>([\s\S]*?)<\/description>/i.exec(xml)?.[1]?.trim() ?? "");
   const body = /<workout>([\s\S]*?)<\/workout>/i.exec(xml)?.[1];
-  if (!body) throw new Error("The workout file has no <workout> section.");
+  if (!body) throw new Error(t("workout.error.noSection"));
 
   const segments = [];
   for (const match of body.matchAll(/<(\w+)([^>]*?)\/?>/g)) {
@@ -165,7 +192,7 @@ export function parseZwo(xml) {
       case "freeride":
       case "maxeffort":
         // No fixed target: ride easy in ERG terms; the rider can override manually.
-        segments.push(steady(duration, 0.5, tag === "maxeffort" ? "Max effort" : "Free ride"));
+        segments.push(steady(duration, 0.5, tag === "maxeffort" ? "Max effort" : "Free ride")); // i18n-ok
         break;
       default:
         break;
@@ -179,23 +206,23 @@ export function parseZwo(xml) {
 export const PRESET_WORKOUTS = Object.freeze([
   createWorkout({
     name: "Endurance 45",
-    description: "Steady aerobic ride with a short build.",
-    segments: [ramp(600, 0.45, 0.65, "Warm-up", "warmup"), steady(1500, 0.68, "Endurance"), steady(300, 0.75, "Tempo"), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
+    description: "Steady aerobic ride with a short build.", // i18n-ok
+    segments: [ramp(600, 0.45, 0.65, "Warm-up", "warmup"), steady(1500, 0.68, "Endurance"), steady(300, 0.75, "Tempo"), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")], // i18n-ok
   }),
   createWorkout({
-    name: "Sweet Spot 3×8",
-    description: "Three 8-minute blocks just below threshold.",
+    name: "Sweet Spot 3×8", // i18n-ok
+    description: "Three 8-minute blocks just below threshold.", // i18n-ok
     segments: [ramp(600, 0.45, 0.7, "Warm-up", "warmup"), ...intervals(3, 480, 0.9, 240, 0.55), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
   }),
   createWorkout({
     name: "VO2max 5×3",
-    description: "Five hard 3-minute efforts with equal recovery.",
+    description: "Five hard 3-minute efforts with equal recovery.", // i18n-ok
     segments: [ramp(600, 0.45, 0.75, "Warm-up", "warmup"), ...intervals(5, 180, 1.15, 180, 0.5), ramp(300, 0.6, 0.45, "Cool-down", "cooldown")],
   }),
   createWorkout({
-    name: "ERG check 10",
-    description: "Short steps to see how your trainer holds power.",
-    segments: [steady(120, 0.5, "Easy"), steady(120, 0.7, "Step 1"), steady(120, 0.85, "Step 2"), steady(120, 1.0, "Step 3"), steady(120, 0.5, "Easy")],
+    name: "ERG check 10", // i18n-ok
+    description: "Short steps to see how your trainer holds power.", // i18n-ok
+    segments: [steady(120, 0.5, "Easy"), steady(120, 0.7, "Step 1"), steady(120, 0.85, "Step 2"), steady(120, 1.0, "Step 3"), steady(120, 0.5, "Easy")], // i18n-ok
   }),
 ]);
 

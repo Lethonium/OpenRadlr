@@ -8,13 +8,23 @@ import { Emitter } from "../util/emitter.js";
 export const toHex = (dataView) =>
   Array.from(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength), (b) => b.toString(16).padStart(2, "0")).join(" ");
 
+/**
+ * `?debug=controller` in the address: every controller packet goes into the report
+ * (for decoding a controller we don't understand yet); the trainer's stay capped,
+ * or their four packets a second would push the controller's out.
+ */
+export function deviceLogOptions(search) {
+  return new URLSearchParams(search).get("debug") === "controller" ? { capture: ["zwift", "obc"], maxEntries: 3000 } : {};
+}
+
 export class DeviceLog extends Emitter {
   entries = [];
   packets = {};
 
-  /** @param {{maxEntries?: number, maxPacketsLoggedPerSource?: number, now?: () => number}} [options] */
-  constructor({ maxEntries = 300, maxPacketsLoggedPerSource = 20, now = () => Date.now() } = {}) {
+  /** @param {{maxEntries?: number, maxPacketsLoggedPerSource?: number, capture?: string[], now?: () => number}} [options] `capture`: sources logged without a cap */
+  constructor({ maxEntries = 300, maxPacketsLoggedPerSource = 20, capture = [], now = () => Date.now() } = {}) {
     super();
+    this.capture = new Set(capture);
     this.maxEntries = maxEntries;
     this.maxPacketsLoggedPerSource = maxPacketsLoggedPerSource;
     this.now = now;
@@ -42,7 +52,7 @@ export class DeviceLog extends Emitter {
    */
   packet(source, view, parsed) {
     const count = (this.packets[source] = (this.packets[source] ?? 0) + 1);
-    if (count <= this.maxPacketsLoggedPerSource) {
+    if (count <= this.maxPacketsLoggedPerSource || this.capture.has(source)) {
       this.#add({ level: "packet", message: `${source} #${count}: ${toHex(view)} → ${JSON.stringify(parsed)}` });
     } else {
       this.emit("packet", { source, count });
@@ -58,10 +68,11 @@ export class DeviceLog extends Emitter {
 
   report(extra = {}) {
     const header = [
-      `OpenRadlr device diagnostics`,
-      ...(extra.build ? [`Build: ${extra.build}`] : []),
-      `User agent: ${extra.userAgent ?? "unknown"}`,
-      `Packets: ${JSON.stringify(this.packets)}`,
+      `OpenRadlr device diagnostics`, // i18n-ok
+      ...(extra.build ? [`Build: ${extra.build}`] : []), // i18n-ok
+      `User agent: ${extra.userAgent ?? "unknown"}`, // i18n-ok
+      `Packets: ${JSON.stringify(this.packets)}`, // i18n-ok
+      ...(this.capture.size ? [`Capturing: ${[...this.capture].join(", ")} (every packet)`] : []), // i18n-ok
       "",
     ];
     return [...header, ...this.entries.map((e) => `[${e.t}s] ${e.level.toUpperCase()} ${e.message}`)].join("\n");
