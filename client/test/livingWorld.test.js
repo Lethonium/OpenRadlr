@@ -40,7 +40,7 @@ test("Living carries a ground map and a life group", () => {
   const { groundMap } = living.living;
   assert.equal(groundMap.width, 2048);
   assert.equal(groundMap.data.length, 2048 * 2048 * 4);
-  assert.ok(Array.isArray(living.chunks.life));
+  assert.ok(living.chunks.life.reduce((sum, chunk) => sum + chunk.mesh.vertexCount, 0) > 100_000, "the life group is dressed");
   assert.deepEqual(living.living.movers, []);
 });
 
@@ -60,6 +60,12 @@ test("a world without a road network renders like plain 3D", () => {
   const world = buildWorld(hills, { living: true });
   assert.equal(world.living, null);
   assert.equal(world.chunks.life, undefined);
+});
+
+test("a tuft draws upward-facing on the living verges", () => {
+  const { normals, vertexCount } = living.chunks.detail[0].mesh;
+  assert.ok(vertexCount > 0);
+  assert.ok([...normals.subarray(0, 300)].filter((_, i) => i % 3 === 1).every((ny) => ny === 1));
 });
 
 test("a huge island falls back", () => {

@@ -61,6 +61,15 @@ export class MeshBuilder {
     }
   }
 
+  /** A triangle lit as if it faced `normal`, e.g. thin grass blades that should catch the sky. */
+  triangleLit(a, b, c, color, normal) {
+    for (const p of [a, b, c]) {
+      this.positions.push(p[0], p[1], p[2]);
+      this.normals.push(normal[0], normal[1], normal[2]);
+      this.colors.push(color[0], color[1], color[2], color[3] ?? 0);
+    }
+  }
+
   /** Triangle whose front face points along `direction` (winding is fixed up if needed). */
   triangleFacing(a, b, c, color, direction) {
     const n = cross(sub(b, a), sub(c, a));

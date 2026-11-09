@@ -3,6 +3,10 @@
  * world and carried to the view as plain data.
  */
 
+import { RIVER } from "../features.js";
+import { seededRandom } from "../noise.js";
+import { VERGE, roadHalfWidth } from "../world.js";
+import { buildFences, buildHedges, buildOrchards, buildProps, buildWoods, treeBlocked } from "./dressing.js";
 import { buildFields, groundGrid } from "./fields.js";
 import { paintGroundMap } from "./groundMap.js";
 
@@ -18,6 +22,8 @@ export function livingEligible({ biome, network, box }) {
 /** Grid cell (metres) of the village lookup, and how far around a village street its gardens reach. */
 const VILLAGE_CELL = 64;
 const VILLAGE_REACH = 120;
+/** Nothing stands within this of a fork, so riders see the other road. */
+const JUNCTION_SIGHT = 26;
 
 /** Whether a point is in or beside any village of the map. */
 function villageLookup(ordered, zonesOf) {
@@ -41,15 +47,35 @@ function villageLookup(ordered, zonesOf) {
  * Lays out the island's land, before anything is placed on it. Null when
  * Living does not apply here, and the world then builds as plain 3D.
  */
-export function planLiving({ terrain, biome, network, box, zonesOf, ordered, water, seed }) {
+export function planLiving({ terrain, biome, network, box, zonesOf, ordered, water, seed, junctions = [] }) {
   if (!livingEligible({ biome, network, box })) return null;
   const grid = groundGrid(terrain, box);
   const fields = buildFields(terrain, grid, { seed, sea: water, villages: villageLookup(ordered, zonesOf) });
-  return { biome, box, grid, fields };
+  return { biome, box, grid, fields, terrain, zonesOf, ordered, water, seed, junctions, treeBlocked: (x, z) => treeBlocked(fields, x, z) };
 }
 
-/** Paints the ground map, once everything that adds to it is known. */
-export function finishLiving(plan) {
+/** Everything that places things on the land needs this. */
+function livingContext(plan, { mesh, occupancy }) {
+  const { terrain, junctions, grid, fields, biome, zonesOf, ordered, water, box, seed } = plan;
+  const keepClear = (x, z, radius = 0) => {
+    const near = terrain.index.nearest(x, z);
+    if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + radius + 1) return true;
+    if (terrain.riverDistance(x, z) < RIVER.halfWidth + RIVER.bank * 0.6 + radius) return true;
+    if (occupancy.blocked(x, z, radius)) return true;
+    return junctions.some(([px, pz]) => Math.hypot(px - x, pz - z) < JUNCTION_SIGHT + radius);
+  };
+  return { mesh, fields, grid, terrain, occupancy, keepClear, random: seededRandom(seed ^ 0x11fe), biome, zonesOf, ordered, water, box, seed };
+}
+
+/** Dresses the land and paints the ground map, once the world's buildings stand. */
+export function finishLiving(plan, placed) {
   const { biome, box, grid, fields } = plan;
+  const ctx = livingContext(plan, placed);
+  const { budgets } = biome.living;
+  buildWoods(ctx, budgets.woods);
+  buildHedges(ctx, budgets.hedges);
+  buildOrchards(ctx, budgets.orchards);
+  buildFences(ctx, budgets.fences);
+  buildProps(ctx, budgets.props);
   return { groundMap: paintGroundMap({ fields, grid, box, crops: biome.living.crops }), movers: [], models: {} };
 }

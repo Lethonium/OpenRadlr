@@ -13,6 +13,8 @@ const BLOCK = 650;
 /** Land at most this far from a block's seed is searched for; beyond the Voronoi neighbours nothing can be nearer. */
 const REACH = BLOCK * 1.3;
 const RUN_STEP = 40;
+/** How far from a road `grid.roadAt` still tells a distance. */
+const ROAD_REACH = 600;
 
 /** Heights above the sea (metres) at which the land changes class. */
 const LAND = Object.freeze({ wetSand: 0.7, sand: 2.4, dunes: 5, farm: 55, rough: 95, moor: 280, rockSteep: 0.6, beachSteep: 0.5 });
@@ -41,11 +43,34 @@ function scramble(a, b, c = 0, d = 0) {
   return (h >>> 0) / 4294967296;
 }
 
+/** Distance to the nearest road on the grid's nodes, saturating at `ROAD_REACH`. */
+function roadDistances(terrain, box, cell, columns, rows) {
+  const out = new Float32Array(columns * rows).fill(ROAD_REACH);
+  const span = Math.ceil(ROAD_REACH / cell);
+  const { samples } = terrain.index;
+  for (let k = 0; k < samples.length; k += 3) {
+    const s = samples[k];
+    const c0 = Math.round((s.x - box.x0) / cell);
+    const r0 = Math.round((s.z - box.z0) / cell);
+    for (let r = Math.max(0, r0 - span); r <= Math.min(rows - 1, r0 + span); r += 1) {
+      const dz = box.z0 + r * cell - s.z;
+      for (let c = Math.max(0, c0 - span); c <= Math.min(columns - 1, c0 + span); c += 1) {
+        const dx = box.x0 + c * cell - s.x;
+        const squared = dx * dx + dz * dz;
+        const i = r * columns + c;
+        if (squared < out[i] * out[i]) out[i] = Math.sqrt(squared);
+      }
+    }
+  }
+  return out;
+}
+
 /** Height, slope and river distance on a coarse grid over `box`, so nothing needs per-pixel terrain lookups. */
 export function groundGrid(terrain, box, cell = 32) {
   const columns = Math.ceil((box.x1 - box.x0) / cell) + 1;
   const rows = Math.ceil((box.z1 - box.z0) / cell) + 1;
   const nodes = columns * rows;
+  const roads = roadDistances(terrain, box, cell, columns, rows);
   const heights = new Float32Array(nodes);
   const rivers = new Float32Array(nodes);
   const steeps = new Float32Array(nodes);
@@ -87,6 +112,8 @@ export function groundGrid(terrain, box, cell = 32) {
     heightAt: (x, z) => sample(heights, x, z),
     steepAt: (x, z) => sample(steeps, x, z),
     riverAt: (x, z) => sample(rivers, x, z),
+    /** Distance to the nearest road, up to `ROAD_REACH` metres, however far from a road sample's bucket. */
+    roadAt: (x, z) => sample(roads, x, z),
   };
 }
 
