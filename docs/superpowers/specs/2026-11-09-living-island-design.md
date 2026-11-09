@@ -40,7 +40,7 @@ chunks: scenery 1.81M, terrain 0.90M, detail 0.70M, structures 0.70M, road
 
 ## The setting
 
-- `viewControls` offers `3d`, `living` and `2d` as modes. The View popover and
+- `viewControls` offers `2d`, `3d` and `living` as modes, in that order. The View popover and
   the menu's View page show them; the studio is unchanged.
 - `app.viewMode` stays `"3d"` for both 3D and Living, so existing checks and
   saved `openride.view` values keep working. A separate `openride.living`
