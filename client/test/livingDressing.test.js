@@ -7,6 +7,7 @@ import { seededRandom } from "../public/js/view3d/noise.js";
 import { temperate } from "../public/js/view3d/biomes/temperate.js";
 import { buildFields, groundGrid } from "../public/js/view3d/living/fields.js";
 import { temperateLiving } from "../public/js/view3d/living/temperate.js";
+import { buildCoast, coastSpots, planCoast } from "../public/js/view3d/living/coast.js";
 import { buildFences, buildHedges, buildOrchards, buildProps, buildWoods, treeBlocked } from "../public/js/view3d/living/dressing.js";
 
 /** Remembers the larger primitives a builder asked for. */
@@ -138,6 +139,76 @@ test("lone trees in crop parcels are blocked, hedge lines and rough land are not
   assert.equal(treeBlocked(fields, ...inside), true);
   assert.equal(treeBlocked(fields, ...nearEdge), false);
   assert.equal(treeBlocked(fields, ...rough), false);
+});
+
+function coastContext(options = {}) {
+  const ctx = context(options);
+  ctx.cafes = [[0, 0, 1490]];
+  return ctx;
+}
+
+test("coast spots lie on the sand and know which way the sea is", () => {
+  const ctx = coastContext();
+  const spots = coastSpots(ctx.fields, ctx.terrain, ctx.seed);
+  assert.ok(spots.length > 30, `${spots.length} spots`);
+  for (const { x, z, seaward } of spots) {
+    assert.equal(ctx.fields.landAt(x, z), "sand");
+    const inland = ctx.terrain.height(x - seaward[0] * 40, z - seaward[1] * 40);
+    const out = ctx.terrain.height(x + seaward[0] * 40, z + seaward[1] * 40);
+    assert.ok(out < inland, "the land falls towards the sea");
+  }
+});
+
+test("beach huts and parasols stand on sand", () => {
+  const ctx = coastContext();
+  const { huts, parasols } = planCoast(ctx);
+  assert.ok(huts.length > 5, `${huts.length} huts`);
+  assert.ok(parasols.length > 5, `${parasols.length} parasols`);
+  for (const { x, z } of [...huts, ...parasols]) assert.ok(["sand", "dunes"].includes(ctx.fields.landAt(x, z)), `${x}, ${z}: ${ctx.fields.landAt(x, z)}`);
+});
+
+test("the coast keeps out of what must stay clear", () => {
+  const ctx = coastContext({ keepClear: (x) => x > 0 });
+  const { huts, parasols, boats, rocks } = planCoast(ctx);
+  for (const { x } of [...huts, ...parasols, ...rocks]) assert.ok(x <= 0, `at x ${x}`);
+  assert.ok(boats.every(({ x }) => x <= 0));
+});
+
+test("the jetty starts at the shore and reaches the water", () => {
+  const ctx = coastContext();
+  const { points } = planCoast(ctx).jetty;
+  const heights = points.map(([x, z]) => ctx.terrain.height(x, z));
+  assert.ok(heights[0] >= 0, `starts at ${heights[0]}`);
+  assert.ok(heights.at(-1) < 0, `ends at ${heights.at(-1)}`);
+});
+
+test("the jetty is built at the spot nearest the café", () => {
+  const ctx = coastContext();
+  const [start] = planCoast(ctx).jetty.points;
+  assert.ok(Math.hypot(start[0] - 0, start[1] - 1490) < 80, `starts at ${start}`);
+});
+
+test("moored boats float in shallow water", () => {
+  const ctx = coastContext();
+  const { boats } = planCoast(ctx);
+  assert.ok(boats.length > 3, `${boats.length} boats`);
+  for (const { x, z } of boats) {
+    const height = ctx.terrain.height(x, z);
+    assert.ok(height < 0 && height > -6, `height ${height}`);
+  }
+});
+
+test("an island without a beach is left alone", () => {
+  const ctx = coastContext({ options: { height: () => 80 } });
+  assert.deepEqual(coastSpots(ctx.fields, ctx.terrain, ctx.seed), []);
+  assert.equal(buildCoast(ctx, NO_LIMIT), 0);
+});
+
+test("the coast stops at its limit", () => {
+  const ctx = coastContext();
+  const added = buildCoast(ctx, 3000);
+  assert.ok(added > 0 && added <= 3000, `${added}`);
+  assert.equal(added, ctx.mesh.vertexCount);
 });
 
 test("the living tuft faces up, so it isn't black", () => {

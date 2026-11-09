@@ -1114,7 +1114,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   for (const river of rivers) buildRiverWater(river, rivers3d, biome.river ?? undefined);
 
   // Before the chunks are built below: this dresses the `life` group.
-  const livingPart = plan ? finishLiving(plan, { mesh: chunks.life, occupancy }) : null;
+  const livingPart = plan ? finishLiving(plan, { mesh: chunks.life, occupancy, cafes: cafeSpots }) : null;
 
   return {
     // The view needs the biome to resolve its sky and lighting at render time.
