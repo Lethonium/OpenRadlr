@@ -134,3 +134,19 @@ test("the same seed gives the same movers", () => {
   const animals = [{ x: 500, y: 40, z: 700, yaw: 1, kind: "animal1" }];
   assert.deepEqual(buildMovers(context({ animals })).movers, buildMovers(context({ animals })).movers);
 });
+
+/** The mean z of a model's vertices that `pick` accepts. */
+function meanZ(mesh, pick) {
+  const zs = [];
+  for (let i = 0; i < mesh.vertexCount; i += 1) if (pick(mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2])) zs.push(mesh.positions[i * 3 + 2]);
+  return zs.reduce((sum, z) => sum + z, 0) / zs.length;
+}
+
+test("a tractor drives forwards: its cab sits behind the middle, away from −Z", () => {
+  assert.ok(meanZ(built.models.tractor[0], (x, y) => y > 2.4) > 0);
+});
+
+test("a bird flies beak first, towards −Z", () => {
+  const bird = built.models.bird[0];
+  assert.ok(Math.abs(Math.min(...Array.from({ length: bird.vertexCount }, (_, i) => bird.positions[i * 3 + 2]))) > 0.25);
+});

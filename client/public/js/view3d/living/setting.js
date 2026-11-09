@@ -24,6 +24,9 @@ export function resolveLiving(saved, device) {
   return livingDefault(device);
 }
 
+/** Riders on Living by default shouldn't hear about a feature they never picked. */
+export const livingNoteShown = (saved, hasLiving) => saved === "on" && !hasLiving;
+
 /** Which of the three choices a view mode and the setting amount to. */
 export function viewChoice(mode, living) {
   if (mode !== "3d") return "2d";

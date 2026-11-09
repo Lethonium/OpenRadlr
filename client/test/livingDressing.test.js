@@ -60,6 +60,15 @@ test("hedges only within 450 m of a road", () => {
   for (const { center } of ctx.mesh.boxes) assert.ok(Math.abs(center[2]) <= 450, `z ${center[2]}`);
 });
 
+test("no hedge piece reaches a kept-clear strip, even by its ends", () => {
+  // The road runs along x, and half the field edges run straight at it.
+  const ctx = context({ keepClear: (x, z, r = 0) => Math.abs(z) < 12 + r });
+  buildHedges(ctx, NO_LIMIT);
+  assert.ok(ctx.mesh.boxes.length > 20);
+  const { data } = ctx.mesh.positions;
+  for (let i = 2; i < ctx.mesh.positions.length; i += 3) assert.ok(Math.abs(data[i]) >= 12, `vertex at z ${data[i]}`);
+});
+
 test("about a third of the near edges have a hedge", () => {
   const ctx = context();
   buildHedges(ctx, NO_LIMIT);

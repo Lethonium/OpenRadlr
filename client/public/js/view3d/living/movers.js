@@ -110,8 +110,8 @@ function birdModel(up) {
   const m = new MeshBuilder();
   const wing = up ? 0.34 : -0.1;
   const body = [0.2, 0.2, 0.22];
-  m.triangleFacing([0, 0, 0.3], [-0.65, wing, 0], [0, 0, -0.2], body, [0, 1, 0]);
-  m.triangleFacing([0, 0, 0.3], [0.65, wing, 0], [0, 0, -0.2], body, [0, 1, 0]);
+  m.triangleFacing([0, 0, -0.3], [-0.65, wing, 0], [0, 0, 0.2], body, [0, 1, 0]);
+  m.triangleFacing([0, 0, -0.3], [0.65, wing, 0], [0, 0, 0.2], body, [0, 1, 0]);
   return m.build();
 }
 
@@ -150,7 +150,8 @@ function balloonModel(biome) {
 
 function tractorModel(biome) {
   const m = new MeshBuilder();
-  buildParkedTractor(m, 0, 0, 0, Math.PI / 2, biome);
+  // Models face −Z (`yawFor`), so the bonnet goes that way.
+  buildParkedTractor(m, 0, 0, 0, -Math.PI / 2, biome);
   return m.build();
 }
 

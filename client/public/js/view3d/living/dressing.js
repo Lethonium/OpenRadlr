@@ -93,7 +93,8 @@ export function buildHedges(ctx, limit) {
       const q = [a[0] + ((b[0] - a[0]) * (k + 1)) / pieces, a[1] + ((b[1] - a[1]) * (k + 1)) / pieces];
       const cx = (p[0] + q[0]) / 2;
       const cz = (p[1] + q[1]) / 2;
-      if (grid.roadAt(cx, cz) > NEAR.hedges || ctx.keepClear(cx, cz, 2)) continue;
+      // Both ends as well: a piece can run straight at a road or a river.
+      if (grid.roadAt(cx, cz) > NEAR.hedges || [p, q, [cx, cz]].some(([x, z]) => ctx.keepClear(x, z, 2))) continue;
       const palette = stone ? wall : hedge;
       boxAlong(mesh, p, q, stone ? 1.0 : 1.7 + color * 0.8, stone ? 0.6 : 1.1, palette[Math.floor(color * palette.length)], ground(ctx, cx, cz) - 0.15);
     }

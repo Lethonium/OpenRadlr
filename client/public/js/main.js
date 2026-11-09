@@ -90,7 +90,7 @@ import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, sta
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
-import { LIVING_KEY, fromViewChoice, resolveLiving, viewChoice } from "./view3d/living/setting.js";
+import { LIVING_KEY, fromViewChoice, livingNoteShown, resolveLiving, viewChoice } from "./view3d/living/setting.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
@@ -3754,7 +3754,7 @@ function show3d(scene, view = null) {
   app.view3d.network = app.network;
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   app.view3d.reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  $("view-note").textContent = app.living && !app.view3d.hasLiving ? t("view.livingUnavailable") : "";
+  $("view-note").textContent = livingNoteShown(readSetting(LIVING_KEY), app.view3d.hasLiving) ? t("view.livingUnavailable") : "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
   $("view-3d").disabled = false;
   $("view-living").disabled = false;

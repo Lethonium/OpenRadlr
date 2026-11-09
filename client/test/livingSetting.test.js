@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LIVING_KEY, fromViewChoice, livingDefault, resolveLiving, viewChoice } from "../public/js/view3d/living/setting.js";
+import { LIVING_KEY, fromViewChoice, livingNoteShown, livingDefault, resolveLiving, viewChoice } from "../public/js/view3d/living/setting.js";
 
 test("the setting has one storage key", () => {
   assert.equal(LIVING_KEY, "openride.living");
@@ -40,4 +40,11 @@ test("the view choice maps both ways and 2D leaves Living alone", () => {
   assert.deepEqual(fromViewChoice("living"), { mode: "3d", living: true });
   assert.deepEqual(fromViewChoice("3d"), { mode: "3d", living: false });
   assert.deepEqual(fromViewChoice("2d"), { mode: "2d", living: null });
+});
+
+test("the unavailable note is only for riders who chose Living", () => {
+  assert.equal(livingNoteShown("on", false), true);
+  assert.equal(livingNoteShown(null, false), false, "on by default is not a choice");
+  assert.equal(livingNoteShown("off", false), false);
+  assert.equal(livingNoteShown("on", true), false);
 });
