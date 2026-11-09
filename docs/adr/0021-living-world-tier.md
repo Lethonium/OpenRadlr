@@ -48,7 +48,7 @@ terrain's triangles are 16–48 m across, so their colours cannot show a field.
 
 ## Consequences
 
-- Living adds about 0.87M vertices on the valley map (limit 1.65M), about
+- Living adds about 0.85M vertices on the valley map (limit 1.65M), about
   22 MB of texture, and roughly a quarter of a plain build's time.
 - Per-item vertex budgets on the biome are the levers if Living is too heavy.
 - Riders on the same road may see different looks, as with seasons.

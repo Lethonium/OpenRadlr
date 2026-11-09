@@ -37,11 +37,11 @@ test("every point of a parcel has that parcel's crop", () => {
   assert.ok(crops.size > 40, `${crops.size} parcels`);
 });
 
-test("parcels are 80 to 200 m across", () => {
+test("parcels are 80 to 340 m across, some blocks bigger than others", () => {
   const { fields } = setup();
   for (const parcel of farmParcels(fields)) {
-    assert.ok(parcel.width >= 80 && parcel.width <= 200, `width ${parcel.width}`);
-    assert.ok(parcel.depth >= 80 && parcel.depth <= 200, `depth ${parcel.depth}`);
+    assert.ok(parcel.width >= 80 && parcel.width <= 340, `width ${parcel.width}`);
+    assert.ok(parcel.depth >= 80 && parcel.depth <= 340, `depth ${parcel.depth}`);
   }
 });
 
@@ -51,10 +51,10 @@ test("crops are varied and none dominates", () => {
   const parcels = farmParcels(fields);
   for (const { crop } of parcels) counts.set(crop, (counts.get(crop) ?? 0) + 1);
   assert.ok(counts.size >= 5, [...counts.keys()].join());
-  assert.ok(Math.max(...counts.values()) / parcels.length <= 0.35, JSON.stringify([...counts]));
+  assert.ok(Math.max(...counts.values()) / parcels.length <= 0.6, JSON.stringify([...counts]));
 });
 
-test("neighbouring parcels usually differ", () => {
+test("neighbouring parcels often share a crop, without all matching", () => {
   const { fields } = setup();
   let crossings = 0;
   let changes = 0;
@@ -71,7 +71,7 @@ test("neighbouring parcels usually differ", () => {
     if (one.crop !== two.crop) changes += 1;
   }
   assert.ok(crossings > 50, `${crossings} crossings`);
-  assert.ok(changes / crossings >= 0.6, `${changes}/${crossings}`);
+  assert.ok(changes / crossings >= 0.25 && changes / crossings <= 0.75, `${changes}/${crossings}`);
 });
 
 test("parcel edges are straight, with a different parcel on either side", () => {
@@ -134,10 +134,14 @@ test("village land is its own class", () => {
 
 test("parcels follow the road they are near", () => {
   const { fields } = setup();
-  for (const [x, z] of [[100, 200], [-300, -250]]) {
-    const { angle } = fields.parcelAt(x, z);
-    assert.ok(Math.abs(Math.sin(angle)) < 0.01, `angle ${angle} along the x road`);
+  let checked = 0;
+  for (const [x, z] of lattice(40, 700)) {
+    const parcel = fields.parcelAt(x, z);
+    if (!parcel) continue;
+    checked += 1;
+    assert.ok(Math.abs(Math.sin(parcel.angle)) < 0.01, `angle ${parcel.angle} along the x road`);
   }
+  assert.ok(checked > 10, `${checked} points`);
 });
 
 test("woods are dark only where the map says, and every wood point is land", () => {
@@ -157,6 +161,49 @@ test("the same seed gives the same fields", () => {
     return [...lattice(70)].map(([x, z]) => [fields.landAt(x, z), fields.parcelAt(x, z), fields.woodAt(x, z)]);
   };
   assert.deepEqual(sample(), sample());
+});
+
+test("farmland is the minority of the lowland, gathered near the roads", () => {
+  const { fields } = setup({ radius: 2400 });
+  const fieldNear = [];
+  const openNear = [];
+  for (const [x, z] of lattice(40, 2200)) {
+    if (fields.landAt(x, z) !== "farm") continue;
+    (fields.parcelAt(x, z) ? fieldNear : openNear).push(Math.abs(z));
+  }
+  const share = fieldNear.length / (fieldNear.length + openNear.length);
+  assert.ok(share > 0.1 && share < 0.5, `farmland share ${share}`);
+  const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
+  assert.ok(mean(fieldNear) < mean(openNear), "fields lie nearer the road than open land");
+});
+
+test("no parcel is a block of woodland", () => {
+  const { fields } = setup();
+  for (const [x, z] of lattice(30)) assert.notEqual(fields.parcelAt(x, z)?.crop, "woods");
+});
+
+test("woods favour slopes over flat ground of the same height", () => {
+  // Gentle hills on one half, flat on the other, all open land far from the road.
+  const height = (x, z) => (x < 0 ? 30 + 12 * Math.sin(z / 40) : 30);
+  const { fields } = setup({ height });
+  let hilly = 0;
+  let flat = 0;
+  for (const [x, z] of lattice(25)) {
+    if (Math.abs(z) < 700 || fields.parcelAt(x, z)) continue;
+    if (fields.woodAt(x, z) > 0.25) x < 0 ? (hilly += 1) : (flat += 1);
+  }
+  assert.ok(hilly > flat, `${hilly} on slopes, ${flat} on the flat`);
+});
+
+test("rapeseed and lavender are rare accents", () => {
+  const { fields } = setup({ radius: 2400 });
+  const parcels = new Map();
+  for (const [x, z] of lattice(30, 2200)) {
+    const parcel = fields.parcelAt(x, z);
+    if (parcel) parcels.set(parcel.id, parcel.crop);
+  }
+  const loud = [...parcels.values()].filter((crop) => ["rapeseed", "lavender", "sunflower"].includes(crop)).length;
+  assert.ok(loud / parcels.size <= 0.12, `${loud}/${parcels.size}`);
 });
 
 test("eligible only with a hook, a network and a small enough box", () => {

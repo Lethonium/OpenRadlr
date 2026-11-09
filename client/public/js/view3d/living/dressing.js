@@ -10,7 +10,7 @@ import { roadFrame, roadHalfWidth } from "../world.js";
 import { PAVEMENT } from "../features.js";
 
 /** Metres from a road within which hedges, walls and the rest are real objects. */
-const NEAR = Object.freeze({ hedges: 440, woods: 420, orchards: 300, fences: 250, props: 420, fine: 150 });
+const NEAR = Object.freeze({ hedges: 440, woods: 750, orchards: 300, fences: 250, props: 420, fine: 150 });
 const HEDGE_SHARE = 0.33;
 const ORCHARD_SHARE = 0.14;
 const PLANTED = new Set(["ploughed", "wheat", "rapeseed", "lavender", "sunflower", "hay"]);
@@ -31,7 +31,7 @@ export function buildWoods(ctx, limit) {
   const { fields, grid, mesh, random, box, biome } = ctx;
   const start = mesh.vertexCount;
   const candidates = [];
-  const step = 10;
+  const step = 13;
   for (let z = box.z0; z < box.z1; z += step) {
     for (let x = box.x0; x < box.x1; x += step) {
       const road = grid.roadAt(x, z);
@@ -44,8 +44,8 @@ export function buildWoods(ctx, limit) {
   const colors = biome.living.woodland;
   for (const { x: gx, z: gz, wood, road } of candidates) {
     if (sizeOf(ctx, start) + 120 > limit) break;
-    const x = gx + (random() - 0.5) * 7;
-    const z = gz + (random() - 0.5) * 7;
+    const x = gx + (random() - 0.5) * 9;
+    const z = gz + (random() - 0.5) * 9;
     if (ctx.keepClear(x, z, 3)) continue;
     const y = ground(ctx, x, z) - 0.3;
     const kind = random();

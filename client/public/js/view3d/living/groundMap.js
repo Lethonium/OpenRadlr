@@ -10,7 +10,7 @@ import { RIVER } from "../features.js";
 
 /** Rows and stripes: long enough on a ~6.5 m pixel not to shimmer into moiré. */
 const STRIPES = Object.freeze({ ploughed: 20, wheat: 24, hay: 32, rapeseed: 28, lavender: 20, sunflower: 26 });
-const STRIPE_DEPTH = 0.09;
+const STRIPE_DEPTH = 0.035;
 const PLOT = 22;
 
 /** Pixel-sized grain in [0, 1). */
@@ -72,16 +72,26 @@ export function paintGroundMap({ fields, grid, box, overlays = [], crops, resolu
         const plot = scramble(Math.floor(fields.localU / PLOT) * 7919, Math.floor(fields.localV / PLOT));
         return crops.garden[Math.floor(plot * crops.garden.length)];
       }
-      default:
-        return cropColour(fields.parcelRecord(land, x, z));
+      default: {
+        const parcel = fields.parcelRecord(land, x, z);
+        if (parcel) return cropColour(parcel);
+        if (fields.woodAt(x, z) > 0.25) return woodColour(x, z);
+        return openColour(x, z);
+      }
     }
+  };
+
+  /** Unfarmed lowland: soft greens that change with the height of the land, flecked with scrub. */
+  const openColour = (x, z) => {
+    const drier = Math.min(1, Math.max(0, (grid.heightAt(x, z)) / 60)) * 0.5 + valueNoise(x / 75, z / 75, seed + 67) * 0.35;
+    const green = blend(crops.open, crops.openDry, drier);
+    return valueNoise(x / 19, z / 19, seed + 71) > 0.68 ? blend(green, crops.scrub, 0.45) : green;
   };
 
   const woodColour = (x, z) => blend(crops.woods, crops.woodsDeep, valueNoise(x / 26, z / 26, seed + 61));
 
   /** A parcel's colour, with its rows; reads the place in the parcel from `fields.localU` / `localV`. */
   function cropColour(parcel) {
-    if (parcel.crop === "woods") return woodColour(parcel.center[0] + fields.localU, parcel.center[1] + fields.localV);
     const colour = crops[parcel.crop];
     const shade = parcelShade(parcel.id);
     const period = STRIPES[parcel.crop];
@@ -108,8 +118,8 @@ export function paintGroundMap({ fields, grid, box, overlays = [], crops, resolu
 
   // Hedge lines and farm tracks along the parcel edges, so the quilt reads from the air.
   for (const [n, edge] of fields.edges().entries()) {
-    const track = scramble(n, 37) < 0.1;
-    drawLine(data, resolution, metres, x0, z0, edge, track ? crops.track : crops.edge, track ? 1 : 0.55);
+    const track = scramble(n, 37) < 0.06;
+    drawLine(data, resolution, metres, x0, z0, edge, track ? crops.track : crops.edge, track ? 0.8 : 0.3);
   }
 
   for (const overlay of overlays) {

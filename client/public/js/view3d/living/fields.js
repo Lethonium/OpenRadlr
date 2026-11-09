@@ -14,24 +14,28 @@ const BLOCK = 650;
 const REACH = BLOCK * 1.3;
 const RUN_STEP = 40;
 /** How far from a road `grid.roadAt` still tells a distance. */
-const ROAD_REACH = 600;
+const ROAD_REACH = 800;
 
 /** Heights above the sea (metres) at which the land changes class. */
 const LAND = Object.freeze({ wetSand: 0.7, sand: 2.4, dunes: 5, farm: 55, rough: 95, moor: 280, rockSteep: 0.6, beachSteep: 0.5 });
 
 /** Crops of lowland parcels and their shares. */
 const CROPS = Object.freeze([
-  ["meadow", 0.2],
-  ["pasture", 0.2],
-  ["wheat", 0.2],
-  ["ploughed", 0.14],
-  ["rapeseed", 0.1],
+  ["pasture", 0.3],
+  ["meadow", 0.27],
+  ["wheat", 0.17],
   ["hay", 0.1],
-  ["lavender", 0.03],
-  ["sunflower", 0.03],
+  ["ploughed", 0.1],
+  ["rapeseed", 0.03],
+  ["lavender", 0.015],
+  ["sunflower", 0.015],
 ]);
-const WOODED_PARCELS = 0.08;
-const ROUGH_FIELDS = 0.35;
+/** How many of a block's parcels grow its main crop, so neighbours often match. */
+const BLOCK_CROP_SHARE = 0.55;
+const ROUGH_FIELDS = 0.2;
+/** Farmland gathers within this of a road; a parcel is farmed when its score beats `FARMED_ABOVE`. */
+const FARM_REACH = 500;
+const FARMED_ABOVE = 0.55;
 
 /** A number in [0, 1) from a few integers. */
 function scramble(a, b, c = 0, d = 0) {
@@ -166,7 +170,10 @@ class Fields {
       for (let c = 0; c < columns; c += 1, i += 1) {
         const x = box.x0 + c * cell;
         const z = box.z0 + r * cell;
-        this.#woodNoise[i] = fbm(x / 420, z / 420, seed + 11);
+        // Woods wander (a warped noise) and prefer slopes and riverbanks to open flats.
+        const warp = (fbm(x / 900, z / 900, seed + 17, 2) - 0.5) * 500;
+        const banks = grid.riverAt(x, z) < RIVER.halfWidth + 70 ? 0.06 : 0;
+        this.#woodNoise[i] = fbm((x + warp) / 420, (z - warp) / 420, seed + 11) + Math.min(grid.steepAt(x, z), 0.3) * 0.35 + banks;
         this.#villages[i] = villages(x, z) ? 1 : 0;
       }
     }
@@ -182,7 +189,9 @@ class Fields {
     const x = (i + 0.15 + scramble(i, j, seed, 1) * 0.7) * BLOCK;
     const z = (j + 0.15 + scramble(i, j, seed, 2) * 0.7) * BLOCK;
     const angle = roadAngle(this.terrain.index, x, z);
-    block = { i, j, x, z, angle, cos: Math.cos(angle), sin: Math.sin(angle), depth: 110 + scramble(i, j, seed, 3) * 60 };
+    // Some blocks have big fields and some small ones, so the land isn't one even grid.
+    const size = 0.75 + scramble(i, j, seed, 4) * 0.95;
+    block = { i, j, x, z, angle, size, cos: Math.cos(angle), sin: Math.sin(angle), depth: (110 + scramble(i, j, seed, 3) * 60) * size, crop: scramble(i, j, seed, 9) };
     this.#blocks.set(key, block);
     return block;
   }
@@ -208,16 +217,23 @@ class Fields {
 
   #rowOf(block, row) {
     const seed = this.#seed;
-    const length = 80 + scramble(block.i, block.j, row, seed + 5) * 120;
+    const length = Math.max(80, (80 + scramble(block.i, block.j, row, seed + 5) * 120) * block.size);
     return { length, offset: scramble(block.i, block.j, row, seed + 6) * length };
   }
 
-  #cropOf(id, center) {
+  /** Farmland gathers along the roads, in clusters that a block's parcels share, and leaves steep ground alone. */
+  #farmed(id, center, block) {
+    const near = 1 - Math.min(this.#grid.roadAt(center[0], center[1]), FARM_REACH) / FARM_REACH;
+    const cluster = (scramble(block.i, block.j, this.#seed, 8) - 0.5) * 0.8;
+    const own = (scramble(id, this.#seed, 14) - 0.5) * 0.3;
+    return near + cluster + own - Math.min(this.#grid.steepAt(center[0], center[1]), 0.3) > FARMED_ABOVE;
+  }
+
+  #cropOf(id, center, block) {
     const roll = scramble(id, this.#seed, 7);
-    if (roll < WOODED_PARCELS) return "woods";
     const height = this.#grid.heightAt(center[0], center[1]) - this.#sea;
-    const pick = (roll - WOODED_PARCELS) / (1 - WOODED_PARCELS);
-    if (height >= LAND.farm) return pick < 0.5 ? "pasture" : "meadow";
+    if (height >= LAND.farm) return roll < 0.5 ? "pasture" : "meadow";
+    const pick = scramble(id, this.#seed, 15) < BLOCK_CROP_SHARE ? block.crop : roll;
     // A gentle regional bias: pasture here, more wheat there.
     const region = fbm(center[0] / 1700, center[1] / 1700, this.#seed + 29, 2) - 0.5;
     let upTo = 0;
@@ -247,7 +263,7 @@ class Fields {
       const cu = (index + 0.5) * length - offset;
       const cv = (row + 0.5) * block.depth;
       const center = [block.x + cu * block.cos - cv * block.sin, block.z + cu * block.sin + cv * block.cos];
-      parcel = { id, crop: this.#cropOf(id, center), angle: block.angle, width: length, depth: block.depth, center };
+      parcel = { id, crop: this.#cropOf(id, center, block), farmed: this.#farmed(id, center, block), angle: block.angle, width: length, depth: block.depth, center };
       this.#parcels.set(id, parcel);
     }
     return parcel;
@@ -281,6 +297,7 @@ class Fields {
     if (land !== "farm" && land !== "village" && land !== "rough") return null;
     const parcel = this.locate(x, z);
     if (land === "rough" && scramble(parcel.id, this.#seed, 13) >= ROUGH_FIELDS) return null;
+    if (land === "farm" && !parcel.farmed) return null;
     return parcel;
   }
 
@@ -295,17 +312,14 @@ class Fields {
   /** How wooded the ground at (x, z) is, 0…1. */
   woodAt(x, z) {
     const land = this.landAt(x, z);
-    if (land === "rough" || land === "moor") {
-      if (land === "rough" && this.parcelOn(land, x, z)) return 0;
-      return Math.max(0, Math.min(1, (this.#grid.sample(this.#woodNoise, x, z) - 0.58) / 0.12));
-    }
-    if (land === "farm") return this.locate(x, z).crop === "woods" ? 1 : 0;
-    return 0;
+    if (land !== "rough" && land !== "moor" && land !== "farm") return 0;
+    if (this.parcelRecord(land, x, z)) return 0;
+    return Math.max(0, Math.min(1, (this.#grid.sample(this.#woodNoise, x, z) - 0.58) / 0.12));
   }
 
   #hasParcel(x, z) {
     const land = this.landAt(x, z);
-    return land === "farm" || (land === "rough" && scramble(this.locate(x, z).id, this.#seed, 13) < ROUGH_FIELDS);
+    return this.parcelRecord(land, x, z) !== null;
   }
 
   /** Straight runs along the parcel boundaries (cached): `{ a: [x, z], b: [x, z] }`. */
