@@ -18,7 +18,8 @@ function context({ animals = [] } = {}) {
   const village = { from: 2600, to: 3000 };
   const route = terrain.route;
   const zonesOf = new Map([[route, { villages: [village], forests: [], rivers: [], cliffs: [] }]]);
-  return { mesh: new MeshBuilder(), cafes: [], fields, grid, terrain, occupancy: new Occupancy(), keepClear: (x, z, r = 0) => Math.abs(z) < roadHalfWidth(2) + VERGE + r + 1, random: seededRandom(5), biome: temperate, zonesOf, ordered: [route], water: 0, box, seed: terrain.seed, animals };
+  const keepClear = (x, z, r = 0) => Math.abs(z) < roadHalfWidth(2) + VERGE + r + 1;
+  return { mesh: new MeshBuilder(), cafes: [], fields, grid, terrain, occupancy: new Occupancy(), keepClear, landClear: keepClear, random: seededRandom(5), biome: temperate, zonesOf, ordered: [route], water: 0, box, seed: terrain.seed, animals };
 }
 
 const built = buildMovers(context({ animals: [{ x: 500, y: 40, z: 700, yaw: 1, kind: "animal1" }, { x: 900, y: 40, z: 800, yaw: 2, kind: "animal2" }, { x: 1000, y: 40, z: -600, yaw: 0, kind: "animal3" }] }));

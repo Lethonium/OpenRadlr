@@ -10,6 +10,7 @@ import { buildFences, buildHedges, buildOrchards, buildProps, buildWoods, treeBl
 import { buildCoast } from "./coast.js";
 import { buildFields, groundGrid } from "./fields.js";
 import { buildMovers } from "./movers.js";
+import { buildWhimsy } from "./whimsy.js";
 import { paintGroundMap } from "./groundMap.js";
 
 /** One 2048² ground map stays finer than 8 m per pixel only up to this box. */
@@ -49,24 +50,25 @@ function villageLookup(ordered, zonesOf) {
  * Lays out the island's land, before anything is placed on it. Null when
  * Living does not apply here, and the world then builds as plain 3D.
  */
-export function planLiving({ terrain, biome, network, box, zonesOf, ordered, water, seed, junctions = [] }) {
+export function planLiving({ terrain, biome, network, box, zonesOf, ordered, water, seed, junctions = [], ponds = [] }) {
   if (!livingEligible({ biome, network, box })) return null;
   const grid = groundGrid(terrain, box);
   const fields = buildFields(terrain, grid, { seed, sea: water, villages: villageLookup(ordered, zonesOf) });
-  return { biome, box, grid, fields, terrain, zonesOf, ordered, water, seed, junctions, treeBlocked: (x, z) => treeBlocked(fields, x, z), animals: [] };
+  return { biome, box, grid, fields, terrain, zonesOf, ordered, water, seed, junctions, ponds, treeBlocked: (x, z) => treeBlocked(fields, x, z), animals: [] };
 }
 
 /** Everything that places things on the land needs this. */
 function livingContext(plan, { mesh, occupancy, cafes = [] }) {
-  const { animals, terrain, junctions, grid, fields, biome, zonesOf, ordered, water, box, seed } = plan;
-  const keepClear = (x, z, radius = 0) => {
+  const { animals, ponds, terrain, junctions, grid, fields, biome, zonesOf, ordered, water, box, seed } = plan;
+  /** Roads, verges, rivers and junction sight lines: never placed on. */
+  const landClear = (x, z, radius = 0) => {
     const near = terrain.index.nearest(x, z);
     if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + radius + 1) return true;
     if (terrain.riverDistance(x, z) < RIVER.halfWidth + RIVER.bank * 0.6 + radius) return true;
-    if (occupancy.blocked(x, z, radius)) return true;
     return junctions.some(([px, pz]) => Math.hypot(px - x, pz - z) < JUNCTION_SIGHT + radius);
   };
-  return { mesh, cafes, animals, fields, grid, terrain, occupancy, keepClear, random: seededRandom(seed ^ 0x11fe), biome, zonesOf, ordered, water, box, seed };
+  const keepClear = (x, z, radius = 0) => landClear(x, z, radius) || occupancy.blocked(x, z, radius);
+  return { mesh, cafes, animals, ponds, fields, grid, terrain, occupancy, keepClear, landClear, random: seededRandom(seed ^ 0x11fe), biome, zonesOf, ordered, water, box, seed };
 }
 
 /** Dresses the land and paints the ground map, once the world's buildings stand. */
@@ -81,5 +83,8 @@ export function finishLiving(plan, placed) {
   buildProps(ctx, budgets.props);
   buildCoast(ctx, budgets.coast);
   const { movers, models } = buildMovers(ctx);
-  return { groundMap: paintGroundMap({ fields, grid, box, crops: biome.living.crops }), movers, models };
+  // Before the ground map is painted: the giant bicycle is drawn into it.
+  const whimsy = buildWhimsy(ctx, budgets.whimsy);
+  const groundMap = paintGroundMap({ fields, grid, box, overlays: whimsy.overlays, crops: biome.living.crops });
+  return { groundMap, movers: [...movers, ...whimsy.movers], models: { ...models, ...whimsy.models } };
 }

@@ -37,7 +37,7 @@ const FLOWER_COLORS = Object.freeze([
 
 export const temperateLiving = Object.freeze({
   /** Vertex budgets on the valley map, the levers if Living is too heavy. */
-  budgets: Object.freeze({ woods: 400_000, hedges: 400_000, props: 200_000, orchards: 80_000, fences: 60_000, coast: 80_000 }),
+  budgets: Object.freeze({ woods: 400_000, hedges: 400_000, props: 200_000, orchards: 80_000, fences: 60_000, coast: 80_000, whimsy: 120_000 }),
   flora: Object.freeze({ tuft: plantLivingTuft, flower: plantLivingFlower }),
   hedge: Object.freeze([
     [0.24, 0.4, 0.18],

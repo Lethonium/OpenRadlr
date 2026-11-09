@@ -752,7 +752,10 @@ export class View3D {
       const { position, yaw, pose } = moverPose(mover, this.reducedMotion ? 0 : timeS);
       const matrix = mover.scale === 1 ? placement(position, yaw) : multiply(placement(position, yaw), scaling(mover.scale));
       const handle = this.moverModels[mover.model][pose];
-      if (mover.bright) this.renderer.drawBright(handle, matrix, 0.9);
+      if (mover.bright) {
+        // A light that only shows once the day fades.
+        if (light.key !== "day") this.renderer.drawBright(handle, matrix, light.key === "dusk" ? 0.95 : 0.45);
+      }
       else this.renderer.draw(handle, matrix, mover.tint ?? undefined);
     }
     for (const part of visible) {

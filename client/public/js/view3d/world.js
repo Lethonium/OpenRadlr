@@ -982,7 +982,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const long = route.length > LONG_ROUTE_M;
   const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
-  const plan = living && terrain.island ? planLiving({ terrain, biome, network, box: islandBox(terrain.island), zonesOf, ordered, water: ground.water, seed, junctions: junctionClearings(network) }) : null;
+  const plan = living && terrain.island ? planLiving({ terrain, biome, network, box: islandBox(terrain.island), zonesOf, ordered, water: ground.water, seed, junctions: junctionClearings(network), ponds: rivers.flatMap((river) => river.ponds) }) : null;
   if (plan) chunks.life = new ChunkedMesh();
 
   // Nodes where a network's roads meet, for the junction pads.

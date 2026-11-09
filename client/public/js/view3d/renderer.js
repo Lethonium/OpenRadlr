@@ -143,7 +143,7 @@ void main() {
   vec4 far = u_inverseViewProjection * vec4(v_ndc, 1.0, 1.0);
   vec3 direction = normalize(far.xyz / far.w - u_cameraPosition);
   float height = clamp(direction.y, -0.1, 1.0);
-  vec3 sky = mix(u_horizonColor, u_zenithColor, pow(max(height, 0.0), 0.55));
+  vec3 sky = mix(u_horizonColor, u_zenithColor, pow(max(height, 0.0), 0.8));
   float sunAmount = max(dot(direction, u_sunDirection), 0.0);
   sky += u_sunColor * (pow(sunAmount, 900.0) * 1.4 + pow(sunAmount, 12.0) * 0.18);
   outColor = vec4(sky, 1.0);

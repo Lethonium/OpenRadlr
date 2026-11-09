@@ -258,13 +258,14 @@ function addVillagers(ctx, movers) {
 }
 
 function addAnimals(ctx, movers) {
-  const { terrain, keepClear, random } = ctx;
+  const { terrain, landClear, random } = ctx;
   for (const animal of ctx.animals) {
     const reach = 3 + random() * 4;
     const turn = random() * TWO_PI;
     const x1 = animal.x + Math.cos(turn) * reach;
     const z1 = animal.z + Math.sin(turn) * reach;
-    if (keepClear(x1, z1, 2) || keepClear(animal.x, animal.z, 2)) continue;
+    // Their own field is occupied by the herd, so only roads and rivers keep them back.
+    if (landClear(x1, z1, 2) || landClear(animal.x, animal.z, 2)) continue;
     const points = [[animal.x, animal.y, animal.z], [x1, terrain.height(x1, z1) - 0.05, z1]];
     movers.push({ kind: "animal", model: animal.kind, path: { ...pingPath(points), pause: 0.6 }, speed: 0.5, phase: random() * 200, scale: 1, tint: null });
   }

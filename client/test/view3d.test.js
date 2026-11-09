@@ -501,6 +501,20 @@ test("movers are drawn within the frame cap", () => {
   assert.equal(moverDraws(renderer, view).length, 150);
 });
 
+test("the lighthouse beam only shows once the light fades", () => {
+  const renderer = new StubRenderer();
+  const beam = { ...circling("beam", 100), bright: true };
+  const bright = [];
+  renderer.drawBright = (handle) => bright.push(handle);
+  const view = livingView(renderer, moverWorld([beam]));
+  view.setTimeMode("day");
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(!view.moverModels.bird.some((h) => bright.includes(h)), "not by day");
+  view.setTimeMode("dusk");
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.ok(view.moverModels.bird.some((h) => bright.includes(h)), "at dusk");
+});
+
 test("mover models are freed on dispose", () => {
   const renderer = new StubRenderer();
   const freed = [];

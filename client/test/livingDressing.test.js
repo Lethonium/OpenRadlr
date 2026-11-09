@@ -8,6 +8,8 @@ import { temperate } from "../public/js/view3d/biomes/temperate.js";
 import { buildFields, groundGrid } from "../public/js/view3d/living/fields.js";
 import { temperateLiving } from "../public/js/view3d/living/temperate.js";
 import { buildCoast, coastSpots, planCoast } from "../public/js/view3d/living/coast.js";
+import { buildWhimsy, pickBicycleParcel, sceneCount } from "../public/js/view3d/living/whimsy.js";
+import { moverPose } from "../public/js/view3d/living/movers.js";
 import { buildFences, buildHedges, buildOrchards, buildProps, buildWoods, treeBlocked } from "../public/js/view3d/living/dressing.js";
 
 /** Remembers the larger primitives a builder asked for. */
@@ -209,6 +211,100 @@ test("the coast stops at its limit", () => {
   const added = buildCoast(ctx, 3000);
   assert.ok(added > 0 && added <= 3000, `${added}`);
   assert.equal(added, ctx.mesh.vertexCount);
+});
+
+function whimsyContext({ ponds = [], keepClear, options } = {}) {
+  const ctx = context({ options, keepClear: keepClear ?? ((x, z, r = 0) => Math.abs(z) < 7 + r) });
+  ctx.ordered = [ctx.terrain.route];
+  ctx.zonesOf = new Map([[ctx.terrain.route, { villages: [] }]]);
+  ctx.ponds = ponds;
+  return ctx;
+}
+
+test("the giant bicycle sits on a flat parcel beside a road", () => {
+  const { fields, terrain } = whimsyContext();
+  const parcel = pickBicycleParcel(fields, terrain, 7);
+  assert.ok(parcel, "a parcel is found");
+  const road = Math.abs(parcel.center[1]);
+  assert.ok(road >= 30 && road <= 250, `road ${road}`);
+  const heights = [-1, 0, 1].flatMap((a) => [-1, 0, 1].map((b) => terrain.height(parcel.center[0] + (a * parcel.width) / 2.2, parcel.center[1] + (b * parcel.depth) / 2.2)));
+  assert.ok(Math.max(...heights) - Math.min(...heights) <= 4);
+});
+
+test("the bicycle paints only inside its parcel", () => {
+  const ctx = whimsyContext();
+  const { overlays } = buildWhimsy(ctx, NO_LIMIT);
+  const [bicycle] = overlays;
+  assert.ok(bicycle, "an overlay is produced");
+  const parcel = pickBicycleParcel(ctx.fields, ctx.terrain, ctx.seed);
+  let painted = 0;
+  for (let x = bicycle.x0; x <= bicycle.x1; x += 4) {
+    for (let z = bicycle.z0; z <= bicycle.z1; z += 4) {
+      const colour = bicycle.paint(x, z);
+      if (!colour) continue;
+      painted += 1;
+      assert.equal(ctx.fields.parcelAt(x, z)?.id, parcel.id, `paint outside at ${x}, ${z}`);
+    }
+  }
+  assert.ok(painted > 20, `${painted} points painted`);
+});
+
+test("the lighthouse stands on a headland, its beam turns", () => {
+  const ctx = whimsyContext();
+  const { movers } = buildWhimsy(ctx, NO_LIMIT);
+  const beam = movers.find((m) => m.kind === "beam");
+  assert.ok(beam, "a beam");
+  const [x, z] = beam.path.center;
+  assert.ok(ctx.terrain.height(x, z) < 15, `on the shore, height ${ctx.terrain.height(x, z)}`);
+  assert.notEqual(moverPose(beam, 0).yaw, moverPose(beam, 3).yaw);
+});
+
+test("the penguin stays on the beach", () => {
+  const ctx = whimsyContext();
+  const { movers } = buildWhimsy(ctx, NO_LIMIT);
+  const penguin = movers.find((m) => m.kind === "penguin");
+  assert.ok(penguin, "a penguin");
+  for (let t = 0; t < 600; t += 5) {
+    const { position: [x, , z] } = moverPose(penguin, t);
+    assert.ok(["sand", "dunes", "wetSand"].includes(ctx.fields.landAt(x, z)), `${ctx.fields.landAt(x, z)} at ${t}`);
+  }
+});
+
+test("the sheep tower and every scene keep clear of the road", () => {
+  const ctx = whimsyContext();
+  buildWhimsy(ctx, NO_LIMIT);
+  const { data } = ctx.mesh.positions;
+  assert.ok(ctx.mesh.positions.length > 0, "something was built");
+  for (let i = 2; i < ctx.mesh.positions.length; i += 3) assert.ok(Math.abs(data[i]) > 3, `vertex at z ${data[i]}`);
+});
+
+test("about one scene every few kilometres, eight on the valley", () => {
+  assert.equal(sceneCount(1200), 1);
+  assert.equal(sceneCount(15000), 3);
+  assert.equal(sceneCount(110_000), 8);
+});
+
+test("a cow stands in the pond when there is one", () => {
+  const withPond = whimsyContext({ ponds: [{ x: 300, z: 200, surface: 30, radius: 12 }] });
+  const without = whimsyContext();
+  assert.ok(buildWhimsy(withPond, NO_LIMIT).placed.includes("cowInPond"));
+  assert.ok(!buildWhimsy(without, NO_LIMIT).placed.includes("cowInPond"), "skipped without a pond");
+});
+
+test("whimsy stops at its limit", () => {
+  const ctx = whimsyContext();
+  buildWhimsy(ctx, 3000);
+  assert.ok(ctx.mesh.vertexCount <= 3000, `${ctx.mesh.vertexCount}`);
+});
+
+test("the scarecrow waves", () => {
+  const ctx = whimsyContext();
+  const { movers, models } = buildWhimsy(ctx, NO_LIMIT);
+  const scarecrow = movers.find((m) => m.kind === "scarecrow");
+  assert.ok(scarecrow, "a scarecrow");
+  assert.equal(models[scarecrow.model].length, 2);
+  const poses = new Set(Array.from({ length: 20 }, (_, i) => moverPose(scarecrow, i * 0.13).pose));
+  assert.equal(poses.size, 2, "both arm poses show");
 });
 
 test("the living tuft faces up, so it isn't black", () => {

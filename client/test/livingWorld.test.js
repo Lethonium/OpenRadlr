@@ -72,6 +72,16 @@ test("a huge island falls back", () => {
   assert.equal(livingEligible({ biome: temperate, network: {}, box: { x0: 0, z0: 0, x1: 20000, z1: 20000 } }), false);
 });
 
+test("mover models stay within their share of the budget", () => {
+  const modelVertices = Object.values(living.living.models).flat().reduce((sum, mesh) => sum + mesh.vertexCount, 0);
+  assert.ok(modelVertices <= 250_000, `${modelVertices} vertices`);
+});
+
+test("the giant bicycle, the penguin and the lighthouse made it onto the island", () => {
+  const kinds = new Set(living.living.movers.map((m) => m.kind));
+  for (const kind of ["beam", "penguin", "balloon", "boat", "tractor", "walker", "animal", "bird", "gull", "scarecrow"]) assert.ok(kinds.has(kind), kind);
+});
+
 test("the build stays within budget", (t) => {
   const added = vertices(living) - vertices(plain);
   t.diagnostic(`added ${added} vertices; plain ${Math.round(plainMs)} ms, Living ${Math.round(livingMs)} ms (extra ${Math.round(livingMs - plainMs)} ms)`);
