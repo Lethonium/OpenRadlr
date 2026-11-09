@@ -1131,5 +1131,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     rotors,
     spectators,
     spectatorMeshes,
+    living: null,
   };
 }

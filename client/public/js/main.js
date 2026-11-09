@@ -90,6 +90,7 @@ import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, sta
 import { drawWorkout } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
+import { LIVING_KEY, fromViewChoice, resolveLiving, viewChoice } from "./view3d/living/setting.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
@@ -200,6 +201,24 @@ function setBiome(id) {
   else app.menu?.biomeChanged();
 }
 
+/** What the Living default looks at, for riders who haven't chosen. */
+function livingDevice() {
+  return {
+    deviceMemory: navigator.deviceMemory,
+    coarsePointer: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches),
+    narrow: Boolean(globalThis.matchMedia?.(MENU_NARROW_QUERY).matches),
+  };
+}
+
+/** Switches the Living look: saved for next time, the world rebuilt as for a season change. */
+function setLiving(on) {
+  app.living = on;
+  writeSetting(LIVING_KEY, on ? "on" : "off");
+  if (app.studio) return;
+  if (app.view3d) buildRideWorld();
+  else app.menu?.livingChanged();
+}
+
 /** The newest ride-world build; a later request makes an earlier one's result stale. */
 let rideWorldBuild = 0;
 
@@ -212,15 +231,16 @@ function buildRideWorld() {
   const ride = app.ride;
   const routeFile = app.routeFile;
   const biome = app.biome;
+  const living = app.living;
   if (!ride || !routeFile) return;
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, living }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
-      // The season changed while this was building: build the picked one instead.
-      if (app.biome !== biome) return buildRideWorld();
+      // The season or look changed while this was building: build the picked one instead.
+      if (app.biome !== biome || app.living !== living) return buildRideWorld();
       // Drop the old world's buffers before the new one is uploaded: two full
       // maps at once are too much for a low-end GPU.
       app.view3d?.dispose();
@@ -384,6 +404,8 @@ const app = {
   routeId: readSetting(ROUTE_KEY),
   /** The biome this rider sees; every client may pick its own (cosmetic only). */
   biome: biomeSetting(),
+  /** Whether this rider's 3D is the Living look (cosmetic only). */
+  living: resolveLiving(readSetting(LIVING_KEY), livingDevice()),
   /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
   activity: null,
   /** The route the Ride tab goes back to. */
@@ -803,6 +825,7 @@ function initMenuStage() {
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
     biome: () => app.biome,
+    living: () => app.living,
     createView: use3d
       ? (route, scene) => {
           const view = new View3D(canvas, $("labels3d"), route, scene);
@@ -3110,14 +3133,14 @@ function initViewPopover() {
     selected: () => ({
       camera: app.studio ? app.studioView?.cameraMode : app.view3d?.camera.mode,
       layout: app.layoutChoice,
-      mode: app.viewMode,
+      mode: viewChoice(app.viewMode, app.living),
       time: $("time-mode").value,
       has3d: Boolean(app.view3d),
     }),
     onPick: (kind, id) => {
       if (kind === "camera") setCamera(id);
       else if (kind === "layout") setLayoutChoice(id);
-      else if (kind === "mode") setViewMode(id);
+      else if (kind === "mode") setViewChoice(id);
       else if (kind === "time") setTimeMode(id);
     },
   });
@@ -3812,6 +3835,13 @@ function setViewMode(mode, { remember = true } = {}) {
   $("scene-controls").hidden = !use3d;
   if (remember) writeSetting(VIEW_KEY, app.viewMode);
   app.viewPopover?.refresh();
+}
+
+/** Picks 2D, 3D or Living; 2D leaves the Living setting as it is. */
+function setViewChoice(id) {
+  const { mode, living } = fromViewChoice(id);
+  if (living !== null && living !== app.living) setLiving(living);
+  setViewMode(mode);
 }
 
 function myRider(riders) {
