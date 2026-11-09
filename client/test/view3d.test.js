@@ -669,3 +669,49 @@ test("statue targets follow the row's yaw", () => {
   assert.equal(first.yaw, Math.PI / 2);
   closeVec([first.position[0], first.position[2]], transformPoint(placement([0, 0, 0], Math.PI / 2), [-1.5, 0, 0]).filter((_, i) => i !== 1).slice(0, 2));
 });
+
+// --- a workout rider's side (yoga) ----------------------------------------------
+const lungeRider = { ...workoutRider, exercise: "low_lunge", exerciseSince: 10 };
+
+/** The thigh and pelvis models drawn for `rider` at `timeS`, on a view that has already drawn `before`. */
+function drawnThighs(view, renderer, rider, timeS) {
+  renderer.draws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS, colors });
+  const thigh = view.thighs[riderLook(7).variant];
+  const pelvis = view.bodyParts[riderLook(7).variant].get("pelvis");
+  const body = invert(renderer.draws.find((d) => d.handle === pelvis).model);
+  // [left, right] points along each thigh in the rider's frame (pelvis-relative, which the mirror leaves alone).
+  return renderer.draws.filter((d) => d.handle === thigh).map((d) => transformPoint(multiply(body, d.model), [0, -0.3, 0]).slice(0, 3));
+}
+
+function sideView() {
+  const gym = testGym();
+  const { view, renderer } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true });
+  return { view, renderer };
+}
+
+test("a rider on their left side is mirrored", () => {
+  const right = sideView();
+  const left = sideView();
+  const [rightL, rightR] = drawnThighs(right.view, right.renderer, { ...lungeRider, side: "right" }, 12);
+  const [leftL, leftR] = drawnThighs(left.view, left.renderer, { ...lungeRider, side: "left" }, 12);
+  closeVec(leftL, [-rightR[0], rightR[1], rightR[2]], 1e-4);
+  closeVec(leftR, [-rightL[0], rightL[1], rightL[2]], 1e-4);
+  assert.ok(Math.abs(rightL[2] - rightR[2]) > 0.05, "the lunge puts one thigh ahead of the other");
+});
+
+test("a side change keeps the clip time", () => {
+  // No exerciseSince: the view's own first sighting of the clip is its start, which a side change must not reset.
+  const rider = { ...lungeRider, exerciseSince: undefined };
+  const { view, renderer } = sideView();
+  drawnThighs(view, renderer, { ...rider, side: "right" }, 10);
+  drawnThighs(view, renderer, { ...rider, side: "left" }, 20.1); // the switch: a fade starts, the clip plays on
+  const faded = drawnThighs(view, renderer, { ...rider, side: "left" }, 20.5);
+  // A rider who was on the left all along, 10.5 s into the same clip.
+  const steady = sideView();
+  drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 10);
+  const reference = drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 20.5);
+  closeVec(faded[0], reference[0], 1e-4);
+  closeVec(faded[1], reference[1], 1e-4);
+});

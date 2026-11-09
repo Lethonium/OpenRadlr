@@ -4,7 +4,7 @@
  * needs no protocol changes.
  */
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
-import { clipFor, settle } from "./clips.js";
+import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
 import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
 import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
@@ -491,15 +491,23 @@ export class View3D {
   #workoutParts(rider, { gym, spot, slot }, timeS) {
     const look = riderLook(rider.id);
     const exercise = rider.exercise ?? null;
+    const side = rider.side === "left" ? "left" : "right";
     let state = this.#clips.get(rider.id);
     if (!state || state.exercise !== exercise) {
-      state = { exercise, from: state?.last ?? null, changedAt: timeS, last: null };
+      state = { exercise, side, from: state?.last ?? null, changedAt: timeS, fadeAt: timeS, last: null };
       this.#clips.set(rider.id, state);
+    } else if (state.side !== side) {
+      // A side change fades like a clip change, but the clip itself plays on: `changedAt` (its time fallback) stays.
+      state.side = side;
+      state.from = state.last;
+      state.fadeAt = timeS;
     }
     const clip = clipFor(exercise);
     const since = Number.isFinite(rider.exerciseSince) ? rider.exerciseSince : state.changedAt;
-    const current = poseAt(clip, timeS - since);
-    const w = Math.min(1, (timeS - state.changedAt) / CLIP_FADE_S);
+    const flat = poseAt(clip, timeS - since);
+    const current = side === "left" ? mirrorPose(flat) : flat;
+    const plant = side === "left" ? mirrorPlant(clip.plant) : clip.plant;
+    const w = Math.min(1, (timeS - state.fadeAt) / CLIP_FADE_S);
     const pose = state.from && w < 1 ? blend(state.from, current, w) : current;
     state.last = pose;
 
@@ -510,7 +518,7 @@ export class View3D {
     const meshOf = rig
       ? (name) => parts.get(name)
       : (name) => parts.get(name) ?? (name.startsWith("thigh") ? this.thighs[look.variant] : name.startsWith("shin") ? this.shins[look.variant] : this.shoe);
-    const torso = bodyTransforms(settle(pose, clip.plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
+    const torso = bodyTransforms(settle(pose, plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
 
     // Bikes side by side at the rack, in the order of the mat's spots: right, left, right…
     const across = [Math.cos(gym.yaw), 0, -Math.sin(gym.yaw)];

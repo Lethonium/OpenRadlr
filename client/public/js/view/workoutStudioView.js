@@ -4,6 +4,7 @@
  */
 import { formatDuration } from "../util/format.js";
 import { t } from "../i18n/i18n.js";
+import { EXERCISES } from "../workout/plan.js";
 
 /** The planned exercise time (rests excluded): what a workout's active time is measured against. */
 const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (block.kind === "exercise" ? block.seconds : 0), 0);
@@ -28,6 +29,7 @@ export function workoutHudText(position, { state, heartRate }) {
     exercise: position.block?.label ?? "",
     paused: state === "paused" ? t("workout.hud.paused") : "",
     time: formatDuration(Math.ceil(position.blockRemainingS)),
+    cue: position.block?.kind !== "exercise" ? "" : position.side === "left" ? t("workout.switchSides") : (EXERCISES[position.block.exercise]?.cue ?? ""),
     next: next ? t("workout.hud.next", { label: next.label, s: next.seconds }) : t("workout.hud.last"),
     block: t("workout.hud.block", { n: Math.min(position.index + 1, position.count), count: position.count }),
     // Elapsed rounds down and remaining up, like the ring: the first frame reads 0:00 and the full length.

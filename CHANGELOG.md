@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The menu's Overview shows the ride so far: power over the last 10 minutes, weighted power, load and best efforts, with a live power, speed and grade strip on top (#19).
 - A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
 - Workouts at their own café gym with statues of their figures, and workout cards with a block strip (#26)
+- Yoga classes at the Beach Café: Sun Salutation A, a post-ride cool-down and a hip and hamstring flow; poses that switch sides halfway (#26)
 
 ### Changed
 

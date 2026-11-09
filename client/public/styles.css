@@ -5157,6 +5157,14 @@ body.working-out #paddles {
   font-weight: 600;
 }
 
+.workout-cue {
+  color: var(--hud-muted);
+  font-size: 0.85em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
 .workout-stats {
   margin-bottom: auto;
   display: flex;
