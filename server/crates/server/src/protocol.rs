@@ -125,6 +125,9 @@ pub enum ClientMessage {
     Workout {
         #[serde(default)]
         exercise: Option<String>,
+        /// Which side a sided pose is held on (`right` or `left`); the session checks it.
+        #[serde(default)]
+        side: Option<String>,
     },
     /// Answer to an `afk_warning`: the rider is still there.
     Stay,
@@ -168,11 +171,38 @@ pub enum Exercise {
     JumpingJacks,
     Plank,
     Burpees,
+    SunSalutation,
+    ForwardFold,
+    DownwardDog,
+    Cobra,
+    ChildPose,
+    LowLunge,
+    Pigeon,
 }
 
 impl Exercise {
+    /// Whether the pose is held on one side, then the other.
+    pub fn sided(self) -> bool {
+        matches!(self, Exercise::LowLunge | Exercise::Pigeon)
+    }
+
     /// The exercise with this wire id.
     pub fn from_id(id: &str) -> Option<Exercise> {
+        serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
+    }
+}
+
+/// Which side of a sided pose a rider holds; the view mirrors the left one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    Right,
+    Left,
+}
+
+impl Side {
+    /// The side with this wire id.
+    pub fn from_id(id: &str) -> Option<Side> {
         serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
     }
 }
@@ -182,6 +212,7 @@ impl Exercise {
 pub struct RiderTags {
     pub device: DeviceKind,
     pub exercise: Option<Exercise>,
+    pub side: Option<Side>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -449,6 +480,9 @@ pub struct RiderState {
     /// The app a rider from another app rides with (OpenBikeNet); left out for our own.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<String>,
+    /// The side of a sided pose; left out for any other.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<Side>,
 }
 
 impl RiderState {
@@ -471,6 +505,7 @@ impl RiderState {
             parked: false,
             exercise: None,
             app: Some(r.app.clone()),
+            side: None,
         }
     }
 }
@@ -831,6 +866,7 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         parked: r.parked,
         exercise: tags.exercise,
         app: None,
+        side: tags.side,
     }
 }
 
@@ -1202,6 +1238,7 @@ mod tests {
             parked: false,
             exercise: None,
             app: None,
+            side: None,
         }
     }
 
@@ -1214,7 +1251,21 @@ mod tests {
                 ..
             }
         ));
-        let ids = ["squats", "situps", "pushups", "jumping_jacks", "plank", "burpees"];
+        let ids = [
+            "squats",
+            "situps",
+            "pushups",
+            "jumping_jacks",
+            "plank",
+            "burpees",
+            "sun_salutation",
+            "forward_fold",
+            "downward_dog",
+            "cobra",
+            "child_pose",
+            "low_lunge",
+            "pigeon",
+        ];
         for id in ids {
             let exercise = Exercise::from_id(id).unwrap_or_else(|| panic!("{id} parses"));
             assert_eq!(serde_json::to_string(&exercise).unwrap(), format!("\"{id}\""));

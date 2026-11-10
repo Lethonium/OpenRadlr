@@ -10,7 +10,7 @@ use crate::obn::outbox::LocalRider;
 use crate::obn::remote::{RemoteEvent, RemoteRider, Remotes};
 use crate::protocol::{
     event_info, event_message, event_notice_message, event_state, state_message, DeviceKind, EventInfoWire, EventState,
-    Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage,
+    Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage, Side,
 };
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
@@ -184,6 +184,8 @@ struct Client {
     device: DeviceKind,
     /// What a workout rider does now (#77).
     exercise: Option<Exercise>,
+    /// The side of a sided pose (#77).
+    side: Option<Side>,
     /// The part of the rider's odometer already added to the community totals.
     counted_m: f64,
 }
@@ -528,6 +530,7 @@ impl GameCore {
                 last_grade: None,
                 device: DeviceKind::Trainer,
                 exercise: None,
+                side: None,
                 counted_m: self.world.rider(rider_id).map_or(0.0, |r| r.odometer),
             },
         );
@@ -607,6 +610,7 @@ impl GameCore {
             .map_or_else(RiderTags::default, |client| RiderTags {
                 device: client.device,
                 exercise: client.exercise,
+                side: client.side,
             })
     }
 
@@ -635,7 +639,7 @@ impl GameCore {
     }
 
     /// The exercise a workout rider does now; others get `not_in_workout`.
-    pub fn workout(&mut self, rider_id: RiderId, exercise: Option<Exercise>) {
+    pub fn workout(&mut self, rider_id: RiderId, exercise: Option<Exercise>, side: Option<Side>) {
         if !self.clients.contains_key(&rider_id) {
             return;
         }
@@ -645,6 +649,7 @@ impl GameCore {
         }
         if let Some(client) = self.clients.get_mut(&rider_id) {
             client.exercise = exercise;
+            client.side = side;
         }
     }
 
@@ -1074,8 +1079,8 @@ impl Game for GameCore {
         GameCore::telemetry(self, rider_id, power, cadence);
     }
 
-    fn workout(&mut self, rider_id: RiderId, exercise: Option<Exercise>) {
-        GameCore::workout(self, rider_id, exercise);
+    fn workout(&mut self, rider_id: RiderId, exercise: Option<Exercise>, side: Option<Side>) {
+        GameCore::workout(self, rider_id, exercise, side);
     }
 
     fn input(&mut self, rider_id: RiderId, action: InputAction) {
@@ -1142,7 +1147,7 @@ impl Game for GameCore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Exercise, GameEvent, RaceState, RouteRiders};
+    use crate::protocol::{Exercise, GameEvent, RaceState, RouteRiders, Side};
     use openradlr_sim::rng::SplitMix64;
     use openradlr_sim::route::{Point, Route, RouteSpec};
     use openradlr_sim::SimConfig;
@@ -2506,7 +2511,7 @@ mod tests {
         let mut game = game(0, 10);
         let (anna, sink) = join(&mut game, "Anna");
         sink.take();
-        game.workout(anna, Some(Exercise::Squats));
+        game.workout(anna, Some(Exercise::Squats), None);
         assert_eq!(error_codes(&sink.take()), vec!["not_in_workout"]);
     }
 
@@ -2524,12 +2529,25 @@ mod tests {
         let mut game = game(0, 10);
         let (anna, _) = join_workout(&mut game, "Anna");
         let (_, ben_sink) = join(&mut game, "Ben");
-        game.workout(anna, Some(Exercise::Burpees));
+        game.workout(anna, Some(Exercise::Burpees), None);
         broadcast(&mut game);
         assert!(exercise_json(&ben_sink).contains(r#""exercise":"burpees""#));
-        game.workout(anna, None);
+        game.workout(anna, None, None);
         broadcast(&mut game);
         assert!(!exercise_json(&ben_sink).contains(r#""exercise""#));
+    }
+
+    #[test]
+    fn the_side_shows_in_riders() {
+        let mut game = game(0, 10);
+        let (anna, _) = join_workout(&mut game, "Anna");
+        let (_, ben_sink) = join(&mut game, "Ben");
+        game.workout(anna, Some(Exercise::Pigeon), Some(Side::Left));
+        broadcast(&mut game);
+        assert!(exercise_json(&ben_sink).contains(r#""side":"left""#));
+        game.workout(anna, Some(Exercise::Cobra), None);
+        broadcast(&mut game);
+        assert!(!exercise_json(&ben_sink).contains(r#""side""#));
     }
 
     #[test]
@@ -2552,7 +2570,7 @@ mod tests {
         let mut game = game_with_grace(60.0);
         let (anna, sink) = join_workout(&mut game, "Anna");
         let token = token_of(&sink.take());
-        game.workout(anna, Some(Exercise::Plank));
+        game.workout(anna, Some(Exercise::Plank), None);
         game.detach(anna);
         ticks_of(&mut game, 5);
         let fresh = RecordingSink::default();
@@ -2608,7 +2626,7 @@ mod tests {
     fn workout_riders_are_not_in_the_frame() {
         let (mut game, mut frames) = obn_game(0, 4);
         let (anna, _) = join_workout(&mut game, "Anna");
-        game.workout(anna, Some(Exercise::Plank));
+        game.workout(anna, Some(Exercise::Plank), None);
         assert!(game.world().rider(anna).unwrap().workout);
         for _ in 0..game.settings().tick_hz {
             game.tick();

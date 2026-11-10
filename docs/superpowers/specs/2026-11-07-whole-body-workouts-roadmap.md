@@ -18,9 +18,9 @@ sequence of figures (poses), and the avatar shows each one.
 
 | # | Sub-project | State |
 |---|---|---|
-| 0 | UI fixes for the shipped workout | in review (`fix/workout-ui`) |
-| 1 | Yoga | after 0 |
-| 2 | Cycling (ERG) library | after 1 |
+| 0 | UI fixes for the shipped workout | done, #42 |
+| 1 | Yoga | in review, #43 |
+| 2 | Cycling (ERG) library | in progress (`feat/erg-library`), spec `2026-11-08-erg-library-design.md` |
 | 3 | Bodyweight exercises and research-based presets | after 2 |
 | — | Themed gyms and statues | done, #35, spec `2026-11-05-workout-venues-design.md` |
 

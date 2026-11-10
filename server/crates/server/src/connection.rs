@@ -27,7 +27,11 @@ fn to_command(rider_id: RiderId, command: PlayerCommand) -> Command {
         PlayerCommand::Input(action) => Command::Input { rider_id, action },
         PlayerCommand::StartRace { laps } => Command::StartRace { rider_id, laps },
         PlayerCommand::JoinRace => Command::JoinRace { rider_id },
-        PlayerCommand::Workout { exercise } => Command::Workout { rider_id, exercise },
+        PlayerCommand::Workout { exercise, side } => Command::Workout {
+            rider_id,
+            exercise,
+            side,
+        },
         PlayerCommand::LeaveRace => Command::LeaveRace { rider_id },
         PlayerCommand::JoinEvent { event_id } => Command::JoinEvent { rider_id, event_id },
         PlayerCommand::LeaveEvent => Command::LeaveEvent { rider_id },

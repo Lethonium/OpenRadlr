@@ -58,7 +58,7 @@ Workout riders are exempt.
 | `leave_vehicle` | – | get off; you ride on solo |
 | `pause` | – | pull over for a pause: the rider brakes to a stop (even downhill), ignores power and moves onto the shoulder; `riders[].parked` is then true. Refused with `pause_rejected` in a race, an event or a vehicle; the spin studio ignores it |
 | `resume` | – | ride on after a pause |
-| `workout` | `exercise`: `squats` \| `situps` \| `pushups` \| `jumping_jacks` \| `plank` \| `burpees` \| `null` | the exercise being done now, or `null` for rest; only for a `workout` rider (others get `not_in_workout`, an unknown id `unknown_exercise`). A workout rider gets `in_workout` for `input`, `start_race`, `join_race`, `join_event`, `turn`, `create_vehicle`, `board_vehicle`, `pause` and `resume`; `telemetry` is ignored |
+| `workout` | `exercise`: `squats` \| `situps` \| `pushups` \| `jumping_jacks` \| `plank` \| `burpees` \| `sun_salutation` \| `forward_fold` \| `downward_dog` \| `cobra` \| `child_pose` \| `low_lunge` \| `pigeon` \| `null`, `side`?: `right` \| `left` | the exercise being done now, or `null` for rest; `side` applies to the sided poses `low_lunge` and `pigeon` only (default `right`; dropped for any other exercise or rest; an unknown one gets `unknown_side`); only for a `workout` rider (others get `not_in_workout`, an unknown id `unknown_exercise`). A workout rider gets `in_workout` for `input`, `start_race`, `join_race`, `join_event`, `turn`, `create_vehicle`, `board_vehicle`, `pause` and `resume`; `telemetry` is ignored |
 | `chat` | `text` (≤ 200 chars) | at most 5 in a row, then one every 2 s |
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
 | `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
@@ -89,7 +89,7 @@ entered it, `next` the road they take at the next junction: their pick, else
 their route's, straight on off every route),
 `lap` (in a race, else `null`), `lane` (continuous, 0 = leftmost in riding
 direction), `speed`, `power`, and `device` (`sim`, `paddle` or `workout`; left out for
-trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest) and `app` (the id of the other app, for example `incyclist`, on a rider shared through OpenBikeNet; left out for riders of this server). Such a remote rider has `is_bot: false`, an `id` from `0xF000_0000` upwards (never reused while the server runs), no physics, no drafting and no `vehicle`; clients show the name as text and mark the app. They appear only on a shared route (see ADR 0020). Riders of different routes draft each other
+trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest) and `side` (`right` or `left`, only for a sided pose, so the view can mirror the left side) and `app` (the id of the other app, for example `incyclist`, on a rider shared through OpenBikeNet; left out for riders of this server). Such a remote rider has `is_bot: false`, an `id` from `0xF000_0000` upwards (never reused while the server runs), no physics, no drafting and no `vehicle`; clients show the name as text and mark the app. They appear only on a shared route (see ADR 0020). Riders of different routes draft each other
 where they ride the same road the same way.
 
 Studio `riders[]` entries: `id`, `name`, `is_bot`, `seat` (0–7 front row,
@@ -166,7 +166,7 @@ server turned the simulated trainer or phone paddles off), `chat_rate_limited`,
 `unknown_vehicle` (no vehicle has this code), `vehicle_full`, `vehicle_elsewhere` (the code
 belongs to another world; `message` is `route:<id>` to rejoin with), `not_captain`, `in_event` (seated riders can't join events or races and the other way round),
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
-`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`,
+`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`,
 `afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
 
 ### Reconnecting
@@ -240,7 +240,7 @@ Shared vehicles (#55) added `create_vehicle`, `board_vehicle`, `leave_vehicle`,
 `vehicle_code` in `join`, `state.vehicle`, `riders[].vehicle` and `cadence`, the
 three vehicle game events and the vehicle error codes within version 2.
 Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` within version 2.
-Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2.
+Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.

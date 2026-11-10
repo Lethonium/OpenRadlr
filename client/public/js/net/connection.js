@@ -112,8 +112,8 @@ export class GameConnection extends Emitter {
   }
 
   /** Tells the server which café workout exercise is under way (`null`: none). */
-  workout(exercise) {
-    this.#send(ClientMessages.workout(exercise));
+  workout(exercise, side = null) {
+    this.#send(ClientMessages.workout(exercise, side));
   }
 
   /** Parks the rider for a pause (#89). */

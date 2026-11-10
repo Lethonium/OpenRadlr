@@ -87,7 +87,7 @@ import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
-import { drawWorkout } from "./view/workoutView.js";
+import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { LIVING_KEY, fromViewChoice, livingNoteShown, resolveLiving, viewChoice } from "./view3d/living/setting.js";
@@ -2153,7 +2153,7 @@ function startWorkout() {
   app.workoutHeartRate = null;
   app.workoutAudio = "AudioContext" in globalThis ? new AudioContext() : null;
   // The server drops a joined connection after 120 s of silence: repeat the exercise as a keepalive.
-  app.workoutKeepalive = startKeepalive({ send: (exercise) => app.connection?.workout(exercise), current: () => app.workout?.currentExercise() ?? null });
+  app.workoutKeepalive = startKeepalive({ send: (exercise, side) => app.connection?.workout(exercise, side), current: () => [app.workout?.currentExercise() ?? null, app.workout?.currentSide() ?? null] });
   app.workoutCue = createCue({
     audioContext: app.workoutAudio,
     vibrate: navigator.vibrate ? (ms) => navigator.vibrate(ms) : null,
@@ -2190,8 +2190,8 @@ function startWorkout() {
 
 /** Carries out what the workout session decided. */
 function runWorkoutActions(actions) {
-  for (const [kind, value] of actions) {
-    if (kind === "send") app.connection.workout(value);
+  for (const [kind, value, side] of actions) {
+    if (kind === "send") app.connection.workout(value, side);
     else if (kind === "cue") {
       if (app.profile.workoutCues !== false) app.workoutCue?.();
     } else if (kind === "finished") finishWorkout();
@@ -2217,7 +2217,7 @@ function workoutFrame() {
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart } : rider));
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
     app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
   }
 }
@@ -3478,6 +3478,7 @@ function initTraining({ simulated, setSimPower }) {
   const training = app.training;
   renderWorkoutOptions(0);
   $("workout-select").addEventListener("change", () => renderWorkoutDescription());
+  new ResizeObserver(renderWorkoutDescription).observe($("workout-preview"));
 
   $("mode-sim").addEventListener("click", () => training.setMode("sim"));
   $("mode-erg").addEventListener("click", () => training.setMode("erg"));
@@ -3605,6 +3606,7 @@ function renderWorkoutOptions(selected) {
 function renderWorkoutDescription() {
   const chosen = app.workouts[Number($("workout-select").value)];
   $("workout-description").textContent = chosen ? workoutDescription(chosen) : "";
+  drawWorkoutPreview($("workout-preview"), chosen);
 }
 
 function renderTraining({ simulated }) {

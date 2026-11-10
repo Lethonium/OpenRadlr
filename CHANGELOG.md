@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Living: a third view choice beside 2D and 3D that makes the island look lived in. From the drone the noise pattern is gone: road-aligned fields of wheat, rapeseed, hay and pasture, woods, moors and beaches, painted into one generated ground map. Riders pass hedges, stone walls, orchards, fences and farm props, and huts, parasols, a jetty and boats on the coast. Birds, boats, tractors, villagers, grazing animals and balloons move around (still for riders who prefer reduced motion), and a few surprises are hidden around the island: a lighthouse, a giant bicycle mown into a field, a sheep on a tower of hay, an escaped penguin. On by default on desktops and laptops, off on phones and low-memory devices; plain 3D is unchanged. Winter and very large maps show plain 3D for now. See ADR 0021 (#48).
+- Four research-backed ERG sessions (Seiler 4×8, Rønnestad 30/15, 40/20, over-unders), each naming its source, and a power-profile preview of the selected session in the workout picker. (#26)
 - A velodrome: a flat 250 m oval with no bots. With `OPENRADLR_OBN_URL` set it is shared with riders of other apps (Incyclist, VeloPopuli, ...) through an OpenBikeNet server: the start menu marks it *Shared* and says what is sent (name, position, speed, power and cadence; never heart rate). Riders from other apps get their own tint, a label with their app, and a badge in the rider list. Without the variable nothing leaves the server. A switch to stop sharing power and cadence follows in #36. See ADR 0020.
 - OpenBikeControl controllers (and apps such as BikeControl that act as one) connect with *Connect controller*, next to Zwift's: shift, change lane, navigate menus, adjust power or the ERG target, change the camera and take photos. A press that sends several actions at once (e.g. shift up, harder and select) acts once: it shifts while riding, changes the ERG target in ERG, and selects in a menu. See docs/devices.md.
 - A rider who sits at 0 W for 30 minutes gets a "Still riding?" warning with Stay and Leave now, two minutes to answer. Stay gives three more reminders 10 minutes apart, then a final one with Leave now only; no answer removes the rider, so an idle rider no longer holds a seat. Pedalling resets the clock, and workouts are exempt. `OPENRADLR_AFK_TIMEOUT_S=0` turns it off. Outcomes are counted in `openradlr_afk_events_total`.
@@ -18,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The menu's Overview shows the ride so far: power over the last 10 minutes, weighted power, load and best efforts, with a live power, speed and grade strip on top (#19).
 - A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
 - Workouts at their own café gym with statues of their figures, and workout cards with a block strip (#26)
+- Yoga classes at the Beach Café: Sun Salutation A, a post-ride cool-down and a hip and hamstring flow; poses that switch sides halfway (#26)
 
 ### Changed
 

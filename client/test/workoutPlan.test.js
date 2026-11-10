@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPlan, planDuration, planPositionAt, planSummary, withGetReady } from "../public/js/workout/plan.js";
+import { EXERCISES, createPlan, planDuration, planPositionAt, planSummary, withGetReady } from "../public/js/workout/plan.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 test("a plan keeps its blocks and labels them", () => {
@@ -30,6 +30,10 @@ test("presets validate and last as long as they say", () => {
   assert.equal(minutes.tabata, 4);
   assert.ok(minutes.core >= 7 && minutes.core <= 9);
 });
+test("the yoga classes last as the spec says, without get-ready", () => {
+  const seconds = Object.fromEntries(["sun-salutation", "cool-down", "hip-flow"].map((id) => [id, planDuration(PRESETS.find((p) => p.id === id))]));
+  assert.deepEqual(seconds, { "sun-salutation": 240, "cool-down": 545, "hip-flow": 902 });
+});
 test("the summary lists the first blocks", () => {
   assert.match(planSummary(PRESETS.find((p) => p.id === "tabata")), /^Squats 20 s · Rest 10 s · Burpees 20 s/);
 });
@@ -42,4 +46,19 @@ test("a plan refuses an unknown venue", () => {
 });
 test("a plan without a venue has none", () => {
   assert.equal(createPlan({ id: "p", name: "P", blocks: [{ kind: "rest", seconds: 1 }] }).venue, null);
+});
+
+test("the yoga poses are exercises", () => {
+  for (const id of ["sun_salutation", "forward_fold", "downward_dog", "cobra", "child_pose", "low_lunge", "pigeon"]) assert.ok(Object.hasOwn(EXERCISES, id), id);
+});
+test("only the lunge and the pigeon are sided", () => {
+  assert.deepEqual(Object.keys(EXERCISES).filter((id) => EXERCISES[id].sided), ["low_lunge", "pigeon"]);
+});
+test("every exercise has a name and a cue", () => {
+  for (const [id, exercise] of Object.entries(EXERCISES)) {
+    for (const field of ["name", "cue"]) {
+      assert.match(exercise[field] ?? "", /\S/, `${id} ${field}`);
+      assert.ok(!/^workout\./.test(exercise[field]), `${id} ${field} is a raw key`);
+    }
+  }
 });

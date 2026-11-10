@@ -8,7 +8,7 @@
 export const VENUES = Object.freeze({
   "valley-cafe": Object.freeze({ category: "fullBody", material: "marble" }),
   "hill-cafe": Object.freeze({ category: "hiit", material: "bronze" }),
-  "beach-cafe": Object.freeze({ category: "core", material: "sandstone" }), // core moves to forge-hut with yoga
+  "beach-cafe": Object.freeze({ category: "yoga", material: "sandstone" }),
   "forge-hut": Object.freeze({ category: "strength", material: "granite" }),
 });
 
