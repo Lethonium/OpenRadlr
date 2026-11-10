@@ -1070,7 +1070,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     avoid,
     biome,
   });
-  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome });
+  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // The crowd's two poses are biome models like every other shape; the view
   // only alternates them (and adds the hop) while drawing.
   const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];

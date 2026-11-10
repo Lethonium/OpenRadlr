@@ -340,8 +340,8 @@ class StubRenderer {
   }
   resize() {}
   begin() {}
-  draw(handle, model) {
-    this.draws.push({ handle, model });
+  draw(handle, model, tint) {
+    this.draws.push({ handle, model, tint });
   }
   drawBright() {}
   drawCloudLayer() {}
@@ -792,4 +792,53 @@ test("past the ends of a route that isn't a loop the road keeps its direction", 
     closeVec(frame.right, [0, 0, 1]);
     closeVec([frame.forward[0], frame.forward[2]], [1, 0]);
   }
+});
+
+// --- crowds ------------------------------------------------------------------------
+
+/** A view with one spectator 12 m along the square route's first side, beside the road. */
+function crowdView(person, biome = "temperate") {
+  const { view, renderer } = gymView([], biome, null, new RecordingRenderer());
+  const base = { yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, rank: 0, flag: null };
+  view.spectators = [{ ...base, position: [112, 100, 8], ...person }];
+  return { view, renderer };
+}
+const spectatorDraws = (view, renderer) => renderer.draws.filter((d) => view.spectatorMeshes.includes(d.handle));
+
+test("a lining spectator comes out once enough riders are online", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const friends = [2, 3, 4, 5, 6].map((id) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200 }));
+  const alone = crowdView({ rank: 0.7 });
+  alone.view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(alone.view, alone.renderer).length, 0, "not out for one rider");
+  const busy = crowdView({ rank: 0.7 });
+  busy.view.render({ riders: [me, ...friends], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(busy.view, busy.renderer).length, 1, "out for six");
+});
+
+test("bots don't bring out the crowd", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const bots = [2, 3, 4, 5, 6].map((id) => ({ id, name: `B${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, is_bot: true }));
+  const { view, renderer } = crowdView({ rank: 0.7 });
+  view.render({ riders: [me, ...bots], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(view, renderer).length, 0);
+});
+
+test("a spectator with a flag waves it in its colour, beside its head", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9] });
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const flags = renderer.draws.filter((d) => d.handle === view.flagMesh);
+  assert.equal(flags.length, 1);
+  assert.deepEqual(flags[0].tint, [0.1, 0.2, 0.9]);
+  assert.ok(Math.hypot(flags[0].model[12] - 112, flags[0].model[14] - 8) < 1, "at the spectator");
+  assert.ok(flags[0].model[13] > 101.5, "held up high");
+});
+
+test("a penguin holds its flag lower, in its flipper", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9], motion: "clap" }, "winter");
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const flag = renderer.draws.find((d) => d.handle === view.flagMesh);
+  assert.ok(flag.model[13] < 101.2, `at ${flag.model[13]}`);
 });

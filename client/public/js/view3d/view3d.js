@@ -29,8 +29,9 @@ import {
   variantLook,
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
+import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { buildLemon } from "./lemonModel.js";
-import { buildRotor, buildSpectator } from "./structures.js";
+import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
@@ -326,6 +327,7 @@ export class View3D {
     this.lemons = [];
     this.spectators = world.spectators;
     this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
+    this.flagMesh = this.renderer.upload(buildFlag());
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -686,20 +688,21 @@ export class View3D {
     const rotorMatrices = this.rotors
       .filter((r) => Math.hypot(r.hub[0] - eye[0], r.hub[2] - eye[2]) < SCENE.rotorDistance)
       .map((r) => ({ hub: r.hub, model: multiply(placement(r.hub, r.yaw), rotationXAbout([0, 0, 0], r.phase + timeS * r.speed)) }));
+    // More riders online, more of the crowd out; the ones near a rider cheer it on.
+    const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
+    const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
     const crowd = this.spectators
       .filter((p) => {
         const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
-        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide;
+        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide && (p.rank ?? 0) < share;
       })
       .map((p) => {
-        // People jump with their arms up; penguins clap by alternating the two
-        // poses, with a tiny bob so the motion still reads at a distance.
-        const clap = p.motion === "clap";
-        const tick = timeS * (clap ? 7.5 : 6) + p.phase;
-        const pose = clap ? Math.sin(tick) > 0 : p.armsUp;
-        const hop = clap ? Math.abs(Math.sin(tick)) * 0.02 : pose ? Math.max(0, Math.sin(tick)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
-        const position = [p.position[0], p.position[1] + hop, p.position[2]];
-        return { ...p, pose, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
+        const { yaw, lift, pose } = cheer(p, fans, timeS);
+        const position = [p.position[0], p.position[1] + lift, p.position[2]];
+        const model = multiply(placement(position, yaw), scaling(p.scale));
+        // The flag swings about its pole in the raised hand.
+        const flagModel = p.flag ? multiply(model, placement(this.biome.people?.flagHand ?? [0.36, 1.85, -0.05], Math.sin(timeS * 2.6 + p.phase) * 0.5)) : null;
+        return { ...p, pose, model, flagModel };
       });
 
     const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
@@ -732,6 +735,7 @@ export class View3D {
       for (const p of crowd) {
         if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
           this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
+          if (p.flagModel) this.renderer.drawShadowCaster(this.flagMesh, p.flagModel);
         }
       }
       for (const { handle, model } of this.#statues.values()) {
@@ -761,7 +765,10 @@ export class View3D {
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
-    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+    for (const p of crowd) {
+      this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+      if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
+    }
     for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
     for (const part of visible) {
       if (part.ghost) continue;
@@ -905,7 +912,7 @@ export class View3D {
 
   dispose() {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();
