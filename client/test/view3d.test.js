@@ -715,3 +715,46 @@ test("a side change keeps the clip time", () => {
   closeVec(faded[0], reference[0], 1e-4);
   closeVec(faded[1], reference[1], 1e-4);
 });
+
+// --- golden lemons -------------------------------------------------------------
+
+function lemonView() {
+  const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
+  return { view, renderer, me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
+}
+
+test("a lemon ahead of my rider floats over its lane, drawn bright", () => {
+  const { view, renderer, me } = lemonView();
+  view.setLemons([{ id: "a", distance: 130, lane: 2, collected: false }]);
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const lemons = renderer.brights.filter((d) => d.handle === view.lemonMesh);
+  assert.equal(lemons.length, 1);
+  const road = riderPosition(squareRoute(), 130, 2).position;
+  const model = lemons[0].model;
+  close(model[12], road[0], 0.01);
+  close(model[14], road[2], 0.01);
+  assert.ok(model[13] > road[1] + 0.9 && model[13] < road[1] + 1.6, "about handlebar height over the road");
+});
+
+test("collected and far-off lemons are not drawn", () => {
+  const { view, renderer, me } = lemonView();
+  view.setLemons([
+    { id: "a", distance: 130, lane: 2, collected: true },
+    { id: "b", distance: 700, lane: 2, collected: false },
+  ]);
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+});
+
+test("without lemons none are drawn", () => {
+  const { view, renderer, me } = lemonView();
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+});
+
+test("disposing the view frees the lemon mesh", () => {
+  const { view, renderer } = lemonView();
+  const handle = view.lemonMesh;
+  view.dispose();
+  assert.ok(renderer.disposed.includes(handle));
+});

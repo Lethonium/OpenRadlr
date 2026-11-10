@@ -29,6 +29,7 @@ import {
   variantLook,
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
+import { buildLemon } from "./lemonModel.js";
 import { buildRotor, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
@@ -50,6 +51,8 @@ const SCENE = Object.freeze({
   drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
+  /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
+  lemonReach: { behind: 30, ahead: 260 },
   shadowMapSize: 2048,
   labelDistance: 80,
   nearCameraHide: 4,
@@ -316,6 +319,9 @@ export class View3D {
     this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
+    this.lemonMesh = this.renderer.upload(buildLemon());
+    /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
+    this.lemons = [];
     this.spectators = world.spectators;
     this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
     this.bodies = [];
@@ -398,6 +404,11 @@ export class View3D {
   #disposeStatues() {
     for (const { handle, glows } of this.#statues.values()) for (const h of [handle, ...glows]) this.renderer.dispose(h);
     this.#statues.clear();
+  }
+
+  /** The golden lemons of my route (ride/lemons.js), or none: `{distance, lane, collected}[]`. */
+  setLemons(lemons) {
+    this.lemons = lemons ?? [];
   }
 
   /** Back to riding after the menu: chase camera, ride lens, nothing highlighted. */
@@ -689,6 +700,8 @@ export class View3D {
         return { ...p, pose, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
       });
 
+    const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
+
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
     if (this.shadowsEnabled && high && lens.shadows) {
       const focus = me ? me.position : this.camera.target;
@@ -722,6 +735,9 @@ export class View3D {
       for (const { handle, model } of this.#statues.values()) {
         if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(handle, model);
       }
+      for (const model of lemons) {
+        if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(this.lemonMesh, model);
+      }
       this.renderer.endShadows();
     }
 
@@ -744,6 +760,7 @@ export class View3D {
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+    for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -790,6 +807,22 @@ export class View3D {
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
       for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id)) phases.delete(id);
     }
+  }
+
+  /** Model matrices of the lemons not yet collected near my rider on my route: spinning slowly, bobbing at handlebar height. */
+  #lemonModels(me, timeS) {
+    if (!this.lemons.length || (me.route && me.route !== this.route.id)) return [];
+    const { behind, ahead } = SCENE.lemonReach;
+    const models = [];
+    for (const lemon of this.lemons) {
+      if (lemon.collected) continue;
+      const gap = this.route.signedGap(me.distance, lemon.distance);
+      if (gap < -behind || gap > ahead) continue;
+      const { position } = riderPosition(this.route, lemon.distance, lemon.lane);
+      const bob = Math.sin(timeS * 2.2 + lemon.distance) * 0.1;
+      models.push(placement([position[0], position[1] + 1.25 + bob, position[2]], timeS * 1.6 + lemon.distance, 0.35));
+    }
+    return models;
   }
 
   /** Riders near enough for a label (not mine), with where their probe stands: at the bike, or below a seated rider's head. */
@@ -860,7 +893,7 @@ export class View3D {
 
   dispose() {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

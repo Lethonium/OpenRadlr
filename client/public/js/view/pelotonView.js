@@ -17,6 +17,14 @@ export function ridersInWindow(me, riders, route, window = PELOTON_WINDOW) {
     .filter(({ gap }) => gap >= -window.behind && gap <= window.ahead);
 }
 
+/** The golden lemons not yet collected within the window, with their signed gap to me. */
+export function lemonsInWindow(me, lemons, route, window = PELOTON_WINDOW) {
+  return (lemons ?? [])
+    .filter((lemon) => !lemon.collected)
+    .map((lemon) => ({ lemon, gap: route.signedGap(me.distance, lemon.distance) }))
+    .filter(({ gap }) => gap >= -window.behind && gap <= window.ahead);
+}
+
 /** Body length (m) of a vehicle's marker, against 1.8 m for a bike. */
 export const VEHICLE_LENGTH_M = Object.freeze({ tandem: 2.6, beer_bike: 4.5 });
 
@@ -47,7 +55,7 @@ export function overlaps(a, b, margin = 6) {
   return a.row === b.row && a.left < b.right + margin && b.left < a.right + margin;
 }
 
-export function drawPeloton(canvas, { route, riders, me, draft, colors }) {
+export function drawPeloton(canvas, { route, riders, me, draft, colors, lemons = [] }) {
   const { ctx, width, height } = prepareCanvas(canvas);
   if (!me) return;
 
@@ -85,6 +93,15 @@ export function drawPeloton(canvas, { route, riders, me, draft, colors }) {
   ctx.font = "10px system-ui, sans-serif";
   ctx.textAlign = "center";
   for (let m = -20; m <= 40; m += 10) ctx.fillText(m === 0 ? "you" : `${m > 0 ? "+" : ""}${m} m`, x(m), height - 2);
+
+  // Golden lemons in their lanes, under the riders.
+  for (const { lemon, gap } of lemonsInWindow(me, lemons, route)) {
+    const r = Math.min(7, laneHeight * 0.22);
+    ctx.fillStyle = "#ffcc14";
+    ctx.beginPath();
+    ctx.ellipse(x(gap), y(lemon.lane), r * 1.4, r, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Riders as capsules (≈ 1.8 m long bikes); a vehicle is one longer, thicker capsule.
   // Draw mine first so my label always wins, then the others closest to me.

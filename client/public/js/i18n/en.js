@@ -824,4 +824,9 @@ export default {
   "overview.chart": "Power, last 10 minutes",
   "overview.chartLabel": "Power chart",
   "overview.strip": "Live power, speed and grade",
+  "lemons.picked.one": "🍋 Golden lemon! {n} this ride",
+  "lemons.picked.other": "🍋 Golden lemon! {n} this ride",
+  "lemons.total.one": "{n} in all",
+  "lemons.total.other": "{n} in all",
+  "finish.lemons": "Golden lemons",
 };
