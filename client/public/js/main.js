@@ -38,6 +38,7 @@ import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
+import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
@@ -117,6 +118,8 @@ const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
+/** How many golden lemons this browser's rider has collected, all rides together. */
+const LEMONS_KEY = "openradlr.lemons";
 const INFO_REFRESH_MS = 5000;
 const TICKER_ITEMS = 3;
 const TICKER_SECONDS = 9;
@@ -324,6 +327,11 @@ const app = {
   splits: [],
   shownSplits: 0,
   splitToastTimer: null,
+  /** Golden lemons on my route (null off the routes, in the studio and workouts), and how many this ride collected. */
+  lemonHunt: null,
+  lemonsThisRide: 0,
+  /** The all-time lemon count while off the routes (no hunt to hold it). */
+  lemonTotal: 0,
   /** Studio distance ridden before a rejoin, which restarts the room's odometer (#73). */
   distanceOffset: 0,
   lastMyDistance: null,
@@ -1766,6 +1774,9 @@ function endRide() {
     splits: [],
     shownSplits: 0,
     splitToastTimer: (clearTimeout(app.splitToastTimer), ($("split-toast").hidden = true), null),
+    lemonHunt: null,
+    lemonsThisRide: 0,
+    lemonTotal: 0,
     distanceOffset: 0,
     lastMyDistance: null,
     lastOnRoute: null,
@@ -1987,6 +1998,7 @@ function startRoad({ simulated, setSimPower }) {
   initTraining({ simulated, setSimPower });
   initHud();
   initVehicle();
+  startLemonHunt(app.route);
 
   app.actions = {
     // Before a junction the lane keys pick the road instead (#15); on a vehicle only the captain steers.
@@ -2392,6 +2404,26 @@ function studioFrame() {
 
 // --------------------------------------------------------------- finish ---
 
+// -------------------------------------------------------- golden lemons ---
+
+/** The day's lemons on `route` (none off the routes); the all-time count carries over from the last route. */
+function startLemonHunt(route) {
+  const total = app.lemonHunt?.total ?? (Number.parseInt(readSetting(LEMONS_KEY) ?? "", 10) || 0);
+  app.lemonHunt = route && route.id !== OFF_ROUTE_ID ? new LemonHunt({ route, lemons: lemonsFor(route, lemonDay(Date.now())), total }) : null;
+  if (!app.lemonHunt) app.lemonTotal = total;
+  app.view3d?.setLemons(app.lemonHunt?.lemons);
+}
+
+function collectLemons(me) {
+  if (!app.lemonHunt) return;
+  const picked = app.lemonHunt.update({ routeId: me.route === OFF_ROUTE_ID ? null : (me.route ?? app.route.id), distance: me.distance, lane: me.lane });
+  if (!picked.length) return;
+  app.lemonsThisRide += picked.length;
+  writeSetting(LEMONS_KEY, String(app.lemonHunt.total));
+  // An easter egg: a line in the ticker, no counter on the HUD.
+  notify(`${tn("lemons.picked", app.lemonsThisRide)} · ${tn("lemons.total", app.lemonHunt.total)}`);
+}
+
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
 function leaveRide() {
   // The ride and its photos only live in this page until it is left.
@@ -2473,6 +2505,7 @@ function finishStats() {
     [t("finish.work"), `${summary.kilojoules} kJ`],
   ];
   if (summary.avgHeartRate) stats.push([t("finish.avgHeartRate"), `${summary.avgHeartRate} bpm`]);
+  if (app.lemonsThisRide > 0) stats.push([t("finish.lemons"), formatNumber(app.lemonsThisRide)]);
   if (app.seatEnergy && app.vehicleKind) {
     stats.push([t("finish.vehicle"), app.seatEnergy.summaryLine(app.vehicleKind)]);
     for (const seat of app.seatEnergy.perSeat()) stats.push([`${seat.name}${seat.isBot ? ` ${t("panels.botSuffix")}` : ""}`, `${Math.round(seat.kj)} kJ`]);
@@ -3730,6 +3763,7 @@ function show3d(scene, view = null) {
   }
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
+  app.view3d.setLemons(app.lemonHunt?.lemons);
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
@@ -3895,6 +3929,7 @@ function switchRoute(route, named = null) {
   app.route = route;
   app.smoother.route = route;
   app.view3d?.setRoute(route);
+  startLemonHunt(route);
   // Distances on the new road don't continue the old one's.
   app.lastMyDistance = null;
   $("hud-route").textContent = route.id !== OFF_ROUTE_ID ? route.name : named ? named.name : t("ride.offRoute");
@@ -4078,11 +4113,13 @@ function frame() {
     app.lastMyDistance = me.distance;
   }
 
+  if (me && !app.finished) collectLemons(me);
+
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors });
+    drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors, lemons: app.lemonHunt?.lemons });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {

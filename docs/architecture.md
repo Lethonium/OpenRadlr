@@ -129,6 +129,7 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 | `riderModel.js` | Low-poly cyclist; jersey parts are tinted (me orange, humans blue, bots grey); skin, helmet, bike and size vary per rider (deterministic from the id); cranks turn, legs follow the pedals by two-bone IK (`legPose`), spoked wheels spin |
 | `zones.js` | Scenery zones from the route file, or seeded defaults (village, river, forest) |
 | `features.js` | River carving and water, stone bridge, village (houses, church, pavements, lamps, signs), farms with animals, wind turbines, spectators, guard rails, warning signs, flamme rouge |
+| `lemonModel.js` | The golden lemon floating over the road (lemons are placed by `ride/lemons.js`) |
 | `structures.js` | Low-poly models placed by `features.js` (houses, church, barn, silo, bales, lamps, signs, turbines, cows, sheep, spectators) |
 | `chunks.js` | Splits the static world into 300 m tiles; only tiles in view are drawn and only tiles near the rider cast shadows |
 | `lighting.js` | Time-of-day presets (day, golden hour, dusk, auto by local clock) and the sun's shadow frustum |

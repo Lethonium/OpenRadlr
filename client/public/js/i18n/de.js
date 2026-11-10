@@ -824,4 +824,9 @@ export default {
   "overview.chart": "Leistung, letzte 10 Minuten",
   "overview.chartLabel": "Leistungsdiagramm",
   "overview.strip": "Aktuelle Leistung, Geschwindigkeit und Steigung",
+  "lemons.picked.one": "🍋 Goldene Zitrone! {n} auf dieser Fahrt",
+  "lemons.picked.other": "🍋 Goldene Zitrone! {n} auf dieser Fahrt",
+  "lemons.total.one": "{n} insgesamt",
+  "lemons.total.other": "{n} insgesamt",
+  "finish.lemons": "Goldene Zitronen",
 };
