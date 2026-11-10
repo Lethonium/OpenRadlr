@@ -12,8 +12,8 @@ use openradlr_sim::sharing::Flow;
 use openradlr_sim::studio::{Studio, StudioEvent};
 use openradlr_sim::vehicle::Vehicle;
 use openradlr_sim::vehicle::{shares, VehicleId};
-use openradlr_sim::world::Rider;
 use openradlr_sim::world::VehicleChange;
+use openradlr_sim::world::{Controller, Rider};
 use openradlr_sim::{RiderId, RouteIndex, World, WorldEvent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -483,6 +483,15 @@ pub struct RiderState {
     /// The side of a sided pose; left out for any other.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub side: Option<Side>,
+    /// A bot's team (its kit colour); left out for humans.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<&'static str>,
+    /// A bot's riding type; left out for humans.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<&'static str>,
+    /// What a bot is doing (`pull`, `attack`, `answer`, `sprint`); left out while it just rides.
+    #[serde(rename = "move", skip_serializing_if = "Option::is_none")]
+    pub bot_move: Option<&'static str>,
 }
 
 impl RiderState {
@@ -506,6 +515,9 @@ impl RiderState {
             exercise: None,
             app: Some(r.app.clone()),
             side: None,
+            team: None,
+            style: None,
+            bot_move: None,
         }
     }
 }
@@ -834,6 +846,10 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         let seat = v.seats.iter().position(|s| *s == Some(r.id))?;
         Some((v, seat))
     });
+    let bot = match &r.controller {
+        Controller::Bot(brain) => Some(brain),
+        Controller::Human { .. } => None,
+    };
     RiderState {
         id: r.id,
         name: r.name.clone(),
@@ -867,6 +883,9 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         exercise: tags.exercise,
         app: None,
         side: tags.side,
+        team: bot.map(|b| b.profile().team.id()),
+        style: bot.map(|b| b.profile().style.id()),
+        bot_move: bot.and_then(|b| b.current_move().id()),
     }
 }
 
@@ -1239,6 +1258,9 @@ mod tests {
             exercise: None,
             app: None,
             side: None,
+            team: None,
+            style: None,
+            bot_move: None,
         }
     }
 
@@ -1510,5 +1532,47 @@ mod tests {
         }
         .to_json();
         assert!(!json.contains("event"));
+    }
+
+    #[test]
+    fn bots_carry_their_team_style_and_move_and_humans_none() {
+        use openradlr_sim::bot::{RidingStyle, Team};
+        use openradlr_sim::rng::SplitMix64;
+        use openradlr_sim::route::{Point, Route, RouteSpec};
+        use openradlr_sim::SimConfig;
+        let route = Route::new(RouteSpec {
+            id: "r".into(),
+            name: "R".into(),
+            lanes: 4,
+            seed: 1,
+            points: vec![Point::new(0.0, 0.0, 0.0), Point::new(2000.0, 0.0, 0.0)],
+            markers: vec![],
+            walk: vec![],
+        })
+        .unwrap();
+        let config = SimConfig {
+            target_riders: 3,
+            ..SimConfig::default()
+        };
+        let mut world = World::new(route, config, Box::new(SplitMix64::new(1)));
+        let me = world.join_human("Anna", 70.0);
+        let Some(ServerMessage::State { riders, .. }) =
+            state_message(&world, 1, me, 50, None, &|_| RiderTags::default())
+        else {
+            panic!("no state");
+        };
+        let human = serde_json::to_string(riders.iter().find(|r| r.id == me).unwrap()).unwrap();
+        for key in ["\"team\"", "\"style\"", "\"move\""] {
+            assert!(!human.contains(key), "{human}");
+        }
+        let bot = riders.iter().find(|r| r.is_bot).unwrap();
+        assert_eq!(bot.team, Some(Team::of_name(&bot.name).id()));
+        assert_eq!(bot.style, Some(RidingStyle::of_name(&bot.name).id()));
+        assert_eq!(bot.bot_move, None, "just riding");
+        let json = serde_json::to_string(bot).unwrap();
+        assert!(
+            json.contains(&format!("\"team\":\"{}\"", Team::of_name(&bot.name).id())),
+            "{json}"
+        );
     }
 }

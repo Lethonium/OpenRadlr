@@ -14,14 +14,17 @@
 //! onto any other road they ride off-route, road by road, straight on unless
 //! they pick another way.
 
-use crate::bot::{pack_levels, BotBrain, BotProfile, BotSituation, BotTuning, LaneView};
+use crate::bot::{
+    pack_levels, BotBrain, BotProfile, BotSituation, BotTuning, LaneView, LineAhead, LineKind, Passer,
+    DEFAULT_LEVEL_WKG,
+};
 use crate::drafting::DraftParams;
 use crate::names;
 use crate::network::{Network, RoadKey};
 use crate::physics::{self, Body, PhysicsParams, RiderPhysics, StepInput};
 use crate::race::{Race, RaceError, RaceEvent, RacePhase};
 use crate::rng::{RandomSource, SplitMix64};
-use crate::route::Route;
+use crate::route::{MarkerKind, Route};
 use crate::sharing::SharingTuning;
 use crate::vehicle::{Vehicle, VehicleId, VehicleKind, VehicleParams};
 use std::collections::{BTreeMap, BTreeSet};
@@ -37,8 +40,21 @@ pub type RouteIndex = usize;
 /// Tunables of the simulation. Everything has a sensible default.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimConfig {
-    /// Humans plus bots the world tries to keep riding on every route.
+    /// Humans plus bots the world keeps riding on every route at least
+    /// (0: no bots at all). More come with the humans, see `bots_near_human`.
     pub target_riders: usize,
+    /// Bots every human riding a route keeps around them: up to
+    /// `company_radius_m` ahead or `company_behind_m` behind.
+    pub bots_near_human: usize,
+    /// How far ahead along the route a bot keeps a human company.
+    pub company_radius_m: f64,
+    /// How far behind a bot still keeps a human company: those further back
+    /// are passed and gone, and a new group takes their place ahead.
+    pub company_behind_m: f64,
+    /// New bots appear at least this far from every human (out of sight).
+    pub spawn_clear_m: f64,
+    /// Most riders on one route, however many humans ride it.
+    pub max_route_riders: usize,
     pub physics: PhysicsParams,
     pub draft: DraftParams,
     pub bot_tuning: BotTuning,
@@ -69,6 +85,11 @@ impl Default for SimConfig {
     fn default() -> Self {
         Self {
             target_riders: 12,
+            bots_near_human: 6,
+            company_radius_m: 1500.0,
+            company_behind_m: 400.0,
+            spawn_clear_m: 350.0,
+            max_route_riders: 48,
             physics: PhysicsParams::default(),
             draft: DraftParams::default(),
             bot_tuning: BotTuning::default(),
@@ -274,6 +295,20 @@ struct Slot {
     draft: DraftParams,
     /// The road under the rider, how far along it, and the road after it.
     road: Option<(Step, f64, RoadKey)>,
+    speed: f64,
+    human: bool,
+}
+
+/// What a bot sees around it in one step (see `World::bot_surroundings`).
+#[derive(Debug, Clone, Copy, Default)]
+struct Surroundings {
+    line_ahead: Option<LineAhead>,
+    passer: Option<Passer>,
+    wheel_behind: bool,
+    gap_ahead_m: Option<f64>,
+    human_m: Option<f64>,
+    waiting_for_group: bool,
+    leave_group: bool,
 }
 
 /// The race of one route and who is entered in it.
@@ -306,6 +341,7 @@ pub struct World {
     /// The vehicle each seated rider (captain and bots included) sits in.
     seat_of: BTreeMap<RiderId, VehicleId>,
     next_vehicle_id: VehicleId,
+    next_group: u32,
 }
 
 impl World {
@@ -384,6 +420,7 @@ impl World {
             vehicles: BTreeMap::new(),
             seat_of: BTreeMap::new(),
             next_vehicle_id: 1,
+            next_group: 1,
         };
         world.balance_population();
         world
@@ -814,6 +851,8 @@ impl World {
             slots: &slots,
         };
 
+        let around = self.bot_surroundings(&field, &own_slots);
+
         // The draft each vehicle gets from the gap ahead of its captain.
         let vehicle_drafts: Vec<(VehicleId, f64)> = self
             .vehicles
@@ -851,11 +890,22 @@ impl World {
                         }
                         _ => None,
                     };
+                    let near = around.get(&rider.id).copied().unwrap_or_default();
+                    if near.leave_group {
+                        brain.leave_group();
+                    }
                     let situation = BotSituation {
                         grade_percent: grade,
                         racing: distance_to_finish.is_some(),
                         group_ride: rider.in_group_ride,
                         distance_to_finish,
+                        free: !seated && rider.off_route.is_none(),
+                        line_ahead: near.line_ahead,
+                        passer: near.passer,
+                        wheel_behind: near.wheel_behind,
+                        gap_ahead_m: near.gap_ahead_m,
+                        human_m: near.human_m,
+                        waiting_for_group: near.waiting_for_group,
                     };
                     rider.power = brain.power(&situation, self.rng.as_mut(), dt);
                     rider.cadence = Some(85.0);
@@ -954,6 +1004,8 @@ impl World {
             wide,
             draft,
             road,
+            speed: rider.speed,
+            human: !rider.is_bot(),
         }
     }
 
@@ -1152,22 +1204,68 @@ impl World {
         }
     }
 
-    /// Keeps humans + bots at the target on every route: spawns bots where
-    /// there are too few riders, removes surplus bots once no human is nearby.
+    /// Riders a route keeps: `target_riders` at least, more with every
+    /// human riding it (`bots_near_human` each), at most `max_route_riders`.
+    /// No bots at all with `target_riders == 0`.
+    pub fn route_target(&self, route: RouteIndex) -> usize {
+        if self.config.target_riders == 0 {
+            return 0;
+        }
+        let humans = self.company_humans(route).len();
+        let wanted = humans * (1 + self.config.bots_near_human);
+        wanted.min(self.config.max_route_riders).max(self.config.target_riders)
+    }
+
+    /// Riders of `route` that count towards its population: everyone but seated riders.
+    fn population(&self, route: RouteIndex) -> usize {
+        self.riders
+            .values()
+            .filter(|r| r.route == route && !self.seat_of.contains_key(&r.id))
+            .count()
+    }
+
+    /// Humans riding `route` freely, who keep bots around them: on the route,
+    /// not in a workout, a vehicle, a race or an event. Their position and level.
+    fn company_humans(&self, route: RouteIndex) -> Vec<(f64, f64)> {
+        let entrants = &self.races[route].entrants;
+        self.riders
+            .values()
+            .filter(|r| {
+                r.route == route
+                    && !r.is_bot()
+                    && r.off_route.is_none()
+                    && !r.workout
+                    && !r.in_group_ride
+                    && !r.turns_locked
+                    && !entrants.contains(&r.id)
+                    && !self.seat_of.contains_key(&r.id)
+            })
+            .map(|r| (r.position, r.level_wkg.unwrap_or(DEFAULT_LEVEL_WKG)))
+            .collect()
+    }
+
+    /// A bot that may leave: not seated, racing or in a group ride.
+    fn free_bot(&self, r: &Rider) -> bool {
+        r.is_bot()
+            && !r.in_group_ride
+            && !self.races[r.route].entrants.contains(&r.id)
+            && !self.seat_of.contains_key(&r.id)
+    }
+
+    /// Keeps every route at its target (see `route_target`): company for its
+    /// humans first, then groups where the route is emptiest; surplus bots
+    /// leave once no human is nearby.
     fn balance_population(&mut self) {
         for route in 0..self.routes.len() {
-            // Seated riders (a vehicle's captain, humans and bots) are not population.
-            let population = |world: &Self| {
-                world
-                    .riders
-                    .values()
-                    .filter(|r| r.route == route && !world.seat_of.contains_key(&r.id))
-                    .count()
-            };
-            while population(self) < self.config.target_riders {
-                self.spawn_bot(route);
+            let target = self.route_target(route);
+            self.keep_company(route, target);
+            while self.population(route) < target {
+                let room = target - self.population(route);
+                if self.spawn_group(route, None, room) == 0 {
+                    break;
+                }
             }
-            while population(self) > self.config.target_riders {
+            while self.population(route) > target {
                 // Humans anywhere on the map: a bot on a shared road can be in someone's view.
                 let humans: Vec<(f64, f64)> = self
                     .riders
@@ -1175,17 +1273,10 @@ impl World {
                     .filter(|r| !r.is_bot())
                     .map(|r| self.rider_xy(r))
                     .collect();
-                let entrants = &self.races[route].entrants;
                 let candidate = self
                     .riders
                     .values()
-                    .filter(|r| {
-                        r.route == route
-                            && r.is_bot()
-                            && !r.in_group_ride
-                            && !entrants.contains(&r.id)
-                            && !self.seat_of.contains_key(&r.id)
-                    })
+                    .filter(|r| r.route == route && self.free_bot(r))
                     .map(|bot| {
                         let at = self.rider_xy(bot);
                         let nearest = humans.iter().map(|&h| distance(h, at)).fold(f64::INFINITY, f64::min);
@@ -1203,6 +1294,87 @@ impl World {
         }
     }
 
+    /// Whether a rider at route position `bot` keeps a human at `at` company.
+    fn keeps_company(&self, route: RouteIndex, at: f64, bot: f64) -> bool {
+        let line = &self.routes[route];
+        let ahead = line.forward_gap(at, bot);
+        ahead <= self.config.company_radius_m.min(line.length() / 2.0)
+            || line.length() - ahead <= self.config.company_behind_m
+    }
+
+    /// Bots of `route` keeping the human at route position `at` company.
+    fn bots_near(&self, route: RouteIndex, at: f64) -> usize {
+        self.riders
+            .values()
+            .filter(|r| {
+                r.route == route
+                    && r.is_bot()
+                    && r.off_route.is_none()
+                    && !self.seat_of.contains_key(&r.id)
+                    && self.keeps_company(route, at, r.position)
+            })
+            .count()
+    }
+
+    /// Spawns a group for every human of `route` with too few bots around,
+    /// making room first where the route is full.
+    fn keep_company(&mut self, route: RouteIndex, target: usize) {
+        if self.config.bots_near_human == 0 || target == 0 {
+            return;
+        }
+        for (at, level) in self.company_humans(route) {
+            loop {
+                let near = self.bots_near(route, at);
+                let Some(missing) = self.config.bots_near_human.checked_sub(near).filter(|&m| m > 0) else {
+                    break;
+                };
+                while self.population(route) >= target && self.make_room(route) {}
+                let room = target.saturating_sub(self.population(route));
+                if room == 0 || self.spawn_group(route, Some((at, level)), missing.min(room)) == 0 {
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Removes the bot of `route` furthest from every human, if it is out of
+    /// sight and keeps nobody company. Returns whether one left.
+    fn make_room(&mut self, route: RouteIndex) -> bool {
+        let humans: Vec<(f64, f64)> = self
+            .riders
+            .values()
+            .filter(|r| !r.is_bot())
+            .map(|r| self.rider_xy(r))
+            .collect();
+        let company = self.company_humans(route);
+        let candidate = self
+            .riders
+            .values()
+            .filter(|r| r.route == route && self.free_bot(r))
+            .filter(|r| {
+                r.off_route.is_some()
+                    || company
+                        .iter()
+                        .all(|&(at, _)| !self.keeps_company(route, at, r.position))
+            })
+            .map(|bot| {
+                let at = self.rider_xy(bot);
+                (
+                    bot.id,
+                    humans.iter().map(|&h| distance(h, at)).fold(f64::INFINITY, f64::min),
+                )
+            })
+            .filter(|&(_, nearest)| nearest >= self.config.bot_despawn_distance_m)
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        match candidate {
+            Some((id, _)) => {
+                self.leave_without_rebalance(id);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn leave_without_rebalance(&mut self, id: RiderId) {
         if let Some(rider) = self.riders.remove(&id) {
             self.events.push(WorldEvent::RiderLeft {
@@ -1213,23 +1385,15 @@ impl World {
         }
     }
 
-    /// Candidate start points a new bot picks from: the one furthest from
+    /// Candidate start points a new group picks from: the one furthest from
     /// everybody, so bots spread over the map instead of piling up where
     /// routes share a road.
     const SPAWN_CANDIDATES: usize = 6;
+    /// Rows of a group, one bike length and a bit apart.
+    const GROUP_ROW_M: f64 = 2.5;
 
-    fn spawn_bot(&mut self, route: RouteIndex) {
-        let levels = pack_levels(&self.human_levels());
-        self.spawn_bot_matched(route, &levels);
-    }
-
-    fn spawn_bot_matched(&mut self, route: RouteIndex, levels: &[f64]) -> RiderId {
-        let id = self.allocate_id();
-        let taken: Vec<&str> = self.riders.values().map(|r| r.name.as_str()).collect();
-        let name = names::generate_unique(self.rng.as_mut(), &taken);
-        let profile = BotProfile::matched(levels, self.rng.as_mut());
-        let lanes = self.routes[route].lanes();
-        let lane = self.rng.index(usize::from(lanes)) as u8;
+    /// The emptiest of a few random points of `route`.
+    fn emptiest_position(&mut self, route: RouteIndex) -> f64 {
         let length = self.routes[route].length();
         let others: Vec<(f64, f64)> = self.riders.values().map(|r| self.rider_xy(r)).collect();
         let mut position = self.rng.range_f64(0.0, length);
@@ -1243,15 +1407,121 @@ impl World {
                 position = candidate;
             }
         }
+        position
+    }
+
+    /// Where a group for a human at route position `at` of level `level`
+    /// starts and at what level: 70% ahead and a bit slower (a group to
+    /// chase), else behind and a bit faster (a wheel coming by). Out of sight
+    /// of every human, or `None`.
+    fn company_spot(&mut self, route: RouteIndex, at: f64, level: f64) -> Option<(f64, f64)> {
+        let humans: Vec<(f64, f64)> = self
+            .riders
+            .values()
+            .filter(|r| !r.is_bot())
+            .map(|r| self.rider_xy(r))
+            .collect();
+        let ahead = self.rng.next_f64() < 0.7;
+        let factor = if ahead {
+            self.rng.range_f64(0.85, 0.95)
+        } else {
+            self.rng.range_f64(1.05, 1.15)
+        };
+        for _ in 0..Self::SPAWN_CANDIDATES {
+            let offset = if ahead {
+                self.rng.range_f64(350.0, 800.0)
+            } else {
+                -self.rng.range_f64(350.0, 600.0)
+            };
+            let position = self.routes[route].wrap(at + offset);
+            let xy = self.routes[route].position_at(position);
+            if humans.iter().all(|&h| distance(h, xy) >= self.config.spawn_clear_m) {
+                return Some((position, level * factor));
+            }
+        }
+        None
+    }
+
+    /// Spawns a group of up to `max` bots on `route` (2–5, now and then one):
+    /// for a human (`company`: their route position and level) or where the
+    /// route is emptiest, matched to the humans online. Returns how many.
+    fn spawn_group(&mut self, route: RouteIndex, company: Option<(f64, f64)>, max: usize) -> usize {
+        let size = if self.rng.next_f64() < 0.2 {
+            1
+        } else {
+            2 + self.rng.index(4)
+        }
+        .min(max);
+        if size == 0 {
+            return 0;
+        }
+        let (lead, level) = match company {
+            Some((at, level)) => match self.company_spot(route, at, level) {
+                Some((position, level)) => (position, Some(level)),
+                None => return 0,
+            },
+            None => (self.emptiest_position(route), None),
+        };
+        let group = (size > 1).then(|| {
+            let id = self.next_group;
+            self.next_group = self.next_group.wrapping_add(1).max(1);
+            id
+        });
+        let levels = pack_levels(&self.human_levels());
+        let lanes = usize::from(self.routes[route].lanes());
+        let first_lane = self.rng.index(lanes);
+        let mut base = level;
+        for k in 0..size {
+            let name = self.unique_name();
+            let mut profile = BotProfile::matched(&name, &levels, self.rng.as_mut());
+            match base {
+                Some(level) if k == 0 && company.is_some() => profile.ftp_wkg = level,
+                Some(level) => profile.ftp_wkg = level * self.rng.range_f64(0.97, 1.03),
+                None => {}
+            }
+            base.get_or_insert(profile.ftp_wkg);
+            let row = (k / lanes) as f64;
+            let position = self.routes[route].wrap(lead - row * Self::GROUP_ROW_M);
+            let lane = ((first_lane + k) % lanes) as u8;
+            self.spawn_bot_at(route, &name, profile, position, lane, group);
+        }
+        size
+    }
+
+    fn unique_name(&mut self) -> String {
+        let taken: Vec<&str> = self.riders.values().map(|r| r.name.as_str()).collect();
+        names::generate_unique(self.rng.as_mut(), &taken)
+    }
+
+    fn spawn_bot_matched(&mut self, route: RouteIndex, levels: &[f64]) -> RiderId {
+        let name = self.unique_name();
+        let profile = BotProfile::matched(&name, levels, self.rng.as_mut());
+        let lanes = self.routes[route].lanes();
+        let lane = self.rng.index(usize::from(lanes)) as u8;
+        let position = self.emptiest_position(route);
+        self.spawn_bot_at(route, &name, profile, position, lane, None)
+    }
+
+    fn spawn_bot_at(
+        &mut self,
+        route: RouteIndex,
+        name: &str,
+        profile: BotProfile,
+        position: f64,
+        lane: u8,
+        group: Option<u32>,
+    ) -> RiderId {
+        let id = self.allocate_id();
         let mass_kg = profile.weight_kg;
         let cruising_speed = 8.0;
+        let brain = BotBrain::new(profile, self.config.bot_tuning).in_group(group);
 
         self.riders.insert(
             id,
             Rider {
                 id,
-                name: name.clone(),
-                controller: Controller::Bot(Box::new(BotBrain::new(profile, self.config.bot_tuning))),
+                name: name.to_owned(),
+                controller: Controller::Bot(Box::new(brain)),
                 mass_kg,
                 route,
                 position,
@@ -1275,11 +1545,108 @@ impl World {
         );
         self.events.push(WorldEvent::RiderJoined {
             rider_id: id,
-            name,
+            name: name.to_owned(),
             is_bot: true,
             route,
         });
         id
+    }
+
+    /// What every bot on its route sees around it this step.
+    fn bot_surroundings(&self, field: &Field<'_>, slots: &[Slot]) -> BTreeMap<RiderId, Surroundings> {
+        const WHEEL_M: f64 = 4.0;
+        const PASSING_M: f64 = 8.0;
+        const GROUP_WAIT_M: f64 = 25.0;
+        const GROUP_SPLIT_M: f64 = 300.0;
+        let groups: Vec<(RiderId, u32, RouteIndex, f64)> = self
+            .riders
+            .values()
+            .filter(|r| r.off_route.is_none())
+            .filter_map(|r| match &r.controller {
+                Controller::Bot(brain) => brain.group().map(|g| (r.id, g, r.route, r.position)),
+                Controller::Human { .. } => None,
+            })
+            .collect();
+        let mut around = BTreeMap::new();
+        for (rider, me) in self.riders.values().zip(slots) {
+            if !rider.is_bot() || rider.off_route.is_some() || self.seat_of.contains_key(&rider.id) {
+                continue;
+            }
+            let route = &self.routes[rider.route];
+            let line_ahead = route
+                .markers()
+                .iter()
+                .enumerate()
+                .filter_map(|(index, marker)| {
+                    let (kind, length) = match marker.kind {
+                        MarkerKind::Sprint { length } => (LineKind::Sprint, length),
+                        MarkerKind::Climb { length } => (LineKind::Summit, length),
+                        MarkerKind::StartFinish => return None,
+                    };
+                    let line = route.wrap(marker.distance + length);
+                    Some(LineAhead {
+                        kind,
+                        index,
+                        distance_m: route.forward_gap(rider.position, line),
+                    })
+                })
+                .min_by(|a, b| a.distance_m.total_cmp(&b.distance_m));
+            let same_road = |s: &&Slot| s.id != me.id && s.route == me.route && s.on_route;
+            let passer = slots
+                .iter()
+                .filter(same_road)
+                .filter(|s| {
+                    let gap = route.forward_gap(me.position, s.position);
+                    gap > 0.0 && gap <= PASSING_M && s.speed > me.speed
+                })
+                .map(|s| Passer {
+                    human: s.human,
+                    speed_gain: s.speed - me.speed,
+                    lane: s.lane.round().max(0.0) as u8,
+                })
+                .max_by(|a, b| a.speed_gain.total_cmp(&b.speed_gain));
+            let wheel_behind = field.gap_behind(me, me.lane).is_some_and(|gap| gap <= WHEEL_M);
+            let human_m = slots
+                .iter()
+                .filter(same_road)
+                .filter(|s| s.human)
+                .map(|s| route.loop_distance(me.position, s.position))
+                .min_by(f64::total_cmp);
+            let mut waiting_for_group = false;
+            let mut leave_group = false;
+            if let Some(group) = groups.iter().find(|g| g.0 == rider.id).map(|g| g.1) {
+                let mates: Vec<f64> = groups
+                    .iter()
+                    .filter(|g| g.0 != rider.id && g.1 == group && g.2 == rider.route)
+                    .map(|g| g.3)
+                    .collect();
+                let nearest = mates
+                    .iter()
+                    .map(|&p| route.loop_distance(rider.position, p))
+                    .fold(f64::INFINITY, f64::min);
+                if nearest > GROUP_SPLIT_M {
+                    leave_group = true;
+                } else {
+                    let all_behind = mates
+                        .iter()
+                        .all(|&p| route.forward_gap(p, rider.position) < route.length() / 2.0);
+                    waiting_for_group = all_behind && nearest > GROUP_WAIT_M;
+                }
+            }
+            around.insert(
+                rider.id,
+                Surroundings {
+                    line_ahead,
+                    passer,
+                    wheel_behind,
+                    gap_ahead_m: field.gap_ahead(me, me.lane),
+                    human_m,
+                    waiting_for_group,
+                    leave_group,
+                },
+            );
+        }
+        around
     }
 
     fn allocate_id(&mut self) -> RiderId {
@@ -1451,6 +1818,18 @@ impl Field<'_> {
             .min_by(|a, b| a.0.total_cmp(&b.0))
     }
 
+    /// Gap to the closest rider behind `me` in `lane` on its route, if any.
+    fn gap_behind(&self, me: &Slot, lane: f64) -> Option<f64> {
+        let route = &self.routes[me.route];
+        self.slots
+            .iter()
+            .filter(|s| s.id != me.id && s.route == me.route && s.on_route && me.on_route)
+            .filter(|s| (s.lane - lane).abs() < s.half_width.max(me.half_width))
+            .map(|s| route.forward_gap(s.position, me.position))
+            .filter(|&gap| gap > 0.0 && gap < route.length() / 2.0)
+            .min_by(f64::total_cmp)
+    }
+
     fn lane_view(&self, me: &Slot) -> LaneView {
         let lanes = self.routes[me.route].lanes();
         LaneView {
@@ -1465,7 +1844,7 @@ mod tests {
     use super::*;
     use crate::rng::SplitMix64;
     use crate::route::tests::{flat_loop, square_loop, step};
-    use crate::route::{Point, RouteSpec, WalkStep};
+    use crate::route::{Marker, Point, RouteSpec, WalkStep};
 
     pub(super) const DT: f64 = 0.05;
 
@@ -1581,6 +1960,7 @@ mod tests {
         let config = SimConfig {
             target_riders: 3,
             bot_despawn_distance_m: 0.0,
+            bots_near_human: 0,
             ..SimConfig::default()
         };
         let mut world = world_with(square_loop(), config);
@@ -1595,6 +1975,7 @@ mod tests {
         let config = SimConfig {
             target_riders: 1,
             bot_despawn_distance_m: 10_000.0,
+            bots_near_human: 0,
             ..SimConfig::default()
         };
         let mut world = world_with(square_loop(), config);
@@ -2154,16 +2535,26 @@ mod tests {
     }
 
     #[test]
-    fn bots_spread_out_instead_of_piling_up() {
+    fn bot_groups_spread_out_instead_of_piling_up() {
         let world = map_world(10);
-        let at: Vec<(f64, f64)> = world.riders().map(|r| world.rider_xy(r)).collect();
+        // One rider of each group (a bot riding alone is a group of its own).
+        let mut seen = BTreeSet::new();
+        let at: Vec<(f64, f64)> = world
+            .riders()
+            .filter(|r| match &r.controller {
+                Controller::Bot(brain) => brain.group().is_none_or(|g| seen.insert(g)),
+                Controller::Human { .. } => true,
+            })
+            .map(|r| world.rider_xy(r))
+            .collect();
         let closest = at
             .iter()
             .enumerate()
             .flat_map(|(i, &a)| at[i + 1..].iter().map(move |&b| distance(a, b)))
             .fold(f64::INFINITY, f64::min);
-        // 30 bots on 7.6 km of road: random starts would put some within a few metres.
-        assert!(closest > 25.0, "two bots start {closest:.1} m apart");
+        // 30 bots in groups on 7.6 km of road: random starts would put some within a few metres.
+        assert!(at.len() >= 6, "{} groups", at.len());
+        assert!(closest > 25.0, "two groups start {closest:.1} m apart");
     }
 
     #[test]
@@ -2544,5 +2935,325 @@ mod tests {
     fn rider_physics_of_an_unknown_rider_is_none() {
         let world = empty_world(flat_loop(1000.0));
         assert_eq!(world.rider_physics(9_999), None);
+    }
+
+    // --- bots: population, company, groups and what they see -------------------------
+
+    fn company_world(config: SimConfig, seed: u64) -> World {
+        World::new(flat_loop(20_000.0), config, Box::new(SplitMix64::new(seed)))
+    }
+
+    fn bot_level(rider: &Rider) -> f64 {
+        match &rider.controller {
+            Controller::Bot(brain) => brain.profile().ftp_wkg,
+            Controller::Human { .. } => panic!("{} is no bot", rider.name),
+        }
+    }
+
+    fn group_of(rider: &Rider) -> Option<u32> {
+        match &rider.controller {
+            Controller::Bot(brain) => brain.group(),
+            Controller::Human { .. } => None,
+        }
+    }
+
+    fn joined_bots(world: &mut World) -> Vec<RiderId> {
+        world
+            .drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                WorldEvent::RiderJoined {
+                    rider_id, is_bot: true, ..
+                } => Some(rider_id),
+                _ => None,
+            })
+            .filter(|id| world.rider(*id).is_some())
+            .collect()
+    }
+
+    fn surroundings_of(world: &World, id: RiderId) -> Surroundings {
+        let slots: Vec<Slot> = world.riders().map(|r| world.slot(r)).collect();
+        let field = Field {
+            routes: &world.routes,
+            slots: &slots,
+        };
+        world.bot_surroundings(&field, &slots)[&id]
+    }
+
+    #[test]
+    fn the_population_target_follows_the_humans() {
+        let config = SimConfig {
+            target_riders: 12,
+            bots_near_human: 6,
+            max_route_riders: 30,
+            ..SimConfig::default()
+        };
+        let mut world = company_world(config, 1);
+        assert_eq!(world.route_target(0), 12);
+        world.join_human("Anna", 70.0);
+        world.join_human("Ben", 70.0);
+        assert_eq!(world.route_target(0), 14);
+        for name in ["Cleo", "Dan", "Eva"] {
+            world.join_human(name, 70.0);
+        }
+        assert_eq!(world.route_target(0), 30, "capped at max_route_riders");
+        world.tick(DT);
+        assert_eq!(world.riders().count(), 30);
+    }
+
+    #[test]
+    fn a_world_without_bots_stays_without_bots() {
+        let mut world = company_world(
+            SimConfig {
+                target_riders: 0,
+                ..SimConfig::default()
+            },
+            1,
+        );
+        world.join_human("Anna", 70.0);
+        world.tick(DT);
+        assert_eq!(world.bot_count(), 0);
+    }
+
+    #[test]
+    fn every_human_gets_company_that_appears_out_of_sight() {
+        for seed in 0..8 {
+            let mut world = company_world(
+                SimConfig {
+                    target_riders: 1,
+                    ..SimConfig::default()
+                },
+                seed,
+            );
+            world.drain_events();
+            let anna = world.join_human("Anna", 70.0);
+            for _ in 0..20 {
+                world.tick(DT);
+            }
+            let me = world.rider(anna).unwrap();
+            let (at, xy) = (me.position, world.rider_xy(me));
+            let route = world.route(0);
+            let near = world
+                .riders()
+                .filter(|r| r.is_bot() && route.loop_distance(at, r.position) <= 1500.0)
+                .count();
+            assert!(near >= 6, "seed {seed}: {near} bots near");
+            for id in joined_bots(&mut world) {
+                let bot = world.rider(id).unwrap();
+                // Spawned at least 350 m away; a second of riding since.
+                assert!(
+                    distance(world.rider_xy(bot), xy) >= 330.0,
+                    "seed {seed}: {} appeared in sight",
+                    bot.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn company_ahead_is_a_bit_slower_and_company_behind_a_bit_faster() {
+        let (mut ahead, mut behind) = (0, 0);
+        for seed in 0..16 {
+            // One human and their company fill the route: every new bot is company.
+            let mut world = company_world(
+                SimConfig {
+                    target_riders: 1,
+                    max_route_riders: 7,
+                    ..SimConfig::default()
+                },
+                seed,
+            );
+            world.drain_events();
+            world.join_human("Anna", 70.0);
+            let level = DEFAULT_LEVEL_WKG;
+            for id in joined_bots(&mut world) {
+                let bot = world.rider(id).unwrap();
+                let wkg = bot_level(bot);
+                if world.route(0).forward_gap(0.0, bot.position) < 10_000.0 {
+                    ahead += 1;
+                    assert!(
+                        (level * 0.85 * 0.97..=level * 0.95 * 1.03).contains(&wkg),
+                        "ahead at {wkg}"
+                    );
+                } else {
+                    behind += 1;
+                    assert!(
+                        (level * 1.05 * 0.97..=level * 1.15 * 1.03).contains(&wkg),
+                        "behind at {wkg}"
+                    );
+                }
+            }
+        }
+        assert!(ahead > behind && behind > 0, "{ahead} ahead, {behind} behind");
+    }
+
+    #[test]
+    fn a_full_route_brings_its_far_bots_to_a_lonely_human() {
+        let config = SimConfig {
+            target_riders: 6,
+            max_route_riders: 6,
+            ..SimConfig::default()
+        };
+        let mut world = company_world(config, 3);
+        let bots: Vec<RiderId> = world.riders().map(|r| r.id).collect();
+        for (k, id) in bots.iter().enumerate() {
+            place(&mut world, *id, 9000.0 + 10.0 * k as f64, 8.0);
+        }
+        let anna = world.join_human("Anna", 70.0);
+        for _ in 0..40 {
+            world.tick(DT);
+        }
+        assert_eq!(world.riders().count(), 6);
+        let at = world.rider(anna).unwrap().position;
+        let near = world
+            .riders()
+            .filter(|r| r.is_bot() && world.route(0).loop_distance(at, r.position) <= 1500.0)
+            .count();
+        assert_eq!(near, 5, "every bot moved to Anna");
+    }
+
+    #[test]
+    fn humans_in_a_race_bring_no_company() {
+        let mut world = company_world(
+            SimConfig {
+                target_riders: 1,
+                race_countdown_s: 30.0,
+                ..SimConfig::default()
+            },
+            1,
+        );
+        let anna = world.join_human("Anna", 70.0);
+        world.start_race(1, Some(anna)).unwrap();
+        assert_eq!(world.route_target(0), 1);
+    }
+
+    fn spawn_a_group(world: &mut World, at_least: usize) -> Vec<RiderId> {
+        loop {
+            world.drain_events();
+            let n = world.spawn_group(0, None, 5);
+            let ids = joined_bots(world);
+            assert_eq!(ids.len(), n);
+            if n >= at_least {
+                return ids;
+            }
+        }
+    }
+
+    #[test]
+    fn a_group_starts_together_in_rows_at_about_one_level() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let ids = spawn_a_group(&mut world, 5);
+        let members: Vec<&Rider> = ids.iter().map(|id| world.rider(*id).unwrap()).collect();
+        let group = group_of(members[0]);
+        assert!(group.is_some());
+        assert!(members.iter().all(|r| group_of(r) == group));
+        let route = world.route(0);
+        for r in &members {
+            assert!(
+                route.loop_distance(members[0].position, r.position) <= 2.5 + 1e-9,
+                "rows 2.5 m apart"
+            );
+        }
+        let lanes: BTreeSet<u8> = members[..4].iter().map(|r| r.target_lane).collect();
+        assert_eq!(lanes.len(), 4, "the first row spans the lanes");
+        let levels: Vec<f64> = members.iter().map(|r| bot_level(r)).collect();
+        let (low, high) = levels
+            .iter()
+            .fold((f64::MAX, f64::MIN), |(l, h), &w| (l.min(w), h.max(w)));
+        assert!(high / low <= 1.03 / 0.97 + 1e-9, "levels {levels:?}");
+    }
+
+    #[test]
+    fn a_bot_ahead_of_its_group_waits_and_one_far_away_rides_alone() {
+        // No bots of its own, and the group's bots never leave.
+        let config = SimConfig {
+            target_riders: 0,
+            bot_despawn_distance_m: f64::INFINITY,
+            ..SimConfig::default()
+        };
+        let mut world = world_with(flat_loop(10_000.0), config);
+        world.join_human("Anna", 70.0);
+        let ids = spawn_a_group(&mut world, 3);
+        let (a, b, c) = (ids[0], ids[1], ids[2]);
+        place(&mut world, a, 1000.0, 8.0);
+        place(&mut world, b, 970.0, 8.0);
+        place(&mut world, c, 965.0, 8.0);
+        for &id in &ids[3..] {
+            place(&mut world, id, 960.0, 8.0);
+        }
+        assert!(surroundings_of(&world, a).waiting_for_group);
+        assert!(!surroundings_of(&world, b).waiting_for_group);
+        place(&mut world, a, 980.0, 8.0);
+        assert!(!surroundings_of(&world, a).waiting_for_group, "close enough");
+        place(&mut world, a, 1500.0, 8.0);
+        assert!(surroundings_of(&world, a).leave_group);
+        world.tick(DT);
+        assert_eq!(group_of(world.rider(a).unwrap()), None);
+    }
+
+    fn marked_loop() -> Route {
+        Route::new(RouteSpec {
+            id: "marked".into(),
+            name: "Marked".into(),
+            lanes: 4,
+            seed: 1,
+            points: vec![Point::new(0.0, 0.0, 0.0), Point::new(5000.0, 0.0, 0.0)],
+            markers: vec![
+                Marker {
+                    kind: MarkerKind::StartFinish,
+                    distance: 0.0,
+                },
+                Marker {
+                    kind: MarkerKind::Climb { length: 1000.0 },
+                    distance: 500.0,
+                },
+                Marker {
+                    kind: MarkerKind::Sprint { length: 300.0 },
+                    distance: 2000.0,
+                },
+            ],
+            walk: vec![],
+        })
+        .expect("valid route")
+    }
+
+    #[test]
+    fn a_bot_sees_the_next_line_the_human_and_who_comes_past() {
+        let mut world = empty_world(marked_loop());
+        let anna = world.join_human("Anna", 70.0);
+        let bot = world.spawn_bot_matched(0, &[]);
+        place(&mut world, bot, 1200.0, 8.0);
+        place(&mut world, anna, 1205.0, 10.0);
+        let seen = surroundings_of(&world, bot);
+        assert_eq!(
+            seen.line_ahead,
+            Some(LineAhead {
+                kind: LineKind::Summit,
+                index: 1,
+                distance_m: 300.0
+            })
+        );
+        assert_eq!(
+            seen.passer,
+            Some(Passer {
+                human: true,
+                speed_gain: 2.0,
+                lane: 1
+            })
+        );
+        assert_eq!(seen.human_m, Some(5.0));
+        assert_eq!(seen.gap_ahead_m, Some(5.0));
+        assert!(!seen.wheel_behind);
+
+        place(&mut world, anna, 1197.0, 8.0);
+        let seen = surroundings_of(&world, bot);
+        assert!(seen.wheel_behind);
+        assert_eq!(seen.passer, None);
+
+        place(&mut world, bot, 1600.0, 8.0);
+        assert_eq!(
+            surroundings_of(&world, bot).line_ahead.map(|l| (l.kind, l.distance_m)),
+            Some((LineKind::Sprint, 700.0))
+        );
     }
 }

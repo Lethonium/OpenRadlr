@@ -938,3 +938,22 @@ test("a penguin holds its flag lower, in its flipper", () => {
   const flag = renderer.draws.find((d) => d.handle === view.flagMesh);
   assert.ok(flag.model[13] < 101.2, `at ${flag.model[13]}`);
 });
+
+// --- bot kits (#64) ------------------------------------------------------------------
+
+test("a bot rides in its team's kit; one without a known team in the bot colour", () => {
+  const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  // Past label range, so no DOM is needed.
+  const teamed = { id: 41, name: "Gus Tailwind", is_bot: true, team: "moos", distance: 200, lane: 0, speed: 8, power: 150 };
+  const plain = { id: 42, name: "Sally Sprocket", is_bot: true, distance: 205, lane: 3, speed: 8, power: 150 };
+  view.render({ riders: [me, teamed, plain], myId: 1, timeS: 3, colors });
+  const tintAt = (rider) => {
+    const road = riderPosition(squareRoute(), rider.distance, rider.lane).position;
+    const body = view.bodies[riderLook(rider.id).variant];
+    const draw = renderer.draws.find((d) => d.handle === body && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
+    return draw.tint.map((c) => Math.round(c * 255));
+  };
+  assert.deepEqual(tintAt(teamed), [0x4f, 0x8f, 0x3a]);
+  assert.deepEqual(tintAt(plain), [0, 0, 255]);
+});
