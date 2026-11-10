@@ -55,6 +55,8 @@ const SCENE = Object.freeze({
   lemonReach: { behind: 30, ahead: 260 },
   shadowMapSize: 2048,
   labelDistance: 80,
+  /** My best lap's ghost (ride/ghostLap.js): see-through, pale, unshaded a little. */
+  ghost: { alpha: 0.38, unlit: 0.4, tint: [0.75, 0.9, 1] },
   nearCameraHide: 4,
 });
 
@@ -82,7 +84,7 @@ export function projectToScreen(viewProjection, point, width, height) {
  */
 export function riderLabelElement(rider, myId) {
   const element = document.createElement("div");
-  element.className = rider.id === myId ? "label3d me" : "label3d";
+  element.className = rider.id === myId ? "label3d me" : rider.ghost ? "label3d ghost" : "label3d";
   const name = document.createElement("span");
   name.textContent = rider.name;
   element.append(name);
@@ -660,9 +662,9 @@ export class View3D {
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
-      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
       const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
-      visible.push({ rider, position, forward, fromCamera, tint, ...parts });
+      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
     }
 
     // Seated riders are drawn through their vehicle, once per vehicle.
@@ -714,7 +716,7 @@ export class View3D {
       }
       this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
       for (const part of visible) {
-        if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
+        if (part.ghost || Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
         for (const piece of part.torso) this.renderer.drawShadowCaster(piece.mesh, piece.model);
         for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
@@ -762,6 +764,7 @@ export class View3D {
     for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
     for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
     for (const part of visible) {
+      if (part.ghost) continue;
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
       for (const limb of part.limbs) this.renderer.draw(limb.mesh, limb.model);
@@ -790,8 +793,17 @@ export class View3D {
     this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
     for (const part of visible) {
-      if (part.fromCamera > 150) continue;
+      if (part.ghost || part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
+    }
+    // Ghosts last, see-through over everything else.
+    for (const part of visible) {
+      if (!part.ghost) continue;
+      const look = { ...SCENE.ghost, tint: part.tint };
+      this.renderer.drawTransparent(this.bodies[part.variant], part.model, look);
+      for (const piece of part.torso) this.renderer.drawTransparent(piece.mesh, piece.model, look);
+      for (const limb of part.limbs) this.renderer.drawTransparent(limb.mesh, limb.model, look);
+      for (const wheel of part.wheels) this.renderer.drawTransparent(this.wheel, wheel, look);
     }
     if (this.weather && this.biome.weather && this.renderer.drawWeather) {
       let right = cross(forward, [0, 1, 0]);

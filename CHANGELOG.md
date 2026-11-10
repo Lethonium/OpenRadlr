@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Golden lemons: a few lemons float over the road, each in one lane, and move to new places every day (the same for every rider). Ride through one in its lane to collect it; they grow back every lap. A pickup shows in the ticker with your all-time count, and the finish screen lists the ride's lemons. No counter on the HUD: it's an easter egg.
+- Ghost lap: your best lap on a loop route is kept in the browser, and a see-through rider labelled "Best lap" rides it again from the line, lane changes and all. The HUD shows the live gap ("Best lap +4.2 s", red behind, green ahead), and a faster lap becomes the new ghost at once. Hidden in races and events.
 
 - Four research-backed ERG sessions (Seiler 4×8, Rønnestad 30/15, 40/20, over-unders), each naming its source, and a power-profile preview of the selected session in the workout picker. (#26)
 - A velodrome: a flat 250 m oval with no bots. With `OPENRADLR_OBN_URL` set it is shared with riders of other apps (Incyclist, VeloPopuli, ...) through an OpenBikeNet server: the start menu marks it *Shared* and says what is sent (name, position, speed, power and cadence; never heart rate). Riders from other apps get their own tint, a label with their app, and a badge in the rider list. Without the variable nothing leaves the server. A switch to stop sharing power and cadence follows in #36. See ADR 0020.

@@ -758,3 +758,29 @@ test("disposing the view frees the lemon mesh", () => {
   view.dispose();
   assert.ok(renderer.disposed.includes(handle));
 });
+
+// --- ghost lap -------------------------------------------------------------------
+
+class TransparentRecorder extends RecordingRenderer {
+  transparent = [];
+  drawTransparent(handle, model, options) {
+    this.transparent.push({ handle, model, options });
+  }
+}
+
+test("my best lap's ghost is drawn see-through, casting no shadow, never solid", () => {
+  const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const ghost = { id: -1, name: "Best lap", distance: 200, lane: 2, speed: 8, power: 0, ghost: true };
+  // 100 m ahead: past label range, so no DOM is needed.
+  view.render({ riders: [me, ghost], myId: 1, timeS: 3, colors });
+  const bike = view.bodies[riderLook(-1).variant];
+  const seeThrough = renderer.transparent.filter((d) => d.handle === bike);
+  assert.equal(seeThrough.length, 1, "the ghost's bike is see-through");
+  assert.ok(seeThrough[0].options.alpha < 0.6);
+  const road = riderPosition(squareRoute(), 200, 2).position;
+  close(seeThrough[0].model[12], road[0], 0.01);
+  const solidAtGhost = (list) => list.filter((d) => d.handle === bike && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
+  assert.equal(solidAtGhost(renderer.draws).length, 0, "not drawn solid");
+  assert.equal(solidAtGhost(renderer.casters).length, 0, "no shadow");
+});

@@ -829,4 +829,10 @@ export default {
   "lemons.total.one": "{n} insgesamt",
   "lemons.total.other": "{n} insgesamt",
   "finish.lemons": "Goldene Zitronen",
+  "ghost.name": "Beste Runde",
+  "ghost.gap": "Beste Runde {gap}",
+  "ghost.gapTitle": "Dein Abstand zu deiner besten Runde auf dieser Strecke",
+  "ghost.ready": "Deine beste Runde hier: {time}. Ihr Geist startet mit dir an der Linie.",
+  "ghost.firstLap": "Runde in {time}: ihr Geist fährt ab jetzt mit.",
+  "ghost.newBest": "Neue beste Runde: {time} ({gain}). Der Geist fährt sie ab jetzt.",
 };
