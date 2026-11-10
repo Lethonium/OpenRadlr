@@ -75,12 +75,23 @@ on the Ashtanga opening practice, the other two on the ACSM stretching
 guideline (holds of about 60 s per muscle group). No trial of yoga in cyclists
 is cited.
 
-Every pose has a **cue** under its name in the HUD, a short line on what to do
-with the body (empty during rest). The bodyweight exercises have cues too.
+Every exercise has **steps** (two to eight short lines on how to get into the
+pose and hold it) and a **cue**, one line on what to keep in mind. The HUD's
+guide card shows them: during an exercise under "How to", and during every
+rest, Get ready included, for the exercise coming up ("Coming up: Low lunge"),
+so the steps can be read before it starts. After the last exercise the card
+hides. The bodyweight exercises have steps and cues too.
+
+The **sun salutation** is a flow: its eight steps are its movements, one
+breath each, and the guide marks the one under way. The mark follows the clip
+(a movement every 4 s, `flow` in `EXERCISES`; stepping back to plank and
+lowering share one breath across two clip keys) and starts over with each
+round. It is off while paused.
 
 **Sided poses** (low lunge and pigeon) switch sides halfway through the block.
-The first half shows the cue, and at the midpoint the HUD reads "Switch sides"
-with a single beep, if beeps are on. The session sends the side on the wire
+The guide names the side: "Right leg in front" in the first half and coming
+up, "Switch sides: left leg in front" from the midpoint, with a single beep, if
+beeps are on. The session sends the side on the wire
 (`right` at the start, `left` at the midpoint), so every rider at the gym sees
 the change: a rider on their left side is mirrored in the view. Pausing or
 skipping a sided block behaves as for any block; resuming after the midpoint
@@ -133,9 +144,18 @@ reduced motion the camera cuts instead of flying.
   the current block (counted as skipped); **End workout** finishes early.
 - A beep (60 ms) and a short vibration in each of the last three seconds of a
   block, if you left it on.
-- The camera swings to a close side view framing your own spot on the gym mat,
-  with the picture shifted down clear of the timer card; with reduced motion it
-  cuts instead of swinging. The clips still play.
+- The information keeps to the corners so the middle is free for the avatar:
+  the timer ring top left, the stats and the guide card top right, the buttons
+  bottom left. On a phone on its side the side view and the buttons swap
+  corners; on an upright phone the buttons span the foot.
+- The camera swings to a close front view framing your own spot on the gym
+  mat; with reduced motion it cuts instead of swinging. The clips still play.
+- A **side view** in a framed box (bottom right) shows your avatar from its
+  left, so a pose can be read in profile as well. It is a second pass of the
+  3D view into that box (`SIDE_CAMERA` in `view3d.js`) and draws only your own
+  avatar: the riders on the next spots would stand in the way. It follows the
+  body along the mat, so a plank stays framed like a standing pose. It shows
+  only when the 3D gym is drawn.
 
 A dropped connection comes back like a ride does: the plan clock keeps running
 on the client, the client re-sends its current `workout`, and the avatar is
