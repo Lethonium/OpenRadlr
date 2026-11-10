@@ -835,4 +835,8 @@ export default {
   "ghost.ready": "Your best lap here: {time}. Its ghost starts with you at the line.",
   "ghost.firstLap": "Lap in {time}: its ghost rides with you from now on.",
   "ghost.newBest": "New best lap: {time} ({gain}). The ghost rides it from now on.",
+  "milestone.distance": "{distance} on OpenRadlr!",
+  "milestone.everest.one": "You've climbed Everest! 8,849 m in all",
+  "milestone.everest.other": "You've climbed Everest {n} times!",
+  "milestone.summit": "First time over this top! · {route}",
 };

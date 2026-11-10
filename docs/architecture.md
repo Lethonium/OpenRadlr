@@ -130,6 +130,7 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 | `zones.js` | Scenery zones from the route file, or seeded defaults (village, river, forest) |
 | `features.js` | River carving and water, stone bridge, village (houses, church, pavements, lamps, signs), farms with animals, wind turbines, spectators (at the finish, climbs and sprints, lining the last 600 m of each climb), guard rails, warning signs, flamme rouge |
 | `lemonModel.js` | The golden lemon floating over the road (lemons are placed by `ride/lemons.js`) |
+| `banners.js`, `pixelFont.js` | Names on the arches and banners over the road (1 km and 500 m to a climb's top, halfway), in a 5 × 7 pixel font made of geometry |
 | `structures.js` | Low-poly models placed by `features.js` (houses, church, barn, silo, bales, lamps, signs, turbines, cows, sheep, spectators, flags) |
 | `crowd.js` | How much of the crowd is out for the riders online, and how each spectator cheers a rider coming by |
 | `chunks.js` | Splits the static world into 300 m tiles; only tiles in view are drawn and only tiles near the rider cast shadows |

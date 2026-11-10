@@ -10,6 +10,7 @@
  *
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
+import { buildBanners, letterArch } from "./banners.js";
 import { ChunkedMesh } from "./chunks.js";
 import {
   BRIDGE_HALF_LENGTH,
@@ -697,7 +698,7 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
   return own ? mesh.build() : mesh;
 }
 
-/** Arches at the start/finish line and at climb and sprint segments. */
+/** Arches at the start/finish line and at climb and sprint segments, with their names; banners counting down climbs and at halfway. */
 export function buildArches(route, { biome = temperate } = {}) {
   const colors = biome.arch;
   const mesh = new MeshBuilder();
@@ -726,10 +727,14 @@ export function buildArches(route, { biome = temperate } = {}) {
     }
   };
   for (const marker of route.markers) {
-    if (marker.type === "start_finish") arch(marker.distance, colors.start, 5.6);
-    else if (marker.type === "climb") arch(marker.distance, colors.climb);
-    else if (marker.type === "sprint") arch(marker.distance, colors.sprint);
+    const height = marker.type === "start_finish" ? 5.6 : 5.2;
+    if (marker.type === "start_finish") arch(marker.distance, colors.start, height);
+    else if (marker.type === "climb") arch(marker.distance, colors.climb, height);
+    else if (marker.type === "sprint") arch(marker.distance, colors.sprint, height);
+    else continue;
+    letterArch(mesh, route, marker, { height, halfWidth, depth: 0.4 });
   }
+  buildBanners(mesh, route, { biome });
   return mesh.build();
 }
 
