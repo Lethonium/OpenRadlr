@@ -4,7 +4,7 @@
  */
 import { formatDuration } from "../util/format.js";
 import { t } from "../i18n/i18n.js";
-import { EXERCISES } from "../workout/plan.js";
+import { EXERCISES, flowStep } from "../workout/plan.js";
 
 /** The planned exercise time (rests excluded): what a workout's active time is measured against. */
 const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (block.kind === "exercise" ? block.seconds : 0), 0);
@@ -29,13 +29,35 @@ export function workoutHudText(position, { state, heartRate }) {
     exercise: position.block?.label ?? "",
     paused: state === "paused" ? t("workout.hud.paused") : "",
     time: formatDuration(Math.ceil(position.blockRemainingS)),
-    cue: position.block?.kind !== "exercise" ? "" : position.side === "left" ? t("workout.switchSides") : (EXERCISES[position.block.exercise]?.cue ?? ""),
+    ...guideText(position, state),
     next: next ? t("workout.hud.next", { label: next.label, s: next.seconds }) : t("workout.hud.last"),
     block: t("workout.hud.block", { n: Math.min(position.index + 1, position.count), count: position.count }),
     // Elapsed rounds down and remaining up, like the ring: the first frame reads 0:00 and the full length.
     elapsed: formatDuration(Math.floor(position.elapsedS)),
     remaining: formatDuration(Math.ceil(position.remainingS)),
     hr: Number.isFinite(heartRate) ? `${Math.round(heartRate)} bpm` : "",
+  };
+}
+
+/**
+ * The instructions card: how to do the exercise under way, or during a rest
+ * (and Get ready) the one coming up, so the steps can be read before it
+ * starts. A flow marks the movement of the breath in progress; a sided pose
+ * names the side.
+ */
+function guideText(position, state) {
+  const block = position.block;
+  const now = block?.kind === "exercise";
+  const id = now ? block.exercise : block?.kind === "rest" && position.next?.kind === "exercise" ? position.next.exercise : null;
+  const exercise = id ? EXERCISES[id] : null;
+  if (!exercise) return { guideTitle: "", guideSide: "", steps: [], step: -1, cue: "" };
+  const side = !exercise.sided ? "" : now && position.side === "left" ? t("workout.side.left") : t("workout.side.right");
+  return {
+    guideTitle: now ? t("workout.guide.howTo") : t("workout.guide.comingUp", { label: exercise.name }),
+    guideSide: side,
+    steps: exercise.steps,
+    step: now && state !== "paused" ? flowStep(id, block.seconds - position.blockRemainingS) : -1,
+    cue: exercise.cue,
   };
 }
 
@@ -78,25 +100,58 @@ export function resyncWorkout(workout, connection) {
   if (workout) connection.workout(workout.currentExercise());
 }
 
-/** Writes HUD text into the `[data-w]` elements of the workout HUD and drives the ring. */
+/** Writes HUD text into the `[data-w]` elements of the workout HUD, the steps into its guide card, and drives the ring. */
 export class WorkoutStudioView {
   #root;
+  #steps = "";
 
   constructor(root) {
     this.#root = root;
   }
 
-  /** @param {{exercise: string, paused: string, time: string, next: string, block: string, elapsed: string, remaining: string, hr: string}} text @param {number} [progress] block progress 0..1 */
+  /**
+   * @param {{exercise: string, paused: string, time: string, next: string, block: string, elapsed: string, remaining: string, hr: string,
+   *          guideTitle: string, guideSide: string, cue: string, steps: string[], step: number}} text
+   * @param {number} [progress] block progress 0..1
+   */
   render(text, progress = 0) {
-    for (const [key, value] of Object.entries(text)) {
+    const { steps = [], step = -1, ...lines } = text;
+    for (const [key, value] of Object.entries(lines)) {
       const element = this.#root.querySelector(`[data-w="${key}"]`);
       if (element && element.textContent !== value) element.textContent = value;
     }
+    this.#renderSteps(steps, step);
     const ring = this.#root.querySelector(".workout-ring");
     ring?.style.setProperty("--progress", String(Math.min(1, Math.max(0, progress))));
     const hr = this.#root.querySelector('[data-w="hr"]');
     // The caption goes with the value.
     if (hr) hr.parentElement.hidden = text.hr === "";
+  }
+
+  /** The list is rebuilt only when the steps change; the mark on the step in progress moves every frame. */
+  #renderSteps(steps, step) {
+    const guide = this.#root.querySelector(".workout-guide");
+    if (guide) guide.hidden = steps.length === 0;
+    const list = this.#root.querySelector('[data-w-list="steps"]');
+    if (!list) return;
+    const key = steps.join("\n");
+    if (key !== this.#steps) {
+      this.#steps = key;
+      list.replaceChildren(
+        ...steps.map((line) => {
+          const item = list.ownerDocument.createElement("li");
+          item.textContent = line;
+          return item;
+        }),
+      );
+    }
+    Array.from(list.children).forEach((item, index) => {
+      const mark = index === step ? "current" : "";
+      if (item.className === mark) return;
+      item.className = mark;
+      // On a short screen the card scrolls: keep the step under way in sight.
+      if (mark) item.scrollIntoView?.({ block: "nearest" });
+    });
   }
 
   dispose() {

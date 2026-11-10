@@ -7,22 +7,43 @@
 import { t } from "../i18n/i18n.js";
 import { VENUES } from "./venues.js";
 
-/** The exercise ids the server and the 3D gym know about, with display names, a one-line cue and whether a pose is sided (right half, then left). */
+/**
+ * The exercise ids the server and the 3D gym know about, with display names, a
+ * one-line cue, the steps into the pose and whether a pose is sided (right
+ * half, then left). A flow (`sun_salutation`) moves on every `stepS` seconds of
+ * its clip; `order` says which step each of those movements is.
+ */
+const exercise = ([name, cue, steps], extra = {}) =>
+  Object.freeze({
+    get name() { return t(name); },
+    get cue() { return t(cue); },
+    get steps() { return t(steps).split("\n"); },
+    ...extra,
+  });
 export const EXERCISES = Object.freeze({
-  squats: { get name() { return t("workout.exercise.squats"); }, get cue() { return t("workout.cue.squats"); } },
-  situps: { get name() { return t("workout.exercise.situps"); }, get cue() { return t("workout.cue.situps"); } },
-  pushups: { get name() { return t("workout.exercise.pushups"); }, get cue() { return t("workout.cue.pushups"); } },
-  jumping_jacks: { get name() { return t("workout.exercise.jumpingJacks"); }, get cue() { return t("workout.cue.jumpingJacks"); } },
-  plank: { get name() { return t("workout.exercise.plank"); }, get cue() { return t("workout.cue.plank"); } },
-  burpees: { get name() { return t("workout.exercise.burpees"); }, get cue() { return t("workout.cue.burpees"); } },
-  sun_salutation: { get name() { return t("workout.exercise.sunSalutation"); }, get cue() { return t("workout.cue.sunSalutation"); } },
-  forward_fold: { get name() { return t("workout.exercise.forwardFold"); }, get cue() { return t("workout.cue.forwardFold"); } },
-  downward_dog: { get name() { return t("workout.exercise.downwardDog"); }, get cue() { return t("workout.cue.downwardDog"); } },
-  cobra: { get name() { return t("workout.exercise.cobra"); }, get cue() { return t("workout.cue.cobra"); } },
-  child_pose: { get name() { return t("workout.exercise.childPose"); }, get cue() { return t("workout.cue.childPose"); } },
-  low_lunge: { get name() { return t("workout.exercise.lowLunge"); }, get cue() { return t("workout.cue.lowLunge"); }, sided: true },
-  pigeon: { get name() { return t("workout.exercise.pigeon"); }, get cue() { return t("workout.cue.pigeon"); }, sided: true },
+  squats: exercise(["workout.exercise.squats", "workout.cue.squats", "workout.steps.squats"]),
+  situps: exercise(["workout.exercise.situps", "workout.cue.situps", "workout.steps.situps"]),
+  pushups: exercise(["workout.exercise.pushups", "workout.cue.pushups", "workout.steps.pushups"]),
+  jumping_jacks: exercise(["workout.exercise.jumpingJacks", "workout.cue.jumpingJacks", "workout.steps.jumpingJacks"]),
+  plank: exercise(["workout.exercise.plank", "workout.cue.plank", "workout.steps.plank"]),
+  burpees: exercise(["workout.exercise.burpees", "workout.cue.burpees", "workout.steps.burpees"]),
+  // Fold, half lift, step back and lower (two clip keys, one breath), up dog, down dog, half lift, fold, arms up.
+  sun_salutation: exercise(["workout.exercise.sunSalutation", "workout.cue.sunSalutation", "workout.steps.sunSalutation"], { flow: Object.freeze({ stepS: 4, order: Object.freeze([0, 1, 2, 2, 3, 4, 5, 6, 7]) }) }),
+  forward_fold: exercise(["workout.exercise.forwardFold", "workout.cue.forwardFold", "workout.steps.forwardFold"]),
+  downward_dog: exercise(["workout.exercise.downwardDog", "workout.cue.downwardDog", "workout.steps.downwardDog"]),
+  cobra: exercise(["workout.exercise.cobra", "workout.cue.cobra", "workout.steps.cobra"]),
+  child_pose: exercise(["workout.exercise.childPose", "workout.cue.childPose", "workout.steps.childPose"]),
+  low_lunge: exercise(["workout.exercise.lowLunge", "workout.cue.lowLunge", "workout.steps.lowLunge"], { sided: true }),
+  pigeon: exercise(["workout.exercise.pigeon", "workout.cue.pigeon", "workout.steps.pigeon"], { sided: true }),
 });
+
+/** The step of a flow exercise in progress `blockS` seconds into its block (its clip starts with the block), or -1. */
+export function flowStep(id, blockS) {
+  const flow = EXERCISES[id]?.flow;
+  if (!flow || !(blockS >= 0)) return -1;
+  const movement = Math.floor(blockS / flow.stepS) % flow.order.length;
+  return flow.order[movement];
+}
 
 const MAX_BLOCKS = 200;
 const MAX_BLOCK_S = 600;
