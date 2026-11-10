@@ -52,8 +52,10 @@ export function roadFrame(route, distance) {
     return [x, route.elevationAt(d), -y];
   };
   const center = toWorld(distance);
-  const ahead = toWorld(distance + 2);
-  const behind = toWorld(distance - 2);
+  // Past the ends of a route that isn't a loop both would land on the end: take the direction from inside.
+  const along = route.loop === false ? Math.min(route.length - 2, Math.max(2, distance)) : distance;
+  const ahead = toWorld(along + 2);
+  const behind = toWorld(along - 2);
   const flat = normalize([ahead[0] - behind[0], 0, ahead[2] - behind[2]]);
   const right = [-flat[2], 0, flat[0]];
   const forward = normalize([ahead[0] - behind[0], ahead[1] - behind[1], ahead[2] - behind[2]]);
@@ -1068,7 +1070,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     avoid,
     biome,
   });
-  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome });
+  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // The crowd's two poses are biome models like every other shape; the view
   // only alternates them (and adds the hop) while drawing.
   const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
