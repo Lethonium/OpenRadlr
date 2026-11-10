@@ -5140,15 +5140,11 @@ body.working-out #paddles {
 }
 
 .workout-hud {
+  --workout-pad: max(var(--gap), env(safe-area-inset-top));
   position: absolute;
   inset: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
-  padding: max(var(--gap), env(safe-area-inset-top)) max(var(--gap), env(safe-area-inset-right)) max(var(--gap), env(safe-area-inset-bottom)) max(var(--gap), env(safe-area-inset-left));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .workout-hud .glass,
@@ -5156,20 +5152,39 @@ body.working-out #paddles {
   pointer-events: auto;
 }
 
+/* The corners hold the information; the middle stays free for the avatar. */
+.workout-corner {
+  position: absolute;
+  top: var(--workout-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workout-corner-left {
+  left: max(var(--gap), env(safe-area-inset-left));
+  align-items: flex-start;
+}
+
+.workout-corner-right {
+  right: max(var(--gap), env(safe-area-inset-right));
+  align-items: stretch;
+  width: min(340px, 32vw);
+}
+
 .workout-main {
-  /* The ring card and the stats card are two cards: keep a gap between them. */
-  margin-bottom: 14px;
-  padding: 14px 24px 12px;
+  padding: 12px 18px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  max-width: 240px;
 }
 
 .workout-ring {
   --progress: 0;
-  width: 190px;
-  height: 190px;
+  width: 170px;
+  height: 170px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -5178,8 +5193,8 @@ body.working-out #paddles {
 }
 
 .workout-ring-inner {
-  width: 158px;
-  height: 158px;
+  width: 142px;
+  height: 142px;
   border-radius: 50%;
   background: var(--glass-strong);
   display: flex;
@@ -5191,7 +5206,7 @@ body.working-out #paddles {
 }
 
 .workout-exercise {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -5213,7 +5228,7 @@ body.working-out #paddles {
 
 .workout-time {
   font-family: var(--num);
-  font-size: 64px;
+  font-size: 54px;
   font-weight: 700;
   line-height: 1;
 }
@@ -5221,21 +5236,14 @@ body.working-out #paddles {
 .workout-next {
   color: var(--hud-muted);
   font-weight: 600;
-}
-
-.workout-cue {
-  color: var(--hud-muted);
-  font-size: 0.85em;
-  max-width: 100%;
-  overflow-wrap: anywhere;
   text-align: center;
 }
 
 .workout-stats {
-  margin-bottom: auto;
   display: flex;
-  gap: 22px;
-  padding: 10px 18px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
 }
 
 .workout-stats > div {
@@ -5246,37 +5254,187 @@ body.working-out #paddles {
 
 .workout-stats strong {
   font-family: var(--num);
-  font-size: 24px;
+  font-size: 22px;
+  white-space: nowrap;
 }
 
+/* How to do the pose under way, or the one coming up during a rest. */
+.workout-guide {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Room for the side view below it. */
+  max-height: calc(100vh - 2 * var(--workout-pad) - 120px - var(--workout-inset-h));
+  overflow-y: auto;
+}
+
+.workout-guide-side {
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.workout-guide-side:empty,
+.workout-cue:empty {
+  display: none;
+}
+
+.workout-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.workout-steps li {
+  color: var(--hud-muted);
+}
+
+/* The movement of the breath in progress (the sun salutation). */
+.workout-steps li.current {
+  color: inherit;
+  font-weight: 700;
+}
+
+.workout-steps li.current::marker {
+  color: var(--accent);
+}
+
+.workout-cue {
+  margin: 2px 0 0;
+  color: var(--hud-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+/* The frame of the side view: the 3D view draws into this box, under it. */
+.workout-hud {
+  --workout-inset-w: clamp(200px, 30vw, 440px);
+  --workout-inset-h: calc(var(--workout-inset-w) * 3 / 4);
+}
+
+.workout-side-view {
+  position: absolute;
+  right: max(var(--gap), env(safe-area-inset-right));
+  bottom: max(var(--gap), env(safe-area-inset-bottom));
+  width: var(--workout-inset-w);
+  height: var(--workout-inset-h);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 3px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.workout-side-view .caption {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+}
+
+/* The buttons take the lower left, the last free corner. */
 .workout-buttons {
+  position: absolute;
+  left: max(var(--gap), env(safe-area-inset-left));
+  bottom: max(var(--gap), env(safe-area-inset-bottom));
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 10px;
+  max-width: calc(100% - var(--workout-inset-w) - 3 * var(--gap));
+}
+
+/* Short screens (a phone on its side): the side view moves to the empty lower left. */
+@media (max-height: 520px) {
+  .workout-hud {
+    --workout-inset-w: clamp(160px, 26vw, 260px);
+  }
+
+  .workout-side-view {
+    right: auto;
+    left: max(var(--gap), env(safe-area-inset-left));
+  }
+
+  .workout-buttons {
+    left: auto;
+    right: max(var(--gap), env(safe-area-inset-right));
+    justify-content: flex-end;
+  }
+
+  /* Clear of the stats above and the buttons below. */
+  .workout-guide {
+    max-height: calc(100vh - 2 * var(--workout-pad) - 140px);
+  }
+}
+
+/* Narrow screens (a phone upright): smaller ring and stats, the side view above the buttons. */
+@media (max-width: 640px) {
+  .workout-hud {
+    --workout-inset-w: 44vw;
+  }
+
+  .workout-corner-right {
+    width: auto;
+    left: calc(max(var(--gap), env(safe-area-inset-left)) + 140px);
+  }
+
+  .workout-side-view {
+    bottom: calc(max(var(--gap), env(safe-area-inset-bottom)) + 56px);
+  }
+
+  .workout-buttons {
+    right: max(var(--gap), env(safe-area-inset-right));
+    max-width: none;
+    justify-content: center;
+  }
+
+  .workout-guide {
+    max-height: calc(100vh - 2 * var(--workout-pad) - 190px - var(--workout-inset-h));
+  }
 }
 
 @media (max-width: 640px), (max-height: 520px) {
-  .workout-ring {
-    width: 140px;
-    height: 140px;
+  .workout-main {
+    padding: 8px 10px;
   }
 
-  .workout-ring-inner {
+  .workout-ring {
     width: 116px;
     height: 116px;
   }
 
+  .workout-ring-inner {
+    width: 96px;
+    height: 96px;
+  }
+
   .workout-exercise {
-    font-size: 16px;
+    font-size: 13px;
   }
 
   .workout-time {
-    font-size: 44px;
+    font-size: 34px;
+  }
+
+  .workout-next {
+    font-size: 12px;
   }
 
   .workout-stats {
-    gap: 14px;
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .workout-stats strong {
+    font-size: 16px;
+  }
+
+  .workout-steps {
+    font-size: 13px;
   }
 }
 

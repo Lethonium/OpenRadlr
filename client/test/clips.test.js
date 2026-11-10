@@ -168,3 +168,10 @@ test("a mirrored plant names the other foot", () => {
   assert.deepEqual(mirrorPlant({ mesh: "footR", at: [0.1, -0.06, -0.2], z: 0.3 }), { mesh: "footL", at: [-0.1, -0.06, -0.2], z: 0.3 });
   assert.equal(mirrorPlant(null), null);
 });
+
+test("the sun salutation's clip moves one key per step of its flow", () => {
+  const { flow } = EXERCISES.sun_salutation;
+  const clip = CLIPS.sun_salutation;
+  assert.equal(clip.loopS, flow.stepS * flow.order.length);
+  for (const key of clip.keys) assert.equal(key.t % flow.stepS, 0, `key at ${key.t}`);
+});

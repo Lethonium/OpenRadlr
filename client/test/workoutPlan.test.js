@@ -62,3 +62,14 @@ test("every exercise has a name and a cue", () => {
     }
   }
 });
+test("every exercise has two to eight steps of text", () => {
+  for (const [id, exercise] of Object.entries(EXERCISES)) {
+    assert.ok(exercise.steps.length >= 2 && exercise.steps.length <= 8, `${id} has ${exercise.steps.length} steps`);
+    for (const step of exercise.steps) assert.ok(/\S/.test(step) && !/^workout\./.test(step), `${id}: ${step}`);
+  }
+});
+test("a flow's movements each point at one of its steps", () => {
+  const { flow, steps } = EXERCISES.sun_salutation;
+  for (const index of flow.order) assert.ok(index >= 0 && index < steps.length, String(index));
+  assert.deepEqual([...new Set(flow.order)], steps.map((_, i) => i));
+});

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createPlan, planPositionAt, withGetReady } from "../public/js/workout/plan.js";
 import { WorkoutSession } from "../public/js/workout/workoutSession.js";
 import { createCue } from "../public/js/workout/cue.js";
-import { blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "../public/js/view/workoutStudioView.js";
+import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "../public/js/view/workoutStudioView.js";
 import { EXERCISES } from "../public/js/workout/plan.js";
 import { t } from "../public/js/i18n/i18n.js";
 import { PRESETS } from "../public/js/workout/presets.js";
@@ -230,11 +230,94 @@ test("the cue line shows the exercise's cue", () => {
   assert.equal(workoutHudText(yogaAt(40), { state: "block", heartRate: null }).cue, EXERCISES.cobra.cue);
 });
 
-test("the second half of a sided block says switch sides", () => {
-  const position = { ...yogaAt(130), side: "left" };
-  assert.equal(workoutHudText(position, { state: "block", heartRate: null }).cue, t("workout.switchSides"));
+test("an exercise lists its steps under a how-to title", () => {
+  const text = workoutHudText(yogaAt(40), { state: "block", heartRate: null });
+  assert.equal(text.guideTitle, t("workout.guide.howTo"));
+  assert.deepEqual(text.steps, EXERCISES.cobra.steps);
+  assert.equal(text.step, -1);
 });
 
-test("rest has no cue", () => {
-  assert.equal(workoutHudText(yogaAt(95), { state: "block", heartRate: null }).cue, "");
+test("a rest shows the steps and the cue of the pose coming up", () => {
+  const text = workoutHudText(yogaAt(95), { state: "block", heartRate: null });
+  assert.equal(text.guideTitle, t("workout.guide.comingUp", { label: EXERCISES.pigeon.name }));
+  assert.deepEqual(text.steps, EXERCISES.pigeon.steps);
+  assert.equal(text.cue, EXERCISES.pigeon.cue);
+});
+
+test("get ready shows the first pose coming up", () => {
+  assert.deepEqual(workoutHudText(yogaAt(5), { state: "ready", heartRate: null }).steps, EXERCISES.cobra.steps);
+});
+
+test("the last rest of a plan has no guide", () => {
+  const position = planPositionAt(withGetReady(createPlan({ id: "r", name: "R", blocks: [{ kind: "exercise", exercise: "cobra", seconds: 10 }, { kind: "rest", seconds: 10 }] })), 45);
+  const text = workoutHudText(position, { state: "block", heartRate: null });
+  assert.deepEqual([text.guideTitle, text.steps, text.cue, text.guideSide], ["", [], "", ""]);
+});
+
+test("a sided pose names the right side first, then says switch to the left", () => {
+  assert.equal(workoutHudText({ ...yogaAt(110), side: "right" }, { state: "block", heartRate: null }).guideSide, t("workout.side.right"));
+  assert.equal(workoutHudText({ ...yogaAt(130), side: "left" }, { state: "block", heartRate: null }).guideSide, t("workout.side.left"));
+});
+
+test("a sided pose coming up starts on the right", () => {
+  assert.equal(workoutHudText(yogaAt(95), { state: "block", heartRate: null }).guideSide, t("workout.side.right"));
+});
+
+test("a pose without sides has no side line", () => {
+  assert.equal(workoutHudText(yogaAt(40), { state: "block", heartRate: null }).guideSide, "");
+});
+
+// Get ready 0-30, sun salutation 30-102
+const flowAt = (elapsed) => planPositionAt(withGetReady(createPlan({ id: "s", name: "S", blocks: [{ kind: "exercise", exercise: "sun_salutation", seconds: 72 }] })), elapsed);
+
+test("the sun salutation marks the movement of the breath in progress", () => {
+  assert.equal(workoutHudText(flowAt(31), { state: "block", heartRate: null }).step, 0);
+  assert.equal(workoutHudText(flowAt(30 + 9), { state: "block", heartRate: null }).step, 2);
+  assert.equal(workoutHudText(flowAt(30 + 13), { state: "block", heartRate: null }).step, 2);
+  assert.equal(workoutHudText(flowAt(30 + 34), { state: "block", heartRate: null }).step, 7);
+});
+
+test("the sun salutation starts its steps over with each round", () => {
+  assert.equal(workoutHudText(flowAt(30 + 36 + 1), { state: "block", heartRate: null }).step, 0);
+});
+
+test("a paused sun salutation marks no movement", () => {
+  assert.equal(workoutHudText(flowAt(31), { state: "paused", heartRate: null }).step, -1);
+});
+
+/** A `#workout-hud` stand-in: the `[data-w]` elements, the step list and the guide card. */
+function fakeHud() {
+  const element = () => ({ textContent: "", hidden: false, style: { setProperty() {} }, parentElement: { hidden: false } });
+  const list = { ...element(), children: [], ownerDocument: { createElement: () => ({ textContent: "", className: "" }) }, replaceChildren(...items) { this.children = items; } };
+  const elements = { ".workout-guide": element(), '[data-w-list="steps"]': list };
+  return {
+    elements,
+    list,
+    querySelector(selector) {
+      elements[selector] ??= element();
+      return elements[selector];
+    },
+  };
+}
+
+test("the HUD lists the steps and marks the one in progress", () => {
+  const hud = fakeHud();
+  new WorkoutStudioView(hud).render({ exercise: "Sun salutation", steps: ["Fold", "Lift", "Plank"], step: 1, hr: "" });
+  assert.deepEqual(hud.list.children.map((item) => [item.textContent, item.className]), [["Fold", ""], ["Lift", "current"], ["Plank", ""]]);
+  assert.equal(hud.elements[".workout-guide"].hidden, false);
+});
+
+test("the next frame moves the mark without rebuilding the list", () => {
+  const hud = fakeHud();
+  const view = new WorkoutStudioView(hud);
+  view.render({ steps: ["Fold", "Lift"], step: 0, hr: "" });
+  const [first, second] = hud.list.children;
+  view.render({ steps: ["Fold", "Lift"], step: 1, hr: "" });
+  assert.deepEqual([hud.list.children[0] === first, first.className, second.className], [true, "", "current"]);
+});
+
+test("without steps the guide card hides", () => {
+  const hud = fakeHud();
+  new WorkoutStudioView(hud).render({ steps: [], step: -1, hr: "" });
+  assert.equal(hud.elements[".workout-guide"].hidden, true);
 });
