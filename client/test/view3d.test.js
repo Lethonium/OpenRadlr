@@ -784,3 +784,12 @@ test("my best lap's ghost is drawn see-through, casting no shadow, never solid",
   assert.equal(solidAtGhost(renderer.draws).length, 0, "not drawn solid");
   assert.equal(solidAtGhost(renderer.casters).length, 0, "no shadow");
 });
+
+test("past the ends of a route that isn't a loop the road keeps its direction", () => {
+  const route = new RouteGeometry({ id: "line", name: "Line", lanes: 2, seed: 1, loop: false, points: [[0, 0, 0], [100, 0, 0]] });
+  for (const distance of [-24, -1, 0, 100, 124]) {
+    const frame = roadFrame(route, distance);
+    closeVec(frame.right, [0, 0, 1]);
+    closeVec([frame.forward[0], frame.forward[2]], [1, 0]);
+  }
+});
