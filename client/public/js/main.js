@@ -39,6 +39,7 @@ import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOptio
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
+import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
@@ -345,6 +346,10 @@ const app = {
   autosave: new RideAutosave({ store: indexedDbStore() }),
   /** Every finished ride, kept locally (#48, #83). */
   history: new RideHistory({ store: indexedDbStore("openradlr-history") }),
+  /** My best lap per route, ridden again by a ghost. */
+  ghosts: new GhostStore({ store: indexedDbStore("openradlr-ghosts") }),
+  /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
+  ghostLap: null,
   finishSplits: [],
   unfinished: null,
   reconnector: null,
@@ -1777,6 +1782,7 @@ function endRide() {
     lemonHunt: null,
     lemonsThisRide: 0,
     lemonTotal: 0,
+    ghostLap: null,
     distanceOffset: 0,
     lastMyDistance: null,
     lastOnRoute: null,
@@ -1999,6 +2005,7 @@ function startRoad({ simulated, setSimPower }) {
   initHud();
   initVehicle();
   startLemonHunt(app.route);
+  startGhostLap(app.route);
 
   app.actions = {
     // Before a junction the lane keys pick the road instead (#15); on a vehicle only the captain steers.
@@ -2422,6 +2429,78 @@ function collectLemons(me) {
   writeSetting(LEMONS_KEY, String(app.lemonHunt.total));
   // An easter egg: a line in the ticker, no counter on the HUD.
   notify(`${tn("lemons.picked", app.lemonsThisRide)} · ${tn("lemons.total", app.lemonHunt.total)}`);
+}
+
+// ------------------------------------------------------------ ghost lap ---
+
+/** Never a server rider's id: the server counts from 1. */
+const GHOST_ID = -1;
+
+/** Laps on `route` and my best lap there, loaded in the background (none off the routes or on routes that aren't loops). */
+function startGhostLap(route) {
+  hideGhostGap();
+  if (!route || route.id === OFF_ROUTE_ID || !route.loop) {
+    app.ghostLap = null;
+    return;
+  }
+  const lap = { run: new LapRun(route), best: null };
+  app.ghostLap = lap;
+  const ride = app.ride;
+  app.ghosts.best(route.id).then((best) => {
+    if (!best || app.ghostLap !== lap || app.ride !== ride) return;
+    lap.best = best;
+    notify(t("ghost.ready", { time: formatDuration(best.durationS) }));
+  });
+}
+
+/**
+ * Feeds my position to the lap run, keeps finished laps, shows the gap; the
+ * ghost rider to draw, or null. Hidden in races and events: there the others count.
+ */
+function updateGhostLap(me, time) {
+  const lap = app.ghostLap;
+  if (!lap) return null;
+  const clockS = (app.pausedFrom ?? time) - app.rideStartedAt;
+  const routeId = me.route === OFF_ROUTE_ID ? null : (me.route ?? app.route.id);
+  for (const event of lap.run.update({ routeId, routeM: me.distance, lane: me.lane, clockS })) {
+    if (event.type === "lap") keepLap(event, lap);
+  }
+  const racing = inRace(app.state?.race, me, app.riderId) || Boolean(app.state?.event?.entered);
+  if (!lap.best || !lap.run.riding || racing) {
+    hideGhostGap();
+    return null;
+  }
+  const elapsedS = clockS - lap.run.startedAtS;
+  const reachedS = timeAt(lap.best.trace, me.distance);
+  showGhostGap(reachedS === null ? null : elapsedS - reachedS);
+  const at = ghostAt(lap.best.trace, elapsedS);
+  if (!at) return null;
+  return { id: GHOST_ID, name: t("ghost.name"), distance: at.routeM, lane: at.lane, speed: at.speed, power: 0, route: app.route.id, ghost: true };
+}
+
+/** A finished lap: kept if it's the best on its route, and then the ghost of the next one. */
+function keepLap(event, lap) {
+  app.ghosts.offer(event).then(({ best, previousS }) => {
+    if (!best) return;
+    if (app.ghostLap === lap) lap.best = { routeId: event.routeId, durationS: event.durationS, trace: event.trace };
+    const time = formatDuration(event.durationS);
+    notify(previousS === null ? t("ghost.firstLap", { time }) : t("ghost.newBest", { time, gain: formatLapGap(event.durationS - previousS) }));
+  });
+}
+
+function showGhostGap(gapS) {
+  const pill = $("ghost-gap");
+  if (gapS === null) return hideGhostGap();
+  const text = t("ghost.gap", { gap: formatLapGap(gapS) });
+  if (pill.textContent !== text) pill.textContent = text;
+  pill.classList.toggle("ahead", gapS <= -0.05);
+  pill.classList.toggle("behind", gapS >= 0.05);
+  pill.hidden = false;
+}
+
+function hideGhostGap() {
+  const pill = $("ghost-gap");
+  if (pill) pill.hidden = true;
 }
 
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
@@ -3930,6 +4009,7 @@ function switchRoute(route, named = null) {
   app.smoother.route = route;
   app.view3d?.setRoute(route);
   startLemonHunt(route);
+  startGhostLap(route);
   // Distances on the new road don't continue the old one's.
   app.lastMyDistance = null;
   $("hud-route").textContent = route.id !== OFF_ROUTE_ID ? route.name : named ? named.name : t("ride.offRoute");
@@ -4114,12 +4194,13 @@ function frame() {
   }
 
   if (me && !app.finished) collectLemons(me);
+  const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors, lemons: app.lemonHunt?.lemons });
+    drawPeloton($("peloton"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, colors, lemons: app.lemonHunt?.lemons });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {

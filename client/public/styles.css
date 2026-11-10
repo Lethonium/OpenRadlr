@@ -1688,6 +1688,20 @@ body.riding {
   border: 1px solid rgba(76, 195, 255, 0.5);
 }
 
+/* Gap to my best lap's ghost: green ahead, red behind. */
+.pill-ghost {
+  font-variant-numeric: tabular-nums;
+  border: 1px dashed rgba(191, 232, 255, 0.6);
+}
+
+.pill-ghost.ahead {
+  color: #6fe39b;
+}
+
+.pill-ghost.behind {
+  color: #ff8a7a;
+}
+
 .hud-ticker {
   position: absolute;
   left: var(--gap);

@@ -48,3 +48,12 @@ profile's FTP and weight, the resolved split mode and the splits (record
 version 2 adds the power curve, weighted power, Load and a flag for ramp-test
 rides). Nothing leaves the browser. It is the base for measured FTP and
 fitness (#48), see [ftp.md](ftp.md); there is no screen for the history yet.
+
+## Ghost lap
+
+Your best lap on each loop route is kept in the browser (laps as above, timed
+by the ride clock, so pauses don't count). From the next crossing of the line a
+see-through rider labelled *Best lap* rides it again, in the lanes you rode,
+and the HUD shows the gap: `+` behind, `−` ahead. A faster lap replaces it at
+once. The ghost is hidden while you are in a race or an event. Design:
+[the spec](superpowers/specs/2026-11-10-ghost-lap-design.md).

@@ -115,7 +115,17 @@ export function drawPeloton(canvas, { route, riders, me, draft, colors, lemons =
     ctx.fillStyle = riderColor(rider, me.id, colors);
     ctx.beginPath();
     ctx.roundRect(cx - bikeLength, cy - h / 2, bikeLength, h, h / 2);
+    // My best lap's ghost: see-through with a dashed outline.
+    ctx.globalAlpha = rider.ghost ? 0.35 : 1;
     ctx.fill();
+    ctx.globalAlpha = 1;
+    if (rider.ghost) {
+      ctx.strokeStyle = colors.text;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     if (mine) {
       ctx.strokeStyle = colors.text;
       ctx.lineWidth = 2;

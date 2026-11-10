@@ -829,4 +829,10 @@ export default {
   "lemons.total.one": "{n} in all",
   "lemons.total.other": "{n} in all",
   "finish.lemons": "Golden lemons",
+  "ghost.name": "Best lap",
+  "ghost.gap": "Best lap {gap}",
+  "ghost.gapTitle": "Your gap to your best lap on this route",
+  "ghost.ready": "Your best lap here: {time}. Its ghost starts with you at the line.",
+  "ghost.firstLap": "Lap in {time}: its ghost rides with you from now on.",
+  "ghost.newBest": "New best lap: {time} ({gain}). The ghost rides it from now on.",
 };
