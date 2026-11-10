@@ -40,6 +40,7 @@ import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
+import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
@@ -121,6 +122,8 @@ const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
 /** How many golden lemons this browser's rider has collected, all rides together. */
 const LEMONS_KEY = "openradlr.lemons";
+/** The climbs' tops this browser's rider has been over ("routeId:metres"), for the first-time banner. */
+const SUMMITS_KEY = "openradlr.summits";
 const INFO_REFRESH_MS = 5000;
 const TICKER_ITEMS = 3;
 const TICKER_SECONDS = 9;
@@ -333,6 +336,11 @@ const app = {
   lemonsThisRide: 0,
   /** The all-time lemon count while off the routes (no hunt to hold it). */
   lemonTotal: 0,
+  /** Personal milestones (null in the studio and workouts), this ride's climbing as last read, and the banner's timer. */
+  milestones: null,
+  rideClimbedM: 0,
+  milestoneReadAt: 0,
+  milestoneTimer: null,
   /** Studio distance ridden before a rejoin, which restarts the room's odometer (#73). */
   distanceOffset: 0,
   lastMyDistance: null,
@@ -1783,6 +1791,10 @@ function endRide() {
     lemonsThisRide: 0,
     lemonTotal: 0,
     ghostLap: null,
+    milestones: null,
+    rideClimbedM: 0,
+    milestoneReadAt: 0,
+    milestoneTimer: (clearTimeout(app.milestoneTimer), ($("milestone-banner").hidden = true), null),
     distanceOffset: 0,
     lastMyDistance: null,
     lastOnRoute: null,
@@ -2006,6 +2018,7 @@ function startRoad({ simulated, setSimPower }) {
   initVehicle();
   startLemonHunt(app.route);
   startGhostLap(app.route);
+  startMilestones();
 
   app.actions = {
     // Before a junction the lane keys pick the road instead (#15); on a vehicle only the captain steers.
@@ -2501,6 +2514,56 @@ function showGhostGap(gapS) {
 function hideGhostGap() {
   const pill = $("ghost-gap");
   if (pill) pill.hidden = true;
+}
+
+// ----------------------------------------------------------- milestones ---
+
+/** Watches the ride for personal milestones; the totals of earlier rides arrive from the history in the background. */
+function startMilestones() {
+  let summits;
+  try {
+    summits = JSON.parse(readSetting(SUMMITS_KEY) ?? "[]");
+  } catch {
+    summits = [];
+  }
+  const watch = new MilestoneWatch({ totals: null, unitM: unitMetres(), summits: new Set(Array.isArray(summits) ? summits : []) });
+  app.milestones = watch;
+  const ride = app.ride;
+  app.history.list().then((records) => {
+    if (app.milestones === watch && app.ride === ride) watch.totals = lifetimeTotals(records);
+  });
+}
+
+function checkMilestones(me, time) {
+  if (!app.milestones || !app.recorder) return;
+  // The ride's climbing comes from the recorder; reading it every frame would be wasteful.
+  if (time - app.milestoneReadAt >= 2) {
+    app.milestoneReadAt = time;
+    app.rideClimbedM = app.recorder.summary().elevationGainM;
+  }
+  const onRoute = me.route !== OFF_ROUTE_ID;
+  const reached = app.milestones.update({ rideDistanceM: app.rideDistance, rideClimbedM: app.rideClimbedM, route: onRoute ? app.route : null, routeM: onRoute ? me.distance : null });
+  if (!reached.length) return;
+  if (reached.some((m) => m.kind === "summit")) writeSetting(SUMMITS_KEY, JSON.stringify([...app.milestones.summits]));
+  showMilestone(reached.map(milestoneText).join(" · "));
+}
+
+function milestoneText(milestone) {
+  if (milestone.kind === "distance") return t("milestone.distance", { distance: `${formatNumber(milestone.value, 0)} ${distanceUnit()}` });
+  if (milestone.kind === "everest") return tn("milestone.everest", milestone.value);
+  return t("milestone.summit", { route: milestone.route });
+}
+
+/** The banner across the top for a few seconds. */
+function showMilestone(text) {
+  const banner = $("milestone-banner");
+  banner.textContent = text;
+  banner.hidden = false;
+  banner.classList.remove("show");
+  void banner.offsetWidth;
+  banner.classList.add("show");
+  clearTimeout(app.milestoneTimer);
+  app.milestoneTimer = setTimeout(() => (banner.hidden = true), 5000);
 }
 
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
@@ -4274,6 +4337,7 @@ function frame() {
     elevation: me ? app.route.elevationAt(me.distance) : null,
   });
   if (kept) updateSplits();
+  if (me && !app.finished) checkMilestones(me, time);
 
   const draftText = draft ? t("hud.drafting", { percent: draft.savingPercent }) : "";
   $("draft-status").hidden = !draft;
