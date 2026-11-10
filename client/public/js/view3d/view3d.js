@@ -177,10 +177,10 @@ export function depthStep({ near, far }, distance, bits = 24) {
 /**
  * The gym camera (#77): metres from the framed spot towards the road, eye height
  * above it, how far above it the camera aims, how far the picture is shifted
- * down the screen (normalised device units, clear of the HUD timer card), and
- * the swing from the chase camera or a previous spot (seconds).
+ * down the screen (normalised device units: a little, as the HUD keeps to the
+ * corners), and the swing from the chase camera or a previous spot (seconds).
  */
-export const GYM_CAMERA = Object.freeze({ back: 4.5, up: 1.5, aim: 0.6, screenY: -0.4, swingS: 1.5 });
+export const GYM_CAMERA = Object.freeze({ back: 4.5, up: 1.5, aim: 0.6, screenY: -0.1, swingS: 1.5 });
 /**
  * Where a gym's workout riders leave their bikes: by the mat's road edge
  * (`back` metres from its centre towards the road), in two rows from `aside`
@@ -189,6 +189,14 @@ export const GYM_CAMERA = Object.freeze({ back: 4.5, up: 1.5, aim: 0.6, screenY:
  * below the mat's top.
  */
 export const BIKE_RACK = Object.freeze({ back: 3, aside: 4.6, gap: 0.7, lift: 0.06 });
+/**
+ * The workout's side view (an inset beside the front view): `distance` metres
+ * to my rider's left, `up` above the mat, looking at `aim` above it, through
+ * a lens `fovY` high (radians). It follows the body along the mat (poses are
+ * planted on the feet, so a plank reaches forward from the spot), easing
+ * over about `followS` seconds.
+ */
+export const SIDE_CAMERA = Object.freeze({ distance: 2.6, up: 1.1, aim: 1, fovY: (55 * Math.PI) / 180, followS: 0.8 });
 /** Crossfade between two clips when a rider's exercise changes (seconds). */
 const CLIP_FADE_S = 0.3;
 
@@ -200,6 +208,43 @@ export function gymCameraPose(gym, settings = GYM_CAMERA, focus = gym.center) {
   const [fx, fy, fz] = focus;
   const [dx, , dz] = towardsRoad(gym);
   return { eye: [fx + dx * settings.back, fy + settings.up, fz + dz * settings.back], target: [fx, fy + settings.aim, fz] };
+}
+
+/** The way a rider at `spot` faces: (−sin yaw, 0, −cos yaw). */
+const facingOf = (spot) => [-Math.sin(spot.yaw), 0, -Math.cos(spot.yaw)];
+
+/** How far ahead of `spot`, along the way it faces, the body parts (world model matrices) lie on average; 0 without parts. */
+export function bodyAhead(models, spot) {
+  if (models.length === 0) return 0;
+  const [fx, , fz] = facingOf(spot);
+  const sum = models.reduce((total, m) => total + (m[12] - spot.position[0]) * fx + (m[14] - spot.position[2]) * fz, 0);
+  return sum / models.length;
+}
+
+/** The side camera's pose for a rider at `spot`: from the rider's left, level with them, framing `ahead` metres in front of the feet. */
+export function sideCameraPose(spot, ahead = 0, settings = SIDE_CAMERA) {
+  const forward = facingOf(spot);
+  // Their left is (−cos yaw, 0, sin yaw).
+  const left = [-Math.cos(spot.yaw), 0, Math.sin(spot.yaw)];
+  const [x, y, z] = spot.position.map((v, k) => v + forward[k] * ahead);
+  return { eye: [x + left[0] * settings.distance, y + settings.up, z + left[2] * settings.distance], target: [x, y + settings.aim, z] };
+}
+
+/**
+ * The GL viewport of an on-screen `box` (CSS pixels, like `canvas`, both from
+ * getBoundingClientRect) in device pixels from the canvas's bottom left,
+ * clipped to the canvas; null when nothing of it is on the canvas.
+ */
+export function insetViewport(box, canvas, ratio) {
+  if (!box) return null;
+  const left = Math.max(box.left, canvas.left);
+  const top = Math.max(box.top, canvas.top);
+  const right = Math.min(box.left + box.width, canvas.left + canvas.width);
+  const bottom = Math.min(box.top + box.height, canvas.top + canvas.height);
+  if (right - left < 1 || bottom - top < 1) return null;
+  const x = Math.round((left - canvas.left) * ratio);
+  const y = Math.round((canvas.top + canvas.height - bottom) * ratio);
+  return { x, y, width: Math.round((right - canvas.left) * ratio) - x, height: Math.round((canvas.top + canvas.height - top) * ratio) - y };
 }
 
 /**
@@ -256,6 +301,10 @@ export class GymCamera {
 }
 
 export class View3D {
+  /** The workout's side-view box (see `workoutMode`), null while riding. */
+  sideView = null;
+  /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
+  #sideAhead = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
   #highlights = [];
@@ -408,6 +457,7 @@ export class View3D {
   }
 
   rideMode() {
+    this.sideView = null;
     this.camera = new ChaseCamera(this.route);
     this.lens = RIDE_LENS;
     this.viewOffset = [0, 0];
@@ -416,11 +466,15 @@ export class View3D {
 
   /**
    * The workout's fixed camera on `gym`'s mat: it swings over from the chase
-   * camera, or is there at once with reduced motion.
+   * camera, or is there at once with reduced motion. With a `sideView` element
+   * my rider is also drawn from the side into that element's box.
    */
-  workoutMode(gym, { reducedMotion = false } = {}) {
+  workoutMode(gym, { reducedMotion = false, sideView = null } = {}) {
     this.camera = new GymCamera(gym, reducedMotion ? null : this.camera, GYM_CAMERA, { cut: reducedMotion });
     this.viewOffset = [0, GYM_CAMERA.screenY];
+    /** The element whose box on the canvas shows my rider from the side, or null. */
+    this.sideView = sideView;
+    this.#sideAhead = null;
   }
 
   setCameraMode(mode) {
@@ -725,7 +779,58 @@ export class View3D {
       this.renderer.endShadows();
     }
 
-    // Passes 1 and 2: sky and the lit world.
+    // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
+    const scene = { light, lens, high, visible, vehicles, crowd, rotorMatrices };
+    this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
+
+    // Which riders that could get a label are in sight, for the next frames' labels.
+    const probes = this.#labelProbes(placed, myId, seatHeads);
+    if (this.renderer.queryOcclusion) {
+      for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
+    }
+
+    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
+      let right = cross(forward, [0, 1, 0]);
+      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
+      right = normalize(right);
+      const up = normalize(cross(right, forward));
+      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
+    }
+
+    // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
+    if (me?.gym && this.sideView && this.renderer.viewport) {
+      const box = this.sideView.getBoundingClientRect();
+      const canvasBox = this.canvas.getBoundingClientRect?.() ?? { left: 0, top: 0, width, height };
+      const rect = insetViewport(box, canvasBox, ratio);
+      if (rect) {
+        const mine = visible.filter((part) => part.rider.id === myId);
+        // Ease towards where the body is, so a flow glides instead of jerking the picture.
+        const ahead = bodyAhead(mine.flatMap((part) => part.torso.map((piece) => piece.model)), me.gym.spot);
+        this.#sideAhead = this.#sideAhead === null ? ahead : this.#sideAhead + (ahead - this.#sideAhead) * Math.min(1, dt / SIDE_CAMERA.followS);
+        const side = sideCameraPose(me.gym.spot, this.#sideAhead);
+        const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
+        this.renderer.viewport(rect);
+        this.#drawWorld(
+          { ...scene, visible: mine, vehicles: [], crowd: [] },
+          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
+        );
+        this.renderer.viewport(null);
+      }
+    }
+
+    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
+    const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
+    for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
+    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
+      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id)) phases.delete(id);
+    }
+  }
+
+  /**
+   * Sky, the lit world and the blended pass, as seen through `view`: drawn
+   * once for the screen and, in a workout, once more for the side view.
+   */
+  #drawWorld({ light, lens, high, visible, vehicles, crowd, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
@@ -763,32 +868,12 @@ export class View3D {
       if (glow) this.renderer.drawBright(glow, model, 0.9);
     }
 
-    // Which riders that could get a label are in sight, for the next frames' labels.
-    const probes = this.#labelProbes(placed, myId, seatHeads);
-    if (this.renderer.queryOcclusion) {
-      for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
-    }
-
     // Pass 3: blended — sea and soft contact shadows under the bikes.
     this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
     for (const part of visible) {
       if (part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
-    }
-    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
-      let right = cross(forward, [0, 1, 0]);
-      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
-      right = normalize(right);
-      const up = normalize(cross(right, forward));
-      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
-    }
-
-    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
-    const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
-    for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
-    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
-      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id)) phases.delete(id);
     }
   }
 

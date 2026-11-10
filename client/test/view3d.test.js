@@ -26,7 +26,7 @@ import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
-import { GYM_CAMERA, GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
+import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
@@ -339,9 +339,19 @@ class StubRenderer {
     return false;
   }
   resize() {}
-  begin() {}
+  /** The scissored viewport of the pass being drawn, null for the whole canvas. */
+  viewport(rect) {
+    this.pass = rect;
+    this.viewports.push(rect);
+  }
+  viewports = [];
+  pass = null;
+  begins = 0;
+  begin() {
+    this.begins += 1;
+  }
   draw(handle, model) {
-    this.draws.push({ handle, model });
+    this.draws.push({ handle, model, pass: this.pass });
   }
   drawBright() {}
   drawCloudLayer() {}
@@ -521,13 +531,13 @@ test("the workout view frames my rider at their spot", () => {
   closeVec(view.camera.target, [x, y + GYM_CAMERA.aim, z]);
 });
 
-test("the workout view shifts the picture down", () => {
+test("the workout view shifts the picture by the gym camera's offset, the ride not at all", () => {
   const gym = testGym();
   const { view } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true });
   const inWorkout = view.viewOffset;
   view.rideMode();
-  assert.deepEqual([inWorkout, view.viewOffset], [[0, -0.4], [0, 0]]);
+  assert.deepEqual([inWorkout, view.viewOffset], [[0, GYM_CAMERA.screenY], [0, 0]]);
 });
 
 test("the gym camera swings over from the chase camera in 1.5 s", () => {
@@ -714,4 +724,90 @@ test("a side change keeps the clip time", () => {
   const reference = drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 20.5);
   closeVec(faded[0], reference[0], 1e-4);
   closeVec(faded[1], reference[1], 1e-4);
+});
+
+// --- the workout's side view ------------------------------------------------------
+
+test("the side camera stands to the rider's left, a little above the mat, looking at the rider", () => {
+  // Yaw 0 faces −Z, so the rider's right is +X and their left −X.
+  const spot = { position: [10, 2, 5], yaw: 0 };
+  const { eye, target } = sideCameraPose(spot);
+  closeVec(eye, [10 - SIDE_CAMERA.distance, 2 + SIDE_CAMERA.up, 5], 1e-9);
+  closeVec(target, [10, 2 + SIDE_CAMERA.aim, 5], 1e-9);
+});
+
+test("the side camera frames a body that reaches ahead of the feet", () => {
+  const { eye, target } = sideCameraPose({ position: [10, 2, 5], yaw: 0 }, 0.9);
+  closeVec(eye, [10 - SIDE_CAMERA.distance, 2 + SIDE_CAMERA.up, 5 - 0.9], 1e-9);
+  closeVec(target, [10, 2 + SIDE_CAMERA.aim, 5 - 0.9], 1e-9);
+});
+
+test("the side camera turns with the spot", () => {
+  // Yaw π/2 faces −X, so the rider's left is +Z.
+  const { eye } = sideCameraPose({ position: [0, 0, 0], yaw: Math.PI / 2 });
+  closeVec(eye, [0, SIDE_CAMERA.up, SIDE_CAMERA.distance], 1e-9);
+});
+
+test("a body's reach ahead of its spot is where its parts lie on average, along the way it faces", () => {
+  const at = (x, z) => Object.assign(new Float32Array(16), { 12: x, 14: z });
+  const spot = { position: [10, 0, 5], yaw: 0 };
+  // Facing −Z: parts 0.4, 1.2 and 0.8 m ahead; the last one's metre to the side does not count.
+  assert.ok(Math.abs(bodyAhead([at(10, 4.6), at(10, 3.8), at(11, 4.2)], spot) - 0.8) < 1e-6);
+  assert.equal(bodyAhead([], spot), 0);
+});
+
+test("the inset's viewport is the box on the canvas in device pixels, counted from the bottom", () => {
+  const box = { left: 900, top: 500, width: 300, height: 200 };
+  const canvas = { left: 0, top: 0, width: 1280, height: 800 };
+  assert.deepEqual(insetViewport(box, canvas, 2), { x: 1800, y: 200, width: 600, height: 400 });
+});
+
+test("the inset is clipped to the canvas, and a hidden box has none", () => {
+  const canvas = { left: 0, top: 0, width: 1000, height: 600 };
+  assert.deepEqual(insetViewport({ left: 900, top: 500, width: 300, height: 200 }, canvas, 1), { x: 900, y: 0, width: 100, height: 100 });
+  assert.equal(insetViewport({ left: 0, top: 0, width: 0, height: 0 }, canvas, 1), null);
+  assert.equal(insetViewport(null, canvas, 1), null);
+});
+
+/** A side-view box at the lower right of the 320×200 test canvas. */
+const sideBox = { getBoundingClientRect: () => ({ left: 220, top: 120, width: 90, height: 70 }) };
+
+test("with a side view the workout draws a second pass into the inset", () => {
+  const gym = testGym();
+  const { view, renderer } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  assert.equal(renderer.begins, 2);
+  assert.deepEqual(renderer.viewports, [{ x: 220, y: 10, width: 90, height: 70 }, null]);
+});
+
+test("the inset shows my rider and not the riders on the next spots", (t) => {
+  // The neighbour gets a name label: a bare stand-in for the DOM it is made of.
+  const element = () => ({ style: {}, classList: { toggle() {} }, append() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+  const gym = testGym();
+  const { view, renderer } = gymView([gym]);
+  view.labelLayer = { append() {} };
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  const other = { ...workoutRider, id: 9 };
+  view.render({ riders: [workoutRider, other], myId: 7, timeS: 12, colors });
+  const inset = renderer.draws.filter((d) => d.pass);
+  const pelvis = (id) => view.bodyParts[riderLook(id).variant].get("pelvis");
+  const pelvisAt = (id) => assignSpots([7, 9], gym).get(id).position;
+  const drawnAt = (draw) => [draw.model[12], draw.model[14]];
+  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[2]) < 0.5;
+  assert.ok(inset.some((d) => d.handle === pelvis(7) && near(drawnAt(d), pelvisAt(7))), "mine is drawn");
+  assert.ok(!inset.some((d) => d.handle === pelvis(9) && near(drawnAt(d), pelvisAt(9))), "the neighbour is not");
+});
+
+test("riding has no side view", () => {
+  const gym = testGym();
+  const { view, renderer } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  view.rideMode();
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(renderer.begins, 1);
 });
