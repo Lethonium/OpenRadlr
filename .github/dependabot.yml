@@ -1,39 +1,55 @@
 version: 2
+multi-ecosystem-groups:
+  weekly-dependencies:
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
 updates:
   - package-ecosystem: cargo
     directory: /server
     schedule:
       interval: weekly
-    groups:
-      cargo-minor-and-patch:
-        update-types: [minor, patch]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: npm
     directory: /client
     schedule:
       interval: weekly
-    groups:
-      npm-minor-and-patch:
-        update-types: [minor, patch]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: npm
     directory: /landing
     schedule:
       interval: weekly
-    groups:
-      landing-minor-and-patch:
-        update-types: [minor, patch]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: docker
     directory: /landing
     schedule:
       interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies

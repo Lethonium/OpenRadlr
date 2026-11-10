@@ -16,6 +16,23 @@ the PR title a Conventional Commit and preserve relevant footers in the squash
 commit body. See [Releases](docs/releases.md) for versioning and maintainer setup.
 Keep pull requests focused; split refactorings from behaviour changes.
 
+## Dependency updates
+
+Dependabot batches minor and patch version updates across ecosystems on Mondays
+at 08:00 Europe/Berlin. Major version updates remain separate. Security updates
+can arrive outside the weekly version-update batch.
+
+Dependabot PRs automatically opt into squash auto-merge. Maintainers still review
+and approve the changes; merging waits for the required CI checks and
+repository review rules. The automation never approves PRs or checks out their code.
+It reuses `RELEASE_PLEASE_TOKEN` so merged updates can trigger CI and Release Please.
+
+The `Protect main` ruleset keeps earlier reviews recorded instead of dismissing
+every stale approval, while requiring one code-owner approval. Approval of the
+latest reviewable push is not separately required. Review new changes before
+merging, even when GitHub retains an earlier approval. Branches must remain
+current with `main` before merging.
+
 ## Test-driven development
 
 New behaviour starts with a test. The architecture is designed so that almost
