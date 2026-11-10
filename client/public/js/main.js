@@ -3749,9 +3749,14 @@ function show3d(scene, view = null) {
   app.view3d.setStatues(rows);
   app.workoutGym = app.workout ? rideGym : null;
   app.workoutRowFigures = app.workout ? (rows.find((row) => row.gym === rideGym)?.figures ?? []) : [];
-  // The workout watches my avatar on the gym mat (#77).
+  // The workout watches my avatar on the gym mat (#77), from the front and, in the side-view box, from the side.
   const gym = app.workout ? rideGym : null;
-  if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
+  // Shown only where the 3D gym draws into it.
+  $("workout-side-view").hidden = !gym;
+  if (gym) {
+    const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    app.view3d.workoutMode(gym, { reducedMotion, sideView: document.getElementById("workout-side-view") });
+  }
 }
 
 /** C: the next camera of this ride's View controls (the workout's gym camera does not cycle). */

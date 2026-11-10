@@ -269,23 +269,35 @@
 
         <!-- Café workout (#77): replaces the ride HUD while body.working-out -->
         <div id="workout-hud" class="workout-hud" hidden>
-          <div class="workout-main glass" role="status" aria-live="off">
-            <div class="workout-ring">
-              <div class="workout-ring-inner">
-                <strong class="workout-exercise" data-w="exercise" data-i18n="ride.getReady">Get ready</strong>
-                <span class="workout-paused" data-w="paused"></span>
-                <span class="workout-time" data-w="time">0:30</span>
+          <!-- The corners hold the information; the middle stays free for the avatar. -->
+          <div class="workout-corner workout-corner-left">
+            <div class="workout-main glass" role="status" aria-live="off">
+              <div class="workout-ring">
+                <div class="workout-ring-inner">
+                  <strong class="workout-exercise" data-w="exercise" data-i18n="ride.getReady">Get ready</strong>
+                  <span class="workout-paused" data-w="paused"></span>
+                  <span class="workout-time" data-w="time">0:30</span>
+                </div>
               </div>
+              <span class="workout-next" data-w="next"></span>
             </div>
-            <span class="workout-next" data-w="next"></span>
-            <span class="workout-cue" data-w="cue"></span>
           </div>
-          <div class="workout-stats glass">
-            <div><span class="caption" data-i18n="ride.block">Block</span><strong data-w="block" data-i18n="ride.block11">Block 1/1</strong></div>
-            <div><span class="caption" data-i18n="ride.elapsed">Elapsed</span><strong data-w="elapsed">0:00</strong></div>
-            <div><span class="caption" data-i18n="ride.remaining">Remaining</span><strong data-w="remaining">0:00</strong></div>
-            <div hidden><span class="caption" data-i18n="ride.heart">Heart</span><strong data-w="hr"></strong></div>
+          <div class="workout-corner workout-corner-right">
+            <div class="workout-stats glass">
+              <div><span class="caption" data-i18n="ride.block">Block</span><strong data-w="block" data-i18n="ride.block11">Block 1/1</strong></div>
+              <div><span class="caption" data-i18n="ride.elapsed">Elapsed</span><strong data-w="elapsed">0:00</strong></div>
+              <div><span class="caption" data-i18n="ride.remaining">Remaining</span><strong data-w="remaining">0:00</strong></div>
+              <div hidden><span class="caption" data-i18n="ride.heart">Heart</span><strong data-w="hr"></strong></div>
+            </div>
+            <section class="workout-guide glass" hidden>
+              <span class="caption accent" data-w="guideTitle"></span>
+              <strong class="workout-guide-side" data-w="guideSide"></strong>
+              <ol class="workout-steps" data-w-list="steps"></ol>
+              <p class="workout-cue" data-w="cue"></p>
+            </section>
           </div>
+          <!-- The 3D view draws my rider from the side into this box (#26). -->
+          <div id="workout-side-view" class="workout-side-view" aria-hidden="true" hidden><span class="caption" data-i18n="workout.sideView">Side view</span></div>
           <div class="workout-buttons">
             <button type="button" id="workout-pause" class="text-button glass" data-i18n="ride.pause">Pause</button>
             <button type="button" id="workout-skip-block" class="text-button glass" data-i18n="ride.skipBlock">Skip block</button>
