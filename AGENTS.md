@@ -46,7 +46,8 @@ repeat it. Here is the operational knowledge on top of that.
 - Issues are referenced by number in code comments and CHANGELOG entries (`#73`).
   Look them up with `gh issue view <n>` when a change mentions one.
 - PRs: short description of *why*, focused (refactorings split from behaviour
-  changes), imperative commit messages.
+  changes), Conventional Commit messages with imperative descriptions (see
+  `CONTRIBUTING.md` and `docs/releases.md`).
 
 ## Documentation conventions
 - **Protocol changes:** update `docs/protocol.md`, both sides, bump
