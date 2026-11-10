@@ -183,15 +183,16 @@ export function composePhoto(scene, { routeName, stats, when }, doc = document) 
 }
 
 /**
- * Draws the end-of-ride card (1600 × 900): the last view of the world
+ * Draws the end-of-ride card (1600 × 1200): the last view of the world
  * behind a dark panel with the totals, an elevation profile and the power
- * line of the whole ride.
+ * line of the whole ride. It is 4:3 because that's the shape Strava shows
+ * activity photos in; a wider card loses its sides there.
  * @param {{routeName: string, serverName: string, when: Date, stats: [string, string][],
  *          power: number[], elevation: (number|null)[], scene?: HTMLCanvasElement | null}} info
  */
 export function composeSummary({ routeName, serverName, when, stats, power, elevation, scene = null }, doc = document) {
   const W = 1600;
-  const H = 900;
+  const H = 1200;
   const canvas = doc.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -209,45 +210,46 @@ export function composeSummary({ routeName, serverName, when, stats, power, elev
   const shade = ctx.createLinearGradient(0, 0, W, 0);
   shade.addColorStop(0, "rgba(15, 18, 22, 0.94)");
   shade.addColorStop(0.62, "rgba(15, 18, 22, 0.86)");
-  shade.addColorStop(1, "rgba(15, 18, 22, 0.35)");
+  shade.addColorStop(1, "rgba(15, 18, 22, 0.6)");
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, W, H);
 
-  const left = 80;
+  const left = 100;
+  const width = W - 2 * left;
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = ACCENT;
-  ctx.font = `800 22px ${SANS}`;
-  ctx.fillText(t("photos.cardTitle"), left, 104);
+  ctx.font = `800 24px ${SANS}`;
+  ctx.fillText(t("photos.cardTitle"), left, 140);
   ctx.fillStyle = "#fff";
-  ctx.font = `700 56px ${SANS}`;
-  ctx.fillText(fit(ctx, routeName, 980), left, 172);
+  ctx.font = `700 64px ${SANS}`;
+  ctx.fillText(fit(ctx, routeName, width), left, 220);
   ctx.fillStyle = "#aab3c0";
-  ctx.font = `500 24px ${SANS}`;
-  ctx.fillText(fit(ctx, `${when.toLocaleString(getLocale(), { dateStyle: "long", timeStyle: "short" })} · ${serverName}`, 980), left, 214);
+  ctx.font = `500 28px ${SANS}`;
+  ctx.fillText(fit(ctx, `${when.toLocaleString(getLocale(), { dateStyle: "long", timeStyle: "short" })} · ${serverName}`, width), left, 270);
 
   // Totals in a grid of up to 4 columns.
   const columns = 4;
-  const cellW = 250;
+  const cellW = width / columns;
   stats.slice(0, 8).forEach(([label, value], i) => {
     const x = left + (i % columns) * cellW;
-    const y = 300 + Math.floor(i / columns) * 128;
+    const y = 390 + Math.floor(i / columns) * 160;
     ctx.fillStyle = "#8a94a3";
-    ctx.font = `700 18px ${SANS}`;
+    ctx.font = `700 20px ${SANS}`;
     ctx.fillText(label.toUpperCase(), x, y);
     ctx.fillStyle = "#fff";
-    let size = 64;
+    let size = 80;
     do ctx.font = `700 ${size}px ${NUM}`;
-    while (ctx.measureText(value).width > cellW - 24 && (size -= 4) > 28);
-    ctx.fillText(value, x, y + 64);
+    while (ctx.measureText(value).width > cellW - 32 && (size -= 4) > 28);
+    ctx.fillText(value, x, y + 80);
   });
 
   // Elevation (filled) and power (line) over the ride.
-  const chart = { x: left, y: 600, w: 980, h: 200 };
+  const chart = { x: left, y: 800, w: width, h: 280 };
   ctx.fillStyle = "#8a94a3";
-  ctx.font = `700 18px ${SANS}`;
-  ctx.fillText("POWER", chart.x, chart.y - 18);
+  ctx.font = `700 20px ${SANS}`;
+  ctx.fillText("POWER", chart.x, chart.y - 20);
   ctx.fillStyle = "#5fb47c";
-  ctx.fillText("ELEVATION", chart.x + 100, chart.y - 18);
+  ctx.fillText("ELEVATION", chart.x + 110, chart.y - 20);
   const heights = elevation.filter((v) => v !== null && Number.isFinite(v));
   if (heights.length > 1) {
     const series = downsample(elevation.map((v) => (v === null || !Number.isFinite(v) ? heights[0] : v)), 240);
@@ -272,7 +274,7 @@ export function composeSummary({ routeName, serverName, when, stats, power, elev
       else ctx.lineTo(x, y);
     });
     ctx.strokeStyle = ACCENT;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.lineJoin = "round";
     ctx.stroke();
   }

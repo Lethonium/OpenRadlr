@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PhotoAlbum, canShareFiles, downsample, photoFileName, photoStats } from "../public/js/view/photos.js";
+import { PhotoAlbum, canShareFiles, composeSummary, downsample, photoFileName, photoStats } from "../public/js/view/photos.js";
 
 test("names photo files after the date, route and number", () => {
   const t = new Date(2026, 9, 14, 15, 30).getTime();
@@ -82,4 +82,51 @@ test("sharing files is offered only where the browser supports it", () => {
   assert.equal(canShareFiles({}), false);
   assert.equal(canShareFiles({ canShare: ({ files }) => files.length === 1 }), true);
   assert.equal(canShareFiles({ canShare: () => { throw new Error("nope"); } }), false);
+});
+
+/** A canvas document whose 2D context records the text drawn on it. */
+function recordingDoc() {
+  const texts = [];
+  const state = { font: "10px sans-serif", textAlign: "left" };
+  const ctx = new Proxy(state, {
+    get(target, key) {
+      if (key in target) return target[key];
+      if (key === "measureText") return (text) => ({ width: text.length * Number(/(\d+)px/.exec(target.font)[1]) * 0.6 });
+      if (key === "fillText") return (text, x, y) => texts.push({ text, x, y, align: target.textAlign, width: ctx.measureText(text).width });
+      if (key === "createLinearGradient") return () => ({ addColorStop() {} });
+      return () => {};
+    },
+    set(target, key, value) {
+      target[key] = value;
+      return true;
+    },
+  });
+  const canvas = { width: 0, height: 0, getContext: () => ctx };
+  return { doc: { createElement: () => canvas }, texts };
+}
+
+const RIDE = {
+  routeName: "Col de la Forge",
+  serverName: "OpenRadlr",
+  when: new Date(2026, 10, 10, 15, 48),
+  stats: [["Time", "1:02:38"], ["Distance", "30.53 km"], ["Avg power", "168 W"], ["Max power", "484 W"], ["Elevation", "510 m"], ["Work", "831 kJ"]],
+  power: [100, 200, 150],
+  elevation: [10, 20, 15],
+};
+
+test("the summary card is 4:3, the shape Strava shows photos in, so it isn't cropped", () => {
+  const { doc } = recordingDoc();
+  const canvas = composeSummary(RIDE, doc);
+  assert.equal(canvas.width * 3, canvas.height * 4);
+});
+
+test("the summary card keeps all its text clear of the edges", () => {
+  const { doc, texts } = recordingDoc();
+  const canvas = composeSummary(RIDE, doc);
+  const margin = canvas.width * 0.04;
+  const outside = texts.filter(({ x, y, align, width }) => {
+    const from = align === "right" ? x - width : x;
+    return from < margin || from + width > canvas.width - margin || y < margin || y > canvas.height - margin;
+  });
+  assert.deepEqual(outside.map((t) => t.text), []);
 });
