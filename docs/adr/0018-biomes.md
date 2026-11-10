@@ -74,6 +74,8 @@ roads.
   separate shader pass, so it adds no world geometry and rewrites no buffer
   per frame. `preview` supplies the three-colour swatch shown beside each
   season picker.
+- **A world tier is a biome hook too.** `biome.living` gives a season its
+  Living look (see ADR 0021); without it the world renders as plain 3D.
 - **Rebuild in the worker.** Changing the season rebuilds the scene through
   `buildScene(route, others, { network, biome })`; the old world keeps
   rendering until the new one arrives, then the old view is disposed before

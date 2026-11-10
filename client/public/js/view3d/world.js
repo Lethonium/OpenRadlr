@@ -35,6 +35,7 @@ import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
+import { finishLiving, planLiving } from "./living/index.js";
 
 export const LANE_WIDTH = 1.4;
 export const SHOULDER = 0.9;
@@ -954,7 +955,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, living = false } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -981,6 +982,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const long = route.length > LONG_ROUTE_M;
   const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+  const plan = living && terrain.island ? planLiving({ terrain, biome, network, box: islandBox(terrain.island), zonesOf, ordered, water: ground.water, seed, junctions: junctionClearings(network), ponds: rivers.flatMap((river) => river.ponds) }) : null;
+  if (plan) chunks.life = new ChunkedMesh();
 
   // Nodes where a network's roads meet, for the junction pads.
   const degree = new Map();
@@ -1051,7 +1054,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
-  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome });
+  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome, ...(plan ? { movingAnimal: (animal) => plan.animals.push(animal) } : {}) });
   const rotors = buildWindTurbines(route, terrain, {
     structures: chunks.structures,
     occupancy,
@@ -1086,18 +1089,19 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const near = terrain.index.nearest(x, z);
     return near !== null && near.distance < 70 && inStretch(near.sample.route, zonesOf.get(near.sample.route).villages, near.sample.distance, 20);
   };
-  const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || inVillage(x, z);
+  const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || inVillage(x, z) || Boolean(plan?.treeBlocked(x, z));
+  const grown = plan ? { ...biome, flora: { ...biome.flora, ...biome.living.flora } } : biome;
   const detailBlocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.7) || occupancy.blocked(x, z) || (inVillage(x, z) && terrain.distanceToRoad(x, z) < half + PAVEMENT + 1);
   for (const r of ordered) {
     const km = r.length / 1000;
     const margin = 450;
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    buildScenery(r, terrain, bounds, { biome: grown, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
     buildGroundDetail(r, terrain, {
-      biome,
+      biome: grown,
       water: ground.water,
       into: chunks.detail,
       tufts: Math.round(density.tufts * km * detail),
@@ -1108,6 +1112,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const rivers3d = new MeshBuilder();
   for (const river of rivers) buildRiverWater(river, rivers3d, biome.river ?? undefined);
+
+  // Before the chunks are built below: this dresses the `life` group.
+  const livingPart = plan ? finishLiving(plan, { mesh: chunks.life, occupancy, cafes: cafeSpots }) : null;
 
   return {
     // The view needs the biome to resolve its sky and lighting at render time.
@@ -1131,5 +1138,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     rotors,
     spectators,
     spectatorMeshes,
+    living: livingPart,
   };
 }

@@ -1,4 +1,4 @@
-// What the View popover offers on this ride: cameras, layouts, 3D/2D and time
+// What the View popover offers on this ride: cameras, layouts, 2D/3D/Living and time
 // of day. Pure: no DOM; labels come translated from i18n.
 import { t } from "../i18n/i18n.js";
 import { CAMERA_MODES } from "../view3d/chaseCamera.js";
@@ -23,7 +23,7 @@ export function viewControls({ studio }) {
   return {
     cameras: cameraIds.map((id) => option(id, t(CAMERA_KEYS[id]))),
     layouts: studio ? null : LAYOUT_CHOICES.map((id) => option(id, LAYOUT_LABELS[id])),
-    modes: studio ? [] : [option("3d", "3D"), option("2d", "2D")],
+    modes: studio ? [] : [option("2d", "2D"), option("3d", "3D"), option("living", t("view.living"))],
     showTime: !studio,
     times: studio ? [] : TIME_MODES.map((id) => option(id, t(TIME_KEYS[id]))),
   };

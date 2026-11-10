@@ -493,7 +493,7 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
 // ------------------------------------------------------------------- farms ---
 
 /** Farmsteads (barn, house, silo, hay bales) with grazing animals nearby. */
-export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
+export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate, movingAnimal = null }) {
   const random = seededRandom(seed ^ 0xfa53);
   const m = sharedModels(biome);
   const farms = [];
@@ -540,7 +540,11 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
       const z = field[2] + Math.sin(angle) * r;
       if (avoid(x, z, 2) || terrain.height(x, z) < lakeLevel + 1) continue;
       const mesh = third ? m.animal3 : random() < 0.5 ? m.animal1 : m.animal2;
-      structures.append(mesh, placement([x, terrain.height(x, z) - 0.05, z], random() * Math.PI * 2));
+      const y = terrain.height(x, z) - 0.05;
+      const yaw = random() * Math.PI * 2;
+      // Living: every third animal of a herd walks; the rest stay baked in.
+      if (movingAnimal && a % 3 === 0) movingAnimal({ x, y, z, yaw, kind: third ? "animal3" : mesh === m.animal1 ? "animal1" : "animal2" });
+      else structures.append(mesh, placement([x, y, z], yaw));
     }
     occupancy.add(pos[0], pos[2], 30);
     occupancy.add(field[0], field[2], 20);

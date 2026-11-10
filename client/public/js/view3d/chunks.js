@@ -30,6 +30,10 @@ export class ChunkedMesh extends MeshBuilder {
     this.#builder((a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3).triangle(a, b, c, color);
   }
 
+  triangleLit(a, b, c, color, normal) {
+    this.#builder((a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3).triangleLit(a, b, c, color, normal);
+  }
+
   append(mesh, matrix) {
     const placed = new MeshBuilder();
     placed.append(mesh, matrix);

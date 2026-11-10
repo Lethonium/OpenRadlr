@@ -8,7 +8,7 @@ test("route rides offer four cameras five layouts and 3D/2D", () => {
   const controls = viewControls({ studio: false });
   assert.deepEqual(
     { cameras: ids(controls.cameras), layouts: ids(controls.layouts), modes: ids(controls.modes), showTime: controls.showTime },
-    { cameras: ["chase", "close", "drone", "side"], layouts: ["auto", "cockpit", "broadcast", "training", "race"], modes: ["3d", "2d"], showTime: true },
+    { cameras: ["chase", "close", "drone", "side"], layouts: ["auto", "cockpit", "broadcast", "training", "race"], modes: ["2d", "3d", "living"], showTime: true },
   );
 });
 

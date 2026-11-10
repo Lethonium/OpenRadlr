@@ -24,8 +24,8 @@ const mapOf = (route) => route.map?.id ?? `route:${route.id}`;
 /** The distinct exercises of a plan in order: what its figure chips count. */
 const planFigures = (plan) => [...new Set(plan.blocks.filter((b) => b.kind === "exercise").map((b) => b.exercise))];
 
-/** What a built world is for: one route in one biome. */
-const buildKey = (routeId, biome) => `${routeId}\0${biome}`;
+/** What a built world is for: one route in one biome and look. */
+const buildKey = (routeId, biome, living) => `${routeId}\0${biome}\0${living}`;
 
 export class MenuStage {
   #routes = [];
@@ -39,6 +39,7 @@ export class MenuStage {
   #viewRouteId = null;
   #viewMap = null;
   #viewBiome = null;
+  #viewLiving = null;
   /** The scene's overview, for per-view lenses. */
   #overview = null;
   /** Lenses by camera view, built once per overview. */
@@ -64,8 +65,9 @@ export class MenuStage {
    * @param {object} deps
    * @param {(id: string) => Promise<object>} deps.fetchRouteFile
    * @param {(mapId: string) => Promise<object>} [deps.fetchNetwork] a map's road network file (#26)
-   * @param {(file: object, others: object[], options: {network: object | null, biome?: string}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
+   * @param {(file: object, others: object[], options: {network: object | null, biome?: string, living?: boolean}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
    * @param {() => string} [deps.biome] the rider's biome, when the world is built
+   * @param {() => boolean} [deps.living] whether the rider picked the Living look
    * @param {(route: RouteGeometry, scene: object) => object} [deps.createView] a View3D on the menu canvas
    * @param {(viewKind: "island" | "route" | "gym", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
    * @param {(overview: object) => object} [deps.createCamera] a MenuCamera
@@ -105,6 +107,11 @@ export class MenuStage {
     return this.deps.biome?.() ?? DEFAULT_BIOME;
   }
 
+  /** Whether the next world is built in the Living look (the rider's pick). */
+  #living() {
+    return this.deps.living?.() ?? false;
+  }
+
   /**
    * The rider picked another biome: rebuild the world behind the menu. The one
    * on screen stays until the new one is ready.
@@ -112,6 +119,11 @@ export class MenuStage {
   biomeChanged() {
     if (this.#stopped) return Promise.resolve();
     return this.select(this.#routes, this.#selectedId, { force: true });
+  }
+
+  /** The rider switched Living on or off: rebuild like a season change. */
+  livingChanged() {
+    return this.biomeChanged();
   }
 
   /**
@@ -228,6 +240,7 @@ export class MenuStage {
     let others;
     let network;
     const biome = this.#biome();
+    const living = this.#living();
     try {
       file = await this.#file(id);
       [others, network] = await Promise.all([
@@ -246,31 +259,31 @@ export class MenuStage {
       this.deps.onRoute({ route, routes: [route, ...neighbours], network });
       this.#show(route, neighbours);
     }
-    if (!this.uses3d || (this.#viewRouteId === id && this.#viewBiome === biome) || this.#buildingKey === buildKey(id, biome)) return;
+    if (!this.uses3d || (this.#viewRouteId === id && this.#viewBiome === biome && this.#viewLiving === living) || this.#buildingKey === buildKey(id, biome, living)) return;
     // The first world right away; later ones once the pick has settled and the camera
     // has landed: swapping worlds stalls the main thread, which mid-glide shows as a hitch.
     this.deps.clearTimer(this.#buildTimer);
     const build = () => {
       if (this.#camera?.flying) this.#buildTimer = this.deps.setTimer(build, this.deps.landingCheckMs);
-      else this.#build(id, biome, file, others, network);
+      else this.#build(id, biome, living, file, others, network);
     };
     if (this.#view || this.#buildingKey) this.#buildTimer = this.deps.setTimer(build, this.deps.rebuildDelayMs);
     else build();
   }
 
-  async #build(id, biome, file, others, network) {
-    const key = buildKey(id, biome);
-    if (this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome) return;
+  async #build(id, biome, living, file, others, network) {
+    const key = buildKey(id, biome, living);
+    if (this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome || this.#living() !== living) return;
     this.#buildingKey = key;
     let scene;
     try {
-      scene = await this.deps.buildScene(file, others, { network, biome });
+      scene = await this.deps.buildScene(file, others, { network, biome, living });
     } catch (error) {
       console.warn("Menu world unavailable:", error);
       scene = null;
     }
     if (this.#buildingKey === key) this.#buildingKey = null;
-    if (!scene || this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome) return;
+    if (!scene || this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome || this.#living() !== living) return;
     const route = this.#geometry(file);
     let view;
     try {
@@ -287,6 +300,7 @@ export class MenuStage {
     this.#view = view;
     this.#viewRouteId = id;
     this.#viewBiome = biome;
+    this.#viewLiving = living;
     this.#viewMap = mapOf(route);
     this.#gyms = scene.gyms ?? [];
     this.#overview = scene.overview ?? null;
@@ -448,7 +462,7 @@ export class MenuStage {
     if (!view) return null;
     view.setHighlights([]);
     const sameWorld = this.#viewRouteId === routeId || (map !== null && map === this.#viewMap);
-    if (sameWorld && this.#viewBiome === this.#biome()) return view;
+    if (sameWorld && this.#viewBiome === this.#biome() && this.#viewLiving === this.#living()) return view;
     view.dispose();
     return null;
   }

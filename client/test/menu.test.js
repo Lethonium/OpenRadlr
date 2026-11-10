@@ -482,6 +482,63 @@ test("another biome rebuilds the menu world in it", async () => {
   assert.equal(log.builds.length, 2);
 });
 
+test("the menu world is rebuilt when Living changes", async () => {
+  const { stage, log } = fakeStage();
+  let living = false;
+  stage.deps.living = () => living;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, living: options?.living, resolve: () => resolve({ overview: overview() }) }));
+
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(log.builds[0].living, false);
+
+  living = true;
+  await stage.livingChanged();
+  land(log);
+  log.timers.at(-1)();
+  assert.deepEqual(log.builds.map((build) => build.living), [false, true]);
+});
+
+test("flipping Living during a build: the last pick wins and no stale world is shown", async () => {
+  const { stage, log } = fakeStage();
+  let living = true;
+  stage.deps.living = () => living;
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => log.builds.push({ id: routeFile.id, living: options?.living, resolve: () => resolve({ overview: overview() }) }));
+
+  await stage.select(listed, "rolling-hills");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(log.views.length, 1);
+
+  living = false;
+  await stage.livingChanged();
+  land(log);
+  log.timers.at(-1)();
+  assert.equal(log.builds[1].living, false);
+
+  // Flip back while the "off" world is on its way; then it arrives, stale.
+  living = true;
+  await stage.livingChanged();
+  log.builds[1].resolve();
+  await settle();
+  assert.equal(log.views.length, 1, "the stale off world never reaches the screen");
+  assert.ok(!log.views[0].disposed, "the on world stays on screen");
+});
+
+test("the view stays usable for the ride only when its Living matches", async () => {
+  const { stage, log } = fakeStage();
+  let living = true;
+  stage.deps.living = () => living;
+  await stage.select(listed, "rolling-hills");
+  log.builds.at(-1)?.resolve?.();
+  await settle();
+  living = false;
+  assert.equal(stage.takeView("rolling-hills"), null, "a world in the other look isn't handed to the ride");
+});
+
 test("a season change on the studio tab rebuilds the island in it", async () => {
   const { stage, log } = fakeStage();
   let biome = "temperate";

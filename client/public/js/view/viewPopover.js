@@ -87,7 +87,7 @@ export function createViewPopover({
     if (rows.camera) rows.camera.hidden = (flat && controls.modes.length > 0) || !offered;
     if (rows.time) rows.time.hidden = flat;
     for (const option of options) {
-      if (option.dataset.kind === "mode" && option.dataset.id === "3d") option.disabled = current.has3d === false;
+      if (option.dataset.kind === "mode" && option.dataset.id !== "2d") option.disabled = current.has3d === false;
     }
     root.setAttribute("data-sheet", String(Boolean(matchNarrow.matches)));
   }

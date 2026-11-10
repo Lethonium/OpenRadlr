@@ -30,6 +30,7 @@ import {
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
 import { buildRotor, buildSpectator } from "./structures.js";
+import { moverPose, selectMovers } from "./living/movers.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
@@ -47,7 +48,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
+  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220, life: 1600 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   shadowMapSize: 2048,
@@ -305,6 +306,14 @@ export class View3D {
     this.gyms = world.gyms ?? [];
 
     this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
+    /** The Living ground texture; null on plain worlds and devices too small for it. */
+    this.groundMap = world.living?.groundMap ? this.renderer.uploadGroundMap(world.living.groundMap) : null;
+    this.hasLiving = Boolean(world.living);
+    /** Whatever moves on a Living island: plain data, posed anew each frame. */
+    this.movers = world.living?.movers ?? [];
+    this.moverModels = Object.fromEntries(Object.entries(world.living?.models ?? {}).map(([name, poses]) => [name, poses.map((mesh) => this.renderer.upload(mesh))]));
+    /** Holds the movers still, for riders who ask for less motion. */
+    this.reducedMotion = false;
 
     this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
     this.chunks = Object.fromEntries(
@@ -694,7 +703,7 @@ export class View3D {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
-      for (const group of ["scenery", "structures"]) {
+      for (const group of this.chunks.life ? ["scenery", "structures", "life"] : ["scenery", "structures"]) {
         for (const chunk of this.chunks[group]) {
           if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
         }
@@ -726,24 +735,37 @@ export class View3D {
     }
 
     // Passes 1 and 2: sky and the lit world.
-    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
+    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0, sky: Boolean(this.groundMap) });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
       if (group === "detail" && !high) continue;
       // Seen from the drone, small things reach a little further, not as far as the haze.
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
+      const painted = group === "terrain" && this.groundMap;
+      if (painted) this.renderer.useGroundMap(this.groundMap);
       for (const chunk of chunks) {
         if (!chunkVisible(chunk, eye, forward, range)) continue;
         if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
         else this.renderer.draw(chunk.handle, this.identity);
       }
+      if (painted) this.renderer.useGroundMap(null);
     }
     this.renderer.drawBright(this.meshes.arches, this.identity);
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+    for (const mover of selectMovers(this.movers, eye)) {
+      const { position, yaw, pose } = moverPose(mover, this.reducedMotion ? 0 : timeS);
+      const matrix = mover.scale === 1 ? placement(position, yaw) : multiply(placement(position, yaw), scaling(mover.scale));
+      const handle = this.moverModels[mover.model][pose];
+      if (mover.bright) {
+        // A light that only shows once the day fades.
+        if (light.key !== "day") this.renderer.drawBright(handle, matrix, light.key === "dusk" ? 0.95 : 0.45);
+      }
+      else this.renderer.draw(handle, matrix, mover.tint ?? undefined);
+    }
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -862,6 +884,9 @@ export class View3D {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
+    handles.push(...Object.values(this.moverModels).flat());
+    if (this.groundMap) this.renderer.disposeGroundMap(this.groundMap);
+    this.groundMap = null;
     this.#highlights = [];
     this.#disposeStatues();
     const workoutHandles = this.workoutParts ? [...this.workoutParts.values()] : [];
