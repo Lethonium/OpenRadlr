@@ -271,6 +271,18 @@ export function buildSpectator(armsUp) {
 }
 
 /**
+ * A flag a spectator waves, held at the hand: a pole leaning back from the
+ * origin (the hand) and a white cloth (tinted per flag, alpha = 1) off its top.
+ */
+export function buildFlag() {
+  const m = new MeshBuilder();
+  const cloth = [1, 1, 1, 1];
+  m.segment([0, -0.25, 0], [0, 1.55, 0.12], 0.035, 0.035, PALETTE.door);
+  m.box([0.36, 1.27, 0.1], [0.68, 0.46, 0.03], cloth);
+  return m.build();
+}
+
+/**
  * A roadside bike café: a single-storey building with a big glass front and a
  * striped awning, a wooden terrace with tables and parasols, a bike rack with
  * bikes and a sign. Front faces −Z (the road); the terrace reaches

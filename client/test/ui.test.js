@@ -4,7 +4,7 @@ import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
 import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
 import { describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, riderSections } from "../public/js/view/panels.js";
-import { ridersInWindow } from "../public/js/view/pelotonView.js";
+import { lemonsInWindow, ridersInWindow } from "../public/js/view/pelotonView.js";
 import { profileScale } from "../public/js/view/profileView.js";
 import { minimapTransform } from "../public/js/view/minimapView.js";
 import { squareRoute } from "./helpers.js";
@@ -249,4 +249,18 @@ test("edits are kept as they're typed, each field only once it's valid", () => {
   assert.equal(keepValid(previous, { name: "  " }).name, "Anna");
   assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).chainring, 34);
   assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).cog, 16);
+});
+
+test("the peloton shows the golden lemons near me that are still there", () => {
+  const route = squareRoute();
+  const me = { id: 1, distance: 5, lane: 1 };
+  const lemons = [
+    { id: "a", distance: 30, lane: 2, collected: false },
+    { id: "b", distance: 20, lane: 0, collected: true },
+    { id: "c", distance: 990, lane: 3, collected: false },
+    { id: "d", distance: 400, lane: 1, collected: false },
+  ];
+  const shown = lemonsInWindow(me, lemons, route);
+  assert.deepEqual(shown.map((s) => s.lemon.id), ["a", "c"]);
+  assert.equal(shown[1].gap, -15);
 });

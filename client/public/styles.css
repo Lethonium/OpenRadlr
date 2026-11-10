@@ -1688,6 +1688,66 @@ body.riding {
   border: 1px solid rgba(76, 195, 255, 0.5);
 }
 
+/* Gap to my best lap's ghost: green ahead, red behind. */
+.pill-ghost {
+  font-variant-numeric: tabular-nums;
+  border: 1px dashed rgba(191, 232, 255, 0.6);
+}
+
+.pill-ghost.ahead {
+  color: #6fe39b;
+}
+
+.pill-ghost.behind {
+  color: #ff8a7a;
+}
+
+/* A personal milestone: a lemon-yellow banner across the top for a few seconds. */
+.milestone-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(720px, calc(100vw - 32px));
+  margin: 0;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd21a, #ffe774);
+  color: #1d1d20;
+  font-size: clamp(18px, 3vw, 30px);
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.milestone-banner.show {
+  animation: milestone-in 5s ease-out both;
+}
+
+@keyframes milestone-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(0.92);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milestone-banner.show {
+    animation: none;
+  }
+}
+
 .hud-ticker {
   position: absolute;
   left: var(--gap);

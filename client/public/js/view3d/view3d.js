@@ -29,7 +29,9 @@ import {
   variantLook,
 } from "./riderModel.js";
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
-import { buildRotor, buildSpectator } from "./structures.js";
+import { CROWD, cheer, crowdShare } from "./crowd.js";
+import { buildLemon } from "./lemonModel.js";
+import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
@@ -50,8 +52,12 @@ const SCENE = Object.freeze({
   drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
+  /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
+  lemonReach: { behind: 30, ahead: 260 },
   shadowMapSize: 2048,
   labelDistance: 80,
+  /** My best lap's ghost (ride/ghostLap.js): see-through, pale, unshaded a little. */
+  ghost: { alpha: 0.38, unlit: 0.4, tint: [0.75, 0.9, 1] },
   nearCameraHide: 4,
 });
 
@@ -79,7 +85,7 @@ export function projectToScreen(viewProjection, point, width, height) {
  */
 export function riderLabelElement(rider, myId) {
   const element = document.createElement("div");
-  element.className = rider.id === myId ? "label3d me" : "label3d";
+  element.className = rider.id === myId ? "label3d me" : rider.ghost ? "label3d ghost" : "label3d";
   const name = document.createElement("span");
   name.textContent = rider.name;
   element.append(name);
@@ -365,8 +371,12 @@ export class View3D {
     this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
+    this.lemonMesh = this.renderer.upload(buildLemon());
+    /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
+    this.lemons = [];
     this.spectators = world.spectators;
     this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
+    this.flagMesh = this.renderer.upload(buildFlag());
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -447,6 +457,11 @@ export class View3D {
   #disposeStatues() {
     for (const { handle, glows } of this.#statues.values()) for (const h of [handle, ...glows]) this.renderer.dispose(h);
     this.#statues.clear();
+  }
+
+  /** The golden lemons of my route (ride/lemons.js), or none: `{distance, lane, collected}[]`. */
+  setLemons(lemons) {
+    this.lemons = lemons ?? [];
   }
 
   /** Back to riding after the menu: chase camera, ride lens, nothing highlighted. */
@@ -703,9 +718,9 @@ export class View3D {
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
-      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
       const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
-      visible.push({ rider, position, forward, fromCamera, tint, ...parts });
+      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
     }
 
     // Seated riders are drawn through their vehicle, once per vehicle.
@@ -727,21 +742,24 @@ export class View3D {
     const rotorMatrices = this.rotors
       .filter((r) => Math.hypot(r.hub[0] - eye[0], r.hub[2] - eye[2]) < SCENE.rotorDistance)
       .map((r) => ({ hub: r.hub, model: multiply(placement(r.hub, r.yaw), rotationXAbout([0, 0, 0], r.phase + timeS * r.speed)) }));
+    // More riders online, more of the crowd out; the ones near a rider cheer it on.
+    const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
+    const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
     const crowd = this.spectators
       .filter((p) => {
         const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
-        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide;
+        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide && (p.rank ?? 0) < share;
       })
       .map((p) => {
-        // People jump with their arms up; penguins clap by alternating the two
-        // poses, with a tiny bob so the motion still reads at a distance.
-        const clap = p.motion === "clap";
-        const tick = timeS * (clap ? 7.5 : 6) + p.phase;
-        const pose = clap ? Math.sin(tick) > 0 : p.armsUp;
-        const hop = clap ? Math.abs(Math.sin(tick)) * 0.02 : pose ? Math.max(0, Math.sin(tick)) * 0.14 : Math.sin(timeS * 3 + p.phase) * 0.02;
-        const position = [p.position[0], p.position[1] + hop, p.position[2]];
-        return { ...p, pose, model: multiply(placement(position, p.yaw), scaling(p.scale)) };
+        const { yaw, lift, pose } = cheer(p, fans, timeS);
+        const position = [p.position[0], p.position[1] + lift, p.position[2]];
+        const model = multiply(placement(position, yaw), scaling(p.scale));
+        // The flag swings about its pole in the raised hand.
+        const flagModel = p.flag ? multiply(model, placement(this.biome.people?.flagHand ?? [0.36, 1.85, -0.05], Math.sin(timeS * 2.6 + p.phase) * 0.5)) : null;
+        return { ...p, pose, model, flagModel };
       });
+
+    const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
 
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
     if (this.shadowsEnabled && high && lens.shadows) {
@@ -755,7 +773,7 @@ export class View3D {
       }
       this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
       for (const part of visible) {
-        if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
+        if (part.ghost || Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
         for (const piece of part.torso) this.renderer.drawShadowCaster(piece.mesh, piece.model);
         for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
@@ -771,16 +789,20 @@ export class View3D {
       for (const p of crowd) {
         if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
           this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
+          if (p.flagModel) this.renderer.drawShadowCaster(this.flagMesh, p.flagModel);
         }
       }
       for (const { handle, model } of this.#statues.values()) {
         if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(handle, model);
       }
+      for (const model of lemons) {
+        if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(this.lemonMesh, model);
+      }
       this.renderer.endShadows();
     }
 
     // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
-    const scene = { light, lens, high, visible, vehicles, crowd, rotorMatrices };
+    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -811,7 +833,7 @@ export class View3D {
         const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
         this.renderer.viewport(rect);
         this.#drawWorld(
-          { ...scene, visible: mine, vehicles: [], crowd: [] },
+          { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
           { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
         );
         this.renderer.viewport(null);
@@ -830,7 +852,7 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
+  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
@@ -848,8 +870,13 @@ export class View3D {
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
-    for (const p of crowd) this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+    for (const p of crowd) {
+      this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
+      if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
+    }
+    for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
     for (const part of visible) {
+      if (part.ghost) continue;
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
       for (const limb of part.limbs) this.renderer.draw(limb.mesh, limb.model);
@@ -872,9 +899,34 @@ export class View3D {
     this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
     for (const part of visible) {
-      if (part.fromCamera > 150) continue;
+      if (part.ghost || part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
     }
+    // Ghosts last, see-through over everything else.
+    for (const part of visible) {
+      if (!part.ghost) continue;
+      const look = { ...SCENE.ghost, tint: part.tint };
+      this.renderer.drawTransparent(this.bodies[part.variant], part.model, look);
+      for (const piece of part.torso) this.renderer.drawTransparent(piece.mesh, piece.model, look);
+      for (const limb of part.limbs) this.renderer.drawTransparent(limb.mesh, limb.model, look);
+      for (const wheel of part.wheels) this.renderer.drawTransparent(this.wheel, wheel, look);
+    }
+  }
+
+  /** Model matrices of the lemons not yet collected near my rider on my route: spinning slowly, bobbing at handlebar height. */
+  #lemonModels(me, timeS) {
+    if (!this.lemons.length || (me.route && me.route !== this.route.id)) return [];
+    const { behind, ahead } = SCENE.lemonReach;
+    const models = [];
+    for (const lemon of this.lemons) {
+      if (lemon.collected) continue;
+      const gap = this.route.signedGap(me.distance, lemon.distance);
+      if (gap < -behind || gap > ahead) continue;
+      const { position } = riderPosition(this.route, lemon.distance, lemon.lane);
+      const bob = Math.sin(timeS * 2.2 + lemon.distance) * 0.1;
+      models.push(placement([position[0], position[1] + 1.25 + bob, position[2]], timeS * 1.6 + lemon.distance, 0.35));
+    }
+    return models;
   }
 
   /** Riders near enough for a label (not mine), with where their probe stands: at the bike, or below a seated rider's head. */
@@ -945,7 +997,7 @@ export class View3D {
 
   dispose() {
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

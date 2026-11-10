@@ -256,7 +256,8 @@ export const temperate = Object.freeze({
   palette: PALETTE,
   models,
   /** `model(pose)` draws the two crowd poses; `motion` tells the view how to play them. */
-  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true, shirts: SHIRTS }),
+  /** `flagHand`: where a spectator holds its flag, in its own frame. */
+  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true, shirts: SHIRTS, flagHand: [0.36, 1.85, -0.05] }),
   terrainColor,
   flora: Object.freeze({
     /** Scenery per kilometre of road, so every route gets the same density. */

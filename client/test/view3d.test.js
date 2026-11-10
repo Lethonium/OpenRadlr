@@ -350,8 +350,8 @@ class StubRenderer {
   begin() {
     this.begins += 1;
   }
-  draw(handle, model) {
-    this.draws.push({ handle, model, pass: this.pass });
+  draw(handle, model, tint) {
+    this.draws.push({ handle, model, tint, pass: this.pass });
   }
   drawBright() {}
   drawCloudLayer() {}
@@ -810,4 +810,131 @@ test("riding has no side view", () => {
   view.camera.update(100, 1, 0);
   view.render({ riders: [], myId: null, timeS: 12, colors });
   assert.equal(renderer.begins, 1);
+});
+
+// --- golden lemons -------------------------------------------------------------
+
+function lemonView() {
+  const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
+  return { view, renderer, me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
+}
+
+test("a lemon ahead of my rider floats over its lane, drawn bright", () => {
+  const { view, renderer, me } = lemonView();
+  view.setLemons([{ id: "a", distance: 130, lane: 2, collected: false }]);
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const lemons = renderer.brights.filter((d) => d.handle === view.lemonMesh);
+  assert.equal(lemons.length, 1);
+  const road = riderPosition(squareRoute(), 130, 2).position;
+  const model = lemons[0].model;
+  close(model[12], road[0], 0.01);
+  close(model[14], road[2], 0.01);
+  assert.ok(model[13] > road[1] + 0.9 && model[13] < road[1] + 1.6, "about handlebar height over the road");
+});
+
+test("collected and far-off lemons are not drawn", () => {
+  const { view, renderer, me } = lemonView();
+  view.setLemons([
+    { id: "a", distance: 130, lane: 2, collected: true },
+    { id: "b", distance: 700, lane: 2, collected: false },
+  ]);
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+});
+
+test("without lemons none are drawn", () => {
+  const { view, renderer, me } = lemonView();
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+});
+
+test("disposing the view frees the lemon mesh", () => {
+  const { view, renderer } = lemonView();
+  const handle = view.lemonMesh;
+  view.dispose();
+  assert.ok(renderer.disposed.includes(handle));
+});
+
+// --- ghost lap -------------------------------------------------------------------
+
+class TransparentRecorder extends RecordingRenderer {
+  transparent = [];
+  drawTransparent(handle, model, options) {
+    this.transparent.push({ handle, model, options });
+  }
+}
+
+test("my best lap's ghost is drawn see-through, casting no shadow, never solid", () => {
+  const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const ghost = { id: -1, name: "Best lap", distance: 200, lane: 2, speed: 8, power: 0, ghost: true };
+  // 100 m ahead: past label range, so no DOM is needed.
+  view.render({ riders: [me, ghost], myId: 1, timeS: 3, colors });
+  const bike = view.bodies[riderLook(-1).variant];
+  const seeThrough = renderer.transparent.filter((d) => d.handle === bike);
+  assert.equal(seeThrough.length, 1, "the ghost's bike is see-through");
+  assert.ok(seeThrough[0].options.alpha < 0.6);
+  const road = riderPosition(squareRoute(), 200, 2).position;
+  close(seeThrough[0].model[12], road[0], 0.01);
+  const solidAtGhost = (list) => list.filter((d) => d.handle === bike && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
+  assert.equal(solidAtGhost(renderer.draws).length, 0, "not drawn solid");
+  assert.equal(solidAtGhost(renderer.casters).length, 0, "no shadow");
+});
+
+test("past the ends of a route that isn't a loop the road keeps its direction", () => {
+  const route = new RouteGeometry({ id: "line", name: "Line", lanes: 2, seed: 1, loop: false, points: [[0, 0, 0], [100, 0, 0]] });
+  for (const distance of [-24, -1, 0, 100, 124]) {
+    const frame = roadFrame(route, distance);
+    closeVec(frame.right, [0, 0, 1]);
+    closeVec([frame.forward[0], frame.forward[2]], [1, 0]);
+  }
+});
+
+// --- crowds ------------------------------------------------------------------------
+
+/** A view with one spectator 12 m along the square route's first side, beside the road. */
+function crowdView(person, biome = "temperate") {
+  const { view, renderer } = gymView([], biome, null, new RecordingRenderer());
+  const base = { yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, rank: 0, flag: null };
+  view.spectators = [{ ...base, position: [112, 100, 8], ...person }];
+  return { view, renderer };
+}
+const spectatorDraws = (view, renderer) => renderer.draws.filter((d) => view.spectatorMeshes.includes(d.handle));
+
+test("a lining spectator comes out once enough riders are online", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const friends = [2, 3, 4, 5, 6].map((id) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200 }));
+  const alone = crowdView({ rank: 0.7 });
+  alone.view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(alone.view, alone.renderer).length, 0, "not out for one rider");
+  const busy = crowdView({ rank: 0.7 });
+  busy.view.render({ riders: [me, ...friends], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(busy.view, busy.renderer).length, 1, "out for six");
+});
+
+test("bots don't bring out the crowd", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const bots = [2, 3, 4, 5, 6].map((id) => ({ id, name: `B${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, is_bot: true }));
+  const { view, renderer } = crowdView({ rank: 0.7 });
+  view.render({ riders: [me, ...bots], myId: 1, timeS: 3, colors });
+  assert.equal(spectatorDraws(view, renderer).length, 0);
+});
+
+test("a spectator with a flag waves it in its colour, beside its head", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9] });
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const flags = renderer.draws.filter((d) => d.handle === view.flagMesh);
+  assert.equal(flags.length, 1);
+  assert.deepEqual(flags[0].tint, [0.1, 0.2, 0.9]);
+  assert.ok(Math.hypot(flags[0].model[12] - 112, flags[0].model[14] - 8) < 1, "at the spectator");
+  assert.ok(flags[0].model[13] > 101.5, "held up high");
+});
+
+test("a penguin holds its flag lower, in its flipper", () => {
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9], motion: "clap" }, "winter");
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const flag = renderer.draws.find((d) => d.handle === view.flagMesh);
+  assert.ok(flag.model[13] < 101.2, `at ${flag.model[13]}`);
 });

@@ -363,6 +363,7 @@
           <div class="hud-status route-only">
             <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
             <span id="draft-status" class="pill pill-draft" hidden></span>
+            <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
             <span id="group-gap" class="pill glass" hidden></span>
             <span id="sharing-line" class="pill glass" hidden></span>
             <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
@@ -385,6 +386,7 @@
           </div>
 
           <ul id="hud-ticker" class="hud-ticker" aria-live="polite"></ul>
+          <p id="milestone-banner" class="milestone-banner" aria-live="polite" hidden></p>
 
           <!-- Touch screens: lanes (and roads at a junction) without a keyboard -->
           <div class="lane-controls route-only" id="lane-controls">

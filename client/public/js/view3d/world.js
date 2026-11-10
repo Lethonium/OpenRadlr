@@ -10,6 +10,7 @@
  *
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
+import { buildBanners, letterArch } from "./banners.js";
 import { ChunkedMesh } from "./chunks.js";
 import {
   BRIDGE_HALF_LENGTH,
@@ -52,8 +53,10 @@ export function roadFrame(route, distance) {
     return [x, route.elevationAt(d), -y];
   };
   const center = toWorld(distance);
-  const ahead = toWorld(distance + 2);
-  const behind = toWorld(distance - 2);
+  // Past the ends of a route that isn't a loop both would land on the end: take the direction from inside.
+  const along = route.loop === false ? Math.min(route.length - 2, Math.max(2, distance)) : distance;
+  const ahead = toWorld(along + 2);
+  const behind = toWorld(along - 2);
   const flat = normalize([ahead[0] - behind[0], 0, ahead[2] - behind[2]]);
   const right = [-flat[2], 0, flat[0]];
   const forward = normalize([ahead[0] - behind[0], ahead[1] - behind[1], ahead[2] - behind[2]]);
@@ -258,10 +261,14 @@ export function terrainModel(routes, { seed } = {}) {
 /**
  * Terrain of a road network (#26): the landscape comes with the network
  * (terrain first), with a little seeded detail on the land, and blends to
- * the road bed next to every road, like `terrainModel`.
+ * the road bed next to every road, like `terrainModel`. `keepClear`: routes
+ * that count as road for what may stand where (`distanceToRoad`), not for the
+ * ground's height — a route rounds a sharp corner at a place up to about 8 m
+ * off the network's roads, and that asphalt is drawn too.
  */
-export function networkTerrain(network, roads = network.roads()) {
+export function networkTerrain(network, roads = network.roads(), { keepClear = [] } = {}) {
   const index = new RoadIndex(roads);
+  const clear = keepClear.length > 0 ? new RoadIndex(keepClear) : null;
   const seed = network.seed;
   return {
     index,
@@ -279,7 +286,8 @@ export function networkTerrain(network, roads = network.roads()) {
       return bed + (natural - bed) * smoothstep(halfWidth + 1.5, halfWidth + 40, near.distance);
     },
     distanceToRoad(x, z) {
-      return index.nearest(x, z)?.distance ?? 10_000;
+      const road = index.nearest(x, z)?.distance ?? 10_000;
+      return clear ? Math.min(road, clear.nearest(x, z)?.distance ?? 10_000) : road;
     },
   };
 }
@@ -690,7 +698,7 @@ export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift 
   return own ? mesh.build() : mesh;
 }
 
-/** Arches at the start/finish line and at climb and sprint segments. */
+/** Arches at the start/finish line and at climb and sprint segments, with their names; banners counting down climbs and at halfway. */
 export function buildArches(route, { biome = temperate } = {}) {
   const colors = biome.arch;
   const mesh = new MeshBuilder();
@@ -719,10 +727,14 @@ export function buildArches(route, { biome = temperate } = {}) {
     }
   };
   for (const marker of route.markers) {
-    if (marker.type === "start_finish") arch(marker.distance, colors.start, 5.6);
-    else if (marker.type === "climb") arch(marker.distance, colors.climb);
-    else if (marker.type === "sprint") arch(marker.distance, colors.sprint);
+    const height = marker.type === "start_finish" ? 5.6 : 5.2;
+    if (marker.type === "start_finish") arch(marker.distance, colors.start, height);
+    else if (marker.type === "climb") arch(marker.distance, colors.climb, height);
+    else if (marker.type === "sprint") arch(marker.distance, colors.sprint, height);
+    else continue;
+    letterArch(mesh, route, marker, { height, halfWidth, depth: 0.4 });
   }
+  buildBanners(mesh, route, { biome });
   return mesh.build();
 }
 
@@ -964,7 +976,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const ordered = network ? roads : [...routes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const seed = network ? network.seed : mapSeed(route);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
-  const base = network ? networkTerrain(network, roads) : terrainModel(ordered, { seed });
+  // Every route of the map keeps its asphalt clear, whichever is ridden, so the world looks the same from all of them.
+  const mapRoutes = [route, ...others.filter((o) => o.id !== route.id)];
+  const base = network ? networkTerrain(network, roads, { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
   const sea = waterLevel(base.index);
   const rivers = ordered.flatMap((r) => zonesOf.get(r).rivers.map((z) => ({ ...buildRiverPath(r, base, z.at, r.seed >>> 0, sea), route: r })));
   const terrain = rivers.length > 0 ? withRivers(base, rivers, sea - RIVER.mouthDepth) : { ...base, riverDistance: () => Infinity };
@@ -1061,7 +1075,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     avoid,
     biome,
   });
-  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome });
+  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // The crowd's two poses are biome models like every other shape; the view
   // only alternates them (and adds the hop) while drawing.
   const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
