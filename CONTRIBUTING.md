@@ -23,14 +23,15 @@ at 08:00 Europe/Berlin. Major version updates remain separate. Security updates
 can arrive outside the weekly version-update batch.
 
 Dependabot PRs automatically opt into squash auto-merge. Maintainers still review
-and approve the latest changes; merging waits for the required CI checks and
+and approve the changes; merging waits for the required CI checks and
 repository review rules. The automation never approves PRs or checks out their code.
 It reuses `RELEASE_PLEASE_TOKEN` so merged updates can trigger CI and Release Please.
 
 The `Protect main` ruleset keeps earlier reviews recorded instead of dismissing
-every stale approval, while requiring one code-owner approval and approval of the
-latest reviewable push. A rebase that changes the merge base can still require
-reapproval. Branches must remain current with `main` before merging.
+every stale approval, while requiring one code-owner approval. Approval of the
+latest reviewable push is not separately required. Review new changes before
+merging, even when GitHub retains an earlier approval. Branches must remain
+current with `main` before merging.
 
 ## Test-driven development
 
