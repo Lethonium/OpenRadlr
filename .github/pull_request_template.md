@@ -10,5 +10,6 @@
 
 - [ ] New behaviour started with a failing test
 - [ ] `make check` passes
+- [ ] PR title follows Conventional Commits (`feat:`, `fix:`, `chore:`, etc.) for squash merging
 - [ ] Docs updated (`docs/protocol.md` and `PROTOCOL_VERSION` for protocol changes; an ADR for structural decisions)
 - [ ] `CHANGELOG.md` entry under `[Unreleased]` for user-visible changes

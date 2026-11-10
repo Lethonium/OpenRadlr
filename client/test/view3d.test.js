@@ -26,7 +26,7 @@ import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
-import { GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
+import { GYM_CAMERA, GymCamera, View3D, gymCameraPose } from "../public/js/view3d/view3d.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
@@ -470,7 +470,64 @@ test("a workout rider with no gym in reach stays on its bike on the road", () =>
 
 test("the gym camera looks at the mat centre from its road side", () => {
   const { eye, target } = gymCameraPose(testGym());
-  closeVec([...eye, ...target], [100, 102.6, 23, 100, 100.4, 30]);
+  closeVec([...eye, ...target], [100, 101.9, 25.5, 100, 101, 30]);
+});
+
+test("the gym camera looks at a given spot from its road side", () => {
+  const spot = [101.8, 100.4, 30.9];
+  const { eye, target } = gymCameraPose(testGym(), GYM_CAMERA, spot);
+  closeVec([...eye, ...target], [101.8, 101.9, 26.4, 101.8, 101, 30.9]);
+});
+
+test("the gym camera swings to my spot when it changes", () => {
+  const gym = testGym();
+  const p1 = [101.8, 100.4, 30.9];
+  const camera = new GymCamera(gym);
+  const old = [...camera.eye];
+  camera.focusOn(p1);
+  camera.update(0, 0, GYM_CAMERA.swingS / 2);
+  const half = [...camera.eye];
+  camera.update(0, 0, GYM_CAMERA.swingS / 2);
+  const goal = gymCameraPose(gym, GYM_CAMERA, p1).eye;
+  assert.deepEqual([half[0] > old[0] && half[0] < goal[0], camera.eye], [true, goal]);
+});
+
+test("with reduced motion the gym camera cuts to my spot", () => {
+  const gym = testGym();
+  const spot = [101.8, 100.4, 30.9];
+  const camera = new GymCamera(gym, null, GYM_CAMERA, { cut: true });
+  camera.focusOn(spot);
+  camera.update(0, 0, 0);
+  assert.deepEqual(camera.eye, gymCameraPose(gym, GYM_CAMERA, spot).eye);
+});
+
+test("focusing on the same spot again does not restart the swing", () => {
+  const gym = testGym();
+  const p1 = [101.8, 100.4, 30.9];
+  const camera = new GymCamera(gym);
+  camera.focusOn(p1);
+  camera.update(0, 0, GYM_CAMERA.swingS);
+  camera.focusOn([...p1]);
+  camera.update(0, 0, 0);
+  assert.deepEqual(camera.eye, gymCameraPose(gym, GYM_CAMERA, p1).eye);
+});
+
+test("the workout view frames my rider at their spot", () => {
+  const gym = testGym();
+  const { view } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true });
+  for (let k = 0; k < 20; k += 1) view.render({ riders: [workoutRider], myId: 7, timeS: 12 + k * 0.1, colors });
+  const [x, y, z] = assignSpots([7], gym).get(7).position;
+  closeVec(view.camera.target, [x, y + GYM_CAMERA.aim, z]);
+});
+
+test("the workout view shifts the picture down", () => {
+  const gym = testGym();
+  const { view } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true });
+  const inWorkout = view.viewOffset;
+  view.rideMode();
+  assert.deepEqual([inWorkout, view.viewOffset], [[0, -0.4], [0, 0]]);
 });
 
 test("the gym camera swings over from the chase camera in 1.5 s", () => {
@@ -611,4 +668,50 @@ test("statue targets follow the row's yaw", () => {
   const [first] = view.statueTargets(gym);
   assert.equal(first.yaw, Math.PI / 2);
   closeVec([first.position[0], first.position[2]], transformPoint(placement([0, 0, 0], Math.PI / 2), [-1.5, 0, 0]).filter((_, i) => i !== 1).slice(0, 2));
+});
+
+// --- a workout rider's side (yoga) ----------------------------------------------
+const lungeRider = { ...workoutRider, exercise: "low_lunge", exerciseSince: 10 };
+
+/** The thigh and pelvis models drawn for `rider` at `timeS`, on a view that has already drawn `before`. */
+function drawnThighs(view, renderer, rider, timeS) {
+  renderer.draws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS, colors });
+  const thigh = view.thighs[riderLook(7).variant];
+  const pelvis = view.bodyParts[riderLook(7).variant].get("pelvis");
+  const body = invert(renderer.draws.find((d) => d.handle === pelvis).model);
+  // [left, right] points along each thigh in the rider's frame (pelvis-relative, which the mirror leaves alone).
+  return renderer.draws.filter((d) => d.handle === thigh).map((d) => transformPoint(multiply(body, d.model), [0, -0.3, 0]).slice(0, 3));
+}
+
+function sideView() {
+  const gym = testGym();
+  const { view, renderer } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true });
+  return { view, renderer };
+}
+
+test("a rider on their left side is mirrored", () => {
+  const right = sideView();
+  const left = sideView();
+  const [rightL, rightR] = drawnThighs(right.view, right.renderer, { ...lungeRider, side: "right" }, 12);
+  const [leftL, leftR] = drawnThighs(left.view, left.renderer, { ...lungeRider, side: "left" }, 12);
+  closeVec(leftL, [-rightR[0], rightR[1], rightR[2]], 1e-4);
+  closeVec(leftR, [-rightL[0], rightL[1], rightL[2]], 1e-4);
+  assert.ok(Math.abs(rightL[2] - rightR[2]) > 0.05, "the lunge puts one thigh ahead of the other");
+});
+
+test("a side change keeps the clip time", () => {
+  // No exerciseSince: the view's own first sighting of the clip is its start, which a side change must not reset.
+  const rider = { ...lungeRider, exerciseSince: undefined };
+  const { view, renderer } = sideView();
+  drawnThighs(view, renderer, { ...rider, side: "right" }, 10);
+  drawnThighs(view, renderer, { ...rider, side: "left" }, 20.1); // the switch: a fade starts, the clip plays on
+  const faded = drawnThighs(view, renderer, { ...rider, side: "left" }, 20.5);
+  // A rider who was on the left all along, 10.5 s into the same clip.
+  const steady = sideView();
+  drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 10);
+  const reference = drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 20.5);
+  closeVec(faded[0], reference[0], 1e-4);
+  closeVec(faded[1], reference[1], 1e-4);
 });

@@ -7,7 +7,9 @@
 
 use crate::afk::{AfkEvent, AfkWatch};
 use crate::guard::{ConnectionLimits, TokenBucket};
-use crate::protocol::{ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, PROTOCOL_VERSION};
+use crate::protocol::{
+    ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, Side, PROTOCOL_VERSION,
+};
 use crate::studio::STUDIO_ID;
 use crate::ServerInfo;
 use openradlr_sim::RiderId;
@@ -89,6 +91,7 @@ pub enum PlayerCommand {
     /// The exercise a workout rider does now (`None`: rest, #77).
     Workout {
         exercise: Option<Exercise>,
+        side: Option<Side>,
     },
 }
 
@@ -290,12 +293,19 @@ impl Session {
             (Phase::Joined(_), ClientMessage::LeaveVehicle) => Action::Forward(PlayerCommand::LeaveVehicle),
             (Phase::Joined(_), ClientMessage::Pause) => Action::Forward(PlayerCommand::Pause { on: true }),
             (Phase::Joined(_), ClientMessage::Resume) => Action::Forward(PlayerCommand::Pause { on: false }),
-            (Phase::Joined(_), ClientMessage::Workout { exercise }) => match exercise {
-                None => Action::Forward(PlayerCommand::Workout { exercise: None }),
+            (Phase::Joined(_), ClientMessage::Workout { exercise, side }) => match exercise {
+                None => Action::Forward(PlayerCommand::Workout {
+                    exercise: None,
+                    side: None,
+                }),
                 Some(id) => match Exercise::from_id(&id) {
-                    Some(exercise) => Action::Forward(PlayerCommand::Workout {
-                        exercise: Some(exercise),
-                    }),
+                    Some(exercise) => match side.as_deref().map(Side::from_id) {
+                        Some(None) => Action::Reply(ServerMessage::error("unknown_side", "no such side")),
+                        parsed => Action::Forward(PlayerCommand::Workout {
+                            exercise: Some(exercise),
+                            side: exercise.sided().then(|| parsed.flatten().unwrap_or(Side::Right)),
+                        }),
+                    },
                     None => Action::Reply(ServerMessage::error("unknown_exercise", "no such exercise")),
                 },
             },
@@ -674,21 +684,80 @@ mod tests {
     }
 
     #[test]
+    fn a_sided_exercise_forwards_its_side() {
+        let mut s = joined_session();
+        assert_eq!(
+            s.on_text(r#"{"type":"workout","exercise":"pigeon","side":"left"}"#, 0.2),
+            Action::Forward(PlayerCommand::Workout {
+                exercise: Some(Exercise::Pigeon),
+                side: Some(Side::Left)
+            })
+        );
+    }
+
+    #[test]
+    fn a_sided_exercise_without_a_side_is_right() {
+        let mut s = joined_session();
+        assert_eq!(
+            s.on_text(r#"{"type":"workout","exercise":"low_lunge"}"#, 0.2),
+            Action::Forward(PlayerCommand::Workout {
+                exercise: Some(Exercise::LowLunge),
+                side: Some(Side::Right)
+            })
+        );
+    }
+
+    #[test]
+    fn a_side_on_a_plain_exercise_or_rest_is_dropped() {
+        let mut s = joined_session();
+        assert_eq!(
+            s.on_text(r#"{"type":"workout","exercise":"cobra","side":"left"}"#, 0.2),
+            Action::Forward(PlayerCommand::Workout {
+                exercise: Some(Exercise::Cobra),
+                side: None
+            })
+        );
+        assert_eq!(
+            s.on_text(r#"{"type":"workout","exercise":null,"side":"left"}"#, 0.3),
+            Action::Forward(PlayerCommand::Workout {
+                exercise: None,
+                side: None
+            })
+        );
+    }
+
+    #[test]
+    fn an_unknown_side_is_refused() {
+        let mut s = joined_session();
+        assert!(is_error(
+            &s.on_text(r#"{"type":"workout","exercise":"pigeon","side":"up"}"#, 0.2),
+            "unknown_side"
+        ));
+    }
+
+    #[test]
     fn a_known_exercise_and_null_are_forwarded() {
         let mut s = joined_session();
         assert_eq!(
             s.on_text(r#"{"type":"workout","exercise":"jumping_jacks"}"#, 0.2),
             Action::Forward(PlayerCommand::Workout {
-                exercise: Some(Exercise::JumpingJacks)
+                exercise: Some(Exercise::JumpingJacks),
+                side: None
             })
         );
         assert_eq!(
             s.on_text(r#"{"type":"workout","exercise":null}"#, 0.3),
-            Action::Forward(PlayerCommand::Workout { exercise: None })
+            Action::Forward(PlayerCommand::Workout {
+                exercise: None,
+                side: None
+            })
         );
         assert_eq!(
             s.on_text(r#"{"type":"workout"}"#, 0.4),
-            Action::Forward(PlayerCommand::Workout { exercise: None })
+            Action::Forward(PlayerCommand::Workout {
+                exercise: None,
+                side: None
+            })
         );
     }
 

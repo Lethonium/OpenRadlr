@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Four research-backed ERG sessions (Seiler 4×8, Rønnestad 30/15, 40/20, over-unders), each naming its source, and a power-profile preview of the selected session in the workout picker. (#26)
 - A velodrome: a flat 250 m oval with no bots. With `OPENRADLR_OBN_URL` set it is shared with riders of other apps (Incyclist, VeloPopuli, ...) through an OpenBikeNet server: the start menu marks it *Shared* and says what is sent (name, position, speed, power and cadence; never heart rate). Riders from other apps get their own tint, a label with their app, and a badge in the rider list. Without the variable nothing leaves the server. A switch to stop sharing power and cadence follows in #36. See ADR 0020.
 - OpenBikeControl controllers (and apps such as BikeControl that act as one) connect with *Connect controller*, next to Zwift's: shift, change lane, navigate menus, adjust power or the ERG target, change the camera and take photos. A press that sends several actions at once (e.g. shift up, harder and select) acts once: it shifts while riding, changes the ERG target in ERG, and selects in a menu. See docs/devices.md.
 - A rider who sits at 0 W for 30 minutes gets a "Still riding?" warning with Stay and Leave now, two minutes to answer. Stay gives three more reminders 10 minutes apart, then a final one with Leave now only; no answer removes the rider, so an idle rider no longer holds a seat. Pedalling resets the clock, and workouts are exempt. `OPENRADLR_AFK_TIMEOUT_S=0` turns it off. Outcomes are counted in `openradlr_afk_events_total`.
@@ -17,6 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The menu's Overview shows the ride so far: power over the last 10 minutes, weighted power, load and best efforts, with a live power, speed and grade strip on top (#19).
 - A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
 - Workouts at their own café gym with statues of their figures, and workout cards with a block strip (#26)
+- Yoga classes at the Beach Café: Sun Salutation A, a post-ride cool-down and a hip and hamstring flow; poses that switch sides halfway (#26)
 
 ### Changed
 
@@ -24,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- Workouts: the statue plinths no longer flicker, the camera frames your own rider below the timer instead of the mat's centre, joining a workout no longer shows a black screen while the gym's world is built again, and the start menu no longer shows an empty map box on the Workout and Studio tabs (#26).
 - Name labels no longer float over houses and hills: a rider out of sight (the GPU checks each one) has no label, with a short delay so labels don't flicker at an edge. Labels point at their rider with a small tail and get smaller and fainter with distance (#15).
 - A finished ride is no longer stored twice in the ride history when it was finished, continued and finished again (#19).
 - Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.

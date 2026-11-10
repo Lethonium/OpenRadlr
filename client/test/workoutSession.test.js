@@ -25,7 +25,7 @@ const sends = (actions) => actions.filter((a) => a[0] === "send");
 
 test("starts with get ready and sends rest", () => {
   const { session } = setup();
-  assert.deepEqual(session.tick(), [["send", null]]);
+  assert.deepEqual(session.tick(), [["send", null, null]]);
   assert.equal(session.state, "ready");
   assert.equal(session.currentExercise(), null);
 });
@@ -34,7 +34,7 @@ test("sends each exercise once when its block starts", () => {
   const { clock, session } = setup();
   session.tick();
   clock.t = 30;
-  assert.deepEqual(session.tick(), [["send", "squats"]]);
+  assert.deepEqual(session.tick(), [["send", "squats", null]]);
   assert.equal(session.state, "block");
   clock.t = 31;
   assert.deepEqual(sends(session.tick()), []);
@@ -55,7 +55,7 @@ test("pause freezes the clock and sends rest", () => {
   const { clock, session } = setup();
   clock.t = 32;
   session.tick();
-  assert.deepEqual(session.pause(), [["send", null]]);
+  assert.deepEqual(session.pause(), [["send", null, null]]);
   assert.equal(session.state, "paused");
   const before = session.position().elapsedS;
   clock.t += 100;
@@ -69,7 +69,7 @@ test("resume re-sends the block's exercise", () => {
   session.tick();
   session.pause();
   clock.t += 100;
-  assert.deepEqual(session.resume(), [["send", "squats"]]);
+  assert.deepEqual(session.resume(), [["send", "squats", null]]);
   assert.equal(session.state, "block");
 });
 
@@ -84,10 +84,10 @@ test("a pause at a block's end neither skips nor repeats the next block", () => 
   clock.t += 0.1;
   assert.deepEqual(sends(session.tick()), []);
   clock.t += 0.2; // now in the rest block
-  assert.deepEqual(sends(session.tick()), [["send", null]]);
+  assert.deepEqual(sends(session.tick()), [["send", null, null]]);
   clock.t += 5; // elapsed 45.1: the pushups block
   const pushups = sends(session.tick());
-  assert.deepEqual(pushups, [["send", "pushups"]]);
+  assert.deepEqual(pushups, [["send", "pushups", null]]);
   clock.t += 1;
   assert.deepEqual(sends(session.tick()), []);
 });
@@ -97,7 +97,7 @@ test("skip ends the block and counts it as skipped", () => {
   clock.t = 31;
   session.tick();
   const actions = session.skip();
-  assert.deepEqual(sends(actions), [["send", null]]);
+  assert.deepEqual(sends(actions), [["send", null, null]]);
   assert.equal(session.position().index, 2);
   clock.t = 41;
   session.tick();
@@ -114,7 +114,7 @@ test("the end of the plan finishes once", () => {
   clock.t = 54;
   session.tick();
   clock.t = 55;
-  assert.deepEqual(session.tick(), [["send", null], ["finished"]]);
+  assert.deepEqual(session.tick(), [["send", null, null], ["finished"]]);
   assert.equal(session.state, "done");
   clock.t = 60;
   assert.deepEqual(session.tick(), []);
@@ -141,7 +141,7 @@ test("end while an exercise is running sends rest and finishes", () => {
   const { clock, session } = setup();
   clock.t = 35;
   session.tick();
-  assert.deepEqual(session.end(), [["send", null], ["finished"]]);
+  assert.deepEqual(session.end(), [["send", null, null], ["finished"]]);
   assert.equal(session.record(), null);
 });
 
@@ -234,4 +234,54 @@ test("a workout is completed when the plan ran out, not when it was ended early"
   full.clock.t = 56;
   full.session.tick();
   assert.equal(full.session.completed, true);
+});
+
+const sidedSession = (blocks) => {
+  const clock = { t: 0 };
+  const session = new WorkoutSession({
+    plan: createPlan({ id: "y", name: "Yoga", blocks }),
+    now: () => clock.t,
+  });
+  const goto = (t) => {
+    clock.t = t;
+    return session.tick();
+  };
+  goto(0);
+  return { session, goto };
+};
+
+test("a sided block sends right at its start and left at its midpoint", () => {
+  const { goto } = sidedSession([{ kind: "exercise", exercise: "pigeon", seconds: 120 }]);
+  assert.deepEqual(sends(goto(30)), [["send", "pigeon", "right"]]);
+  assert.deepEqual(goto(89.9).filter((a) => a[0] === "send"), []);
+  const atMid = goto(90);
+  assert.deepEqual(sends(atMid), [["send", "pigeon", "left"]]);
+  assert.equal(atMid.filter((a) => a[0] === "cue").length, 1);
+  const later = goto(95);
+  assert.deepEqual(later.filter((a) => a[0] === "send" || a[0] === "cue"), []);
+});
+
+test("the position reports the side", () => {
+  const { session, goto } = sidedSession([{ kind: "exercise", exercise: "pigeon", seconds: 120 }]);
+  assert.equal(session.position().side, null);
+  goto(60);
+  assert.equal(session.position().side, "right");
+  goto(100);
+  assert.equal(session.position().side, "left");
+  assert.equal(session.currentSide(), "left");
+});
+
+test("a plain exercise sends no side", () => {
+  const { session, goto } = sidedSession([{ kind: "exercise", exercise: "cobra", seconds: 60 }]);
+  assert.deepEqual(sends(goto(30)), [["send", "cobra", null]]);
+  assert.equal(session.position().side, null);
+  assert.equal(session.currentSide(), null);
+});
+
+test("resuming after the midpoint sends left", () => {
+  const { session, goto } = sidedSession([{ kind: "exercise", exercise: "pigeon", seconds: 120 }]);
+  goto(100);
+  assert.deepEqual(session.pause(), [["send", null, null]]);
+  assert.equal(session.currentSide(), null);
+  assert.deepEqual(session.resume(), [["send", "pigeon", "left"]]);
 });

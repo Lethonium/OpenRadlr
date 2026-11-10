@@ -12,7 +12,7 @@
  */
 import { buildForearm, buildHead, buildPelvis, buildShin, buildShoe, buildThigh, buildTorso, buildUpperArm, variantLook } from "./riderModel.js";
 import { transformPoint } from "./math.js";
-import { bodyTransforms, poseAt } from "./riderPose.js";
+import { JOINTS, bodyTransforms, poseAt } from "./riderPose.js";
 
 const look = variantLook(0);
 /** The corners of each body part's mesh (the same for every look), to find the lowest point of a pose. */
@@ -82,6 +82,25 @@ export function settle(pose, plant = null, parts = null) {
   const root = { ...pose.root, y: pose.root.y - lowest };
   if (plant) root.z = (pose.root.z ?? 0) + plant.z - z;
   return { ...pose, root };
+}
+
+const OTHER_SIDE = (joint) => joint.replace(/^(.*)([LR])(z?)$/, (_, base, side, z) => `${base}${side === "L" ? "R" : "L"}${z}`);
+
+/**
+ * `pose` seen in a mirror: every left joint takes its right partner's angle and
+ * vice versa. The sideways (`…z`) angles count outward on both sides, the spine
+ * and neck have no sideways joint, and the root no sideways part, so swapping is
+ * all it takes.
+ */
+export function mirrorPose(pose) {
+  return { root: { ...pose.root }, joints: Object.fromEntries(JOINTS.map((joint) => [joint, pose.joints[OTHER_SIDE(joint)]])) };
+}
+
+/** A clip's `plant` for the mirrored pose: the other foot (or its mesh's partner), the same Z; `null` stays `null`. */
+export function mirrorPlant(plant) {
+  if (!plant) return plant;
+  const mesh = OTHER_SIDE(plant.mesh);
+  return Object.freeze({ ...plant, mesh, at: [-plant.at[0], plant.at[1], plant.at[2]] });
 }
 
 /** `clip` whose `plant` point stays where its first key puts it. */
@@ -195,6 +214,64 @@ const burpees = {
   ],
 };
 
+/*
+ * Yoga. Sided poses are keyed on the RIGHT side (the view mirrors a rider on
+ * their left). A held pose breathes on a 4 to 6 s loop: at its middle the
+ * spine and neck move a few hundredths, like the plank.
+ */
+
+/** A held pose: `root` and `joints` at rest, `breath` added to them at the loop's middle. */
+function hold(loopS, root, joints, breath) {
+  const deep = Object.fromEntries(Object.entries(joints).map(([name, angle]) => [name, angle + (breath[name] ?? 0)]));
+  for (const [name, delta] of Object.entries(breath)) deep[name] ??= delta;
+  return { loopS, keys: [key(0, root, joints), key(loopS / 2, root, deep), key(loopS, root, joints)] };
+}
+
+/** Arms overhead: the upward salute. */
+const SALUTE = { "shoulder#": 2.9, "shoulder#z": 0.2, "elbow#": 0.1, spine: 0.08, neck: -0.1 };
+/** Standing forward fold: legs straight, the torso hanging, the hands to the mat. */
+const FOLD = { spine: -2.1, "shoulder#": 2.1, "shoulder#z": 0.1, "elbow#": 0.1, neck: 0.3 };
+/** Half lift: back flat and parallel to the mat, the hands on the shins. */
+const HALF_LIFT = { spine: -1.45, "shoulder#": 1.45, "shoulder#z": 0.1, neck: 0.5 };
+/** Upward dog: the tops of the feet and the hands on the mat, thighs just off it, chest open, arms straight. */
+const UP_DOG_ROOT = { pitch: -1.45 };
+const UP_DOG = { spine: 0.85, neck: 0.4, "shoulder#": 0.6, "shoulder#z": 0.1, "ankle#": -1.2 };
+/** Downward dog: hips high, heels near the mat, arms by the ears. */
+const DOWN_DOG_ROOT = { pitch: -0.7 };
+const DOWN_DOG = { spine: -1.3, neck: 0.3, "shoulder#": 2.8, "shoulder#z": 0.15, "ankle#": 0.6 };
+
+/** Sun Salutation A, one breath (4 s) a position: salute, fold, half lift, plank, chaturanga, upward dog, downward dog, half lift, fold, salute. */
+const sunSalutation = {
+  loopS: 36,
+  keys: [
+    key(0, {}, SALUTE),
+    key(4, {}, FOLD),
+    key(8, {}, HALF_LIFT),
+    pushUp(12, PLANK_Z),
+    pushDown(16, PLANK_Z),
+    key(20, UP_DOG_ROOT, UP_DOG),
+    key(24, DOWN_DOG_ROOT, DOWN_DOG),
+    key(28, {}, HALF_LIFT),
+    key(32, {}, FOLD),
+    key(36, {}, SALUTE),
+  ],
+};
+const forwardFold = hold(5, {}, FOLD, { spine: -0.06, neck: 0.04 });
+const downwardDog = hold(5, DOWN_DOG_ROOT, DOWN_DOG, { spine: -0.04, neck: 0.04 });
+/** Cobra: face down, hips and legs on the mat, the chest lifted on bent arms with the hands beside the ribs. */
+const cobra = hold(5, { pitch: -1.45 }, { spine: 0.6, neck: 0.3, "shoulder#": 0.15, "elbow#": 1, "shoulder#z": 0.1, "ankle#": -1.4 }, { spine: 0.05, neck: -0.03 });
+/** Child's pose: kneeling, hips back on the heels, the chest on the thighs, arms stretched forward on the mat. */
+const childPose = hold(6, {}, { "hip#": 1.25, "knee#": -2.82, "ankle#": -1.2, spine: -1.7, neck: 0.3, "shoulder#": 3.1, "shoulder#z": 0.1 }, { spine: 0.04, neck: -0.03 });
+/** Low lunge (right foot forward): front shin upright, back knee and the top of the back foot on the mat, arms raised. */
+const lowLunge = hold(5, {}, { hipR: 1.6, kneeR: -1.6, hipL: -0.4, kneeL: -1.2, ankleL: -1.2, ...SALUTE }, { spine: 0.04, neck: -0.03 });
+/** Pigeon, upright: right thigh forward and turned out with the shin folded in, left leg long behind with the knee and the top of the foot on the mat, hands beside the hips. */
+const pigeon = hold(
+  6,
+  {},
+  { hipR: 1.45, hipRz: 0.9, kneeR: -2.7, hipL: -1.3, kneeL: -0.05, ankleL: -1.2, spine: 0.05, neck: -0.05, "shoulder#": 0.25, "shoulder#z": 0.2, "elbow#": 0.25 },
+  { spine: 0.04, neck: -0.03 },
+);
+
 /** Every exercise's clip, plus `idle` (rest, get-ready, paused). */
 export const CLIPS = Object.freeze({
   idle,
@@ -204,6 +281,13 @@ export const CLIPS = Object.freeze({
   jumping_jacks: jumpingJacks,
   plank: planted(plank, "footR", TOES),
   burpees,
+  sun_salutation: planted(sunSalutation, "footR", TOES),
+  forward_fold: planted(forwardFold, "footR", ANKLE),
+  downward_dog: planted(downwardDog, "footR", ANKLE),
+  cobra: planted(cobra, "footR", TOES),
+  child_pose: planted(childPose, "footR", ANKLE),
+  low_lunge: planted(lowLunge, "footR", ANKLE),
+  pigeon: planted(pigeon, "footR", ANKLE),
 });
 
 /** The clip for an exercise; no or an unknown exercise stands idle. */
@@ -223,4 +307,11 @@ export const STATUE_MOMENT = Object.freeze({
   situps: Object.freeze({ t: 0.6, plinth: "lying" }),
   jumping_jacks: Object.freeze({ t: 0.5, plinth: "upright" }),
   burpees: Object.freeze({ t: 2.75, plinth: "upright" }),
+  sun_salutation: Object.freeze({ t: 0, plinth: "upright" }),
+  forward_fold: Object.freeze({ t: 0, plinth: "upright" }),
+  downward_dog: Object.freeze({ t: 0, plinth: "lying" }),
+  cobra: Object.freeze({ t: 0, plinth: "lying" }),
+  child_pose: Object.freeze({ t: 0, plinth: "lying" }),
+  low_lunge: Object.freeze({ t: 0, plinth: "lying" }),
+  pigeon: Object.freeze({ t: 0, plinth: "lying" }),
 });

@@ -43,6 +43,8 @@ test("parses the AFK warning from the server", () => {
 test("workout messages carry the exercise or null", () => {
   assert.deepEqual(ClientMessages.workout("plank"), { type: "workout", exercise: "plank" });
   assert.deepEqual(ClientMessages.workout(), { type: "workout", exercise: null });
+  assert.deepEqual(ClientMessages.workout("pigeon", "left"), { type: "workout", exercise: "pigeon", side: "left" });
+  assert.equal("side" in ClientMessages.workout("cobra"), false);
 });
 
 test("a workout join sends the workout device", () => {

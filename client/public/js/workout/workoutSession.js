@@ -3,11 +3,18 @@
  * the caller owns the clock tick, executes the returned actions and never lets
  * this touch the DOM or the network.
  *
- * Actions: ["send", exercise | null] (tell the server), ["cue"], ["finished"].
+ * Actions: ["send", exercise | null, side | null] (tell the server), ["cue"], ["finished"].
  */
-import { planDuration, planPositionAt, withGetReady } from "./plan.js";
+import { EXERCISES, planDuration, planPositionAt, withGetReady } from "./plan.js";
 
 const CUE_SECONDS = 3;
+
+/** "right" for the first half of a sided exercise block, "left" for the second, else null. */
+function sideAt(position) {
+  const block = position.block;
+  if (block?.kind !== "exercise" || !EXERCISES[block.exercise]?.sided) return null;
+  return block.seconds - position.blockRemainingS >= block.seconds / 2 ? "left" : "right";
+}
 
 export class WorkoutSession {
   /** "ready" | "block" | "paused" | "done" */
@@ -28,7 +35,9 @@ export class WorkoutSession {
   /** Per block: "done" | "skipped" | undefined (not over yet). */
   #status = [];
   #sent;
+  #sentSide = null;
   #cued = null;
+  #switched = null;
   #hr = [];
 
   /**
@@ -76,7 +85,8 @@ export class WorkoutSession {
    */
   position() {
     this.#advance();
-    return { ...planPositionAt(this.#plan, this.#elapsed), elapsedS: this.#spent };
+    const position = planPositionAt(this.#plan, this.#elapsed);
+    return { ...position, elapsedS: this.#spent, side: sideAt(position) };
   }
 
   /** True once the whole plan ran out (as opposed to ending it early). */
@@ -90,10 +100,16 @@ export class WorkoutSession {
     return block?.kind === "exercise" && this.state !== "paused" && this.state !== "done" ? block.exercise : null;
   }
 
-  #send(exercise) {
-    if (this.#sent === exercise) return [];
+  /** The side being sent now: null at rest, when paused, or for a plain exercise. */
+  currentSide() {
+    return this.currentExercise() === null ? null : this.position().side;
+  }
+
+  #send(exercise, side = null) {
+    if (this.#sent === exercise && this.#sentSide === side) return [];
     this.#sent = exercise;
-    return [["send", exercise]];
+    this.#sentSide = side;
+    return [["send", exercise, side]];
   }
 
   /** Moves the state to where the clock is and reports what must happen. */
@@ -102,7 +118,14 @@ export class WorkoutSession {
     if (position.finished) return this.#finish();
     if (!this.#running) return this.#send(null);
     this.state = position.index === 0 ? "ready" : "block";
-    const actions = this.#send(this.currentExercise());
+    const actions = this.#send(this.currentExercise(), this.currentSide());
+    if (position.block.kind === "exercise" && sideAt(position) === "left") {
+      const switchKey = `${position.index}:switch`;
+      if (switchKey !== this.#switched) {
+        this.#switched = switchKey;
+        actions.push(["cue"]);
+      }
+    }
     const remaining = Math.ceil(position.blockRemainingS);
     const key = `${position.index}:${remaining}`;
     if (remaining >= 1 && remaining <= CUE_SECONDS && key !== this.#cued) {

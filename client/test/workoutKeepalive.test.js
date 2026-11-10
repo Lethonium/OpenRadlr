@@ -16,7 +16,7 @@ test("the keepalive sends the current exercise every 30 s", () => {
   const fake = fakeTimers();
   const sent = [];
   let exercise = "squats";
-  startKeepalive({ send: (value) => sent.push(value), current: () => exercise, ...fake });
+  startKeepalive({ send: (value) => sent.push(value), current: () => [exercise, null], ...fake });
   assert.equal(KEEPALIVE_MS, 30000);
   assert.deepEqual([...fake.timers.values()].map((t) => t.ms), [30000]);
   [...fake.timers.values()][0].fn();
@@ -27,7 +27,15 @@ test("the keepalive sends the current exercise every 30 s", () => {
 
 test("stopping the keepalive clears the timer", () => {
   const fake = fakeTimers();
-  const stop = startKeepalive({ send: () => {}, current: () => null, ...fake });
+  const stop = startKeepalive({ send: () => {}, current: () => [null, null], ...fake });
   stop();
   assert.equal(fake.timers.size, 0);
+});
+
+test("the keepalive repeats the side", () => {
+  const fake = fakeTimers();
+  const sent = [];
+  startKeepalive({ send: (exercise, side) => sent.push([exercise, side]), current: () => ["pigeon", "left"], ...fake });
+  [...fake.timers.values()][0].fn();
+  assert.deepEqual(sent, [["pigeon", "left"]]);
 });

@@ -33,6 +33,9 @@ A workout is solo and on-demand, and there is no in-ride entry in this slice.
 | Full body | Two rounds of the six exercises, 40 s on and 20 s rest | 12 min |
 | Core | Two rounds of sit-ups 45 s, plank 60 s, push-ups 40 s, with longer rests | 8 min |
 | Tabata | Eight rounds of 20 s on, 10 s rest, alternating squats and burpees | 4 min |
+| Sun Salutation A | Five rounds of Surya Namaskara A (180 s), then child's pose 60 s | 4 min |
+| Post-ride cool-down | Forward fold 60 s, low lunge 120 s, pigeon 120 s, downward dog 60 s, cobra 45 s, child's pose 90 s, 10 s rest between poses | 9 min |
+| Hip and hamstring flow | Two sun salutations (72 s), low lunge, forward fold, pigeon, downward dog, low lunge, pigeon, forward fold, child's pose, 10 s rest between poses | 15 min |
 
 Every plan starts with a 30 s **Get ready** rest that is added by the client
 and never stored in a preset. A plan is validated on load: 1 to 200 blocks,
@@ -49,19 +52,39 @@ know them.
 | --- | --- | --- | --- |
 | Valley Café | Full body | marble | Full body |
 | Hilltop Café | HIIT | bronze | Tabata |
-| Beach Café | Core | sandstone | Core |
-| Forge Hut | Strength | granite | none yet |
+| Beach Café | Yoga | sandstone | Sun Salutation A, Post-ride cool-down, Hip and hamstring flow |
+| Forge Hut | Strength | granite | Core |
 
 A venue's statues show the distinct exercises of the presets it holds, in the
 order they first appear: Valley has the six exercises, Hilltop squats and
-burpees, Beach sit-ups, plank and push-ups. A venue without presets keeps its
-gym as scenery, without statues, and nothing in the menu points to it.
+burpees, Beach the seven yoga poses, Forge sit-ups, plank and push-ups. A venue
+without presets keeps its gym as scenery, without statues, and nothing in the
+menu points to it.
 
 **Fallback.** When a workout's café has no offered route, the workout joins
 the default route and runs at the default gym. In the start menu that gym's
 statue row then shows the picked workout's figures in its venue's material, so
 the preview matches what you will do. The row goes back to its own figures
 when another card is picked.
+
+## Yoga
+
+The three yoga classes are held at Beach Café and carry the Yoga tag on their
+cards. Each class names what it is based on in its description: Sun Salutation A
+on the Ashtanga opening practice, the other two on the ACSM stretching
+guideline (holds of about 60 s per muscle group). No trial of yoga in cyclists
+is cited.
+
+Every pose has a **cue** under its name in the HUD, a short line on what to do
+with the body (empty during rest). The bodyweight exercises have cues too.
+
+**Sided poses** (low lunge and pigeon) switch sides halfway through the block.
+The first half shows the cue, and at the midpoint the HUD reads "Switch sides"
+with a single beep, if beeps are on. The session sends the side on the wire
+(`right` at the start, `left` at the midpoint), so every rider at the gym sees
+the change: a rider on their left side is mirrored in the view. Pausing or
+skipping a sided block behaves as for any block; resuming after the midpoint
+sends `left` again. Other exercises send no side.
 
 ## Statues
 
@@ -110,8 +133,9 @@ reduced motion the camera cuts instead of flying.
   the current block (counted as skipped); **End workout** finishes early.
 - A beep (60 ms) and a short vibration in each of the last three seconds of a
   block, if you left it on.
-- The camera swings to a fixed side view of the gym mat with your avatar on it;
-  with reduced motion it cuts instead of swinging. The clips still play.
+- The camera swings to a close side view framing your own spot on the gym mat,
+  with the picture shifted down clear of the timer card; with reduced motion it
+  cuts instead of swinging. The clips still play.
 
 A dropped connection comes back like a ride does: the plan clock keeps running
 on the client, the client re-sends its current `workout`, and the avatar is

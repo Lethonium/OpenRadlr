@@ -1400,6 +1400,12 @@ button.small {
   width: 100%;
 }
 
+.canvas-workout-preview {
+  /* A fixed height, like .canvas-workout: a percentage would grow with the backing store. */
+  width: 100%;
+  height: 56px;
+}
+
 .workout-actions {
   display: flex;
   gap: 8px;
@@ -5155,6 +5161,14 @@ body.working-out #paddles {
 .workout-next {
   color: var(--hud-muted);
   font-weight: 600;
+}
+
+.workout-cue {
+  color: var(--hud-muted);
+  font-size: 0.85em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .workout-stats {

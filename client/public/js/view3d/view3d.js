@@ -4,7 +4,7 @@
  * needs no protocol changes.
  */
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
-import { clipFor, settle } from "./clips.js";
+import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
 import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
 import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
@@ -174,8 +174,13 @@ export function depthStep({ near, far }, distance, bits = 24) {
   return (distance * distance * (1 / near - 1 / far)) / 2 ** bits;
 }
 
-/** The gym camera (#77): metres from the mat centre towards the road, height, and the swing from the chase camera (seconds). */
-export const GYM_CAMERA = Object.freeze({ back: 7, up: 2.2, swingS: 1.5 });
+/**
+ * The gym camera (#77): metres from the framed spot towards the road, eye height
+ * above it, how far above it the camera aims, how far the picture is shifted
+ * down the screen (normalised device units, clear of the HUD timer card), and
+ * the swing from the chase camera or a previous spot (seconds).
+ */
+export const GYM_CAMERA = Object.freeze({ back: 4.5, up: 1.5, aim: 0.6, screenY: -0.4, swingS: 1.5 });
 /**
  * Where a gym's workout riders leave their bikes: by the mat's road edge
  * (`back` metres from its centre towards the road), in two rows from `aside`
@@ -190,21 +195,33 @@ const CLIP_FADE_S = 0.3;
 /** Towards the road from a gym (its riders face that way). */
 const towardsRoad = (gym) => [-Math.sin(gym.yaw), 0, -Math.cos(gym.yaw)];
 
-/** The gym camera's pose: on the mat's road side, a little above it, looking at its centre. */
-export function gymCameraPose(gym, settings = GYM_CAMERA) {
-  const [cx, cy, cz] = gym.center;
+/** The gym camera's pose: on the road side of `focus` (the mat centre by default), a little above it, looking at it. */
+export function gymCameraPose(gym, settings = GYM_CAMERA, focus = gym.center) {
+  const [fx, fy, fz] = focus;
   const [dx, , dz] = towardsRoad(gym);
-  return { eye: [cx + dx * settings.back, cy + settings.up, cz + dz * settings.back], target: [cx, cy, cz] };
+  return { eye: [fx + dx * settings.back, fy + settings.up, fz + dz * settings.back], target: [fx, fy + settings.aim, fz] };
 }
 
-/** A fixed camera on the gym mat; swings over from where the last camera was (`from`), unless that is null. */
+/**
+ * A fixed camera on the gym mat; swings over from where the last camera was
+ * (`from`), unless that is null. With `cut` (reduced motion) a new spot is
+ * framed at once instead of swung to.
+ */
 export class GymCamera {
   mode = "gym";
+  #cut;
+  #gym;
+  #settings;
+  #focus;
   #pose;
   #from;
   #blend;
 
-  constructor(gym, from = null, settings = GYM_CAMERA) {
+  constructor(gym, from = null, settings = GYM_CAMERA, { cut = false } = {}) {
+    this.#cut = cut;
+    this.#gym = gym;
+    this.#settings = settings;
+    this.#focus = gym.center;
     this.#pose = gymCameraPose(gym, settings);
     this.#from = from?.eye && from?.target ? { eye: [...from.eye], target: [...from.target] } : null;
     this.#blend = this.#from ? 0 : 1;
@@ -216,6 +233,15 @@ export class GymCamera {
 
   cycle() {
     return this.mode;
+  }
+
+  /** Frames `position` (my rider's spot); a changed spot starts a new swing from where the camera is now. */
+  focusOn(position) {
+    if (Math.hypot(...position.map((v, k) => v - this.#focus[k])) <= 0.01) return;
+    this.#from = { eye: [...this.eye], target: [...this.target] };
+    this.#focus = position;
+    this.#pose = gymCameraPose(this.#gym, this.#settings, position);
+    this.#blend = this.#cut ? 1 : 0;
   }
 
   /** Same signature as the chase camera's; only the time step matters. */
@@ -393,7 +419,8 @@ export class View3D {
    * camera, or is there at once with reduced motion.
    */
   workoutMode(gym, { reducedMotion = false } = {}) {
-    this.camera = new GymCamera(gym, reducedMotion ? null : this.camera);
+    this.camera = new GymCamera(gym, reducedMotion ? null : this.camera, GYM_CAMERA, { cut: reducedMotion });
+    this.viewOffset = [0, GYM_CAMERA.screenY];
   }
 
   setCameraMode(mode) {
@@ -464,15 +491,23 @@ export class View3D {
   #workoutParts(rider, { gym, spot, slot }, timeS) {
     const look = riderLook(rider.id);
     const exercise = rider.exercise ?? null;
+    const side = rider.side === "left" ? "left" : "right";
     let state = this.#clips.get(rider.id);
     if (!state || state.exercise !== exercise) {
-      state = { exercise, from: state?.last ?? null, changedAt: timeS, last: null };
+      state = { exercise, side, from: state?.last ?? null, changedAt: timeS, fadeAt: timeS, last: null };
       this.#clips.set(rider.id, state);
+    } else if (state.side !== side) {
+      // A side change fades like a clip change, but the clip itself plays on: `changedAt` (its time fallback) stays.
+      state.side = side;
+      state.from = state.last;
+      state.fadeAt = timeS;
     }
     const clip = clipFor(exercise);
     const since = Number.isFinite(rider.exerciseSince) ? rider.exerciseSince : state.changedAt;
-    const current = poseAt(clip, timeS - since);
-    const w = Math.min(1, (timeS - state.changedAt) / CLIP_FADE_S);
+    const flat = poseAt(clip, timeS - since);
+    const current = side === "left" ? mirrorPose(flat) : flat;
+    const plant = side === "left" ? mirrorPlant(clip.plant) : clip.plant;
+    const w = Math.min(1, (timeS - state.fadeAt) / CLIP_FADE_S);
     const pose = state.from && w < 1 ? blend(state.from, current, w) : current;
     state.last = pose;
 
@@ -483,7 +518,7 @@ export class View3D {
     const meshOf = rig
       ? (name) => parts.get(name)
       : (name) => parts.get(name) ?? (name.startsWith("thigh") ? this.thighs[look.variant] : name.startsWith("shin") ? this.shins[look.variant] : this.shoe);
-    const torso = bodyTransforms(settle(pose, clip.plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
+    const torso = bodyTransforms(settle(pose, plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
 
     // Bikes side by side at the rack, in the order of the mat's spots: right, left, right…
     const across = [Math.cos(gym.yaw), 0, -Math.sin(gym.yaw)];
@@ -594,6 +629,7 @@ export class View3D {
     });
     const me = placed.find((p) => p.rider.id === myId);
     const myVehicle = me?.rider.vehicle ? layoutOf(me.rider.vehicle.kind, me.rider.vehicle.seats) : null;
+    if (me?.gym && this.camera instanceof GymCamera) this.camera.focusOn(me.gym.spot.position);
     if (me) this.camera.update(me.rider.distance, me.rider.lane, dt, myVehicle);
     if (!this.camera.eye) return;
 

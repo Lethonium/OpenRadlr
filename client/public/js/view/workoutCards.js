@@ -16,11 +16,18 @@ export const EXERCISE_COLORS = Object.freeze({
   jumping_jacks: "#f2c14e",
   plank: "#59a96a",
   burpees: "#a06cd5",
+  sun_salutation: "#2ec4b6",
+  forward_fold: "#5b8def",
+  downward_dog: "#1f8a70",
+  cobra: "#7ac47a",
+  child_pose: "#8fb8de",
+  low_lunge: "#3a9bb3",
+  pigeon: "#4f7ea8",
 });
 
 /** The translated tag per venue category (literal keys, so the key sweep sees them). */
 const categoryTag = (category) =>
-  ({ fullBody: () => t("workout.category.fullBody"), hiit: () => t("workout.category.hiit"), core: () => t("workout.category.core"), strength: () => t("workout.category.strength") })[category]?.() ?? "";
+  ({ fullBody: () => t("workout.category.fullBody"), hiit: () => t("workout.category.hiit"), core: () => t("workout.category.core"), strength: () => t("workout.category.strength"), yoga: () => t("workout.category.yoga") })[category]?.() ?? "";
 
 /** The blocks of a plan as fractions of its length (the get-ready rest is not part of a stored plan). */
 export function blockStrip(plan) {
