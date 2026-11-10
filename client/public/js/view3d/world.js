@@ -258,10 +258,14 @@ export function terrainModel(routes, { seed } = {}) {
 /**
  * Terrain of a road network (#26): the landscape comes with the network
  * (terrain first), with a little seeded detail on the land, and blends to
- * the road bed next to every road, like `terrainModel`.
+ * the road bed next to every road, like `terrainModel`. `keepClear`: routes
+ * that count as road for what may stand where (`distanceToRoad`), not for the
+ * ground's height — a route rounds a sharp corner at a place up to about 8 m
+ * off the network's roads, and that asphalt is drawn too.
  */
-export function networkTerrain(network, roads = network.roads()) {
+export function networkTerrain(network, roads = network.roads(), { keepClear = [] } = {}) {
   const index = new RoadIndex(roads);
+  const clear = keepClear.length > 0 ? new RoadIndex(keepClear) : null;
   const seed = network.seed;
   return {
     index,
@@ -279,7 +283,8 @@ export function networkTerrain(network, roads = network.roads()) {
       return bed + (natural - bed) * smoothstep(halfWidth + 1.5, halfWidth + 40, near.distance);
     },
     distanceToRoad(x, z) {
-      return index.nearest(x, z)?.distance ?? 10_000;
+      const road = index.nearest(x, z)?.distance ?? 10_000;
+      return clear ? Math.min(road, clear.nearest(x, z)?.distance ?? 10_000) : road;
     },
   };
 }
@@ -964,7 +969,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const ordered = network ? roads : [...routes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const seed = network ? network.seed : mapSeed(route);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
-  const base = network ? networkTerrain(network, roads) : terrainModel(ordered, { seed });
+  // Every route of the map keeps its asphalt clear, whichever is ridden, so the world looks the same from all of them.
+  const mapRoutes = [route, ...others.filter((o) => o.id !== route.id)];
+  const base = network ? networkTerrain(network, roads, { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
   const sea = waterLevel(base.index);
   const rivers = ordered.flatMap((r) => zonesOf.get(r).rivers.map((z) => ({ ...buildRiverPath(r, base, z.at, r.seed >>> 0, sea), route: r })));
   const terrain = rivers.length > 0 ? withRivers(base, rivers, sea - RIVER.mouthDepth) : { ...base, riverDistance: () => Infinity };
