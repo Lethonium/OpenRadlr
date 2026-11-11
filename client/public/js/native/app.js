@@ -23,6 +23,7 @@ export const APP_SCHEME = "openradlr";
  * @returns {{
  *   saveFiles: ((files: {blob: Blob, name: string}[]) => Promise<void>) | null,
  *   signIn: ((url: string) => Promise<string>) | null,
+ *   onBack: ((back: () => boolean) => void) | null,
  * } | null}
  */
 export function installNativeApp({ plugins = nativePlugins(), navigator: nav = globalThis.navigator, storage } = {}) {
@@ -41,6 +42,7 @@ export function installNativeApp({ plugins = nativePlugins(), navigator: nav = g
     // No downloads folder on a phone: the share sheet offers "Save to Files" and other apps.
     saveFiles: canShare ? (files) => shareFiles(plugins, files) : null,
     signIn: canSignIn ? (url) => systemSignIn(plugins, url) : null,
+    onBack: plugins.App ? (back) => onBackButton(plugins.App, back) : null,
   };
 }
 
@@ -79,6 +81,18 @@ export function systemSignIn({ WebAuth, Browser, App }, url, { setTimeout = glob
     // The tab also closes on the way back to the app: give the link a moment to arrive first.
     handles.push(Browser.addListener("browserFinished", () => setTimeout(() => settle(() => reject(aborted())), 1500)));
     Promise.resolve(Browser.open({ url })).catch((error) => settle(() => reject(error)));
+  });
+}
+
+/**
+ * Android's back button and gesture (iOS has neither): `back` takes one step
+ * back in the page and returns false when there is none left. Then the app
+ * goes to the background, as the home screen's apps do, and keeps its
+ * devices and its ride.
+ */
+function onBackButton(App, back) {
+  return App.addListener("backButton", () => {
+    if (!back()) App.minimizeApp();
   });
 }
 

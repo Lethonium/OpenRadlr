@@ -16,6 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   system sign-in sheet, so Google and Apple sign-in work too. On iOS, devices
   stay connected while the app is in the background. Browsers are unaffected
   ([docs/app.md](docs/app.md), ADR 0021).
+- **Back button in the Android app:** the back button and gesture go one step
+  back, as Esc does: a menu page to the page list, then the menu closes.
+  Mid-ride, back opens the menu at *Finish this ride?*; in a café workout it
+  pauses and asks *End the workout?*; from a summary it returns to the menu;
+  on the start menu the app goes to the background instead of closing. A
+  ride never ends on a stray swipe ([docs/app.md](docs/app.md#back-button)).
 - Bots with character (#64): every bot is a named rider of a made-up cast ("Gus Tailwind", "Penny Farthing") (and, rarely, Goldie Lemon in lemon yellow) with a riding type (rouleur, climber, sprinter, attacker, tourer) and a team kit, the same everywhere. Bots now race you: they take turns on the front of a group and swing off, attack near the top of a climb, take up the chase when you come past and sprint for the line, as long as their energy (W′) lasts. They ride in groups that spawn out of sight around every rider (mostly a group ahead to chase, sometimes one coming up from behind),; the number of riders per route is still `OPENRADLR_TARGET_RIDERS`. The 3D view shows bots in their team's kit, the rider list names their type, and the ticker calls out moves near you.
 - Golden lemons: a few lemons float over the road, each in one lane, and move to new places every day (the same for every rider). Ride through one in its lane to collect it; they grow back every lap. A pickup shows in the ticker with your all-time count, and the finish screen lists the ride's lemons. No counter on the HUD: it's an easter egg.
 - Ghost lap: your best lap on a loop route is kept in the browser, and a see-through rider labelled "Best lap" rides it again from the line, lane changes and all. The HUD shows the live gap ("Best lap +4.2 s", red behind, green ahead), and a faster lap becomes the new ghost at once. Hidden in races and events.

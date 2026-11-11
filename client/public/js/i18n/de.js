@@ -385,6 +385,7 @@ export default {
   "workout.resume": "Weiter",
   "workout.pause": "Pause",
   "workout.ended": "Workout beendet",
+  "workout.confirmEnd": "Workout beenden? Abgeschlossene Blöcke werden gespeichert.",
   "studio.ergTitle": "ERG: Die Rolle hält die Zielleistung",
   "studio.powerOnlyTitle": "Deine Rolle sendet nur Leistung: Folge den Zielen selbst",
   "studio.unavailable3d": "Das 3D-Studio ist auf diesem Gerät nicht verfügbar; Ziele und Rangliste funktionieren weiter.",

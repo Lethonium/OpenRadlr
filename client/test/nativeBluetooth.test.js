@@ -275,7 +275,7 @@ test("large files are encoded in chunks", async () => {
 
 test("only the features with native plugins are offered", () => {
   const share = { Filesystem: {}, Share: {} };
-  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn"]);
+  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn", "onBack"]);
   assert.equal(installNativeApp({ plugins: {}, navigator: {} }).saveFiles, null);
   assert.equal(typeof installNativeApp({ plugins: share, navigator: {} }).saveFiles, "function");
   assert.equal(typeof installNativeApp({ plugins: { WebAuth: {} }, navigator: {} }).signIn, "function");
@@ -336,4 +336,35 @@ test("closing the Android sign-in tab is an AbortError", async () => {
   android.fire("browserFinished");
   android.timers.forEach((fn) => fn());
   await assert.rejects(signedIn, { name: "AbortError" });
+});
+
+/** Capacitor's App plugin with a back button the test can press. */
+function backButtonApp() {
+  const calls = [];
+  let pressed = null;
+  const App = {
+    addListener: (event, listener) => (calls.push(event), (pressed = listener), Promise.resolve({ remove() {} })),
+    minimizeApp: async () => calls.push("minimizeApp"),
+  };
+  return { App, calls, press: () => pressed() };
+}
+
+test("Android's back button runs the page's back step", () => {
+  const { App, calls, press } = backButtonApp();
+  let backs = 0;
+  installNativeApp({ plugins: { App }, navigator: {} }).onBack(() => (backs++, true));
+  press();
+  assert.equal(backs, 1);
+  assert.deepEqual(calls, ["backButton"]);
+});
+
+test("with nothing left to go back to, the back button sends the app to the background", () => {
+  const { App, calls, press } = backButtonApp();
+  installNativeApp({ plugins: { App }, navigator: {} }).onBack(() => false);
+  press();
+  assert.deepEqual(calls, ["backButton", "minimizeApp"]);
+});
+
+test("without the App plugin there is no back button to handle", () => {
+  assert.equal(installNativeApp({ plugins: {}, navigator: {} }).onBack, null);
 });

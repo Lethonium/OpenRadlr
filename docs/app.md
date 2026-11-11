@@ -29,6 +29,24 @@ Bluetooth. Why we chose this approach: [ADR 0021](adr/0021-native-app-shell.md).
 - If the server can't be reached, the app shows `app/www/index.html` with a
   *Try again* button.
 
+## Back button
+
+On Android, the back button and the back gesture go one step back, like Esc
+(`client/public/js/input/back.js`, wired up in `native/app.js`). They never
+end a ride or a workout without asking:
+
+| Where | Back |
+|---|---|
+| A menu, drawer or popover is open | One step back: on a phone a menu page returns to the page list, then the menu closes |
+| On the road or in the spin studio | Opens the menu at *Finish this ride?*; back again cancels |
+| In a café workout | Pauses it and asks *End the workout?*; cancelling goes on where it was |
+| The ride's or the workout's summary | Back to the menu (asks first if the ride is not saved) |
+| An exercise in the Workout tab | Closes it |
+| The start menu | The app goes to the background, as at the home screen; devices stay connected |
+
+iOS has no back button, and in a browser the back button still leaves the
+page.
+
 ## Strava sign-in
 
 Google and Apple don't allow sign-in inside an embedded web view. So in the
@@ -205,7 +223,10 @@ description.
 9. *Connect with Strava* opens the sign-in sheet. Signing in with email,
    Google and Apple each comes back connected, with devices still connected.
    Closing the sheet changes nothing.
-10. Lock the phone or switch apps for a minute mid-ride, then come back: the
+10. Android: back works as in [Back button](#back-button). Mid-ride it asks
+    before finishing, mid-workout it pauses and asks, and on the start menu
+    the app goes to the background.
+11. Lock the phone or switch apps for a minute mid-ride, then come back: the
     trainer is still connected (iOS) and the ride goes on.
 
 ## Known limitations

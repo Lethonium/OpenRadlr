@@ -385,6 +385,7 @@ export default {
   "workout.resume": "Resume",
   "workout.pause": "Pause",
   "workout.ended": "Workout ended",
+  "workout.confirmEnd": "End the workout? Finished blocks are saved.",
   "studio.ergTitle": "ERG: the trainer holds the target",
   "studio.powerOnlyTitle": "Your trainer only sends power: follow the targets yourself",
   "studio.unavailable3d": "The 3D studio is unavailable on this device; targets and the board still work.",

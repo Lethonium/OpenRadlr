@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createPlan } from "../public/js/workout/plan.js";
-import { WorkoutSession } from "../public/js/workout/workoutSession.js";
+import { WorkoutSession, endAfterAsking } from "../public/js/workout/workoutSession.js";
 
 // Get ready 0-30, squats 30-40, rest 40-45, pushups 45-55
 const plan = () =>
@@ -284,4 +284,37 @@ test("resuming after the midpoint sends left", () => {
   assert.deepEqual(session.pause(), [["send", null, null]]);
   assert.equal(session.currentSide(), null);
   assert.deepEqual(session.resume(), [["send", "pigeon", "left"]]);
+});
+
+test("asked to end, the clock stops while the rider decides, then the workout ends", () => {
+  const { clock, session } = setup();
+  session.tick();
+  clock.t = 35;
+  session.tick();
+  const actions = endAfterAsking(session, () => {
+    assert.equal(session.state, "paused");
+    clock.t = 90; // the dialog stays open a while
+    return true;
+  });
+  assert.equal(session.state, "done");
+  assert.ok(actions.some(([kind]) => kind === "finished"));
+});
+
+test("not ending resumes where the workout was, without the time the dialog was open", () => {
+  const { clock, session } = setup();
+  session.tick();
+  clock.t = 35;
+  session.tick();
+  endAfterAsking(session, () => ((clock.t = 90), false));
+  assert.equal(session.state, "block");
+  assert.equal(session.currentExercise(), "squats");
+});
+
+test("a paused workout stays paused when the rider keeps it", () => {
+  const { clock, session } = setup();
+  session.tick();
+  clock.t = 35;
+  session.pause();
+  endAfterAsking(session, () => false);
+  assert.equal(session.state, "paused");
 });
