@@ -1,8 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { languageButtonStates } from "../public/js/i18n/selector.js";
+import { languageOptions } from "../public/js/i18n/selector.js";
 
-test("only the current language is pressed", () => {
-  assert.deepEqual(languageButtonStates("de"), { en: false, de: true });
-  assert.deepEqual(languageButtonStates("en"), { en: true, de: false });
+test("one option per supported language, in its own name, with only the current one selected", () => {
+  assert.deepEqual(languageOptions("de"), [
+    { code: "en", label: "English", selected: false },
+    { code: "de", label: "Deutsch", selected: true },
+  ]);
+  assert.deepEqual(
+    languageOptions("en").map((option) => option.selected),
+    [true, false],
+  );
 });

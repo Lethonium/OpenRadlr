@@ -536,8 +536,18 @@ kbd {
     margin-bottom: 14px;
   }
 
+  /* Phones: the tabs share the row (no clipped last tab to scroll to), a touch smaller. */
+  .activity-tabs {
+    width: 100%;
+    gap: 2px;
+  }
+
   .activity-tab {
-    padding: 8px 12px;
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 8px 8px;
+    font-size: 14px;
+    gap: 4px;
   }
 }
 
@@ -621,29 +631,67 @@ kbd {
 }
 
 .build-line {
+  max-width: 1180px;
+  margin: 32px auto 0;
+  padding: 16px 0;
   display: flex;
-  gap: 10px;
-  align-items: baseline;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-start;
   font-size: 12px;
 }
 
-.build-label,
-.build-reload {
+.build-label {
   background: none;
   border: 0;
-  padding: 2px 0;
+  padding: 4px 2px;
   font: inherit;
+  color: var(--muted);
   cursor: pointer;
 }
 
-.build-label {
-  color: var(--muted);
-  opacity: 0.7;
+.build-label:hover {
+  color: var(--text, inherit);
 }
 
-.build-reload {
-  color: var(--lemon);
-  text-decoration: underline;
+/* New version: a pill at the bottom, above the phone's Ride bar. */
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 24px));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--lemon);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.update-reload {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--lemon);
+  border-color: var(--lemon);
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.update-later {
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--muted);
 }
 
 .status-dot {
@@ -1319,6 +1367,12 @@ button.small {
   /* Room for the Ride bar as tall as it is (an error above Ride makes it taller; main.js measures it). */
   .start {
     padding-bottom: calc(var(--dock-height, 68px + env(safe-area-inset-bottom)) + 16px);
+  }
+
+  /* Clear of the Ride bar, with room to spare for its error line. */
+  .build-line {
+    margin-top: 16px;
+    padding-bottom: 36px;
   }
 
   .dock-actions,
@@ -5123,11 +5177,37 @@ body.paddling .lane-button {
 }
 
 /* Units setting (km · kg / mi · lb) */
-.unit-switch,
-.lang-switch {
+.unit-switch {
   display: flex;
   gap: 4px;
   margin-top: 8px;
+}
+
+/* Auto width (Chrome/Safari), so a longer language name still fits. */
+.lang-select {
+  field-sizing: content;
+  width: auto;
+  flex: none;
+  margin-left: auto;
+  appearance: none;
+  padding: 6px 28px 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%239aa3ad' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Phones: the logo and language share a row; the server status gets the next one whole. */
+@media (max-width: 600px) {
+  .start-head .server-status {
+    flex-basis: 100%;
+    justify-content: center;
+  }
 }
 
 /* --- shared vehicles (#55) ------------------------------------------ */
@@ -5708,4 +5788,14 @@ body.working-out #paddles {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+/* Phones: a tighter header, so the language, status and tabs read as one block. */
+@media (max-width: 520px) {
+  .start-head {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: 0;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
 }

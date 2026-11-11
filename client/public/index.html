@@ -176,10 +176,7 @@
             <img class="brand-mark" src="icons/brand-mark.png" alt="" width="69" height="54" />
             <span class="brand-word">Open<span>Radlr</span></span>
           </div>
-          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
-            <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
-            <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
-          </div>
+          <select id="lang-select" class="lang-select" aria-label="Language" data-i18n-attr="aria-label:menu.language"></select>
           <div class="server-status" aria-live="polite">
             <span id="server-dot" class="status-dot" aria-hidden="true"></span>
             <strong id="server-label" data-i18n="menu.server.connecting">Connecting…</strong>
@@ -187,11 +184,6 @@
           </div>
         </header>
 
-        <div class="build-line">
-          <button type="button" id="build-label" class="build-label" title="Copy the build details" data-nav-skip data-i18n-attr="title:menu.build.copy"></button>
-          <button type="button" id="build-reload" class="build-reload" hidden data-i18n="menu.build.update">Update available, reload</button>
-          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" data-nav-skip hidden data-i18n="menu.privacy">Privacy</a>
-        </div>
 
         <div class="start-grid">
           <section class="start-routes" aria-labelledby="routes-title">
@@ -368,10 +360,6 @@
                   <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
                   <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
                 </div>
-                <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:menu.language">
-                  <button type="button" class="toggle" data-lang="en" aria-pressed="true">English</button>
-                  <button type="button" class="toggle" data-lang="de" aria-pressed="false">Deutsch</button>
-                </div>
                 <label><span data-i18n="drawer.biome">Season</span>
                   <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
                 </label>
@@ -400,6 +388,17 @@
             </details>
             </details>
           </form>
+        </div>
+        <footer class="build-line">
+          <button type="button" id="build-label" class="build-label" title="Copy the build details" data-nav-skip data-i18n-attr="title:menu.build.copy"></button>
+          <a id="privacy-link" class="build-label" target="_blank" rel="noopener" data-nav-skip hidden data-i18n="menu.privacy">Privacy</a>
+        </footer>
+
+        <!-- A newer build is live: a toast over the page, not a line to hunt for -->
+        <div id="update-banner" class="update-banner" role="status" hidden>
+          <span data-i18n="menu.build.updateText">A new version is available.</span>
+          <button type="button" id="build-reload" class="update-reload" data-nav-skip data-i18n="menu.build.reload">Reload</button>
+          <button type="button" id="update-later" class="update-later" data-nav-skip data-i18n="menu.build.later">Later</button>
         </div>
       </section>
 
