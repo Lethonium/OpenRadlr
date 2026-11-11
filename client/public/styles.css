@@ -1224,11 +1224,11 @@ label output {
   }
 }
 
+/* The add-on lines keep the same 12 px rhythm as the trainer line above them (the fieldset's gap). */
 .addons {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  margin-top: 8px;
+  gap: 12px;
 }
 
 button.small {
