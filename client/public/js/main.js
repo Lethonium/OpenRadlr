@@ -22,7 +22,9 @@ import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
-import { StravaClient, activityUrl, appLoginResult, stravaMessage } from "./net/strava.js";
+import { StravaClient, appLoginResult, stravaMessage } from "./net/strava.js";
+import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
+import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -70,7 +72,7 @@ import {
   splitLine,
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
-import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoFileName, photoStats } from "./view/photos.js";
+import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawPeloton } from "./view/pelotonView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -427,6 +429,11 @@ const app = {
   rideMode: readSetting(RIDE_MODE_KEY),
   infoTimer: null,
   strava: new StravaClient(),
+  uploadReceipts: new UploadReceipts(),
+  finishUpload: null,
+  recoveryUpload: null,
+  finishRecoverable: false,
+  finishSave: null,
   wakeLock: new ScreenWakeLock(),
   /** undefined = not checked yet, null = not connected. */
   stravaAccount: undefined,
@@ -786,6 +793,7 @@ function initStartMenu() {
     await app.strava.logout().catch(() => {});
     app.stravaAccount = null;
     renderStartMenu();
+    if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
   });
 }
 
@@ -958,6 +966,8 @@ async function loadStravaAccount() {
   // A connected Strava account fills an empty name.
   if (app.stravaAccount && !$("name").value.trim()) $("name").value = app.stravaAccount.name;
   renderStartMenu();
+  if (app.finished) setupFinishUpload();
+  if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
 }
 
 function renderAccount() {
@@ -1622,6 +1632,8 @@ async function joinRide(restored = null) {
     if (!confirm(t("join.confirmNew"))) return;
     await discardUnfinished();
   }
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
   app.restored = restored;
 
   const route = pickRoute(routesOf(app.info), app.routeId);
@@ -1777,6 +1789,8 @@ function learnLevel() {
 function endRide() {
   const ride = app.ride;
   if (!ride) return;
+  app.finishUpload?.dispose();
+  app.finishUpload = null;
   app.ride = null;
   closeDrawers();
   app.menuDialog?.dispose();
@@ -1831,6 +1845,8 @@ function endRide() {
     junction: null,
     finished: false,
     finishController: null,
+    finishRecoverable: false,
+    finishSave: null,
     finishedServerName: null,
     vehicleId: null,
     vehicleKind: null,
@@ -2632,12 +2648,13 @@ function showMilestone(text) {
 
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
 function leaveRide() {
-  // The ride and its photos only live in this page until it is left.
-  const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size });
+  // Finished rides with a verified recovery copy can safely return to the menu.
+  const recoverable = app.finished && app.finishRecoverable && !app.rideSaved;
+  const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size, recoverable });
   if (question && !confirm(question)) return false;
-  // Left on purpose: nothing to continue later.
-  // refreshUnfinished (run by endRide) waits for this clear before it reads the autosave.
-  app.autosaveClearing = app.autosave.clear();
+  // Keep an unsaved finished ride for download or status checking from the menu.
+  // Wait for the final snapshot before clearing, so it cannot resurrect a discarded ride.
+  if (!recoverable) app.autosaveClearing = Promise.resolve(app.finishSave).then(() => app.autosave.clear());
   endRide();
   return true;
 }
@@ -2695,7 +2712,6 @@ function initFinish() {
     saveFiles([{ blob: new Blob([gpx], { type: "application/gpx+xml" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "gpx") }]);
     rideKept();
   });
-  $("upload-strava").addEventListener("click", () => uploadToStrava());
 }
 
 const rideName = () => (app.eventRide ? eventRideName(app.eventRide.kind, app.eventRide.routeName) : `OpenRadlr · ${app.rideRoute.name}`);
@@ -2738,7 +2754,7 @@ function finishRide() {
     recorder: app.recorder,
     closePause: () => app.recorder.resume(Date.now()),
     saveHistory: () => saveFinishedRide(),
-    markAutosaveFinished: () => app.autosave.save({ ...rideSnapshot(), finished: true }).catch((error) => console.error("autosave:", error)),
+    markAutosaveFinished: () => saveFinishedSnapshot(),
     detachConnection: () => {
       app.finishedServerName = connection?.serverInfo.server_name ?? "";
       // Cleared before leave(): its close is then no lost connection, so nothing reconnects.
@@ -2807,22 +2823,18 @@ function openFinish() {
   $("download-gpx").hidden = Boolean(app.studio);
   // Phone paddle rides: photos and the summary card only, no ride files.
   const exportable = canExportRide(app.trainer);
+  $("finish-files").hidden = !exportable;
   if (!exportable) for (const id of ["download-tcx", "download-gpx", "download-fit"]) $(id).hidden = true;
   // Strava gets rides measured by a real trainer only, not taps or keys.
   const measured = hasRealPowerSource(app.trainer);
   $("ftp-prompt").hidden = true;
-  const canUpload = measured && Boolean(app.stravaAccount?.can_upload);
-  $("upload-strava").hidden = !canUpload;
-  $("upload-strava").disabled = empty;
-  $("upload-status").textContent = empty
+  $("finish-note").textContent = empty
     ? t("finish.note.tooShort")
     : !exportable
       ? t("finish.note.paddle")
-      : !measured
-        ? t("finish.note.simulated")
-      : app.stravaAccount && !canUpload
-      ? t("finish.note.permission")
-      : "";
+      : !measured ? t("finish.note.simulated") : "";
+  $("finish-retained").hidden = !app.finishRecoverable || app.rideSaved;
+  setupFinishUpload();
   $("finish").hidden = false;
   // Nothing behind the summary can be reached or opened any more; the next ride gets a fresh ride screen.
   for (const element of $("ride").children) element.inert = element.id !== "finish";
@@ -2831,51 +2843,85 @@ function openFinish() {
   if (!empty) drawPowerChart($("finish-chart"), { samples: app.recorder.samples, ftp: app.profile.ftp, colors: themeColors(), windowS: null });
 }
 
-function uploadToStrava() {
-  if (!hasRealPowerSource(app.trainer)) return;
-  return uploadRide(app.recorder, rideName(), { indoor: Boolean(app.studio), splits: app.finishSplits, button: $("upload-strava"), status: $("upload-status"), onSaved: rideKept });
+/** Final snapshot completion belongs to this recorder, even if the rider leaves. */
+function saveFinishedSnapshot() {
+  const recorder = app.recorder;
+  app.finishSave = app.autosave.save({ ...rideSnapshot(), finished: true }).then((saved) => {
+    if (app.recorder !== recorder) return;
+    app.finishRecoverable = saved;
+    $("finish-retained").hidden = !saved || app.rideSaved;
+  });
+  return app.finishSave;
 }
 
-/**
- * Uploads `recorder`'s ride to Strava as FIT, reporting in `status`. Also
- * used for an autosaved ride from the start menu (#73).
- */
-async function uploadRide(recorder, name, { indoor, splits = [], button, status, onSaved }) {
-  button.disabled = true;
-  status.textContent = t("strava.uploading");
-  try {
-    // FIT: the only format that tells Strava it was a virtual ride (and keeps its climbing).
-    const upload = await app.strava.upload(recorder.toFit({ indoor, splits }), name);
-    status.textContent = t("strava.processing");
-    const done = await app.strava.waitForActivity(upload);
-    if (done.error) {
-      status.textContent = t("strava.error", { message: done.error });
-      button.disabled = false;
-    } else if (done.activity_id) {
-      onSaved();
-      status.replaceChildren(
-        t("strava.done"),
-        Object.assign(document.createElement("a"), { href: activityUrl(done.activity_id), target: "_blank", rel: "noopener", textContent: t("strava.view") }),
-        // Strava only lets partner apps attach photos, so riders add them by hand.
-        t("strava.noPhotos"),
-      );
-    } else {
-      onSaved();
-      status.textContent = t("strava.uploaded");
-    }
-  } catch (error) {
-    status.textContent = t("strava.uploadFailed", { message: error.message });
-    button.disabled = false;
-  }
+/** The same panel renders a finished ride and a ride restored from browser recovery. */
+function mountUpload(prefix, recorder, name, { indoor, splits = [], onSuccess, onConnect }) {
+  const action = prefix === "finish-strava" ? "upload-strava" : "unfinished-strava";
+  const status = prefix === "finish-strava" ? "upload-status" : "unfinished-upload-status";
+  const elements = Object.fromEntries(["account", "detail", "connect", "activity", "storage"].map((part) => [part, $(`${prefix}-${part}`)]));
+  return bindStravaUpload({
+    elements: { ...elements, panel: $(prefix), action: $(action), status: $(status) },
+    client: app.strava,
+    receipts: app.uploadReceipts,
+    key: uploadKey(app.stravaAccount?.athlete_id, recorder.samples[0].t),
+    account: app.stravaAccount,
+    makeFile: () => recorder.toFit({ indoor, splits }),
+    name,
+    onSuccess,
+    onConnect: nativeApp?.signIn ? () => connectStravaInApp() : onConnect,
+    confirm: (message) => confirm(message),
+  });
+}
+
+function setupFinishUpload() {
+  app.finishUpload?.dispose();
+  app.finishUpload = null;
+  const recorder = app.recorder;
+  const visible = !recorder.empty && hasRealPowerSource(app.trainer) && Boolean(app.info?.strava?.enabled);
+  $("finish-strava").hidden = !visible;
+  if (!visible) return;
+  app.finishUpload = mountUpload("finish-strava", recorder, rideName(), {
+    indoor: Boolean(app.studio), splits: app.finishSplits,
+    onConnect: async () => {
+      await app.finishSave;
+      if (!app.finishRecoverable && !confirm(t("strava.connectUnsaved"))) return;
+      location.assign("/auth/strava");
+    },
+    onSuccess: () => {
+      if (app.recorder !== recorder) return;
+      // Keep the snapshot/photos until leaving, so reconnecting or saving photos is safe.
+      app.rideSaved = true;
+      $("finish-retained").hidden = true;
+    },
+  });
+}
+
+function setupRecoveryUpload() {
+  const snapshot = app.unfinished;
+  const visible = snapshot?.trainerKind === "trainer" && Boolean(app.info?.strava?.enabled) && snapshot.recorder.samples.length > 0;
+  $("unfinished-strava-panel").hidden = !visible;
+  // Menu info refreshes every few seconds. Keep this ride's active request and listeners.
+  if (visible && app.recoveryUpload?.source === snapshot && app.recoveryUpload?.account === app.stravaAccount) return;
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
+  $("discard-unfinished").textContent = t("unfinished.discard");
+  if (!visible) return;
+  app.recoveryUpload = Object.assign(mountUpload("unfinished-strava-panel", RideRecorder.from(snapshot.recorder), `OpenRadlr · ${snapshot.routeName}`, {
+    indoor: snapshot.studio,
+    onSuccess: () => {
+      if (app.unfinished === snapshot) $("discard-unfinished").textContent = t("unfinished.done");
+    },
+  }), { source: snapshot, account: app.stravaAccount });
 }
 
 // ------------------------------------------------------------- recovery ---
 // A ride survives a dropped connection and a crashed tab (#73).
 
-/** The ride file is downloaded or uploaded: nothing left to recover. */
+/** A ride file was downloaded; retain the snapshot through any later OAuth redirect. */
 function rideKept() {
   app.rideSaved = true;
-  app.autosave.clear();
+  // Keep photos and the recorder available for an OAuth redirect until explicit leave.
+  $("finish-retained").hidden = true;
 }
 
 /** The socket closed mid-ride: keep riding and try to get back on. */
@@ -3067,12 +3113,15 @@ async function refreshUnfinished() {
 function renderUnfinished() {
   const saved = app.unfinished;
   $("unfinished").hidden = !saved || Boolean(app.ride);
-  if (!saved) return;
+  if (!saved) { app.recoveryUpload?.dispose(); app.recoveryUpload = null; return; }
+  if (!$("unfinished-save").hidden) setupRecoveryUpload();
   $("unfinished-label").textContent = unfinishedLabel(saved, { now: Date.now(), formatDistance: (m) => formatDistanceWithUnit(m, 1) });
   $("continue-ride").hidden = !continueAllowed(saved, { now: Date.now(), serverUrl: defaultServerUrl() });
 }
 
 async function discardUnfinished() {
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
   await app.autosave.clear();
   app.unfinished = null;
   renderUnfinished();
@@ -3104,13 +3153,14 @@ function initRecovery() {
     if (!snapshot) return;
     const photos = await app.autosave.photos();
     $("unfinished-save").hidden = false;
+    $("save-unfinished").hidden = true;
     $("unfinished-photos").hidden = photos.length === 0;
-    $("unfinished-strava").hidden = !(snapshot.trainerKind === "trainer" && app.stravaAccount?.can_upload);
+    setupRecoveryUpload();
   });
   const recorderOf = (snapshot) => RideRecorder.from(snapshot.recorder);
   const kept = () => {
     $("unfinished-status").textContent = t("unfinished.saved");
-    discardUnfinished();
+    // Keep the activity link and photos available until explicit dismissal.
   };
   $("unfinished-fit").addEventListener("click", () => {
     const snapshot = app.unfinished;
@@ -3123,18 +3173,12 @@ function initRecovery() {
     const photos = await app.autosave.photos();
     saveFiles(photos);
   });
-  $("unfinished-strava").addEventListener("click", () => {
+  $("discard-unfinished").addEventListener("click", async () => {
     const snapshot = app.unfinished;
-    if (!snapshot) return;
-    uploadRide(recorderOf(snapshot), `OpenRadlr · ${snapshot.routeName}`, {
-      indoor: snapshot.studio,
-      button: $("unfinished-strava"),
-      status: $("unfinished-status"),
-      onSaved: kept,
-    });
-  });
-  $("discard-unfinished").addEventListener("click", () => {
-    if (confirm(t("unfinished.confirmDiscard"))) discardUnfinished();
+    const uploaded = app.recoveryUpload?.state?.phase === "success";
+    const photos = uploaded ? await app.autosave.photos() : [];
+    if (app.unfinished !== snapshot) return;
+    if ((uploaded && !photos.length) || confirm(t("unfinished.confirmDiscard"))) discardUnfinished();
   });
   refreshUnfinished();
 }
@@ -3147,6 +3191,10 @@ function initPhotos() {
     closeDrawers();
     // Let the menu close before the next frame is captured.
     requestAnimationFrame(() => takePhoto());
+  });
+  $("download-summary").addEventListener("click", () => {
+    const image = app.album.summary;
+    if (image) saveFiles([image]);
   });
   $("download-photos").addEventListener("click", () => {
     saveFiles(app.album.images);
@@ -3194,11 +3242,12 @@ function takePhoto() {
 function renderPhotos() {
   const photos = app.album.photos;
   const images = app.album.images;
+  const actions = photoActions(app.album, canShareFiles());
+  $("download-summary").disabled = !actions.summaryEnabled;
   $("photos-count").textContent = photos.length ? `(${photos.length})` : "";
-  $("photos-hint").hidden = photos.length > 0;
-  $("download-photos").hidden = images.length === 0;
-  $("download-photos").textContent = images.length === 1 ? t("photos.downloadOne") : t("photos.downloadAll");
-  $("share-photos").hidden = !canShareFiles() || images.length === 0;
+  $("download-photos").hidden = !actions.allVisible;
+  $("download-photos").textContent = t("photos.downloadAll");
+  $("share-photos").hidden = !actions.shareVisible;
   $("photo-list").replaceChildren(
     ...images.map((photo) => {
       const item = document.createElement("li");

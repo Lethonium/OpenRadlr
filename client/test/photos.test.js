@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PhotoAlbum, canShareFiles, composeSummary, downsample, photoFileName, photoStats } from "../public/js/view/photos.js";
+import { PhotoAlbum, canShareFiles, composeSummary, photoActions, downsample, photoFileName, photoStats } from "../public/js/view/photos.js";
 
 test("names photo files after the date, route and number", () => {
   const t = new Date(2026, 9, 14, 15, 30).getTime();
@@ -129,4 +129,17 @@ test("the summary card keeps all its text clear of the edges", () => {
     return from < margin || from + width > canvas.width - margin || y < margin || y > canvas.height - margin;
   });
   assert.deepEqual(outside.map((t) => t.text), []);
+});
+
+
+test("the summary has its own save action without a duplicate save-all action", () => {
+  const { photos } = album();
+  photos.setSummary("summary", { name: "summary.png" });
+  assert.deepEqual(photoActions(photos, false), { summaryEnabled: true, allVisible: false, shareVisible: false });
+});
+
+test("ride photos can be saved and shared before the summary is ready", () => {
+  const { photos } = album();
+  photos.add("photo", { name: "photo.png" });
+  assert.deepEqual(photoActions(photos, true), { summaryEnabled: false, allVisible: true, shareVisible: true });
 });

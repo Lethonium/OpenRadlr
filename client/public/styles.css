@@ -5813,3 +5813,84 @@ body.working-out #paddles {
     margin-bottom: 16px;
   }
 }
+
+/* Finish/recovery account row uses the same quiet treatment as the start menu. */
+.strava-upload {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-block: 12px;
+  border-block: 1px solid var(--border);
+}
+
+.strava-upload h3, .strava-upload p { margin: 0; }
+.strava-upload h3 { font-size: 14px; font-weight: 600; }
+.strava-upload .field-hint { line-height: 1.4; overflow-wrap: anywhere; }
+.strava-upload .strava-row { min-width: 0; flex-wrap: nowrap; gap: 8px; }
+.upload-identity { display: flex; align-items: center; flex: 1 1 0; gap: 8px; min-width: 0; }
+.upload-identity h3 { flex: none; }
+.upload-identity .muted { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-actions { display: flex; flex: none; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.strava-upload .upload-action { padding-inline: 10px; font-size: 13px; }
+.upload-action { gap: 7px; white-space: nowrap; transition: background 150ms, border-color 150ms, color 150ms; }
+.strava-upload[data-spinner="true"] .upload-action { cursor: progress; opacity: 1; }
+.strava-upload[data-spinner="true"] .upload-action::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: upload-spin 750ms linear infinite;
+}
+.strava-upload[data-tone="success"] .upload-action {
+  color: var(--terrain-edge);
+  border-color: var(--terrain-edge);
+  background: rgba(95, 180, 124, 0.08);
+}
+.strava-upload[data-tone="success"] .upload-action::before {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-right: 2px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+.strava-upload[data-tone="success"] .upload-action::after { content: "↗"; }
+.strava-upload[data-tone="error"] .upload-action { color: var(--danger); border-color: var(--danger); }
+.strava-upload[data-tone="warning"] .upload-action { color: var(--lemon); border-color: var(--lemon); }
+.strava-upload:is([data-tone="error"], [data-tone="warning"]) .upload-action:first-child::before {
+  content: "!";
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+}
+.upload-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@keyframes upload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .strava-upload[data-spinner="true"] .upload-action::before { animation: none; }
+  .upload-action { transition: none; }
+}
+.finish-files > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding-block: 4px; }
+.finish-files[open] > summary { margin-bottom: 10px; }
+#finish .modal-card { scroll-padding-bottom: 96px; }
+#finish .modal-nav { position: static; margin: 0; padding: 14px 0 0; }
+#finish-note:empty { display: none; }
+
+@media (max-width: 380px) {
+  /* Two actions are needed for an uncertain submission; the brand mark keeps room for both. */
+  .strava-upload[data-state="uncertain"] .upload-identity h3 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

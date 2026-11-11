@@ -70,3 +70,25 @@ test("reads how an app login ended from its openradlr:// URL", () => {
   assert.deepEqual(appLoginResult("openradlr://strava?result=denied"), { result: "denied", ticket: null });
   assert.deepEqual(appLoginResult("not a url"), { result: "failed", ticket: null });
 });
+
+test("an HTTP failure exposes its status and code for reconnect", async () => {
+  const { strava } = client([reply(401, { code: "not_connected", message: "connect first" })]);
+  await assert.rejects(strava.upload("x", "ride"), { status: 401, code: "not_connected" });
+});
+
+test("polling exhaustion returns processing without claiming success", async () => {
+  const { strava, calls } = client([reply(200, { id: 9 }), reply(200, { id: 9 })]);
+  const result = await strava.waitForActivity({ id: 9 }, { tries: 2 });
+  assert.equal(result.activity_id, undefined);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].cache, "no-store");
+  assert.ok(calls[0].signal instanceof AbortSignal);
+});
+
+test("leaving the screen while waiting stops the next status request", async () => {
+  let active = true;
+  let requests = 0;
+  const strava = new StravaClient({ fetch: async () => { requests++; }, sleep: async () => { active = false; } });
+  await strava.waitForActivity({ id: 9 }, { shouldContinue: () => active });
+  assert.equal(requests, 0);
+});
