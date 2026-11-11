@@ -106,7 +106,7 @@ import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, kindN
 import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
-import { languageButtonStates } from "./i18n/selector.js";
+import { languageOptions } from "./i18n/selector.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
@@ -256,6 +256,8 @@ nativeApp?.onBack?.(goBack);
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
+  /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
+  updateDismissed: false,
   profile: profiles.load(),
   /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
   workoutPick: null,
@@ -474,11 +476,22 @@ function relocalise() {
   document.documentElement.lang = getLocale();
   applyTranslations(document);
   applyTranslations(rideTemplate);
-  const pressed = languageButtonStates(getLocale());
-  for (const button of document.querySelectorAll("[data-lang]")) {
-    button.setAttribute("aria-pressed", String(pressed[button.dataset.lang]));
-  }
+  renderLanguageSelect();
   for (const hook of relocaliseHooks) hook();
+}
+
+/** Fills the language dropdown from the supported locales and selects the current one. */
+function renderLanguageSelect() {
+  const select = $("lang-select");
+  const options = languageOptions(getLocale());
+  select.replaceChildren(
+    ...options.map(({ code, label, selected }) => {
+      const option = new Option(label, code, false, selected);
+      option.lang = code;
+      return option;
+    }),
+  );
+  select.hidden = options.length < 2;
 }
 
 /** localStorage, or undefined where even touching it throws. */
@@ -596,10 +609,7 @@ async function offerFtp() {
 
 function initSetup() {
   relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-lang]");
-    if (button) changeLanguage(button.dataset.lang);
-  });
+  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   setUnits(app.profile.units);
   $("name").value = app.profile.name;
   $("weight").value = kgToDisplay(app.profile.weightKg);
@@ -983,7 +993,7 @@ function renderStartMenu() {
   if (privacy) $("privacy-link").href = privacy;
   $("build-label").textContent = build.text;
   $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
-  $("build-reload").hidden = !build.stale;
+  $("update-banner").hidden = !build.stale || app.updateDismissed;
   $("server-dot").className = `status-dot${status.online ? (status.full ? " full" : " online") : ""}`;
 
 
@@ -1511,6 +1521,10 @@ function initDiagnostics() {
     );
   });
   $("build-reload").addEventListener("click", () => location.reload());
+  $("update-later").addEventListener("click", () => {
+    app.updateDismissed = true;
+    $("update-banner").hidden = true;
+  });
   let scheduled = false;
   const render = () => {
     scheduled = false;
