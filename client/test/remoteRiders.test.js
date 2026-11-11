@@ -79,3 +79,13 @@ test("a remote name with markup stays text in the 3D label", () =>
     assert.ok(nodes.some((node) => node.textContent === "<img src=x onerror=alert(1)>"));
     assert.ok(nodes.some((node) => node.className.includes("badge") && node.textContent === "incyclist"));
   }));
+
+test("a bot's name and its type badge are apart in the row, so only the name is cut short (#64)", () =>
+  withFakeDocument(() => {
+    const list = new FakeElement("ul");
+    const bot = { id: 9, name: "Valentina Draftsworth", is_bot: true, style: "attacker", power: 150 };
+    renderRiderList(list, [{ rider: bot, gap: 5, routeName: "" }], 1);
+    const nodes = list.all();
+    assert.ok(nodes.some((node) => node.className === "rider-name-text" && node.textContent === "Valentina Draftsworth"));
+    assert.ok(nodes.some((node) => node.className === "badge" && node.textContent === "attacker bot"));
+  }));

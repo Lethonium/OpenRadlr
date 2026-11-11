@@ -159,6 +159,14 @@ test("remembers one trainer, one strap and the last two controllers", () => {
   assert.equal(known.of("controller").length, MAX_CONTROLLERS);
 });
 
+test("a device found again without its name keeps the name it was remembered by", () => {
+  const known = new KnownDevices(memoryStorage());
+  known.remember("hr", { id: "h", label: "Google Fitbit Air" });
+  // Reopened from the phone's list after a restart: no advertised name, the generic label.
+  known.remember("hr", { id: "h", label: "Heart rate monitor" });
+  assert.deepEqual(known.of("hr"), [{ kind: "hr", id: "h", name: "Google Fitbit Air" }]);
+});
+
 test("ignores devices without an id or name, and broken storage", () => {
   const storage = memoryStorage();
   const known = new KnownDevices(storage);

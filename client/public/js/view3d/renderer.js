@@ -385,6 +385,23 @@ export class Renderer {
   }
 
   /**
+   * Draws the following passes into `rect` of the canvas (device pixels, from
+   * the bottom left) and clears only there; null goes back to the whole canvas.
+   * @param {{x: number, y: number, width: number, height: number} | null} rect
+   */
+  viewport(rect) {
+    const gl = this.gl;
+    if (rect) {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(rect.x, rect.y, rect.width, rect.height);
+      gl.viewport(rect.x, rect.y, rect.width, rect.height);
+    } else {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    }
+  }
+
+  /**
    * Starts a frame: clears, draws the sky and sets the shared uniforms.
    * @param {{viewProjection: Float32Array, inverseViewProjection: Float32Array, camera: number[],
    *          zenith: number[], horizon: number[], ground: number[], sun: number[], sunColor: number[], fog: number[],

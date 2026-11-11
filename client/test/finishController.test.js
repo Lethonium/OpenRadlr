@@ -76,3 +76,7 @@ test("a downloaded ride with photos warns about the photos only", () => {
 test("an empty paddle ride without photos goes back without asking", () => {
   assert.equal(backToMenuWarning({ exportable: false, saved: false, empty: true, albumSize: 0 }), null);
 });
+
+test("a recoverable finished ride can return to the menu without discarding it", () => {
+  assert.equal(backToMenuWarning({ exportable: true, saved: false, empty: false, albumSize: 2, recoverable: true }), null);
+});

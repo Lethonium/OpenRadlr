@@ -1,6 +1,6 @@
 # Build output
 /server/target/
-/client/node_modules/
+/client/node_modules
 
 # Local configuration
 .env

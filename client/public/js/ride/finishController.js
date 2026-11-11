@@ -41,10 +41,11 @@ export function createFinishController({ recorder, closePause, saveHistory, mark
  * The question to ask before going back to the menu, or null when nothing
  * would be lost. An unsaved exportable ride asks about the ride and photos;
  * otherwise only unsaved photos are asked about.
- * @param {{exportable: boolean, saved: boolean, empty: boolean, albumSize: number}} state
+ * @param {{exportable: boolean, saved: boolean, empty: boolean, albumSize: number, recoverable?: boolean}} state
  * @returns {string | null}
  */
-export function backToMenuWarning({ exportable, saved, empty, albumSize }) {
+export function backToMenuWarning({ exportable, saved, empty, albumSize, recoverable = false }) {
+  if (recoverable) return null;
   if (exportable && !saved && !empty) return t("ride.confirmBack.exportable");
   return albumSize > 0 ? t("ride.confirmBack.photos") : null;
 }

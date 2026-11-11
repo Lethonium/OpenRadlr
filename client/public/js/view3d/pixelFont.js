@@ -1,0 +1,70 @@
+/**
+ * A 5 × 7 pixel font built from geometry (the renderer has no textures), for
+ * the words on arches and banners: one small square per lit pixel. Only the
+ * characters those need, plus the digits; `^` is a mountain.
+ */
+
+/** Rows top to bottom; "#" is lit. */
+export const GLYPHS = Object.freeze({
+  " ": [".....", ".....", ".....", ".....", ".....", ".....", "....."],
+  A: [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+  D: ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
+  E: ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+  I: [".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."],
+  K: ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+  L: ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+  M: ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+  N: ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
+  O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+  P: ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+  R: ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+  S: [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+  T: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+  0: [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
+  1: ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+  2: [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+  3: ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
+  4: ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+  5: ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+  6: [".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."],
+  7: ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+  8: [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+  9: [".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."],
+  "/": ["....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."],
+  "^": [".....", ".....", "..#..", ".###.", "#####", "#####", "....."],
+});
+
+const COLS = 5;
+const ROWS = 7;
+
+/** Width of `text` in metres at `pixel` metres per pixel, with one pixel between letters. */
+export function textWidth(text, pixel) {
+  return text.length ? (text.length * (COLS + 1) - 1) * pixel : 0;
+}
+
+/**
+ * Writes `text` into `mesh`, centred on `origin`, reading along `right` with
+ * `up` up, its squares facing `facing`. Unknown characters are left blank.
+ */
+export function pixelText(mesh, text, { origin, right, up, facing, pixel, color }) {
+  const left = -textWidth(text, pixel) / 2;
+  const top = (ROWS * pixel) / 2;
+  const at = (x, y) => [0, 1, 2].map((k) => origin[k] + right[k] * x + up[k] * y);
+  [...text].forEach((char, index) => {
+    const rows = GLYPHS[char];
+    if (!rows) return;
+    rows.forEach((row, r) => {
+      for (let c = 0; c < COLS; c += 1) {
+        if (row[c] !== "#") continue;
+        const x0 = left + (index * (COLS + 1) + c) * pixel;
+        const y0 = top - (r + 1) * pixel;
+        const a = at(x0, y0);
+        const b = at(x0 + pixel, y0);
+        const d = at(x0 + pixel, y0 + pixel);
+        const e = at(x0, y0 + pixel);
+        mesh.triangleFacing(a, b, d, color, facing);
+        mesh.triangleFacing(a, d, e, color, facing);
+      }
+    });
+  });
+}

@@ -66,7 +66,8 @@ const chunkTriangles = (scene) => Object.values(scene.chunks).reduce((sum, chunk
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
-  assert.equal(chunkTriangles(scene), 308562);
+  // 309330: 308562 plus the barriers at the sprint line (2 sides × 16 segments × 2 boxes × 12 triangles).
+  assert.equal(chunkTriangles(scene), 309330);
 });
 
 test("a long route's world is thinned to a size a browser can build", () => {

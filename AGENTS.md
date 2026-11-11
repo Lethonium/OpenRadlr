@@ -38,7 +38,7 @@ repeat it. Here is the operational knowledge on top of that.
   which has neither browsers nor access to the host's `localhost`): run the target in
   the Playwright image matching the version in `client/package.json` (tag
   `v<version>-noble`), on the host network:
-    make screenshot NPM="docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/root/.cache/openradlr -w /app mcr.microsoft.com/playwright:v1.64.1-noble npm" ARGS="--out shot.png"
+    make screenshot NPM="docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/root/.cache/openradlr -w /app mcr.microsoft.com/playwright:v1.65.0-noble npm" ARGS="--out shot.png"
 - A fresh headless browser has empty localStorage → the Rider panel shows default
   profile values (165.3 lb, FTP 200 W), not real data.
 - Client *tests* stay plain node (no browser); Playwright is for ad-hoc UI

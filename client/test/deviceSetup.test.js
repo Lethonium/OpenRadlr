@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, controllerSide, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, DOWN_BUTTON, rideModes } from "../public/js/view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, controllerSide, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, DOWN_BUTTON, rideModes } from "../public/js/view/deviceSetup.js";
 
 const road = { id: "col" };
 const studio = { id: "spin-studio", kind: "studio" };
@@ -55,7 +55,7 @@ test("connect errors in plain words: what to do, not what the browser said", () 
   assert.match(connectErrorText(err("NotFoundError", "Bluetooth adapter not available.")), /Bluetooth is off/);
   assert.match(connectErrorText(err("TimeoutError"), "KICKR CORE"), /No answer from KICKR CORE.*other apps/);
   assert.match(connectErrorText(err("NetworkError", "GATT operation failed for unknown reason.")), /Couldn't connect.*pedal/);
-  assert.match(connectErrorText(err("SecurityError")), /blocked .*browser settings/);
+  assert.match(connectErrorText(err("SecurityError")), /isn't allowed to use Bluetooth.*site settings.*phone's settings/);
   assert.match(connectErrorText(new Error("This device offers neither FTMS Indoor Bike Data nor Cycling Power data.")), /doesn't send power/);
   assert.match(connectErrorText(new Error("Something odd")), /Something odd.*Device diagnostics/);
 });
@@ -152,4 +152,57 @@ test("while needed, B on the right half shifts down (BikeControl's right-side ma
   assert.deepEqual(remapForDown(["b", "shiftUp"], true), ["shiftDown", "shiftUp"]);
   assert.deepEqual(remapForDown(["b"], false), ["b"]);
   assert.deepEqual(remapForDown(["a"], true), ["a"]);
+});
+
+const strap = (connected = true) => ({ label: "Fitbit Air", connected });
+
+test("a device line with nothing connected or remembered names the kind and what it's for", () => {
+  assert.deepEqual(deviceLine({ kind: "hr" }), { state: "idle", title: "Heart rate", detail: "Optional" });
+  assert.deepEqual(deviceLine({ kind: "trainer" }), { state: "idle", title: "Smart trainer", detail: "Not connected" });
+  assert.deepEqual(deviceLine({ kind: "controller" }), { state: "idle", title: "Controller", detail: "Zwift or OpenBikeControl" });
+});
+
+test("a remembered device that isn't connected is named, with its state", () => {
+  assert.deepEqual(deviceLine({ kind: "hr", remembered: ["Fitbit Air"] }), { state: "remembered", title: "Fitbit Air", detail: "Saved" });
+  assert.equal(deviceLine({ kind: "controller", remembered: ["Zwift Click", "Zwift Click"] }).title, "Zwift Click + Zwift Click");
+});
+
+test("while the picker is open or a device connects, the line says so under the name", () => {
+  const picking = deviceLine({ kind: "hr", attempt: { state: "pending", text: "Pick your heart rate strap…" } });
+  assert.deepEqual(picking, { state: "pending", title: "Heart rate", detail: "Pick your heart rate strap…" });
+  assert.equal(deviceLine({ kind: "hr", remembered: ["Fitbit Air"], attempt: { state: "pending", text: "Looking for Fitbit Air…" } }).title, "Fitbit Air");
+});
+
+test("a connected device shows its name and what it measures right now", () => {
+  assert.deepEqual(deviceLine({ kind: "hr", device: strap() }), { state: "connected", title: "Fitbit Air", detail: "Connected" });
+  assert.deepEqual(deviceLine({ kind: "hr", device: strap(), live: { state: "live", text: "144 bpm" } }), { state: "live", title: "Fitbit Air", detail: "144 bpm" });
+  assert.equal(deviceLine({ kind: "trainer", device: { label: "KICKR", connected: true }, live: { state: "silent", text: "No data for 7 s" } }).state, "silent");
+  assert.equal(deviceLine({ kind: "trainer", device: { label: "KICKR", connected: true }, live: { state: "waiting", text: "Connected · waiting for data…" } }).state, "connected");
+});
+
+test("a connected device stays on its line when trying another one fails or is cancelled", () => {
+  const line = deviceLine({ kind: "hr", device: strap(), live: { state: "live", text: "144 bpm" }, attempt: { state: "error", text: "Cancelled" } });
+  assert.deepEqual(line, { state: "live", title: "Fitbit Air", detail: "144 bpm" });
+});
+
+test("picking another device while one is connected keeps the connected name in view", () => {
+  const line = deviceLine({ kind: "controller", device: { label: "Zwift Click +", connected: true }, attempt: { state: "pending", text: "Pick the other Zwift Click…" } });
+  assert.deepEqual(line, { state: "pending", title: "Zwift Click +", detail: "Pick the other Zwift Click…" });
+});
+
+test("a dropped device is reconnecting, not gone", () => {
+  assert.deepEqual(deviceLine({ kind: "hr", device: strap(false), live: { state: "live", text: "144 bpm" } }), { state: "reconnecting", title: "Fitbit Air", detail: "Reconnecting…" });
+});
+
+test("a failed connect says what to try, under the device it was for", () => {
+  const error = { state: "error", text: "No answer from Fitbit Air." };
+  assert.deepEqual(deviceLine({ kind: "hr", remembered: ["Fitbit Air"], attempt: error }), { state: "error", title: "Fitbit Air", detail: "No answer from Fitbit Air." });
+  assert.equal(deviceLine({ kind: "trainer", attempt: error }).title, "Smart trainer");
+});
+
+test("the heart rate check: waiting for the first beat, the bpm, a hint when beats stop", () => {
+  assert.deepEqual(heartRateCheck({ sinceDataMs: null, heartRate: null }), { state: "waiting", text: "Connected · waiting for data…" });
+  assert.deepEqual(heartRateCheck({ sinceDataMs: 800, heartRate: 144 }), { state: "live", text: "♥ 144 bpm" });
+  assert.equal(heartRateCheck({ sinceDataMs: 12000, heartRate: 144 }).state, "silent");
+  assert.match(heartRateCheck({ sinceDataMs: 12000, heartRate: 144 }).text, /12 s/);
 });

@@ -6,6 +6,7 @@
  * mesh targets passed in (usually chunked), and return lists of dynamic
  * objects (turbine rotors, spectators) that the view animates per frame.
  */
+import { CROWD } from "./crowd.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
 import { fbm, seededRandom } from "./noise.js";
@@ -587,17 +588,48 @@ export function buildWindTurbines(route, terrain, { structures, occupancy, seed,
 
 // -------------------------------------------------------------- spectators ---
 
-/** Crowds behind barriers at the finish and on top of the climb. */
-export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate }) {
+/** Flag colours some spectators wave (tinted onto the flag's white cloth). */
+const FLAGS = [
+  [0.86, 0.16, 0.14],
+  [0.16, 0.38, 0.86],
+  [1.0, 0.82, 0.1],
+  [0.95, 0.95, 0.95],
+  [0.18, 0.62, 0.3],
+  [0.98, 0.5, 0.1],
+];
+
+/**
+ * Crowds behind barriers at the finish, on top of every climb and at every
+ * sprint line (`rank` 0: always out), and loose groups lining the last
+ * `CROWD.liningM` of each climb, thicker towards the top (`rank` in (0, 1):
+ * out when `crowdShare` of the riders online is above it). Some wave a flag
+ * (`flag`: its colour). `blocked(x, z)` keeps the lining out of buildings,
+ * yards and rivers.
+ */
+export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate, blocked = () => false }) {
   const random = seededRandom(seed ^ 0x5bec);
+  // Placement added later draws from its own stream: the first crowds stay where they always stood.
+  const more = seededRandom(seed ^ 0xc4e3);
   const crowd = biome.people ?? temperate.people;
   const shirts = crowd.shirts ?? temperate.people.shirts;
   const barrier = biome.road.barrier ?? temperate.road.barrier;
   const half = roadHalfWidth(route.lanes) + VERGE;
+  const people = [];
+  const person = (p, facing, rank) => {
+    // Drawn in the order the crowd always drew them, so the first crowds look as they did.
+    const shirt = shirts[Math.floor(random() * shirts.length)];
+    const yaw = yawFor(facing) + (random() - 0.5) * 0.6;
+    const armsUp = random() < 0.55;
+    const phase = random() * Math.PI * 2;
+    const size = 0.92 + random() * 0.16;
+    const flag = more() < CROWD.flags ? FLAGS[Math.floor(more() * FLAGS.length)] : null;
+    people.push({ position: [p[0], terrain.height(p[0], p[2]), p[2]], yaw, shirt: crowd.tint ? shirt : [1, 1, 1], armsUp, motion: crowd.motion, phase, scale: size, rank, flag });
+  };
+
   const spots = [0];
   for (const marker of route.markers) if (marker.type === "climb") spots.push(marker.distance + (marker.length ?? 0));
-  const people = [];
-  for (const spot of spots) {
+  const sprints = route.markers.filter((m) => m.type === "sprint").map((m) => m.distance + (m.length ?? 0));
+  for (const spot of [...spots, ...sprints]) {
     // Barriers.
     for (const side of [-1, 1]) {
       for (let s = -24; s < 24; s += 3) {
@@ -618,17 +650,29 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const along = (random() - 0.5) * 44;
         const f = roadFrame(route, spot + along);
         const lateral = half + 1.0 + (k % 2) * 0.8 + random() * 0.4;
-        const p = add(f.center, scale(f.right, side * lateral));
-        const shirt = shirts[Math.floor(random() * shirts.length)];
-        people.push({
-          position: [p[0], terrain.height(p[0], p[2]), p[2]],
-          yaw: yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.6,
-          shirt: crowd.tint ? shirt : [1, 1, 1],
-          armsUp: random() < 0.55,
-          motion: crowd.motion,
-          phase: random() * Math.PI * 2,
-          scale: 0.92 + random() * 0.16,
-        });
+        person(add(f.center, scale(f.right, side * lateral)), scale(f.right, -side), 0);
+      }
+    }
+  }
+
+  // Loose groups up the last stretch of each climb, more of them towards the top.
+  for (const marker of route.markers) {
+    if (marker.type !== "climb") continue;
+    const top = marker.distance + (marker.length ?? 0);
+    const from = Math.max(marker.distance, top - CROWD.liningM);
+    for (const side of [-1, 1]) {
+      for (let d = from; d < top - 28; d += 9) {
+        const t = (d - from) / Math.max(1, top - from);
+        if (more() > 0.15 + 0.75 * t * t) continue;
+        const size = 1 + Math.floor(more() * 4);
+        const rank = Math.max(0.001, more() * (1 - 0.6 * t));
+        for (let k = 0; k < size; k += 1) {
+          const f = roadFrame(route, d + (more() - 0.5) * 4);
+          const lateral = half + 0.8 + more() * 1.8;
+          const p = add(f.center, scale(f.right, side * lateral));
+          if (terrain.distanceToRoad(p[0], p[2]) < half + 0.3 || blocked(p[0], p[2])) continue;
+          person(p, scale(f.right, -side), rank);
+        }
       }
     }
   }

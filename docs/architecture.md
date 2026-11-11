@@ -57,18 +57,36 @@ that died after its rider was taken over by a new one can't touch the rider.
 
 1. The race advances its countdown or clock. Races are opt-in: the rider who
    starts one, riders who join during the countdown and about 60 % of the
-   bots line up at the start; everyone else keeps riding and is never moved.
+   bots line up at the start, in rows of one rider per lane 2.5 m apart (the
+   race counts from the line for every row); everyone else keeps riding and is
+   never moved.
 2. Every rider gets power: humans from their latest telemetry (zero after 3 s
    without data), bots from their brain.
-3. Drafting: the nearest rider 0.5–5 m ahead in the same lane reduces CdA by up to 30 %
+3. Drafting: the nearest rider up to 6.5 m ahead in the same lane reduces CdA by up to 30 %,
+   most from 2 m (a bike length, middle to middle) in
    (on your route, or on the same road in the same direction on another route).
 4. Physics integrates speed; position advances and wraps around the loop.
+   Nobody rides through the wheel ahead: closing in, a rider slows to sit on
+   it 2 m behind, and pulls out into a free neighbouring lane to pass when it
+   would be faster than that rider even in clear air (humans too: the server
+   steers them out). "Faster" compares its clear-air acceleration with what
+   the rider ahead really does, averaged over about 5 s: riders speeding up
+   together at equal power stay in the draft, a trainer's jittery power or a
+   short surge doesn't pull anyone out, and about 8 W of lasting surplus (at
+   30 km/h) is enough to go past. With every neighbouring lane taken it
+   waits, and after 3 s slips through. A lane someone is moving into counts
+   as taken, and a rider pulling out whose rider ahead moves into the same
+   lane turns back into the lane just left. Holding back never brakes harder than
+   2 m/s² (easing off the pedals), and a rider that finds itself too close
+   drops back at most 0.5 m/s slower than the wheel ahead: no jolts on
+   screen, and a rider ridden through keeps its speed. Riders going the other way on a shared road are not
+   part of this (nor of drafting).
    Seated riders are skipped: each shared vehicle ([ADR 14](adr/0014-shared-vehicles-as-linked-riders.md))
    takes one step with the summed power and mass of its seats along the
    captain's road, then copies speed, position and lane to every seat.
 5. Lanes move towards their target lane (one lane per second).
 6. Finishers are recorded; the race completes when every participant finished.
-7. Bots are spawned or removed to keep the target rider count.
+7. Bots are spawned or removed to keep `OPENRADLR_TARGET_RIDERS` riders on every route. Each human keeps a few of them around: far bots make room, and groups spawn out of sight, ahead to chase or behind to come by (#64, ADR 0022).
 8. The game core sends events to their route, every fifth tick each client the
    state of the riders around them, and new resistance
    whenever a rider's grade changed by at least 0.1 %.
@@ -126,10 +144,13 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 | `island.js` | The map as an island: coast a seeded margin beyond the outermost roads, beaches, cliffs, sea floor |
 | `menuCamera.js`, `highlight.js` | Start menu: drone orbit over the island, glide down to the picked route and follow it (cuts with reduced motion); glowing band on the picked route with climbs, sprints and a start beacon |
 | `worldScene.js`, `worldWorker.js` | Build the world in a module worker and hand the meshes over without copying (falls back to building in place) |
-| `riderModel.js` | Low-poly cyclist; jersey parts are tinted (me orange, humans blue, bots grey); skin, helmet, bike and size vary per rider (deterministic from the id); cranks turn, legs follow the pedals by two-bone IK (`legPose`), spoked wheels spin |
+| `riderModel.js` | Low-poly cyclist; jersey parts are tinted (me orange, humans blue, bots in their team's kit, see `view/botKits.js`, else grey); skin, helmet, bike and size vary per rider (deterministic from the id); cranks turn, legs follow the pedals by two-bone IK (`legPose`), spoked wheels spin |
 | `zones.js` | Scenery zones from the route file, or seeded defaults (village, river, forest) |
-| `features.js` | River carving and water, stone bridge, village (houses, church, pavements, lamps, signs), farms with animals, wind turbines, spectators, guard rails, warning signs, flamme rouge |
-| `structures.js` | Low-poly models placed by `features.js` (houses, church, barn, silo, bales, lamps, signs, turbines, cows, sheep, spectators) |
+| `features.js` | River carving and water, stone bridge, village (houses, church, pavements, lamps, signs), farms with animals, wind turbines, spectators (at the finish, climbs and sprints, lining the last 600 m of each climb), guard rails, warning signs, flamme rouge |
+| `lemonModel.js` | The golden lemon floating over the road (lemons are placed by `ride/lemons.js`) |
+| `banners.js`, `pixelFont.js` | Names on the arches and banners over the road (1 km and 500 m to a climb's top, halfway), in a 5 × 7 pixel font made of geometry |
+| `structures.js` | Low-poly models placed by `features.js` (houses, church, barn, silo, bales, lamps, signs, turbines, cows, sheep, spectators, flags) |
+| `crowd.js` | How much of the crowd is out for the riders online, and how each spectator cheers a rider coming by |
 | `chunks.js` | Splits the static world into 300 m tiles; only tiles in view are drawn and only tiles near the rider cast shadows |
 | `lighting.js` | Time-of-day presets (day, golden hour, dusk, auto by local clock) and the sun's shadow frustum |
 | `chaseCamera.js` | Road-anchored cameras: chase, close, drone and TV side, with blended switching |
@@ -205,3 +226,14 @@ away; it only falls back to its cache offline, and never caches `/api`,
 Trainers without a control point (power meters, some basic trainers) are
 "power only": the ride works the same, but ERG and virtual shifting are off,
 and workouts run *guided* (targets shown, resistance unchanged).
+
+### Strava upload state
+
+The finish and recovery screens share `view/stravaUploadView.js`, backed by the
+injected `net/stravaUpload.js` controller. Submission, processing, delayed or
+interrupted checks, uncertain submission and confirmed activity creation are
+separate states. Accepted upload IDs survive reloads in account/ride-scoped
+localStorage receipts; retrying them checks status instead of posting again.
+Unsaved finished rides stay in browser recovery on return to the menu. Only an
+activity ID confirms success; no automatic upload happens on reload. See
+[ADR 0023](adr/0023-strava-upload-receipts.md).

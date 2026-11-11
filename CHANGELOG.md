@@ -3,9 +3,63 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.1.0 (2026-11-11)
+
+
+### Features
+
+* Add a ghost of the best lap on each loop route ([#58](https://github.com/Lethonium/OpenRadlr/issues/58)) ([51d68dc](https://github.com/Lethonium/OpenRadlr/commit/51d68dc2552df081951d0ec1402c2f54dc8b9b03))
+* Add banners over the road and personal milestone banners ([#61](https://github.com/Lethonium/OpenRadlr/issues/61)) ([73deb43](https://github.com/Lethonium/OpenRadlr/commit/73deb43a49aa59ef4ca2583ffa5f5cee39d69aab))
+* Add golden lemons to collect along the routes ([#57](https://github.com/Lethonium/OpenRadlr/issues/57)) ([2e40715](https://github.com/Lethonium/OpenRadlr/commit/2e407154adb5e509fcadae6b840dbaa20c7fd631))
+* **app:** Add an iOS and Android app with native Bluetooth ([#8](https://github.com/Lethonium/OpenRadlr/issues/8)) ([63ca386](https://github.com/Lethonium/OpenRadlr/commit/63ca3864b598e506db2f1dc7cd9f58c989a4092f))
+* **app:** Step back with Android's back button instead of closing ([#78](https://github.com/Lethonium/OpenRadlr/issues/78)) ([79cccd0](https://github.com/Lethonium/OpenRadlr/commit/79cccd0df4471a2491909e3d38de24f871be37f6))
+* Give bots character: a cast, moves and company around riders ([#67](https://github.com/Lethonium/OpenRadlr/issues/67)) ([1137aee](https://github.com/Lethonium/OpenRadlr/commit/1137aee1da75e2b665ddb0f96ac35296a209ed8f))
+* Guide workout poses with steps and a side view ([#60](https://github.com/Lethonium/OpenRadlr/issues/60)) ([83f374b](https://github.com/Lethonium/OpenRadlr/commit/83f374b205e48f9fa278ee75a96117e18f0729a8))
+* Line the climbs with a crowd that cheers riders on ([#59](https://github.com/Lethonium/OpenRadlr/issues/59)) ([747327d](https://github.com/Lethonium/OpenRadlr/commit/747327d39b5e1468374e6ab6d81f494e6df8bbca))
+* Simplify the start menu header: language dropdown, footer version, update toast ([#77](https://github.com/Lethonium/OpenRadlr/issues/77)) ([d5c0ba8](https://github.com/Lethonium/OpenRadlr/commit/d5c0ba812c05552e04830de40450e6ec7b6ddf42))
+
+
+### Bug Fixes
+
+* **client:** Draw the route profile again once it is shown ([#73](https://github.com/Lethonium/OpenRadlr/issues/73)) ([cbced3b](https://github.com/Lethonium/OpenRadlr/commit/cbced3be2f761ab1a1bf896dc8c755b454a1ef6d))
+* Draw the summary card at 4:3 so Strava doesn't crop it ([#65](https://github.com/Lethonium/OpenRadlr/issues/65)) ([510f6a2](https://github.com/Lethonium/OpenRadlr/commit/510f6a281475328645bcc0db14c52355e5559a54)), closes [#66](https://github.com/Lethonium/OpenRadlr/issues/66)
+* Keep trees off routes where they round a junction's corner ([#62](https://github.com/Lethonium/OpenRadlr/issues/62)) ([8b24e08](https://github.com/Lethonium/OpenRadlr/commit/8b24e085d850d8cb2c950abc2abe83f3413998a8))
+* Make Strava uploads resumable and preserve ride recovery ([#68](https://github.com/Lethonium/OpenRadlr/issues/68)) ([63463f1](https://github.com/Lethonium/OpenRadlr/commit/63463f115eebf3aff91161e148a3a627893fae8d))
+
+
+### Performance Improvements
+
+* Load the start screen about twice as fast ([#74](https://github.com/Lethonium/OpenRadlr/issues/74)) ([3457d77](https://github.com/Lethonium/OpenRadlr/commit/3457d776bacc79d05fa606b0bb1b40a650795b50))
+
 ## [Unreleased]
 
+### Changed
+
+- Start menu: the language switch is a compact dropdown (any future language shows up in it), the version and Privacy link sit in a quiet footer, and a new version shows a "Reload / Later" toast instead of a link in the header. On phones the tabs share one row instead of scrolling.
+- Installed on a phone or tablet (home screen), OpenRadlr no longer locks itself to landscape: it turns with the device, so the start menu and the ride also work in portrait.
+
 ### Added
+
+- **iOS and Android app (preview):** `app/` wraps the client in a Capacitor
+  shell, so iPhones and iPads can connect smart trainers, heart rate straps
+  and Zwift controllers. That is impossible in any iOS browser. A polyfill
+  (`ble/nativeBluetooth.js`) gives the existing device code the Web
+  Bluetooth it expects, backed by native Bluetooth. Inside the app the screen
+  stays on and ride files open the share sheet. *Connect with Strava* uses the
+  system sign-in sheet, so Google and Apple sign-in work too. On iOS, devices
+  stay connected while the app is in the background. Browsers are unaffected
+  ([docs/app.md](docs/app.md), ADR 0021).
+- **Back button in the Android app:** the back button and gesture go one step
+  back, as Esc does: a menu page to the page list, then the menu closes.
+  Mid-ride, back opens the menu at *Finish this ride?*; in a café workout it
+  pauses and asks *End the workout?*; from a summary it returns to the menu;
+  on the start menu the app goes to the background instead of closing. A
+  ride never ends on a stray swipe ([docs/app.md](docs/app.md#back-button)).
+- Bots with character (#64): every bot is a named rider of a made-up cast ("Gus Tailwind", "Penny Farthing") (and, rarely, Goldie Lemon in lemon yellow) with a riding type (rouleur, climber, sprinter, attacker, tourer) and a team kit, the same everywhere. Bots now race you: they take turns on the front of a group and swing off, attack near the top of a climb, take up the chase when you come past and sprint for the line, as long as their energy (W′) lasts. They ride in groups that spawn out of sight around every rider (mostly a group ahead to chase, sometimes one coming up from behind),; the number of riders per route is still `OPENRADLR_TARGET_RIDERS`. The 3D view shows bots in their team's kit, the rider list names their type, and the ticker calls out moves near you.
+- Golden lemons: a few lemons float over the road, each in one lane, and move to new places every day (the same for every rider). Ride through one in its lane to collect it; they grow back every lap. A pickup shows in the ticker with your all-time count, and the finish screen lists the ride's lemons. No counter on the HUD: it's an easter egg.
+- Ghost lap: your best lap on a loop route is kept in the browser, and a see-through rider labelled "Best lap" rides it again from the line, lane changes and all. The HUD shows the live gap ("Best lap +4.2 s", red behind, green ahead), and a faster lap becomes the new ghost at once. Hidden in races and events.
+- Crowds along the route: spectators line the last 600 m of every climb in loose groups, thicker towards the top, and every sprint line gets a crowd behind barriers. They turn towards a rider coming by and cheer harder (penguins clap faster), and some wave flags. The more riders are online, the more of them come out; bots don't count.
+- Banners along the route: the arches carry their names (OPENRADLR, KOM, SPRINT), banners count down the last kilometre of a climb ("1 KM", "500 M") and mark halfway round a loop. A lemon-yellow banner celebrates personal milestones: 100, 250, 500… km (or miles) in all, every Everest climbed in all, and the first time over the top of a climb.
 
 - Four research-backed ERG sessions (Seiler 4×8, Rønnestad 30/15, 40/20, over-unders), each naming its source, and a power-profile preview of the selected session in the workout picker. (#26)
 - A velodrome: a flat 250 m oval with no bots. With `OPENRADLR_OBN_URL` set it is shared with riders of other apps (Incyclist, VeloPopuli, ...) through an OpenBikeNet server: the start menu marks it *Shared* and says what is sent (name, position, speed, power and cadence; never heart rate). Riders from other apps get their own tint, a label with their app, and a badge in the rider list. Without the variable nothing leaves the server. A switch to stop sharing power and cadence follows in #36. See ADR 0020.
@@ -19,16 +73,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A View button in the top bar opens a small popover for camera, layout, 2D/3D and time of day; it replaces the separate camera and layout buttons (#19).
 - Workouts at their own café gym with statues of their figures, and workout cards with a block strip (#26)
 - Yoga classes at the Beach Café: Sun Salutation A, a post-ride cool-down and a hip and hamstring flow; poses that switch sides halfway (#26)
+- The workout screen guides every pose: step-by-step instructions for the exercise under way or, during rests, the one coming up; the sun salutation marks the breath in progress; sided poses name the leg in front. A side view of your avatar joins the front view, and the timer and stats moved to the corners so the avatar has the middle (#26)
 
 ### Changed
+- The start screen is ready in about half the time on a phone connection (2.1 s → 1.0 s on 4G; first visit 1.9 MB → 0.7 MB): the server sends the client and the route data compressed (Brotli or gzip), and the page asks for all its scripts at once instead of in five rounds.
+- Start screen: every device (trainer, heart rate, controller) is one line of the same shape: a state dot, its name over what it is doing (live power and cadence, heart rate in bpm, which buttons came through) and its actions. Lines no longer wrap or jump when their state changes; on narrow phones two actions or an error go under the name, and nothing is cut off. The Ride bar leaves room for itself however tall an error makes it.
 
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- The start menu's elevation profile (and route map) no longer stays an empty box when the route loaded while it was out of view, e.g. on the Events tab or during a ride: both are drawn again once they show.
+- Cancelling the device window while trying another strap, trainer or controller no longer shows "Cancelled" over the device that is still connected; each device line now shows what its device really does.
+- On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
+- Strava progress stays inside the upload button with a spinner; success becomes a checked activity link and failures show an inline retry action. Periodic menu refreshes no longer interrupt a recovered upload’s status check (#68).
+- Strava uploads keep their status across reloads and let you check an accepted upload without sending it again. Processing delays no longer count as success or remove the recovery copy; finished rides stay available when returning to the menu. Finish and recovery screens now show account/permission guidance, clear progress and an activity link, and downloading a recovered ride keeps its photos available. The finish screen uses a compact account row, collapsed file downloads and an explicit summary-image save action; its footer no longer covers controls on short screens (#68).
+- No more trees on the road where a route rounds a sharp corner at a junction off the map's roads (e.g. at the top of Col de la Forge by the Hilltop Café): every route of the map now keeps its asphalt clear, whichever one is ridden.
+- On routes that aren't a loop (Lanzarote), the start crowd no longer stands in the middle of the road.
 - Workouts: the statue plinths no longer flicker, the camera frames your own rider below the timer instead of the mat's centre, joining a workout no longer shows a black screen while the gym's world is built again, and the start menu no longer shows an empty map box on the Workout and Studio tabs (#26).
 - Name labels no longer float over houses and hills: a rider out of sight (the GPU checks each one) has no label, with a short delay so labels don't flicker at an edge. Labels point at their rider with a small tail and get smaller and fainter with distance (#15).
 - A finished ride is no longer stored twice in the ride history when it was finished, continued and finished again (#19).
+- Riders no longer ride through each other. Closing in on a wheel, a rider (bot or human) slows down to sit on it about a bike length behind, and pulls out into a free lane to pass when strong enough to be faster than that rider even out of its draft (about 8 W of lasting surplus is enough; a surge or jittery trainer power doesn't pull you out of the draft, nor does a group speeding up together); with every lane taken it waits, and after 3 s slips through. Drafting is as strong as before, now measured from that closest spot (full draft from 2 m, fading out at 6.5 m) (#14).
+- Race and group ride starts line the riders up in rows behind the line instead of stacking a whole lane on one spot; distances and the race count from the line for every row (#14).
 - Shifting with a two-piece Zwift Click (v2) keeps working past the first minute. Zwift's firmware locks the left half's plain button messages about a minute after connecting unless the Zwift app unlocked it; OpenRadlr now notices the lock and restarts that half, and while it restarts, B on the right half shifts down. The right half never locks, so with it alone + shifts up and B shifts down.
 - Both Click halves can be connected, whichever comes first: their presses are merged into one stream, so a press that one half relays for the other shifts once, and quick + then − is two shifts.
 - A Click that falls asleep is found again within seconds (it advertises only briefly when woken), and a reconnect attempt that hangs gives up after 15 s instead of ending all reconnects.
@@ -47,6 +113,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Virtual shifting no longer goes missing for a whole ride when the trainer gives control a few seconds after Ride was pressed: rides plan gears and ERG on what the trainer can do once it has control, and the HUD says "Resistance blocked" while it hasn't.
 - A two-piece Zwift Click pairs like a pair: after one half the button reads "Add other half", each half is named by its side ("Zwift Click − 70 % · + 68 %"), the check confirms + and − one by one, and picking the half that's already connected says to pick the other one.
 - Virtual shifting's gear is one line ("Chain on 34 × 14 teeth"); the device report counts a controller's idle messages, so it shows whether a controller sends anything at all.
+- The ride's summary card is 4:3, the shape Strava shows photos in, so its sides are no longer cut off there (#66).
 
 ### Changed
 - "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.

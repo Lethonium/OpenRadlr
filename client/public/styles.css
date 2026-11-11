@@ -536,8 +536,18 @@ kbd {
     margin-bottom: 14px;
   }
 
+  /* Phones: the tabs share the row (no clipped last tab to scroll to), a touch smaller. */
+  .activity-tabs {
+    width: 100%;
+    gap: 2px;
+  }
+
   .activity-tab {
-    padding: 8px 12px;
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 8px 8px;
+    font-size: 14px;
+    gap: 4px;
   }
 }
 
@@ -621,29 +631,67 @@ kbd {
 }
 
 .build-line {
+  max-width: 1180px;
+  margin: 32px auto 0;
+  padding: 16px 0;
   display: flex;
-  gap: 10px;
-  align-items: baseline;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-start;
   font-size: 12px;
 }
 
-.build-label,
-.build-reload {
+.build-label {
   background: none;
   border: 0;
-  padding: 2px 0;
+  padding: 4px 2px;
   font: inherit;
+  color: var(--muted);
   cursor: pointer;
 }
 
-.build-label {
-  color: var(--muted);
-  opacity: 0.7;
+.build-label:hover {
+  color: var(--text, inherit);
 }
 
-.build-reload {
-  color: var(--lemon);
-  text-decoration: underline;
+/* New version: a pill at the bottom, above the phone's Ride bar. */
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 24px));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--lemon);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.update-reload {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--lemon);
+  border-color: var(--lemon);
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.update-later {
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--muted);
 }
 
 .status-dot {
@@ -861,17 +909,6 @@ label output {
   white-space: pre-line;
 }
 
-.live-reading {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.live-reading strong {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
 .diagnostics {
   margin-top: 16px;
   font-size: 14px;
@@ -1068,91 +1105,184 @@ label output {
   display: none;
 }
 
-/* One device per line: status dot, name and status, one action on the right. */
+/*
+ * One device per line, the same in every state (deviceLine() in view/deviceSetup.js):
+ * a state dot, the name over what it's doing, the actions on the right. Nothing
+ * wraps, so a line never jumps when its state changes; only an error or a hint
+ * takes a second line of detail.
+ */
 .device-line {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px 10px;
-  min-height: 44px;
-  padding: 6px 6px 6px 12px;
-  border-radius: 10px;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface-2);
+  transition: border-color 0.2s ease;
 }
 
-.device-line .device-status {
-  flex: 1 1 8em;
+.device-text {
+  display: grid;
+  gap: 1px;
   min-width: 0;
+}
+
+.device-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.device-line button {
-  flex: none;
+/* What it's doing: up to two lines rather than cut off. */
+.device-text .device-status {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
-/* What went wrong and what to try: a sentence, not an ellipsis. */
-.device-line .device-status[data-note="error"] {
-  white-space: normal;
+.device-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--text);
+}
+
+.device-text .device-status {
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.device-actions button,
+.device-line > button,
+.device-line > a {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* The trainer's options (virtual shifting, gears, power-only note) sit under its name. */
+#trainer-panel > :not(.device-line, .bluetooth-note) {
+  margin-left: 37px;
 }
 
 .device-dot {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: 1.5px solid var(--muted);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.device-line:has(.device-status.ok) .device-dot {
+/* Remembered, not connected: a quiet ring. Looking or reconnecting: amber, breathing. */
+.device-line[data-state="remembered"] .device-dot {
+  border-style: dashed;
+}
+
+.device-line[data-state="pending"] .device-dot,
+.device-line[data-state="reconnecting"] .device-dot {
+  border-color: var(--lemon);
+  background: var(--lemon);
+  animation: device-breathe 1.4s ease-in-out infinite;
+}
+
+.device-line[data-state="pending"] .device-status,
+.device-line[data-state="reconnecting"] .device-status {
+  color: var(--text);
+}
+
+/* Connected; live: data arrives right now. */
+.device-line:is([data-state="connected"], [data-state="live"]) .device-dot {
   border-color: #3ddc97;
   background: #3ddc97;
-  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.2);
 }
 
-.device-line:has(.device-status.ok) .device-status {
+.device-line[data-state="live"] .device-dot {
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.22);
+}
+
+.device-line[data-state="live"] .device-status {
+  color: #3ddc97;
+}
+
+/* Connected but silent (asleep, taken by another app), or a connect that failed: what to try, in full. */
+.device-line[data-state="silent"] .device-dot {
+  border-color: var(--lemon);
+  background: var(--lemon);
+}
+
+.device-line[data-state="error"] .device-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+/* An error or a silent device says what to try, in full. */
+.device-line:is([data-state="error"], [data-state="silent"]) .device-status {
+  -webkit-line-clamp: unset;
+}
+
+.device-line[data-state="silent"] .device-status {
+  color: var(--lemon);
+}
+
+.device-line[data-state="error"] {
+  border-color: rgba(255, 93, 93, 0.45);
+}
+
+.device-line[data-state="error"] .device-status {
   color: var(--text);
-  font-weight: 600;
 }
 
-.addon-name {
-  flex: none;
-  font-size: 14px;
+/* Narrow phones: two actions (Reconnect, Other) or an error would squeeze the name to a letter;
+   the actions move under the name instead, the text keeps the full width. */
+@media (max-width: 520px) {
+  .device-line:is([data-state="error"], :has(.device-actions > button:not([hidden]) ~ button:not([hidden]))) {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .device-line:is([data-state="error"], :has(.device-actions > button:not([hidden]) ~ button:not([hidden]))) .device-actions {
+    grid-column: 2;
+  }
 }
 
-.addon.shows-device .addon-name {
-  display: none;
+@keyframes device-breathe {
+  50% {
+    opacity: 0.35;
+  }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .device-line .device-dot {
+    animation: none;
+  }
+}
+
+/* The add-on lines keep the same 12 px rhythm as the trainer line above them (the fieldset's gap). */
 .addons {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.addons .device-line {
-  min-height: 40px;
-  background: none;
+  gap: 12px;
 }
 
 button.small {
   padding: 5px 12px;
   font-size: 14px;
   border-radius: 8px;
-}
-
-/* Data arrives: the live check turns green. */
-.live-reading[data-state="live"] {
-  color: #3ddc97;
-}
-
-/* Data stopped: the trainer fell asleep or another app took it. */
-.live-reading[data-state="silent"] {
-  color: var(--lemon);
 }
 
 /* No Bluetooth in this browser (every iPhone): a friendly note, no dead buttons. */
@@ -1234,8 +1364,15 @@ button.small {
 
 /* One column (tablets, phones): Ride is a bar along the bottom of the screen, whatever is scrolled into view. */
 @media (max-width: 900px) {
+  /* Room for the Ride bar as tall as it is (an error above Ride makes it taller; main.js measures it). */
   .start {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--dock-height, 68px + env(safe-area-inset-bottom)) + 16px);
+  }
+
+  /* Clear of the Ride bar, with room to spare for its error line. */
+  .build-line {
+    margin-top: 16px;
+    padding-bottom: 36px;
   }
 
   .dock-actions,
@@ -1334,6 +1471,17 @@ button.small {
 .check-hint {
   color: var(--muted);
   font-size: 13px;
+}
+
+/* Virtual shifting: the hint under its label, not squeezed beside it. */
+#virtual-shifting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 8px;
+}
+
+#virtual-shifting-row .check-hint {
+  grid-column: 2;
 }
 
 /* The workout card needs no trainer: only the heart-rate row of the devices stays. */
@@ -1686,6 +1834,66 @@ body.riding {
 .pill-draft {
   background: rgba(76, 195, 255, 0.28);
   border: 1px solid rgba(76, 195, 255, 0.5);
+}
+
+/* Gap to my best lap's ghost: green ahead, red behind. */
+.pill-ghost {
+  font-variant-numeric: tabular-nums;
+  border: 1px dashed rgba(191, 232, 255, 0.6);
+}
+
+.pill-ghost.ahead {
+  color: #6fe39b;
+}
+
+.pill-ghost.behind {
+  color: #ff8a7a;
+}
+
+/* A personal milestone: a lemon-yellow banner across the top for a few seconds. */
+.milestone-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(720px, calc(100vw - 32px));
+  margin: 0;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd21a, #ffe774);
+  color: #1d1d20;
+  font-size: clamp(18px, 3vw, 30px);
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.milestone-banner.show {
+  animation: milestone-in 5s ease-out both;
+}
+
+@keyframes milestone-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(0.92);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milestone-banner.show {
+    animation: none;
+  }
 }
 
 .hud-ticker {
@@ -2930,6 +3138,23 @@ body.riding {
   white-space: nowrap;
 }
 
+.rider-name.split {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.rider-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.rider-name.split .badge {
+  flex: none;
+}
+
 .rider-gap,
 .rider-power {
   text-align: right;
@@ -3211,6 +3436,20 @@ body.riding {
   width: 18px;
   height: 18px;
   fill: #fc4c02;
+}
+
+/* The Strava line is a device line without a dot: the mark, who you are, one action. */
+.strava-line .device-line > .device-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.strava-line .device-status.ok {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .strava-line .device-status strong {
@@ -4085,11 +4324,37 @@ body {
   min-height: 100dvh;
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
-  padding-bottom: max(40px, env(safe-area-inset-bottom));
+}
+
+/* Phones: the usual 16 px margin leaves the device lines room for names and actions. */
+@media (max-width: 600px) {
+  .start {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+/* Phones keep the room for the Ride bar along the bottom (the one-column rule above). */
+@media (min-width: 901px) {
+  .start {
+    padding-bottom: max(40px, env(safe-area-inset-bottom));
+  }
 }
 
 .start-head {
   padding-top: max(18px, env(safe-area-inset-top));
+}
+
+/* Edge to edge (the app on Android 15+, iOS home screen): the status bar lies over the page.
+   Outside a ride a strip in the page's colour keeps scrolled text from running under the clock. */
+body:not(.riding)::after {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  height: env(safe-area-inset-top);
+  background: var(--bg);
+  pointer-events: none;
 }
 
 .hud {
@@ -4912,11 +5177,37 @@ body.paddling .lane-button {
 }
 
 /* Units setting (km · kg / mi · lb) */
-.unit-switch,
-.lang-switch {
+.unit-switch {
   display: flex;
   gap: 4px;
   margin-top: 8px;
+}
+
+/* Auto width (Chrome/Safari), so a longer language name still fits. */
+.lang-select {
+  field-sizing: content;
+  width: auto;
+  flex: none;
+  margin-left: auto;
+  appearance: none;
+  padding: 6px 28px 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%239aa3ad' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Phones: the logo and language share a row; the server status gets the next one whole. */
+@media (max-width: 600px) {
+  .start-head .server-status {
+    flex-basis: 100%;
+    justify-content: center;
+  }
 }
 
 /* --- shared vehicles (#55) ------------------------------------------ */
@@ -5080,15 +5371,11 @@ body.working-out #paddles {
 }
 
 .workout-hud {
+  --workout-pad: max(var(--gap), env(safe-area-inset-top));
   position: absolute;
   inset: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
-  padding: max(var(--gap), env(safe-area-inset-top)) max(var(--gap), env(safe-area-inset-right)) max(var(--gap), env(safe-area-inset-bottom)) max(var(--gap), env(safe-area-inset-left));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .workout-hud .glass,
@@ -5096,20 +5383,39 @@ body.working-out #paddles {
   pointer-events: auto;
 }
 
+/* The corners hold the information; the middle stays free for the avatar. */
+.workout-corner {
+  position: absolute;
+  top: var(--workout-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workout-corner-left {
+  left: max(var(--gap), env(safe-area-inset-left));
+  align-items: flex-start;
+}
+
+.workout-corner-right {
+  right: max(var(--gap), env(safe-area-inset-right));
+  align-items: stretch;
+  width: min(340px, 32vw);
+}
+
 .workout-main {
-  /* The ring card and the stats card are two cards: keep a gap between them. */
-  margin-bottom: 14px;
-  padding: 14px 24px 12px;
+  padding: 12px 18px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  max-width: 240px;
 }
 
 .workout-ring {
   --progress: 0;
-  width: 190px;
-  height: 190px;
+  width: 170px;
+  height: 170px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -5118,8 +5424,8 @@ body.working-out #paddles {
 }
 
 .workout-ring-inner {
-  width: 158px;
-  height: 158px;
+  width: 142px;
+  height: 142px;
   border-radius: 50%;
   background: var(--glass-strong);
   display: flex;
@@ -5131,7 +5437,7 @@ body.working-out #paddles {
 }
 
 .workout-exercise {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -5153,7 +5459,7 @@ body.working-out #paddles {
 
 .workout-time {
   font-family: var(--num);
-  font-size: 64px;
+  font-size: 54px;
   font-weight: 700;
   line-height: 1;
 }
@@ -5161,21 +5467,14 @@ body.working-out #paddles {
 .workout-next {
   color: var(--hud-muted);
   font-weight: 600;
-}
-
-.workout-cue {
-  color: var(--hud-muted);
-  font-size: 0.85em;
-  max-width: 100%;
-  overflow-wrap: anywhere;
   text-align: center;
 }
 
 .workout-stats {
-  margin-bottom: auto;
   display: flex;
-  gap: 22px;
-  padding: 10px 18px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
 }
 
 .workout-stats > div {
@@ -5186,37 +5485,187 @@ body.working-out #paddles {
 
 .workout-stats strong {
   font-family: var(--num);
-  font-size: 24px;
+  font-size: 22px;
+  white-space: nowrap;
 }
 
+/* How to do the pose under way, or the one coming up during a rest. */
+.workout-guide {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Room for the side view below it. */
+  max-height: calc(100vh - 2 * var(--workout-pad) - 120px - var(--workout-inset-h));
+  overflow-y: auto;
+}
+
+.workout-guide-side {
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.workout-guide-side:empty,
+.workout-cue:empty {
+  display: none;
+}
+
+.workout-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.workout-steps li {
+  color: var(--hud-muted);
+}
+
+/* The movement of the breath in progress (the sun salutation). */
+.workout-steps li.current {
+  color: inherit;
+  font-weight: 700;
+}
+
+.workout-steps li.current::marker {
+  color: var(--accent);
+}
+
+.workout-cue {
+  margin: 2px 0 0;
+  color: var(--hud-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+/* The frame of the side view: the 3D view draws into this box, under it. */
+.workout-hud {
+  --workout-inset-w: clamp(200px, 30vw, 440px);
+  --workout-inset-h: calc(var(--workout-inset-w) * 3 / 4);
+}
+
+.workout-side-view {
+  position: absolute;
+  right: max(var(--gap), env(safe-area-inset-right));
+  bottom: max(var(--gap), env(safe-area-inset-bottom));
+  width: var(--workout-inset-w);
+  height: var(--workout-inset-h);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 3px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.workout-side-view .caption {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+}
+
+/* The buttons take the lower left, the last free corner. */
 .workout-buttons {
+  position: absolute;
+  left: max(var(--gap), env(safe-area-inset-left));
+  bottom: max(var(--gap), env(safe-area-inset-bottom));
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 10px;
+  max-width: calc(100% - var(--workout-inset-w) - 3 * var(--gap));
+}
+
+/* Short screens (a phone on its side): the side view moves to the empty lower left. */
+@media (max-height: 520px) {
+  .workout-hud {
+    --workout-inset-w: clamp(160px, 26vw, 260px);
+  }
+
+  .workout-side-view {
+    right: auto;
+    left: max(var(--gap), env(safe-area-inset-left));
+  }
+
+  .workout-buttons {
+    left: auto;
+    right: max(var(--gap), env(safe-area-inset-right));
+    justify-content: flex-end;
+  }
+
+  /* Clear of the stats above and the buttons below. */
+  .workout-guide {
+    max-height: calc(100vh - 2 * var(--workout-pad) - 140px);
+  }
+}
+
+/* Narrow screens (a phone upright): smaller ring and stats, the side view above the buttons. */
+@media (max-width: 640px) {
+  .workout-hud {
+    --workout-inset-w: 44vw;
+  }
+
+  .workout-corner-right {
+    width: auto;
+    left: calc(max(var(--gap), env(safe-area-inset-left)) + 140px);
+  }
+
+  .workout-side-view {
+    bottom: calc(max(var(--gap), env(safe-area-inset-bottom)) + 56px);
+  }
+
+  .workout-buttons {
+    right: max(var(--gap), env(safe-area-inset-right));
+    max-width: none;
+    justify-content: center;
+  }
+
+  .workout-guide {
+    max-height: calc(100vh - 2 * var(--workout-pad) - 190px - var(--workout-inset-h));
+  }
 }
 
 @media (max-width: 640px), (max-height: 520px) {
-  .workout-ring {
-    width: 140px;
-    height: 140px;
+  .workout-main {
+    padding: 8px 10px;
   }
 
-  .workout-ring-inner {
+  .workout-ring {
     width: 116px;
     height: 116px;
   }
 
+  .workout-ring-inner {
+    width: 96px;
+    height: 96px;
+  }
+
   .workout-exercise {
-    font-size: 16px;
+    font-size: 13px;
   }
 
   .workout-time {
-    font-size: 44px;
+    font-size: 34px;
+  }
+
+  .workout-next {
+    font-size: 12px;
   }
 
   .workout-stats {
-    gap: 14px;
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .workout-stats strong {
+    font-size: 16px;
+  }
+
+  .workout-steps {
+    font-size: 13px;
   }
 }
 
@@ -5339,4 +5788,109 @@ body.working-out #paddles {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+/* No options yet (still loading) or only one language: nothing to choose, so nothing shown. */
+.lang-select:empty,
+.lang-select[hidden] {
+  display: none;
+}
+
+/* Phones: one 12px rhythm down the header (logo row, status, tabs) and 16px at the sides. */
+@media (max-width: 520px) {
+  .start-head {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: 0;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .start-grid {
+    margin-top: 0;
+  }
+
+  .activity-tabs {
+    margin-bottom: 16px;
+  }
+}
+
+/* Finish/recovery account row uses the same quiet treatment as the start menu. */
+.strava-upload {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-block: 12px;
+  border-block: 1px solid var(--border);
+}
+
+.strava-upload h3, .strava-upload p { margin: 0; }
+.strava-upload h3 { font-size: 14px; font-weight: 600; }
+.strava-upload .field-hint { line-height: 1.4; overflow-wrap: anywhere; }
+.strava-upload .strava-row { min-width: 0; flex-wrap: nowrap; gap: 8px; }
+.upload-identity { display: flex; align-items: center; flex: 1 1 0; gap: 8px; min-width: 0; }
+.upload-identity h3 { flex: none; }
+.upload-identity .muted { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-actions { display: flex; flex: none; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.strava-upload .upload-action { padding-inline: 10px; font-size: 13px; }
+.upload-action { gap: 7px; white-space: nowrap; transition: background 150ms, border-color 150ms, color 150ms; }
+.strava-upload[data-spinner="true"] .upload-action { cursor: progress; opacity: 1; }
+.strava-upload[data-spinner="true"] .upload-action::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: upload-spin 750ms linear infinite;
+}
+.strava-upload[data-tone="success"] .upload-action {
+  color: var(--terrain-edge);
+  border-color: var(--terrain-edge);
+  background: rgba(95, 180, 124, 0.08);
+}
+.strava-upload[data-tone="success"] .upload-action::before {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-right: 2px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+.strava-upload[data-tone="success"] .upload-action::after { content: "↗"; }
+.strava-upload[data-tone="error"] .upload-action { color: var(--danger); border-color: var(--danger); }
+.strava-upload[data-tone="warning"] .upload-action { color: var(--lemon); border-color: var(--lemon); }
+.strava-upload:is([data-tone="error"], [data-tone="warning"]) .upload-action:first-child::before {
+  content: "!";
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+}
+.upload-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@keyframes upload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .strava-upload[data-spinner="true"] .upload-action::before { animation: none; }
+  .upload-action { transition: none; }
+}
+.finish-files > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding-block: 4px; }
+.finish-files[open] > summary { margin-bottom: 10px; }
+#finish .modal-card { scroll-padding-bottom: 96px; }
+#finish .modal-nav { position: static; margin: 0; padding: 14px 0 0; }
+#finish-note:empty { display: none; }
+
+@media (max-width: 380px) {
+  /* Two actions are needed for an uncertain submission; the brand mark keeps room for both. */
+  .strava-upload[data-state="uncertain"] .upload-identity h3 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }

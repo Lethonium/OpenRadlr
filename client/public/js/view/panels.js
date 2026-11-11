@@ -149,12 +149,27 @@ export function riderName(rider) {
   return isPaddler(rider) ? `${rider.name} ${PADDLE_BADGE}` : rider.name;
 }
 
+const BOT_STYLES = Object.freeze({
+  rouleur: "panels.botStyle.rouleur",
+  climber: "panels.botStyle.climber",
+  sprinter: "panels.botStyle.sprinter",
+  attacker: "panels.botStyle.attacker",
+  tourer: "panels.botStyle.tourer",
+});
+
+/** A bot's badge: its riding type ("climber bot"), or plain "bot" (#64). */
+export function botBadgeText(rider) {
+  return Object.hasOwn(BOT_STYLES, rider.style) ? t(BOT_STYLES[rider.style]) : t("panels.bot");
+}
+
 export function renderRiderList(list, entries, myId) {
   list.replaceChildren(
     ...entries.map(({ rider, gap, routeName }) => {
       const item = element("li", rider.id === myId ? "rider me" : "rider");
-      const name = element("span", "rider-name", rider.name);
-      if (rider.is_bot) name.append(element("span", "badge", t("panels.bot")));
+      // The name gives way to the badges: a bot is always marked, however long its name.
+      const name = element("span", "rider-name split");
+      name.append(element("span", "rider-name-text", rider.name));
+      if (rider.is_bot) name.append(element("span", "badge", botBadgeText(rider)));
       if (isRemote(rider)) name.append(element("span", "badge badge-remote", rider.app));
       if (isPaddler(rider)) name.append(paddleBadge());
       item.append(name, element("span", "rider-power", `${Math.round(rider.power)} W`), element("span", "rider-gap", rider.id === myId ? "" : gap === null ? routeName : formatGap(gap)));

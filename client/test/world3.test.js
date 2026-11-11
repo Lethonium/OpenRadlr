@@ -8,7 +8,7 @@ import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { RoadIndex, buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -361,7 +361,33 @@ test("routes turn on curves where they change roads, never on a corner", () => {
 
 // Built once per ridden route: the full map is the most expensive part of the suite.
 const [flatsRoute, hillsRoute, colRoute] = valley;
-const mapWorld = buildWorld(hillsRoute, { network });
+// As the client builds it: the map's network and its other routes.
+const mapWorld = buildWorld(hillsRoute, { network, others: valley });
+test("where a route cuts a junction's corner off the network's roads, it still counts as road", () => {
+  // Routes round their corners at places by up to about 8 m off the network's roads; that asphalt is drawn too.
+  for (const r of valley) {
+    for (let d = 0; d < r.length; d += 2) {
+      const { x, y } = r.positionAt(d);
+      // The road is looked up at samples every 6 m: up to 3 m from one on the road; the cut corners are 6–8 m off.
+      assert.ok(mapWorld.terrain.distanceToRoad(x, -y) < 3.5, `${r.id} at ${d} m`);
+    }
+  }
+});
+
+test("no tree or bush stands on the asphalt of any route of the map", () => {
+  const index = new RoadIndex(valley, { step: 2 });
+  const half = roadHalfWidth(hillsRoute.lanes);
+  const onRoad = [];
+  for (const chunk of mapWorld.chunks.scenery) {
+    const p = chunk.mesh.positions;
+    for (let i = 0; i < p.length; i += 3) {
+      const near = index.nearest(p[i], p[i + 2]);
+      if (near && near.distance < half && p[i + 1] > near.sample.elevation + 1.5) onRoad.push(`${near.sample.route.id} at ${Math.round(near.sample.distance)} m`);
+    }
+  }
+  assert.deepEqual([...new Set(onRoad)], []);
+});
+
 const near = (p, places, radius) => places.some((n) => Math.hypot(p.x - n.x, p.y - n.y) < radius);
 const places = [...network.nodes.values()];
 
@@ -624,7 +650,7 @@ test("rivers run in valleys, not gorges", () => {
 });
 
 test("the map world looks the same whichever route you ride", () => {
-  const fromCol = buildWorld(colRoute, { network });
+  const fromCol = buildWorld(colRoute, { network, others: valley });
   const vertices = (world, name) => world.chunks[name].reduce((sum, c) => sum + c.mesh.vertexCount, 0);
   // Grass and flowers are thinner along roads you don't ride; the rest is the same.
   for (const name of ["terrain", "scenery"]) assert.equal(vertices(fromCol, name), vertices(mapWorld, name), name);

@@ -214,3 +214,19 @@ export class WorkoutSession {
     };
   }
 }
+
+/**
+ * Android's back mid-workout (input/back.js): the clock stops while the rider
+ * decides, then the workout ends or goes on where it was.
+ * @param {WorkoutSession} session
+ * @param {() => boolean} ask true to end the workout
+ * @returns {Array} the actions to carry out, as from the session's own methods
+ */
+export function endAfterAsking(session, ask) {
+  const wasPaused = session.state === "paused";
+  const actions = wasPaused ? [] : session.pause();
+  // Pausing in the last moment finishes the plan: nothing left to ask.
+  if (session.state === "done") return actions;
+  if (ask()) return [...actions, ...session.end()];
+  return wasPaused ? actions : [...actions, ...session.resume()];
+}

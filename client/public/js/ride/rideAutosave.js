@@ -70,7 +70,7 @@ export class RideAutosave {
 
   /** @param {object} snapshot the ride (see docs/superpowers/specs/2026-10-17-ride-recovery-design.md) */
   save(snapshot) {
-    return this.#safely(() => this.store.put(CURRENT, snapshot));
+    return this.#safely(async () => { await this.store.put(CURRENT, snapshot); return true; }, false);
   }
 
   load() {

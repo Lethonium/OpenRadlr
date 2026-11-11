@@ -7,7 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
@@ -22,7 +22,9 @@ import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
-import { StravaClient, activityUrl, stravaMessage } from "./net/strava.js";
+import { StravaClient, appLoginResult, stravaMessage } from "./net/strava.js";
+import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
+import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -34,10 +36,15 @@ import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescript
 import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
 import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
+import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
+import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
+import { BotCalls } from "./ride/botCalls.js";
+import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
+import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
@@ -65,7 +72,7 @@ import {
   splitLine,
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
-import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoFileName, photoStats } from "./view/photos.js";
+import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawPeloton } from "./view/pelotonView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -81,7 +88,7 @@ import { BUILD } from "./build.js";
 import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
-import { WorkoutSession } from "./workout/workoutSession.js";
+import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
@@ -95,13 +102,16 @@ import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, STUDIO_CAMERAS, StudioView3D } from "./view3d/studioScene.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
+import { installNativeApp } from "./native/app.js";
 import { PaddleView } from "./view/paddleView.js";
 import { SeatEnergy, aboardLine, boardingRoute, elsewhereRoute, isCaptain, kindName, normaliseCode, vehicleErrorLine } from "./ride/vehicle.js";
 import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
-import { languageButtonStates } from "./i18n/selector.js";
+import { languageOptions } from "./i18n/selector.js";
 
+// Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
+const nativeApp = installNativeApp();
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
 /** How often a ride is written to the browser while it goes on (#73). */
@@ -117,6 +127,10 @@ const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
+/** How many golden lemons this browser's rider has collected, all rides together. */
+const LEMONS_KEY = "openradlr.lemons";
+/** The climbs' tops this browser's rider has been over ("routeId:metres"), for the first-time banner. */
+const SUMMITS_KEY = "openradlr.summits";
 const INFO_REFRESH_MS = 5000;
 const TICKER_ITEMS = 3;
 const TICKER_SECONDS = 9;
@@ -239,10 +253,13 @@ const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
 let removeDrawerPanel = null;
+nativeApp?.onBack?.(goBack);
 /** Below this the menu fills the screen and shows its page list first. */
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
 const app = {
+  /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
+  updateDismissed: false,
   profile: profiles.load(),
   /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
   workoutPick: null,
@@ -324,6 +341,18 @@ const app = {
   splits: [],
   shownSplits: 0,
   splitToastTimer: null,
+  /** Bots' moves near me, called out in the ticker (#64). */
+  botCalls: new BotCalls(),
+  /** Golden lemons on my route (null off the routes, in the studio and workouts), and how many this ride collected. */
+  lemonHunt: null,
+  lemonsThisRide: 0,
+  /** The all-time lemon count while off the routes (no hunt to hold it). */
+  lemonTotal: 0,
+  /** Personal milestones (null in the studio and workouts), this ride's climbing as last read, and the banner's timer. */
+  milestones: null,
+  rideClimbedM: 0,
+  milestoneReadAt: 0,
+  milestoneTimer: null,
   /** Studio distance ridden before a rejoin, which restarts the room's odometer (#73). */
   distanceOffset: 0,
   lastMyDistance: null,
@@ -337,6 +366,10 @@ const app = {
   autosave: new RideAutosave({ store: indexedDbStore() }),
   /** Every finished ride, kept locally (#48, #83). */
   history: new RideHistory({ store: indexedDbStore("openradlr-history") }),
+  /** My best lap per route, ridden again by a ghost. */
+  ghosts: new GhostStore({ store: indexedDbStore("openradlr-ghosts") }),
+  /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
+  ghostLap: null,
   finishSplits: [],
   unfinished: null,
   reconnector: null,
@@ -344,6 +377,10 @@ const app = {
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
+  lastHeartRateAt: null,
+  lastHeartRate: null,
+  /** Per device line: a pick or connect in progress, or the one that just failed (deviceLine() decides what shows). */
+  deviceAttempts: { trainer: null, hr: null, controller: null },
   /** The open drawer was opened with the controller (+ and − together): its buttons navigate it. */
   drawerByController: false,
   /** All controllers' presses as one stream (MergedControllers), made with the first controller. */
@@ -392,6 +429,11 @@ const app = {
   rideMode: readSetting(RIDE_MODE_KEY),
   infoTimer: null,
   strava: new StravaClient(),
+  uploadReceipts: new UploadReceipts(),
+  finishUpload: null,
+  recoveryUpload: null,
+  finishRecoverable: false,
+  finishSave: null,
   wakeLock: new ScreenWakeLock(),
   /** undefined = not checked yet, null = not connected. */
   stravaAccount: undefined,
@@ -441,11 +483,22 @@ function relocalise() {
   document.documentElement.lang = getLocale();
   applyTranslations(document);
   applyTranslations(rideTemplate);
-  const pressed = languageButtonStates(getLocale());
-  for (const button of document.querySelectorAll("[data-lang]")) {
-    button.setAttribute("aria-pressed", String(pressed[button.dataset.lang]));
-  }
+  renderLanguageSelect();
   for (const hook of relocaliseHooks) hook();
+}
+
+/** Fills the language dropdown from the supported locales and selects the current one. */
+function renderLanguageSelect() {
+  const select = $("lang-select");
+  const options = languageOptions(getLocale());
+  select.replaceChildren(
+    ...options.map(({ code, label, selected }) => {
+      const option = new Option(label, code, false, selected);
+      option.lang = code;
+      return option;
+    }),
+  );
+  select.hidden = options.length < 2;
 }
 
 /** localStorage, or undefined where even touching it throws. */
@@ -561,19 +614,9 @@ async function offerFtp() {
   prompt.hidden = false;
 }
 
-/** Device status lines that applyTranslations resets to their initial text. */
-function renderDeviceStatuses() {
-  if (app.trainer) $("trainer-status").textContent = trainerLabel(app.trainer);
-  if (app.heartRateMonitor) $("hr-status").textContent = app.heartRateMonitor.label;
-  if (app.controllers.length) renderControllerStatus();
-}
-
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, renderWorkoutPick, renderStartMenu, initBiomePicker);
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-lang]");
-    if (button) changeLanguage(button.dataset.lang);
-  });
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   setUnits(app.profile.units);
   $("name").value = app.profile.name;
   $("weight").value = kgToDisplay(app.profile.weightKg);
@@ -621,19 +664,14 @@ function initSetup() {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      // Name what's being looked for: the line's own label may be hidden in favour of the device name.
-      // With a controller connected already, the hint goes under the line: the connected half stays in view.
-      const adding = kind === "controller" && app.controllers.length > 0;
+      // What's being looked for goes under the line's name; a connected controller half keeps its name in view.
       const pending = names?.length
         ? t("setup.looking", { names: names.join(" + ") })
-        : adding && expectsOtherHalf(app.controllers)
+        : kind === "controller" && expectsOtherHalf(app.controllers)
           ? t("setup.pickOtherHalf", { label: app.controllers[0].label })
           : t("setup.pickYour", { what: CHOOSER_NAMES()[kind] });
-      const ok = await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), adding ? "controller-live" : DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
-      if (adding && ok) renderControllerCheck();
+      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), kind, { deviceName: names?.[0] ?? null, pending });
       button.disabled = false;
-      if (kind === "controller" && app.controllers.length) renderControllerStatus();
-      renderReconnectButtons();
     };
     $(`connect-${kind}`).addEventListener("click", (event) => pick(event.currentTarget));
     // The chooser lists only the remembered devices: one tap and a confirm.
@@ -652,7 +690,7 @@ function initSetup() {
     event.preventDefault();
     const action = $("join").dataset.action;
     // The server rides with Strava accounts only: the button takes the rider there.
-    if (action === "strava") return location.assign("/auth/strava");
+    if (action === "strava") return nativeApp?.signIn ? connectStravaInApp() : location.assign("/auth/strava");
     if (action === "board") return boardFromMenu();
     const typed = $("board-code").value.trim();
     if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
@@ -715,13 +753,23 @@ function setDifficultyInputs(difficulty) {
 
 // ------------------------------------------------------------ start menu ---
 
+/** Phones: the start menu keeps its last row clear of the Ride bar, however tall the bar gets. */
+function watchDockHeight() {
+  const dock = document.querySelector(".dock-actions");
+  if (!dock || typeof ResizeObserver !== "function") return;
+  new ResizeObserver(() => document.documentElement.style.setProperty("--dock-height", `${dock.offsetHeight}px`)).observe(dock);
+}
+
 function initStartMenu() {
   openStartMenu();
+  watchDockHeight();
   // Countdowns tick every second between the (slower) info refreshes; so does the trainer check.
   setInterval(() => {
     renderEvents();
     if (app.ride) return;
-    renderLiveCheck();
+    // Live checks notice data that stopped.
+    renderDeviceLine("trainer");
+    renderDeviceLine("hr");
     // Nothing sends resistance in the menu: ask a blocked trainer again from here.
     Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
   }, 1000);
@@ -735,10 +783,17 @@ function initStartMenu() {
     $("strava-message").hidden = false;
     history.replaceState(null, "", location.pathname);
   }
+  if (nativeApp?.signIn) {
+    $("strava-connect").addEventListener("click", (event) => {
+      event.preventDefault();
+      connectStravaInApp();
+    });
+  }
   $("strava-logout").addEventListener("click", async () => {
     await app.strava.logout().catch(() => {});
     app.stravaAccount = null;
     renderStartMenu();
+    if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
   });
 }
 
@@ -798,6 +853,16 @@ function initMenuStage() {
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
   app.redrawStage = drawStage;
+  // A canvas drawn while hidden (the Events tab, the start screen during a ride) has no
+  // size and stays blank once shown: draw again whenever the map or profile changes size.
+  // Their size comes from CSS, so drawing never resizes them again.
+  let stageRedraw = 0;
+  const resized = new ResizeObserver(() => {
+    cancelAnimationFrame(stageRedraw);
+    stageRedraw = requestAnimationFrame(drawStage);
+  });
+  resized.observe($("menu-profile"));
+  resized.observe($("menu-map"));
   app.menu = new MenuStage({
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
@@ -870,6 +935,28 @@ function closeMenuStage(routeId, map = null) {
   if (canvas.parentElement !== parent) parent.insertBefore(canvas, next);
 }
 
+/**
+ * In the app, Strava signs in through the system sign-in sheet (Google and
+ * Apple sign-in don't work in the web view), and this page then claims the
+ * session (docs/app.md#strava-sign-in). No reload: connected devices stay.
+ */
+async function connectStravaInApp() {
+  const showMessage = (text) => {
+    $("strava-message").textContent = text;
+    $("strava-message").hidden = !text;
+  };
+  showMessage("");
+  try {
+    const start = await app.strava.startAppLogin();
+    const { result, ticket } = appLoginResult(await nativeApp.signIn(new URL(start, location.href).href));
+    if (result !== "connected" || !ticket) return showMessage(stravaMessage(result) ?? stravaMessage("failed"));
+    await app.strava.claimAppLogin(ticket);
+    await loadStravaAccount();
+  } catch (error) {
+    if (error.name !== "AbortError") showMessage(t("strava.connectFailed", { message: error.message }));
+  }
+}
+
 async function loadStravaAccount() {
   try {
     app.stravaAccount = await app.strava.me();
@@ -879,6 +966,8 @@ async function loadStravaAccount() {
   // A connected Strava account fills an empty name.
   if (app.stravaAccount && !$("name").value.trim()) $("name").value = app.stravaAccount.name;
   renderStartMenu();
+  if (app.finished) setupFinishUpload();
+  if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
 }
 
 function renderAccount() {
@@ -914,7 +1003,7 @@ function renderStartMenu() {
   if (privacy) $("privacy-link").href = privacy;
   $("build-label").textContent = build.text;
   $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
-  $("build-reload").hidden = !build.stale;
+  $("update-banner").hidden = !build.stale || app.updateDismissed;
   $("server-dot").className = `status-dot${status.online ? (status.full ? " full" : " online") : ""}`;
 
 
@@ -1025,29 +1114,31 @@ function joinEventFromRide(row) {
   if (leaveRide()) joinEventFromMenu(row);
 }
 
-/** @returns {Promise<boolean>} true once connected */
-async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = t("devices.connecting"), deviceName = null } = {}) {
-  const status = $(statusId);
-  status.textContent = pending;
-  status.dataset.note = "pending";
-  status.classList.remove("ok");
+/**
+ * Connects a device of `kind`, its line saying so meanwhile. A cancelled
+ * picker leaves the line as it was; a failure says what to try. Of two
+ * attempts at once (a remembered device found while the rider picks), each
+ * only clears its own.
+ * @returns {Promise<boolean>} true once connected
+ */
+async function connectDevice(connect, onConnected, kind, { pending = t("devices.connecting"), deviceName = null } = {}) {
+  const attempt = { state: "pending", text: pending };
+  const settle = (next) => {
+    if (app.deviceAttempts[kind] === attempt) app.deviceAttempts[kind] = next;
+    renderDeviceLines();
+  };
+  app.deviceAttempts[kind] = attempt;
+  renderDeviceLines();
   try {
     const device = await connect();
+    settle(null);
     onConnected(device);
-    // useTrainer() writes its own label (it knows about power-only trainers).
-    if (!keepLabel) status.textContent = device.label;
-    delete status.dataset.note;
-    status.classList.add("ok");
     return true;
   } catch (error) {
-    // Given up quietly: the rider connected another device meanwhile.
-    if (error.name === "AbortError") {
-      delete status.dataset.note;
-      return false;
-    }
-    status.textContent = connectErrorText(error, deviceName);
-    status.dataset.note = "error";
-    if (error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
+    // Given up quietly (another device was connected meanwhile) or the picker was closed: nothing to say.
+    const cancelled = error.name === "AbortError" || /cancel/i.test(error.message ?? "");
+    settle(cancelled ? null : { state: "error", text: connectErrorText(error, deviceName) });
+    if (!cancelled && error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
 }
@@ -1060,21 +1151,18 @@ const hasController = (id) => app.controllers.some((c) => c.id === id);
 /** Each kind of device: through the chooser (`names`: only these) or, already granted, without it. */
 const DEVICES = {
   trainer: {
-    statusId: "trainer-status",
     connect: (names) => SmartTrainer.connect(undefined, { log: deviceLog, names }),
     open: (device) => SmartTrainer.open(device, { log: deviceLog }),
     use: (trainer) => useTrainer(trainer),
     has: () => Boolean(app.trainer),
   },
   hr: {
-    statusId: "hr-status",
     connect: (names) => HeartRateMonitor.connect(undefined, { log: deviceLog, names }),
     open: (device) => HeartRateMonitor.open(device, { log: deviceLog }),
     use: (monitor) => useHeartRateMonitor(monitor),
     has: () => Boolean(app.heartRateMonitor),
   },
   controller: {
-    statusId: "controller-status",
     connect: (names) => connectController(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
     open: (device) => openController(device, { log: deviceLog }),
     use: (controller) => useController(controller),
@@ -1093,42 +1181,76 @@ function missingDevices(kind) {
 function connected(kind, device) {
   knownDevices.remember(kind, device);
   DEVICES[kind].use(device);
-  renderReconnectButtons();
+  renderDeviceLines();
 }
 
 /** What the browser's device window should list, for the line's hint while it is open. */
 const CHOOSER_NAMES = () => ({ trainer: t("setup.chooser.trainer"), hr: t("setup.chooser.hr"), controller: t("setup.chooser.controller") });
 
-/** What each device line says while nothing is connected or remembered. */
-const IDLE_STATUS = () => ({ trainer: t("setup.idle.trainer"), hr: t("setup.idle.hr"), controller: t("setup.idle.controller") });
+/** The real trainer on the line (paddles and the simulator aren't Bluetooth devices). */
+const lineTrainer = () => (app.trainer && deviceKind(app.trainer) === "trainer" ? app.trainer : null);
 
-/** "Reconnect" next to each kind with a remembered device that isn't connected. */
-function renderReconnectButtons() {
-  for (const kind of Object.keys(DEVICES)) {
-    const button = $(`reconnect-${kind}`);
-    const names = [...new Set(missingDevices(kind).map((entry) => entry.name))];
-    button.hidden = !isBluetoothAvailable() || names.length === 0;
-    // The name goes in the status line, the button stays short: nothing gets squeezed to "N…".
-    button.textContent = t("devices.reconnectShort");
-    button.title = t("devices.reconnect", { names: names.join(" + ") });
-    const status = $(DEVICES[kind].statusId);
-    const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
-    if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS()[kind];
+/** Remembered devices of `kind` that aren't connected, by name. */
+const rememberedNames = (kind) => (isBluetoothAvailable() ? [...new Set(missingDevices(kind).map((entry) => entry.name))] : []);
+
+/** Everything a device line is worked out from (deviceLine() in view/deviceSetup.js). */
+function deviceLineInput(kind) {
+  const base = { kind, remembered: rememberedNames(kind), attempt: app.deviceAttempts[kind] };
+  const since = (at) => (at === null ? null : (now() - at) * 1000);
+  if (kind === "trainer") {
+    const trainer = lineTrainer();
+    if (!trainer) return base;
+    const live = liveCheck({ sinceDataMs: since(app.lastTrainerDataAt), power: app.lastReading?.power, cadence: app.lastReading?.cadence });
+    return { ...base, device: { label: trainerLabel(trainer), connected: trainer.connected !== false }, live };
   }
-  // One main action per line: Reconnect a known device (the chooser then reads "Other"), else connect, change or add.
-  const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
+  if (kind === "hr") {
+    const monitor = app.heartRateMonitor;
+    if (!monitor) return base;
+    return { ...base, device: { label: monitor.label, connected: monitor.connected !== false }, live: heartRateCheck({ sinceDataMs: since(app.lastHeartRateAt), heartRate: app.lastHeartRate }) };
+  }
+  const controllers = app.controllers;
+  if (!controllers.length) return base;
+  // + and − confirmed one by one, or which Click half is missing.
+  const missing = lonelyHalfHint();
+  const seen = new Set(controllers.flatMap((c) => [...c.seen]));
+  const live = { state: missing ? "silent" : seen.size ? "live" : "idle", text: missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null }) };
+  return { ...base, device: { label: controllerLine(controllers), connected: controllers.every((c) => c.connected) }, live };
+}
+
+/** One device line: its dot, name and what it's doing, from deviceLine() alone. */
+function renderDeviceLine(kind) {
+  const line = deviceLine(deviceLineInput(kind));
+  const row = $(kind === "trainer" ? "line-trainer" : `addon-${kind}`);
+  if (row.dataset.state !== line.state) row.dataset.state = line.state;
+  const title = $(`${kind}-title`);
+  if (title.textContent !== line.title) {
+    title.textContent = line.title;
+    title.title = line.title;
+  }
+  const detail = $(`${kind}-status`);
+  if (detail.textContent !== line.detail) {
+    detail.textContent = line.detail;
+    // The whole sentence where a narrow screen cuts it short.
+    detail.title = line.detail;
+  }
+}
+
+/** Every device line with its actions: Reconnect a known device (the chooser then reads "Other"), else connect, change or add. */
+function renderDeviceLines() {
+  const connectedNow = { trainer: Boolean(lineTrainer()), hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
   for (const kind of Object.keys(DEVICES)) {
+    renderDeviceLine(kind);
+    const names = rememberedNames(kind);
     const reconnect = $(`reconnect-${kind}`);
-    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: names.length > 0, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
     reconnect.hidden = !actions.reconnect;
+    reconnect.textContent = t("devices.reconnectShort");
+    reconnect.title = t("devices.reconnect", { names: names.join(" + ") });
     const connect = $(`connect-${kind}`);
     connect.textContent = actions.other;
-    // The trainer's first connect is the main action of the card; add-ons stay quiet.
     // The trainer's first connect is the card's main action; so is the missing half of a Click.
     const main = (kind === "trainer" && actions.other === t("setup.action.connect")) || (kind === "controller" && lonelyHalfHint() !== null);
     connect.className = main ? "primary-small" : "secondary small";
-    // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
-    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
     // Both halves of a pair are in: nothing more to add.
     connect.hidden = kind === "controller" && app.controllers.length >= 2;
   }
@@ -1154,7 +1276,6 @@ function renderRideModes() {
   const addons = addonsShown(mode, bluetooth, picked);
   $("addon-hr").hidden = !addons.hr;
   $("addon-controller").hidden = !addons.controller;
-  $("controller-live").hidden = !addons.controller || app.controllers.length === 0;
   if (!app.ride && picked?.kind !== "workout") applyRideMode(mode);
 }
 
@@ -1167,27 +1288,14 @@ function applyRideMode(mode) {
     dropTrainer();
     initKnownDevices(["trainer"]);
   } else return;
-  renderReconnectButtons();
-}
-
-/** Under the trainer: waiting, still, the numbers, or no data any more (asleep, taken by another app). */
-function renderLiveCheck() {
-  const reading = $("live-reading");
-  if (reading.hidden || !app.trainer) return;
-  const sinceDataMs = app.lastTrainerDataAt === null ? null : (now() - app.lastTrainerDataAt) * 1000;
-  const check = liveCheck({ sinceDataMs, power: app.lastReading?.power, cadence: app.lastReading?.cadence });
-  reading.textContent = check.text;
-  reading.dataset.state = check.state;
+  renderDeviceLines();
 }
 
 /** No trainer: the smart trainer card waits for one. */
 function dropTrainer() {
   app.trainer?.disconnect();
   app.trainer = null;
-  $("trainer-status").textContent = t("setup.idle.trainer");
-  $("trainer-status").classList.remove("ok");
-  $("live-reading").hidden = true;
-  delete $("trainer-status").dataset.note;
+  renderDeviceLines();
   $("power-only-note").hidden = true;
   $("virtual-shifting-row").hidden = true;
   showShiftingSettings();
@@ -1207,7 +1315,7 @@ function showShiftingSettings() {
  * `getDevices()` get the Reconnect buttons only.
  */
 async function initKnownDevices(kinds = Object.keys(DEVICES)) {
-  renderReconnectButtons();
+  renderDeviceLines();
   const known = knownDevices.list().filter((entry) => kinds.includes(entry.kind));
   if (!isBluetoothAvailable() || !known.length) return;
   const found = await grantedDevices(known);
@@ -1220,7 +1328,7 @@ async function autoConnect(entry, device) {
   const spec = DEVICES[entry.kind];
   const taken = () => (entry.kind === "controller" ? spec.has(entry.id) : spec.has());
   if (taken()) return;
-  const ok = await connectDevice(
+  await connectDevice(
     async () => {
       await whenInRange(device);
       const opened = await spec.open(device);
@@ -1232,11 +1340,9 @@ async function autoConnect(entry, device) {
       return opened;
     },
     (opened) => connected(entry.kind, opened),
-    spec.statusId,
-    { keepLabel: true, deviceName: entry.name, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
+    entry.kind,
+    { deviceName: entry.name, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
   );
-  // Two controllers share one status line: show the ones that made it.
-  if (!ok && entry.kind === "controller" && app.controllers.length) renderControllerStatus();
 }
 
 function trainerLabel(trainer) {
@@ -1252,7 +1358,7 @@ function showTrainerControl(trainer) {
   const blocked = Boolean(trainer.controlBlocked);
   // Virtual shifting stays on offer while blocked: it works as soon as the trainer is free.
   const could = couldControlResistance(trainer);
-  $("trainer-status").textContent = trainerLabel(trainer);
+  renderDeviceLine("trainer");
   $("power-only-note").hidden = controllable || paddles;
   $("power-only-note").textContent = blocked ? t("devices.blockedNote") : t("devices.powerOnlyNoteLong");
   // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
@@ -1269,28 +1375,23 @@ function useTrainer(trainer) {
   app.trainer?.disconnect();
   app.trainer = trainer;
   app.lastTrainerDataAt = null;
-  $("trainer-status").classList.add("ok");
-  delete $("trainer-status").dataset.note;
   showTrainerControl(trainer);
   trainer.on("control", () => showTrainerControl(trainer));
 
   // Live check on the setup screen: the rider sees right away whether data arrives.
   app.lastReading = null;
-  $("live-reading").hidden = false;
-  renderLiveCheck();
+  renderDeviceLines();
   trainer.on("data", (reading) => {
     app.lastTrainerDataAt = now();
     app.lastReading = reading;
-    renderLiveCheck();
+    if (!app.ride) renderDeviceLine("trainer");
   });
   trainer.on("disconnected", () => {
-    $("trainer-status").textContent = t("devices.reconnecting");
-    $("trainer-status").classList.remove("ok");
+    renderDeviceLine("trainer");
     notify(t("devices.trainerDisconnected", { label: trainer.label }), "error");
   });
   trainer.on("reconnected", () => {
     showTrainerControl(trainer);
-    $("trainer-status").classList.add("ok");
     notify(t("devices.isBack", { label: trainer.label }));
   });
 }
@@ -1298,19 +1399,24 @@ function useTrainer(trainer) {
 function useHeartRateMonitor(monitor) {
   app.heartRateMonitor?.disconnect();
   app.heartRateMonitor = monitor;
-  const status = $("hr-status");
-  status.textContent = monitor.label;
-  status.classList.add("ok");
+  // The beats on the line: the rider sees the strap works before riding.
+  app.lastHeartRateAt = null;
+  app.lastHeartRate = null;
+  monitor.on("data", ({ heartRate }) => {
+    if (app.heartRateMonitor !== monitor || !Number.isFinite(heartRate)) return;
+    app.lastHeartRateAt = now();
+    app.lastHeartRate = heartRate;
+    if (!app.ride) renderDeviceLine("hr");
+  });
   monitor.on("disconnected", () => {
-    status.textContent = t("devices.reconnecting");
-    status.classList.remove("ok");
+    renderDeviceLine("hr");
     notify(t("devices.trainerDisconnected", { label: monitor.label }), "error");
   });
   monitor.on("reconnected", () => {
-    status.textContent = monitor.label;
-    status.classList.add("ok");
+    renderDeviceLine("hr");
     notify(t("devices.isBack", { label: monitor.label }));
   });
+  renderDeviceLines();
 }
 
 function useController(controller) {
@@ -1319,15 +1425,10 @@ function useController(controller) {
   controller.connectedAt = now();
   app.controllers.push(controller);
   // A half that relays says so (battery, status) within a second; one that stays quiet sends only its own side.
-  setTimeout(() => {
-    renderControllerCheck();
-    renderReconnectButtons();
-  }, 3000);
+  setTimeout(renderDeviceLines, 3000);
   // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
   // In ERG a combined OpenBikeControl press changes the target instead of shifting (shift() ignores it there).
   app.controllerInput ??= new MergedControllers(new ControllerInput({ erg: () => app.training?.mode === "erg" || Boolean(app.studio?.erg) }));
-  $("controller-live").hidden = false;
-  renderControllerCheck();
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
       const known = controller.seen.size;
@@ -1335,12 +1436,9 @@ function useController(controller) {
       const each = pressed.flatMap(alternatives);
       for (const button of each) controller.seen.add(button);
       app.lastControllerPress = { label: controller.label, buttons: each };
-      renderControllerCheck();
       // The first shift tells the half's side: the line names it.
-      if (controller.seen.size !== known) {
-        renderControllerStatus();
-        renderReconnectButtons();
-      }
+      if (controller.seen.size !== known) renderDeviceLines();
+      else renderDeviceLine("controller");
     }
     const found = navigationRoot();
     const screen = !found ? null : found.id === "setup" || found.id === "finish" ? found.id : "drawer";
@@ -1352,9 +1450,9 @@ function useController(controller) {
     if (actions.length) deviceLog.info(`${controller.label} → ${actions.join(", ")} (${root ? `navigating ${root.id}` : "riding"})`);
     for (const action of actions) runAction(action);
   });
-  controller.on("battery", renderControllerStatus);
+  controller.on("battery", () => renderDeviceLine("controller"));
   controller.on("locked", (locked) => {
-    renderControllerCheck();
+    renderDeviceLine("controller");
     // Once per ride: why − moved to B, and that the half comes back by itself.
     if (locked && app.ride && !app.ride.clickLockNoted) {
       app.ride.clickLockNoted = true;
@@ -1363,30 +1461,14 @@ function useController(controller) {
   });
   controller.on("disconnected", () => {
     app.controllerInput.forget(controller.id);
-    renderControllerStatus();
+    renderDeviceLine("controller");
     notify(t("devices.controllerDisconnected", { label: controller.label }), "error");
   });
   controller.on("reconnected", () => {
-    renderControllerStatus();
+    renderDeviceLine("controller");
     notify(t("devices.isBack", { label: controller.label }));
   });
-  renderControllerStatus();
-}
-
-function renderControllerStatus() {
-  const status = $("controller-status");
-  status.textContent = controllerLine(app.controllers);
-  status.classList.toggle("ok", app.controllers.every((c) => c.connected));
-}
-
-/** Under the controller line: + and − confirmed one by one, or which Click half is missing. */
-function renderControllerCheck() {
-  const check = $("controller-live");
-  const missing = lonelyHalfHint();
-  const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
-  check.textContent = missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null });
-  check.dataset.state = missing ? "silent" : seen.size ? "live" : "";
-  delete check.dataset.note;
+  renderDeviceLines();
 }
 
 /** A lone Click half that has had time to say it relays, and hasn't. */
@@ -1419,6 +1501,13 @@ function runAction(action) {
 }
 
 /** A message for the rider: kept in the feed drawer and shown briefly on the HUD. */
+const BOT_CALL_TEXT = Object.freeze({ attack: "bots.attack", sprint: "bots.sprint", answer: "bots.answer", pull: "bots.pull" });
+
+/** A line in the ticker when a bot near me starts a move (#64). */
+function callBotMoves(riders, me) {
+  for (const call of app.botCalls.update({ riders, me, route: app.route, nowS: now() })) notify(t(BOT_CALL_TEXT[call.move], { name: call.name }));
+}
+
 function notify(text, kind = "event") {
   appendFeed($("feed"), text, kind);
   if (!$("hud-ticker")) return;
@@ -1442,6 +1531,10 @@ function initDiagnostics() {
     );
   });
   $("build-reload").addEventListener("click", () => location.reload());
+  $("update-later").addEventListener("click", () => {
+    app.updateDismissed = true;
+    $("update-banner").hidden = true;
+  });
   let scheduled = false;
   const render = () => {
     scheduled = false;
@@ -1539,6 +1632,8 @@ async function joinRide(restored = null) {
     if (!confirm(t("join.confirmNew"))) return;
     await discardUnfinished();
   }
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
   app.restored = restored;
 
   const route = pickRoute(routesOf(app.info), app.routeId);
@@ -1694,6 +1789,8 @@ function learnLevel() {
 function endRide() {
   const ride = app.ride;
   if (!ride) return;
+  app.finishUpload?.dispose();
+  app.finishUpload = null;
   app.ride = null;
   closeDrawers();
   app.menuDialog?.dispose();
@@ -1748,6 +1845,8 @@ function endRide() {
     junction: null,
     finished: false,
     finishController: null,
+    finishRecoverable: false,
+    finishSave: null,
     finishedServerName: null,
     vehicleId: null,
     vehicleKind: null,
@@ -1766,6 +1865,15 @@ function endRide() {
     splits: [],
     shownSplits: 0,
     splitToastTimer: (clearTimeout(app.splitToastTimer), ($("split-toast").hidden = true), null),
+    botCalls: new BotCalls(),
+    lemonHunt: null,
+    lemonsThisRide: 0,
+    lemonTotal: 0,
+    ghostLap: null,
+    milestones: null,
+    rideClimbedM: 0,
+    milestoneReadAt: 0,
+    milestoneTimer: (clearTimeout(app.milestoneTimer), ($("milestone-banner").hidden = true), null),
     distanceOffset: 0,
     lastMyDistance: null,
     lastOnRoute: null,
@@ -1844,6 +1952,7 @@ function wireConnection(connection) {
     app.state = { ...message, riders: riders.filter(onMyRoute), elsewhere };
     // The workout screen has none of the ride panels.
     if (!app.workout) updatePanels();
+    if (!app.workout && app.route) callBotMoves(riders, me);
   });
   on("studio_state", (message) => {
     app.state = message;
@@ -1987,6 +2096,9 @@ function startRoad({ simulated, setSimPower }) {
   initTraining({ simulated, setSimPower });
   initHud();
   initVehicle();
+  startLemonHunt(app.route);
+  startGhostLap(app.route);
+  startMilestones();
 
   app.actions = {
     // Before a junction the lane keys pick the road instead (#15); on a vehicle only the captain steers.
@@ -2392,14 +2504,157 @@ function studioFrame() {
 
 // --------------------------------------------------------------- finish ---
 
+// -------------------------------------------------------- golden lemons ---
+
+/** The day's lemons on `route` (none off the routes); the all-time count carries over from the last route. */
+function startLemonHunt(route) {
+  const total = app.lemonHunt?.total ?? (Number.parseInt(readSetting(LEMONS_KEY) ?? "", 10) || 0);
+  app.lemonHunt = route && route.id !== OFF_ROUTE_ID ? new LemonHunt({ route, lemons: lemonsFor(route, lemonDay(Date.now())), total }) : null;
+  if (!app.lemonHunt) app.lemonTotal = total;
+  app.view3d?.setLemons(app.lemonHunt?.lemons);
+}
+
+function collectLemons(me) {
+  if (!app.lemonHunt) return;
+  const picked = app.lemonHunt.update({ routeId: me.route === OFF_ROUTE_ID ? null : (me.route ?? app.route.id), distance: me.distance, lane: me.lane });
+  if (!picked.length) return;
+  app.lemonsThisRide += picked.length;
+  writeSetting(LEMONS_KEY, String(app.lemonHunt.total));
+  // An easter egg: a line in the ticker, no counter on the HUD.
+  notify(`${tn("lemons.picked", app.lemonsThisRide)} · ${tn("lemons.total", app.lemonHunt.total)}`);
+}
+
+// ------------------------------------------------------------ ghost lap ---
+
+/** Never a server rider's id: the server counts from 1. */
+const GHOST_ID = -1;
+
+/** Laps on `route` and my best lap there, loaded in the background (none off the routes or on routes that aren't loops). */
+function startGhostLap(route) {
+  hideGhostGap();
+  if (!route || route.id === OFF_ROUTE_ID || !route.loop) {
+    app.ghostLap = null;
+    return;
+  }
+  const lap = { run: new LapRun(route), best: null };
+  app.ghostLap = lap;
+  const ride = app.ride;
+  app.ghosts.best(route.id).then((best) => {
+    if (!best || app.ghostLap !== lap || app.ride !== ride) return;
+    lap.best = best;
+    notify(t("ghost.ready", { time: formatDuration(best.durationS) }));
+  });
+}
+
+/**
+ * Feeds my position to the lap run, keeps finished laps, shows the gap; the
+ * ghost rider to draw, or null. Hidden in races and events: there the others count.
+ */
+function updateGhostLap(me, time) {
+  const lap = app.ghostLap;
+  if (!lap) return null;
+  const clockS = (app.pausedFrom ?? time) - app.rideStartedAt;
+  const routeId = me.route === OFF_ROUTE_ID ? null : (me.route ?? app.route.id);
+  for (const event of lap.run.update({ routeId, routeM: me.distance, lane: me.lane, clockS })) {
+    if (event.type === "lap") keepLap(event, lap);
+  }
+  const racing = inRace(app.state?.race, me, app.riderId) || Boolean(app.state?.event?.entered);
+  if (!lap.best || !lap.run.riding || racing) {
+    hideGhostGap();
+    return null;
+  }
+  const elapsedS = clockS - lap.run.startedAtS;
+  const reachedS = timeAt(lap.best.trace, me.distance);
+  showGhostGap(reachedS === null ? null : elapsedS - reachedS);
+  const at = ghostAt(lap.best.trace, elapsedS);
+  if (!at) return null;
+  return { id: GHOST_ID, name: t("ghost.name"), distance: at.routeM, lane: at.lane, speed: at.speed, power: 0, route: app.route.id, ghost: true };
+}
+
+/** A finished lap: kept if it's the best on its route, and then the ghost of the next one. */
+function keepLap(event, lap) {
+  app.ghosts.offer(event).then(({ best, previousS }) => {
+    if (!best) return;
+    if (app.ghostLap === lap) lap.best = { routeId: event.routeId, durationS: event.durationS, trace: event.trace };
+    const time = formatDuration(event.durationS);
+    notify(previousS === null ? t("ghost.firstLap", { time }) : t("ghost.newBest", { time, gain: formatLapGap(event.durationS - previousS) }));
+  });
+}
+
+function showGhostGap(gapS) {
+  const pill = $("ghost-gap");
+  if (gapS === null) return hideGhostGap();
+  const text = t("ghost.gap", { gap: formatLapGap(gapS) });
+  if (pill.textContent !== text) pill.textContent = text;
+  pill.classList.toggle("ahead", gapS <= -0.05);
+  pill.classList.toggle("behind", gapS >= 0.05);
+  pill.hidden = false;
+}
+
+function hideGhostGap() {
+  const pill = $("ghost-gap");
+  if (pill) pill.hidden = true;
+}
+
+// ----------------------------------------------------------- milestones ---
+
+/** Watches the ride for personal milestones; the totals of earlier rides arrive from the history in the background. */
+function startMilestones() {
+  let summits;
+  try {
+    summits = JSON.parse(readSetting(SUMMITS_KEY) ?? "[]");
+  } catch {
+    summits = [];
+  }
+  const watch = new MilestoneWatch({ totals: null, unitM: unitMetres(), summits: new Set(Array.isArray(summits) ? summits : []) });
+  app.milestones = watch;
+  const ride = app.ride;
+  app.history.list().then((records) => {
+    if (app.milestones === watch && app.ride === ride) watch.totals = lifetimeTotals(records);
+  });
+}
+
+function checkMilestones(me, time) {
+  if (!app.milestones || !app.recorder) return;
+  // The ride's climbing comes from the recorder; reading it every frame would be wasteful.
+  if (time - app.milestoneReadAt >= 2) {
+    app.milestoneReadAt = time;
+    app.rideClimbedM = app.recorder.summary().elevationGainM;
+  }
+  const onRoute = me.route !== OFF_ROUTE_ID;
+  const reached = app.milestones.update({ rideDistanceM: app.rideDistance, rideClimbedM: app.rideClimbedM, route: onRoute ? app.route : null, routeM: onRoute ? me.distance : null });
+  if (!reached.length) return;
+  if (reached.some((m) => m.kind === "summit")) writeSetting(SUMMITS_KEY, JSON.stringify([...app.milestones.summits]));
+  showMilestone(reached.map(milestoneText).join(" · "));
+}
+
+function milestoneText(milestone) {
+  if (milestone.kind === "distance") return t("milestone.distance", { distance: `${formatNumber(milestone.value, 0)} ${distanceUnit()}` });
+  if (milestone.kind === "everest") return tn("milestone.everest", milestone.value);
+  return t("milestone.summit", { route: milestone.route });
+}
+
+/** The banner across the top for a few seconds. */
+function showMilestone(text) {
+  const banner = $("milestone-banner");
+  banner.textContent = text;
+  banner.hidden = false;
+  banner.classList.remove("show");
+  void banner.offsetWidth;
+  banner.classList.add("show");
+  clearTimeout(app.milestoneTimer);
+  app.milestoneTimer = setTimeout(() => (banner.hidden = true), 5000);
+}
+
 /** Back to the menu; asks first when the ride or its photos would be lost. @returns {boolean} false if the rider stayed */
 function leaveRide() {
-  // The ride and its photos only live in this page until it is left.
-  const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size });
+  // Finished rides with a verified recovery copy can safely return to the menu.
+  const recoverable = app.finished && app.finishRecoverable && !app.rideSaved;
+  const question = backToMenuWarning({ exportable: canExportRide(app.trainer), saved: app.rideSaved, empty: app.recorder.empty, albumSize: app.album.size, recoverable });
   if (question && !confirm(question)) return false;
-  // Left on purpose: nothing to continue later.
-  // refreshUnfinished (run by endRide) waits for this clear before it reads the autosave.
-  app.autosaveClearing = app.autosave.clear();
+  // Keep an unsaved finished ride for download or status checking from the menu.
+  // Wait for the final snapshot before clearing, so it cannot resurrect a discarded ride.
+  if (!recoverable) app.autosaveClearing = Promise.resolve(app.finishSave).then(() => app.autosave.clear());
   endRide();
   return true;
 }
@@ -2443,21 +2698,20 @@ function initFinish() {
   $("download-tcx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
     const tcx = app.recorder.toTcx({ name: rideName(), splits: app.finishSplits });
-    downloadBlob(new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id));
+    saveFiles([{ blob: new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id) }]);
     rideKept();
   });
   $("download-fit").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
-    downloadBlob(new Blob([app.recorder.toFit({ indoor: Boolean(app.studio), splits: app.finishSplits })], { type: "application/vnd.ant.fit" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "fit"));
+    saveFiles([{ blob: new Blob([app.recorder.toFit({ indoor: Boolean(app.studio), splits: app.finishSplits })], { type: "application/vnd.ant.fit" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "fit") }]);
     rideKept();
   });
   $("download-gpx").addEventListener("click", () => {
     if (!canExportRide(app.trainer)) return;
     const gpx = app.recorder.toGpx({ name: rideName() });
-    downloadBlob(new Blob([gpx], { type: "application/gpx+xml" }), rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "gpx"));
+    saveFiles([{ blob: new Blob([gpx], { type: "application/gpx+xml" }), name: rideFileName(app.recorder.samples[0].t, app.rideRoute.id, "gpx") }]);
     rideKept();
   });
-  $("upload-strava").addEventListener("click", () => uploadToStrava());
 }
 
 const rideName = () => (app.eventRide ? eventRideName(app.eventRide.kind, app.eventRide.routeName) : `OpenRadlr · ${app.rideRoute.name}`);
@@ -2473,6 +2727,7 @@ function finishStats() {
     [t("finish.work"), `${summary.kilojoules} kJ`],
   ];
   if (summary.avgHeartRate) stats.push([t("finish.avgHeartRate"), `${summary.avgHeartRate} bpm`]);
+  if (app.lemonsThisRide > 0) stats.push([t("finish.lemons"), formatNumber(app.lemonsThisRide)]);
   if (app.seatEnergy && app.vehicleKind) {
     stats.push([t("finish.vehicle"), app.seatEnergy.summaryLine(app.vehicleKind)]);
     for (const seat of app.seatEnergy.perSeat()) stats.push([`${seat.name}${seat.isBot ? ` ${t("panels.botSuffix")}` : ""}`, `${Math.round(seat.kj)} kJ`]);
@@ -2499,7 +2754,7 @@ function finishRide() {
     recorder: app.recorder,
     closePause: () => app.recorder.resume(Date.now()),
     saveHistory: () => saveFinishedRide(),
-    markAutosaveFinished: () => app.autosave.save({ ...rideSnapshot(), finished: true }).catch((error) => console.error("autosave:", error)),
+    markAutosaveFinished: () => saveFinishedSnapshot(),
     detachConnection: () => {
       app.finishedServerName = connection?.serverInfo.server_name ?? "";
       // Cleared before leave(): its close is then no lost connection, so nothing reconnects.
@@ -2568,22 +2823,18 @@ function openFinish() {
   $("download-gpx").hidden = Boolean(app.studio);
   // Phone paddle rides: photos and the summary card only, no ride files.
   const exportable = canExportRide(app.trainer);
+  $("finish-files").hidden = !exportable;
   if (!exportable) for (const id of ["download-tcx", "download-gpx", "download-fit"]) $(id).hidden = true;
   // Strava gets rides measured by a real trainer only, not taps or keys.
   const measured = hasRealPowerSource(app.trainer);
   $("ftp-prompt").hidden = true;
-  const canUpload = measured && Boolean(app.stravaAccount?.can_upload);
-  $("upload-strava").hidden = !canUpload;
-  $("upload-strava").disabled = empty;
-  $("upload-status").textContent = empty
+  $("finish-note").textContent = empty
     ? t("finish.note.tooShort")
     : !exportable
       ? t("finish.note.paddle")
-      : !measured
-        ? t("finish.note.simulated")
-      : app.stravaAccount && !canUpload
-      ? t("finish.note.permission")
-      : "";
+      : !measured ? t("finish.note.simulated") : "";
+  $("finish-retained").hidden = !app.finishRecoverable || app.rideSaved;
+  setupFinishUpload();
   $("finish").hidden = false;
   // Nothing behind the summary can be reached or opened any more; the next ride gets a fresh ride screen.
   for (const element of $("ride").children) element.inert = element.id !== "finish";
@@ -2592,51 +2843,85 @@ function openFinish() {
   if (!empty) drawPowerChart($("finish-chart"), { samples: app.recorder.samples, ftp: app.profile.ftp, colors: themeColors(), windowS: null });
 }
 
-function uploadToStrava() {
-  if (!hasRealPowerSource(app.trainer)) return;
-  return uploadRide(app.recorder, rideName(), { indoor: Boolean(app.studio), splits: app.finishSplits, button: $("upload-strava"), status: $("upload-status"), onSaved: rideKept });
+/** Final snapshot completion belongs to this recorder, even if the rider leaves. */
+function saveFinishedSnapshot() {
+  const recorder = app.recorder;
+  app.finishSave = app.autosave.save({ ...rideSnapshot(), finished: true }).then((saved) => {
+    if (app.recorder !== recorder) return;
+    app.finishRecoverable = saved;
+    $("finish-retained").hidden = !saved || app.rideSaved;
+  });
+  return app.finishSave;
 }
 
-/**
- * Uploads `recorder`'s ride to Strava as FIT, reporting in `status`. Also
- * used for an autosaved ride from the start menu (#73).
- */
-async function uploadRide(recorder, name, { indoor, splits = [], button, status, onSaved }) {
-  button.disabled = true;
-  status.textContent = t("strava.uploading");
-  try {
-    // FIT: the only format that tells Strava it was a virtual ride (and keeps its climbing).
-    const upload = await app.strava.upload(recorder.toFit({ indoor, splits }), name);
-    status.textContent = t("strava.processing");
-    const done = await app.strava.waitForActivity(upload);
-    if (done.error) {
-      status.textContent = t("strava.error", { message: done.error });
-      button.disabled = false;
-    } else if (done.activity_id) {
-      onSaved();
-      status.replaceChildren(
-        t("strava.done"),
-        Object.assign(document.createElement("a"), { href: activityUrl(done.activity_id), target: "_blank", rel: "noopener", textContent: t("strava.view") }),
-        // Strava only lets partner apps attach photos, so riders add them by hand.
-        t("strava.noPhotos"),
-      );
-    } else {
-      onSaved();
-      status.textContent = t("strava.uploaded");
-    }
-  } catch (error) {
-    status.textContent = t("strava.uploadFailed", { message: error.message });
-    button.disabled = false;
-  }
+/** The same panel renders a finished ride and a ride restored from browser recovery. */
+function mountUpload(prefix, recorder, name, { indoor, splits = [], onSuccess, onConnect }) {
+  const action = prefix === "finish-strava" ? "upload-strava" : "unfinished-strava";
+  const status = prefix === "finish-strava" ? "upload-status" : "unfinished-upload-status";
+  const elements = Object.fromEntries(["account", "detail", "connect", "activity", "storage"].map((part) => [part, $(`${prefix}-${part}`)]));
+  return bindStravaUpload({
+    elements: { ...elements, panel: $(prefix), action: $(action), status: $(status) },
+    client: app.strava,
+    receipts: app.uploadReceipts,
+    key: uploadKey(app.stravaAccount?.athlete_id, recorder.samples[0].t),
+    account: app.stravaAccount,
+    makeFile: () => recorder.toFit({ indoor, splits }),
+    name,
+    onSuccess,
+    onConnect: nativeApp?.signIn ? () => connectStravaInApp() : onConnect,
+    confirm: (message) => confirm(message),
+  });
+}
+
+function setupFinishUpload() {
+  app.finishUpload?.dispose();
+  app.finishUpload = null;
+  const recorder = app.recorder;
+  const visible = !recorder.empty && hasRealPowerSource(app.trainer) && Boolean(app.info?.strava?.enabled);
+  $("finish-strava").hidden = !visible;
+  if (!visible) return;
+  app.finishUpload = mountUpload("finish-strava", recorder, rideName(), {
+    indoor: Boolean(app.studio), splits: app.finishSplits,
+    onConnect: async () => {
+      await app.finishSave;
+      if (!app.finishRecoverable && !confirm(t("strava.connectUnsaved"))) return;
+      location.assign("/auth/strava");
+    },
+    onSuccess: () => {
+      if (app.recorder !== recorder) return;
+      // Keep the snapshot/photos until leaving, so reconnecting or saving photos is safe.
+      app.rideSaved = true;
+      $("finish-retained").hidden = true;
+    },
+  });
+}
+
+function setupRecoveryUpload() {
+  const snapshot = app.unfinished;
+  const visible = snapshot?.trainerKind === "trainer" && Boolean(app.info?.strava?.enabled) && snapshot.recorder.samples.length > 0;
+  $("unfinished-strava-panel").hidden = !visible;
+  // Menu info refreshes every few seconds. Keep this ride's active request and listeners.
+  if (visible && app.recoveryUpload?.source === snapshot && app.recoveryUpload?.account === app.stravaAccount) return;
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
+  $("discard-unfinished").textContent = t("unfinished.discard");
+  if (!visible) return;
+  app.recoveryUpload = Object.assign(mountUpload("unfinished-strava-panel", RideRecorder.from(snapshot.recorder), `OpenRadlr · ${snapshot.routeName}`, {
+    indoor: snapshot.studio,
+    onSuccess: () => {
+      if (app.unfinished === snapshot) $("discard-unfinished").textContent = t("unfinished.done");
+    },
+  }), { source: snapshot, account: app.stravaAccount });
 }
 
 // ------------------------------------------------------------- recovery ---
 // A ride survives a dropped connection and a crashed tab (#73).
 
-/** The ride file is downloaded or uploaded: nothing left to recover. */
+/** A ride file was downloaded; retain the snapshot through any later OAuth redirect. */
 function rideKept() {
   app.rideSaved = true;
-  app.autosave.clear();
+  // Keep photos and the recorder available for an OAuth redirect until explicit leave.
+  $("finish-retained").hidden = true;
 }
 
 /** The socket closed mid-ride: keep riding and try to get back on. */
@@ -2828,12 +3113,15 @@ async function refreshUnfinished() {
 function renderUnfinished() {
   const saved = app.unfinished;
   $("unfinished").hidden = !saved || Boolean(app.ride);
-  if (!saved) return;
+  if (!saved) { app.recoveryUpload?.dispose(); app.recoveryUpload = null; return; }
+  if (!$("unfinished-save").hidden) setupRecoveryUpload();
   $("unfinished-label").textContent = unfinishedLabel(saved, { now: Date.now(), formatDistance: (m) => formatDistanceWithUnit(m, 1) });
   $("continue-ride").hidden = !continueAllowed(saved, { now: Date.now(), serverUrl: defaultServerUrl() });
 }
 
 async function discardUnfinished() {
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
   await app.autosave.clear();
   app.unfinished = null;
   renderUnfinished();
@@ -2865,37 +3153,32 @@ function initRecovery() {
     if (!snapshot) return;
     const photos = await app.autosave.photos();
     $("unfinished-save").hidden = false;
+    $("save-unfinished").hidden = true;
     $("unfinished-photos").hidden = photos.length === 0;
-    $("unfinished-strava").hidden = !(snapshot.trainerKind === "trainer" && app.stravaAccount?.can_upload);
+    setupRecoveryUpload();
   });
   const recorderOf = (snapshot) => RideRecorder.from(snapshot.recorder);
   const kept = () => {
     $("unfinished-status").textContent = t("unfinished.saved");
-    discardUnfinished();
+    // Keep the activity link and photos available until explicit dismissal.
   };
   $("unfinished-fit").addEventListener("click", () => {
     const snapshot = app.unfinished;
     if (!snapshot) return;
     const recorder = recorderOf(snapshot);
-    downloadBlob(new Blob([recorder.toFit({ indoor: snapshot.studio })], { type: "application/vnd.ant.fit" }), rideFileName(recorder.samples[0].t, snapshot.routeId, "fit"));
+    saveFiles([{ blob: new Blob([recorder.toFit({ indoor: snapshot.studio })], { type: "application/vnd.ant.fit" }), name: rideFileName(recorder.samples[0].t, snapshot.routeId, "fit") }]);
     kept();
   });
   $("unfinished-photos").addEventListener("click", async () => {
     const photos = await app.autosave.photos();
-    photos.forEach((photo, i) => setTimeout(() => downloadBlob(photo.blob, photo.name), i * 250));
+    saveFiles(photos);
   });
-  $("unfinished-strava").addEventListener("click", () => {
+  $("discard-unfinished").addEventListener("click", async () => {
     const snapshot = app.unfinished;
-    if (!snapshot) return;
-    uploadRide(recorderOf(snapshot), `OpenRadlr · ${snapshot.routeName}`, {
-      indoor: snapshot.studio,
-      button: $("unfinished-strava"),
-      status: $("unfinished-status"),
-      onSaved: kept,
-    });
-  });
-  $("discard-unfinished").addEventListener("click", () => {
-    if (confirm(t("unfinished.confirmDiscard"))) discardUnfinished();
+    const uploaded = app.recoveryUpload?.state?.phase === "success";
+    const photos = uploaded ? await app.autosave.photos() : [];
+    if (app.unfinished !== snapshot) return;
+    if ((uploaded && !photos.length) || confirm(t("unfinished.confirmDiscard"))) discardUnfinished();
   });
   refreshUnfinished();
 }
@@ -2909,8 +3192,12 @@ function initPhotos() {
     // Let the menu close before the next frame is captured.
     requestAnimationFrame(() => takePhoto());
   });
+  $("download-summary").addEventListener("click", () => {
+    const image = app.album.summary;
+    if (image) saveFiles([image]);
+  });
   $("download-photos").addEventListener("click", () => {
-    app.album.images.forEach((image, i) => setTimeout(() => downloadBlob(image.blob, image.name), i * 250));
+    saveFiles(app.album.images);
   });
   $("share-photos").addEventListener("click", () => sharePhotos());
 }
@@ -2955,18 +3242,19 @@ function takePhoto() {
 function renderPhotos() {
   const photos = app.album.photos;
   const images = app.album.images;
+  const actions = photoActions(app.album, canShareFiles());
+  $("download-summary").disabled = !actions.summaryEnabled;
   $("photos-count").textContent = photos.length ? `(${photos.length})` : "";
-  $("photos-hint").hidden = photos.length > 0;
-  $("download-photos").hidden = images.length === 0;
-  $("download-photos").textContent = images.length === 1 ? t("photos.downloadOne") : t("photos.downloadAll");
-  $("share-photos").hidden = !canShareFiles() || images.length === 0;
+  $("download-photos").hidden = !actions.allVisible;
+  $("download-photos").textContent = t("photos.downloadAll");
+  $("share-photos").hidden = !actions.shareVisible;
   $("photo-list").replaceChildren(
     ...images.map((photo) => {
       const item = document.createElement("li");
       const open = Object.assign(document.createElement("button"), { type: "button", className: "photo-thumb", title: t("photos.downloadTitle", { name: photo.name }) });
       const alt = photo.summary ? t("photos.summaryCard") : t("photos.takenAt", { time: new Date(photo.takenAt).toLocaleTimeString(getLocale()) });
       open.append(Object.assign(document.createElement("img"), { src: photo.url, alt }));
-      open.addEventListener("click", () => downloadBlob(photo.blob, photo.name));
+      open.addEventListener("click", () => saveFiles([photo]));
       if (photo.summary) {
         item.classList.add("summary-thumb");
         item.append(open, Object.assign(document.createElement("span"), { className: "summary-label", textContent: t("photos.summary") }));
@@ -3010,6 +3298,16 @@ async function summaryImage() {
   });
   const blob = await canvasToPng(canvas);
   return { blob, name: photoFileName(samples[0]?.t ?? Date.now(), app.rideRoute.id, "summary") };
+}
+
+/** Ride files and photos: downloads in a browser, the share sheet in the app. */
+async function saveFiles(files) {
+  if (!nativeApp?.saveFiles) return files.forEach(({ blob, name }, i) => setTimeout(() => downloadBlob(blob, name), i * 250));
+  try {
+    await nativeApp.saveFiles(files);
+  } catch (error) {
+    if (error.name !== "AbortError") notify(t("photos.saveFailed", { message: error.message }), "error");
+  }
 }
 
 /** Phones: hand the summary and all photos to another app, e.g. Strava. */
@@ -3272,6 +3570,35 @@ function toggleMenu() {
 function closeTopPanel() {
   if (app.finished) return;
   panels.closeTop();
+}
+
+/** Android's back button: one step back (input/back.js). @returns {boolean} false on the start menu, where the app goes to the background */
+function goBack() {
+  const riding = document.body.classList.contains("riding");
+  const workout = !document.body.classList.contains("working-out") ? null : $("workout-summary").hidden ? "running" : "summary";
+  switch (backAction({ finished: app.finished, panelOpen: panels.isOpen, riding, workout, figureOpen: app.workoutFigure !== null })) {
+    case "leaveRide":
+      leaveRide();
+      return true;
+    case "stepBack":
+      panels.back();
+      return true;
+    case "askEndWorkout":
+      runWorkoutActions(endAfterAsking(app.workout, () => confirm(t("workout.confirmEnd"))));
+      return true;
+    case "leaveWorkout":
+      endRide();
+      return true;
+    case "askFinish":
+      app.menuDialog?.open();
+      showFinishConfirm();
+      return true;
+    case "closeFigure":
+      pickWorkoutFigure(app.workoutPick, null);
+      return true;
+    default:
+      return false;
+  }
 }
 
 /** Closes the left drawer and the menu. */
@@ -3730,6 +4057,7 @@ function show3d(scene, view = null) {
   }
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
+  app.view3d.setLemons(app.lemonHunt?.lemons);
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
@@ -3749,9 +4077,14 @@ function show3d(scene, view = null) {
   app.view3d.setStatues(rows);
   app.workoutGym = app.workout ? rideGym : null;
   app.workoutRowFigures = app.workout ? (rows.find((row) => row.gym === rideGym)?.figures ?? []) : [];
-  // The workout watches my avatar on the gym mat (#77).
+  // The workout watches my avatar on the gym mat (#77), from the front and, in the side-view box, from the side.
   const gym = app.workout ? rideGym : null;
-  if (gym) app.view3d.workoutMode(gym, { reducedMotion: Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) });
+  // Shown only where the 3D gym draws into it.
+  $("workout-side-view").hidden = !gym;
+  if (gym) {
+    const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    app.view3d.workoutMode(gym, { reducedMotion, sideView: document.getElementById("workout-side-view") });
+  }
 }
 
 /** C: the next camera of this ride's View controls (the workout's gym camera does not cycle). */
@@ -3895,6 +4228,8 @@ function switchRoute(route, named = null) {
   app.route = route;
   app.smoother.route = route;
   app.view3d?.setRoute(route);
+  startLemonHunt(route);
+  startGhostLap(route);
   // Distances on the new road don't continue the old one's.
   app.lastMyDistance = null;
   $("hud-route").textContent = route.id !== OFF_ROUTE_ID ? route.name : named ? named.name : t("ride.offRoute");
@@ -4078,11 +4413,14 @@ function frame() {
     app.lastMyDistance = me.distance;
   }
 
+  if (me && !app.finished) collectLemons(me);
+  const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
+
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawPeloton($("peloton"), { route: app.route, riders, me, draft, colors });
+    drawPeloton($("peloton"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, colors, lemons: app.lemonHunt?.lemons });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {
@@ -4156,6 +4494,7 @@ function frame() {
     elevation: me ? app.route.elevationAt(me.distance) : null,
   });
   if (kept) updateSplits();
+  if (me && !app.finished) checkMilestones(me, time);
 
   const draftText = draft ? t("hud.drafting", { percent: draft.savingPercent }) : "";
   $("draft-status").hidden = !draft;
