@@ -26,6 +26,7 @@ use crate::race::{Race, RaceError, RaceEvent, RacePhase};
 use crate::rng::{RandomSource, SplitMix64};
 use crate::route::{MarkerKind, Route};
 use crate::sharing::SharingTuning;
+use crate::spacing::SpacingParams;
 use crate::vehicle::{Vehicle, VehicleId, VehicleKind, VehicleParams};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -56,6 +57,8 @@ pub struct SimConfig {
     pub spawn_clear_m: f64,
     pub physics: PhysicsParams,
     pub draft: DraftParams,
+    /// How close riders get in a lane, passing, and start line-up rows.
+    pub spacing: SpacingParams,
     pub bot_tuning: BotTuning,
     /// Seconds needed to move over by one lane.
     pub lane_change_s: f64,
@@ -90,6 +93,7 @@ impl Default for SimConfig {
             spawn_clear_m: 350.0,
             physics: PhysicsParams::default(),
             draft: DraftParams::default(),
+            spacing: SpacingParams::default(),
             bot_tuning: BotTuning::default(),
             lane_change_s: 1.0,
             telemetry_timeout_s: 3.0,
@@ -152,6 +156,13 @@ pub struct Rider {
     pub parked: bool,
     /// Doing a workout (#77): permanently parked at the start, never entered in a race.
     pub workout: bool,
+    /// Seconds held behind a slower rider with no free lane to pass in (see [`SpacingParams::squeeze_after_s`]).
+    pub boxed_s: f64,
+    /// How much faster than the rider ahead this rider could ride out of its
+    /// draft, averaged (m/s², see [`SpacingParams::pass_smooth_s`]).
+    pub pass_urge: f64,
+    /// Acceleration in the last tick (m/s²): what a rider behind compares itself with.
+    pub accel: f64,
 }
 
 /// A rider off their route: the road they ride and how far into it.
@@ -283,6 +294,10 @@ struct Slot {
     on_route: bool,
     position: f64,
     lane: f64,
+    /// The lane it is moving to (its lane once settled).
+    target_lane: f64,
+    speed: f64,
+    accel: f64,
     /// Lanes either side of `lane` that this slot blocks when others test
     /// whether they ride in its lane (`draft.lane_tolerance` for a rider).
     half_width: f64,
@@ -293,7 +308,6 @@ struct Slot {
     draft: DraftParams,
     /// The road under the rider, how far along it, and the road after it.
     road: Option<(Step, f64, RoadKey)>,
-    speed: f64,
     human: bool,
 }
 
@@ -604,6 +618,9 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
+                pass_urge: 0.0,
+                accel: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -922,34 +939,87 @@ impl World {
             }
 
             // 2. Physics with drafting.
-            let cda_factor = if rider.parked {
-                1.0
+            let ahead = if rider.parked {
+                None
             } else {
-                field
-                    .draft_ahead(me, me.lane)
-                    .map_or(1.0, |(gap, ahead)| ahead.draft.cda_factor(gap))
+                field.draft_ahead(me, me.lane)
             };
+            let cda_factor = ahead.map_or(1.0, |(gap, ahead)| ahead.draft.cda_factor(gap));
             let power_watts = if rider.parked {
                 0.0
             } else {
                 (rider.power + rider.power_adjust).max(0.0)
             };
-            rider.speed = physics::step_speed(
-                &self.config.physics,
-                &StepInput {
-                    rider_mass_kg: rider.mass_kg,
-                    body: Body::bike(&self.config.physics, rider.mass_kg),
-                    speed: rider.speed,
-                    power_watts,
-                    grade_percent: grade,
-                    cda_factor,
-                },
-                dt,
-            );
+            let input = StepInput {
+                rider_mass_kg: rider.mass_kg,
+                body: Body::bike(&self.config.physics, rider.mass_kg),
+                speed: rider.speed,
+                power_watts,
+                grade_percent: grade,
+                cda_factor,
+            };
+            let speed_before = rider.speed;
+            rider.speed = physics::step_speed(&self.config.physics, &input, dt);
+            // Keep off the wheel ahead; pull out to pass when strong enough to
+            // ride faster than it even out of its draft, for a moment at least.
+            // Boxed in with every lane taken, it slips through after a while.
+            if let Some((gap, ahead)) = ahead {
+                let spacing = &self.config.spacing;
+                let settled = (rider.lane - f64::from(rider.target_lane)).abs() < 1e-9;
+                let at_their_speed = StepInput {
+                    speed: ahead.speed,
+                    cda_factor: 1.0,
+                    ..input
+                };
+                // Compared with what the leader really does: riders speeding up
+                // together at equal power stay in the draft.
+                // A spike counts for no more than about 40 W, so only a surplus
+                // that lasts adds up to a pass.
+                let cap = 5.0 * spacing.pass_accel;
+                let surplus =
+                    (physics::acceleration(&self.config.physics, &at_their_speed) - ahead.accel).clamp(-cap, cap);
+                rider.pass_urge = if gap < spacing.pass_look {
+                    rider.pass_urge + (surplus - rider.pass_urge) * (dt / spacing.pass_smooth_s.max(dt))
+                } else {
+                    0.0
+                };
+                let wants_past = rider.pass_urge > spacing.pass_accel;
+                let mut boxed = false;
+                // Moving over while the rider ahead moves into the same lane:
+                // back into the lane just left, instead of weaving out and back.
+                if !settled {
+                    if let Some(back) = field.turn_back_lane(me, rider.target_lane, spacing) {
+                        rider.target_lane = back;
+                    }
+                }
+                if wants_past && settled {
+                    match field.passing_lane(me, spacing) {
+                        Some(lane) => {
+                            rider.target_lane = lane;
+                            if let Controller::Bot(brain) = &mut rider.controller {
+                                brain.hold_lane();
+                            }
+                        }
+                        None => boxed = true,
+                    }
+                }
+                rider.boxed_s = match (boxed, wants_past) {
+                    (true, _) => rider.boxed_s + dt,
+                    (false, true) => rider.boxed_s,
+                    (false, false) => 0.0,
+                };
+                if rider.boxed_s < spacing.squeeze_after_s {
+                    rider.speed = spacing.hold(rider.speed, speed_before, spacing.speed_limit(gap, ahead.speed), dt);
+                }
+            } else {
+                rider.boxed_s = 0.0;
+                rider.pass_urge = 0.0;
+            }
             if rider.parked {
                 // The brake holds a parked rider at a stop, even on a descent.
                 rider.speed = (rider.speed - self.config.park_brake_mps2 * dt).max(0.0);
             }
+            rider.accel = (rider.speed - speed_before) / dt;
             let advance = rider.speed * dt;
             roads.advance(rider, advance);
             rider.odometer += advance;
@@ -998,11 +1068,13 @@ impl World {
             on_route: rider.off_route.is_none(),
             position: rider.position,
             lane: rider.lane,
+            target_lane: f64::from(rider.target_lane),
+            speed: rider.speed,
+            accel: rider.accel,
             half_width,
             wide,
             draft,
             road,
-            speed: rider.speed,
             human: !rider.is_bot(),
         }
     }
@@ -1015,35 +1087,41 @@ impl World {
         }
     }
 
-    /// Puts the route's entrants on its start line; nobody else is moved.
+    /// Puts the route's entrants on its start line; nobody else is moved. The
+    /// race counts from the line, also for riders in the rows behind it.
     fn line_up_for_race(&mut self, route: RouteIndex) {
         let ids: Vec<RiderId> = self.races[route].entrants.iter().copied().collect();
-        self.line_up(route, &ids);
+        let behind = self.line_up(route, &ids);
         for rider in self.riders.values_mut().filter(|r| ids.contains(&r.id)) {
-            rider.race_start_odometer = Some(rider.odometer);
+            rider.race_start_odometer = Some(rider.odometer + behind.get(&rider.id).copied().unwrap_or(0.0));
             rider.race_finished = false;
         }
     }
 
-    /// Puts the given riders of route `route` on its start line (position 0,
-    /// standing), spread over the lanes. Others are not moved.
-    pub fn line_up(&mut self, route: RouteIndex, ids: &[RiderId]) {
-        let Some(lanes) = self.routes.get(route).map(|r| u32::from(r.lanes())) else {
-            return;
+    /// Puts the given riders of route `route` on its start line, standing, in
+    /// rows across the lanes (see [`SpacingParams::grid_slot`]). Others are not
+    /// moved. Returns how far behind the line each rider stands.
+    pub fn line_up(&mut self, route: RouteIndex, ids: &[RiderId]) -> BTreeMap<RiderId, f64> {
+        let Some(route_ref) = self.routes.get(route) else {
+            return BTreeMap::new();
         };
+        let (lanes, length) = (route_ref.lanes(), route_ref.length());
         let lined_up = ids
             .iter()
             .filter_map(|id| self.riders.get(id).filter(|r| r.route == route).map(|r| r.id))
             .collect::<Vec<_>>();
+        let mut behind = BTreeMap::new();
         for (index, id) in lined_up.into_iter().enumerate() {
-            let lane = (index as u32 % lanes) as u8;
+            let (lane, back) = self.config.spacing.grid_slot(index, lanes);
             if let Some(rider) = self.riders.get_mut(&id) {
-                rider.position = 0.0;
+                rider.position = (-back).rem_euclid(length);
                 rider.speed = 0.0;
                 rider.lane = f64::from(lane);
                 rider.target_lane = lane;
+                behind.insert(id, back);
             }
         }
+        behind
     }
 
     /// Puts a rider at `position` metres on its route's lap (a late joiner at the back).
@@ -1527,6 +1605,9 @@ impl World {
                 turns_locked: false,
                 parked: false,
                 workout: false,
+                boxed_s: 0.0,
+                pass_urge: 0.0,
+                accel: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -1760,6 +1841,18 @@ struct Field<'a> {
     slots: &'a [Slot],
 }
 
+/// Whether `s` rides in `lane` as `me` sees it. Plain riders keep the strict
+/// rule; only a beer bike's width reaches a whole lane over.
+fn in_lane(me: &Slot, s: &Slot, lane: f64) -> bool {
+    let offset = (s.lane - lane).abs();
+    let reach = s.half_width.max(me.half_width);
+    if s.wide || me.wide {
+        offset <= reach + 1e-9
+    } else {
+        offset < reach
+    }
+}
+
 impl Field<'_> {
     /// Gap to the closest rider ahead of `me` in `lane`, if any: on the same
     /// route along it, or on another route where both ride the same road the
@@ -1770,37 +1863,10 @@ impl Field<'_> {
 
     /// The closest rider ahead of `me` in `lane` and the gap to them.
     fn draft_ahead(&self, me: &Slot, lane: f64) -> Option<(f64, &Slot)> {
-        let route = &self.routes[me.route];
         self.slots
             .iter()
-            .filter(|s| {
-                let offset = (s.lane - lane).abs();
-                let reach = s.half_width.max(me.half_width);
-                // Plain riders keep the strict rule; only a beer bike's width
-                // reaches a whole lane over.
-                s.id != me.id
-                    && if s.wide || me.wide {
-                        offset <= reach + 1e-9
-                    } else {
-                        offset < reach
-                    }
-            })
-            .filter_map(|s| {
-                let gap = if s.route == me.route && s.on_route && me.on_route {
-                    let gap = route.forward_gap(me.position, s.position);
-                    (gap < route.length() / 2.0).then_some(gap)?
-                } else {
-                    let ((step, offset, next), (theirs, their_offset, _)) = (me.road?, s.road?);
-                    if theirs.key == step.key {
-                        their_offset - offset
-                    } else if theirs.key == next {
-                        step.length - offset + their_offset
-                    } else {
-                        return None;
-                    }
-                };
-                (gap > 0.0).then_some((gap, s))
-            })
+            .filter(|s| s.id != me.id && in_lane(me, s, lane))
+            .filter_map(|s| self.gap_to(me, s).filter(|&gap| gap > 0.0).map(|gap| (gap, s)))
             .min_by(|a, b| a.0.total_cmp(&b.0))
     }
 
@@ -1814,6 +1880,81 @@ impl Field<'_> {
             .map(|s| route.forward_gap(s.position, me.position))
             .filter(|&gap| gap > 0.0 && gap < route.length() / 2.0)
             .min_by(f64::total_cmp)
+    }
+
+    /// Signed gap from `me` to `s` (negative: `s` is behind): on the same
+    /// route along it, or on another route where both ride the same road the
+    /// same way (on that road, or on the road `me` turns onto next).
+    fn gap_to(&self, me: &Slot, s: &Slot) -> Option<f64> {
+        if s.route == me.route && s.on_route && me.on_route {
+            let route = &self.routes[me.route];
+            let gap = route.forward_gap(me.position, s.position);
+            return Some(if gap < route.length() / 2.0 {
+                gap
+            } else {
+                gap - route.length()
+            });
+        }
+        let ((step, offset, next), (theirs, their_offset, _)) = (me.road?, s.road?);
+        if theirs.key == step.key {
+            Some(their_offset - offset)
+        } else if theirs.key == next {
+            Some(step.length - offset + their_offset)
+        } else {
+            None
+        }
+    }
+
+    /// A neighbouring lane to pull out into, the left one first: nobody in or
+    /// moving through it from `min_gap` behind `me` to `pass_look` ahead.
+    fn passing_lane(&self, me: &Slot, spacing: &SpacingParams) -> Option<u8> {
+        let lanes = f64::from(self.routes[me.route].lanes());
+        let current = me.lane.round();
+        [current - 1.0, current + 1.0]
+            .into_iter()
+            .filter(|&lane| (0.0..lanes).contains(&lane))
+            .find(|&lane| self.free_to_pass_in(me, lane, spacing))
+            .map(|lane| lane as u8)
+    }
+
+    /// Whether `lane` is clear around `me` for passing: nobody in it, or on
+    /// the way into it, from just behind to `pass_look` ahead. A rider ahead
+    /// already leaving it doesn't count.
+    fn free_to_pass_in(&self, me: &Slot, lane: f64, spacing: &SpacingParams) -> bool {
+        !self.slots.iter().any(|s| {
+            if s.id == me.id {
+                return false;
+            }
+            let Some(gap) = self
+                .gap_to(me, s)
+                .filter(|&gap| gap > -spacing.min_gap && gap < spacing.pass_look)
+            else {
+                return false;
+            };
+            let in_it = (s.lane - lane).abs() < s.half_width.max(me.half_width) + 0.5;
+            let leaving = s.target_lane != lane && gap > 0.0;
+            s.target_lane == lane || (in_it && !leaving)
+        })
+    }
+
+    /// While `me` moves over to `target`: the lane it came from, when a rider
+    /// just ahead is moving into `target` too and that lane is clear again.
+    fn turn_back_lane(&self, me: &Slot, target: u8, spacing: &SpacingParams) -> Option<u8> {
+        let target = f64::from(target);
+        let from = if target > me.lane {
+            me.lane.floor()
+        } else {
+            me.lane.ceil()
+        };
+        let cut_in = self.slots.iter().any(|s| {
+            s.id != me.id
+                && s.target_lane == target
+                && (s.lane - target).abs() > 1e-9
+                && self
+                    .gap_to(me, s)
+                    .is_some_and(|gap| gap > 0.0 && gap < spacing.pass_look)
+        });
+        (cut_in && from != target && self.free_to_pass_in(me, from, spacing)).then_some(from as u8)
     }
 
     fn lane_view(&self, me: &Slot) -> LaneView {
@@ -2062,6 +2203,327 @@ mod tests {
             world.rider(leader).unwrap().position,
         );
         assert!(gap < 3.0, "gap should shrink in the draft, was {gap}");
+    }
+
+    /// Puts a rider in `lane` at `position`, already riding at `speed`.
+    fn put(world: &mut World, id: RiderId, position: f64, lane: u8, speed: f64) {
+        let rider = world.riders.get_mut(&id).unwrap();
+        rider.position = position;
+        rider.speed = speed;
+        rider.lane = f64::from(lane);
+        rider.target_lane = lane;
+    }
+
+    /// Signed gap from `from` to `to` along the loop (negative = `to` is behind).
+    fn gap_between(world: &World, from: RiderId, to: RiderId) -> f64 {
+        let route = world.route(0);
+        let gap = route.forward_gap(world.rider(from).unwrap().position, world.rider(to).unwrap().position);
+        if gap > route.length() / 2.0 {
+            gap - route.length()
+        } else {
+            gap
+        }
+    }
+
+    /// Rides like `ride`; returns the smallest distance between the two riders while they share a lane.
+    fn closest_in_lane(world: &mut World, seconds: f64, riders: &[(RiderId, f64)], a: RiderId, b: RiderId) -> f64 {
+        let mut closest = f64::INFINITY;
+        for _ in 0..(seconds / DT).round() as usize {
+            for &(id, power) in riders {
+                world.set_telemetry(id, power, Some(90.0)).unwrap();
+            }
+            world.tick(DT);
+            if (world.rider(a).unwrap().lane - world.rider(b).unwrap().lane).abs() < 0.5 {
+                closest = closest.min(gap_between(world, a, b).abs());
+            }
+        }
+        closest
+    }
+
+    #[test]
+    fn a_rider_closing_in_sits_on_the_wheel_instead_of_riding_through() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 106.0, 1, 10.0);
+        put(&mut world, follower, 100.0, 1, 10.0);
+
+        let riders = [(leader, 200.0), (follower, 200.0)];
+        let closest = closest_in_lane(&mut world, 30.0, &riders, follower, leader);
+
+        let gap = gap_between(&world, follower, leader);
+        let min_gap = SpacingParams::default().min_gap;
+        assert!(
+            closest > min_gap - 0.1,
+            "never closer than a bike length, came to {closest}"
+        );
+        assert!(gap < min_gap + 0.5, "closed in on the wheel, gap {gap}");
+    }
+
+    #[test]
+    fn a_much_stronger_rider_pulls_out_and_passes() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 106.0, 1, 9.0);
+        put(&mut world, follower, 100.0, 1, 9.0);
+
+        let riders = [(leader, 150.0), (follower, 400.0)];
+        let closest = closest_in_lane(&mut world, 30.0, &riders, follower, leader);
+
+        assert!(
+            closest > SpacingParams::default().min_gap - 0.1,
+            "passed beside, not through: {closest}"
+        );
+        assert!(gap_between(&world, leader, follower) > 10.0, "went past");
+    }
+
+    /// `follower` on `leader`'s wheel in lane 1, both settled at 200 W.
+    fn on_the_wheel(world: &mut World) -> (RiderId, RiderId) {
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(world, leader, 102.0, 1, 8.7);
+        put(world, follower, 100.0, 1, 8.7);
+        ride(world, 20.0, &[(leader, 200.0), (follower, 200.0)]);
+        (leader, follower)
+    }
+
+    #[test]
+    fn riders_speeding_up_together_at_equal_power_stay_in_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 102.2, 1, 5.0);
+        put(&mut world, follower, 100.0, 1, 5.0);
+
+        ride(&mut world, 30.0, &[(leader, 200.0), (follower, 200.0)]);
+
+        assert_eq!(
+            world.rider(follower).unwrap().target_lane,
+            1,
+            "not pulled out of the draft"
+        );
+        assert!(gap_between(&world, follower, leader) < 2.5, "still on the wheel");
+    }
+
+    #[test]
+    fn a_rider_a_tenth_stronger_passes_instead_of_waiting_on_the_wheel() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 90.0, &[(leader, 200.0), (follower, 220.0)]);
+
+        assert!(gap_between(&world, leader, follower) > 2.0, "went past");
+    }
+
+    #[test]
+    fn on_the_wheel_a_rider_keeps_up_with_a_fifth_less_power() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 60.0, &[(leader, 200.0), (follower, 160.0)]);
+
+        assert_eq!(world.rider(follower).unwrap().lane, 1.0, "still in the leader's lane");
+        assert!(gap_between(&world, follower, leader) < 2.5, "held the wheel");
+    }
+
+    #[test]
+    fn a_moments_surge_does_not_pull_a_rider_out_of_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 0.5, &[(leader, 200.0), (follower, 320.0)]);
+        ride(&mut world, 10.0, &[(leader, 200.0), (follower, 200.0)]);
+
+        assert_eq!(world.rider(follower).unwrap().target_lane, 1, "stayed on the wheel");
+    }
+
+    #[test]
+    fn a_trainers_jittery_power_does_not_pull_a_rider_out_of_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+        // A new reading every second, up to 25 W either side of the leader's 200 W.
+        let mut seed = 7u64;
+        for _ in 0..60 {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let jitter = ((seed >> 33) as f64 / f64::from(u32::MAX >> 1) * 2.0 - 1.0) * 25.0;
+            ride(&mut world, 1.0, &[(leader, 200.0), (follower, 200.0 + jitter)]);
+        }
+
+        assert_eq!(world.rider(follower).unwrap().target_lane, 1, "stayed on the wheel");
+    }
+
+    #[test]
+    fn a_rider_suddenly_too_close_drops_back_gently() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 100.5, 1, 8.7);
+        put(&mut world, follower, 100.0, 1, 8.7);
+
+        let mut hardest: f64 = 0.0;
+        for _ in 0..(8.0 / DT) as usize {
+            let before = world.rider(follower).unwrap().speed;
+            ride(&mut world, DT, &[(leader, 200.0), (follower, 200.0)]);
+            hardest = hardest.max((before - world.rider(follower).unwrap().speed) / DT);
+        }
+
+        let max_brake = SpacingParams::default().max_brake;
+        assert!(hardest <= max_brake + 0.2, "no jolt: braked at {hardest:.1} m/s²");
+        assert!(
+            gap_between(&world, follower, leader) > SpacingParams::default().min_gap - 0.1,
+            "made room again"
+        );
+    }
+
+    #[test]
+    fn a_rider_ridden_through_keeps_its_speed() {
+        let mut world = empty_world(
+            Route::new(RouteSpec {
+                id: "one".into(),
+                name: "One lane".into(),
+                lanes: 1,
+                seed: 1,
+                points: vec![Point::new(0.0, 0.0, 0.0), Point::new(5000.0, 0.0, 0.0)],
+                markers: vec![],
+                walk: vec![],
+            })
+            .unwrap(),
+        );
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 110.0, 0, 8.6);
+        put(&mut world, follower, 100.0, 0, 8.6);
+
+        let mut slowest = f64::INFINITY;
+        for _ in 0..(90.0 / DT) as usize {
+            ride(&mut world, DT, &[(leader, 200.0), (follower, 260.0)]);
+            slowest = slowest.min(world.rider(leader).unwrap().speed);
+        }
+
+        assert!(gap_between(&world, leader, follower) > 2.0, "slipped through");
+        assert!(
+            slowest > 8.6 - 0.6,
+            "not braked by the rider going through: {:.1} km/h",
+            slowest * 3.6
+        );
+    }
+
+    #[test]
+    fn pulling_out_a_rider_turns_back_when_the_rider_ahead_moves_into_the_same_lane() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        // Both just set off from lane 1 towards lane 2, the leader 4 m ahead.
+        put(&mut world, leader, 104.0, 1, 8.5);
+        put(&mut world, follower, 100.0, 1, 8.5);
+        for id in [leader, follower] {
+            let rider = world.riders.get_mut(&id).unwrap();
+            rider.lane = 1.1;
+            rider.target_lane = 2;
+        }
+
+        let mut widest: f64 = 0.0;
+        for _ in 0..(10.0 / DT) as usize {
+            ride(&mut world, DT, &[(leader, 150.0), (follower, 400.0)]);
+            widest = widest.max(world.rider(follower).unwrap().lane);
+        }
+
+        assert!(
+            widest < 1.3,
+            "turned back at once instead of weaving: reached lane {widest:.2}"
+        );
+        assert!(
+            gap_between(&world, leader, follower) > 2.0,
+            "went past on the side the leader left"
+        );
+    }
+
+    /// A wall across all four lanes: `leader` in lane 1 ahead of `follower`,
+    /// riders alongside the follower in lanes 0 and 2 and one in lane 3.
+    fn boxed_in(world: &mut World) -> (RiderId, RiderId, [(RiderId, f64); 5]) {
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        let wall = [0u8, 2, 3].map(|lane| world.join_human(&format!("Lane {lane}"), 75.0));
+        put(world, leader, 103.0, 1, 9.0);
+        put(world, follower, 100.0, 1, 9.0);
+        for (id, lane) in wall.iter().zip([0u8, 2, 3]) {
+            put(world, *id, 100.5, lane, 9.0);
+        }
+        let riders = [
+            (leader, 150.0),
+            (follower, 400.0),
+            (wall[0], 150.0),
+            (wall[1], 150.0),
+            (wall[2], 150.0),
+        ];
+        (leader, follower, riders)
+    }
+
+    #[test]
+    fn boxed_in_a_stronger_rider_first_waits_behind() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower, riders) = boxed_in(&mut world);
+
+        let closest = closest_in_lane(&mut world, 2.5, &riders, follower, leader);
+
+        assert!(
+            closest > SpacingParams::default().min_gap - 0.1,
+            "stayed off the wheel ahead: {closest}"
+        );
+        assert_eq!(world.rider(follower).unwrap().target_lane, 1, "nowhere to pull out to");
+        assert!(gap_between(&world, follower, leader) > 0.0, "still behind");
+    }
+
+    #[test]
+    fn boxed_in_for_a_while_a_stronger_rider_slips_through() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower, riders) = boxed_in(&mut world);
+
+        ride(&mut world, 20.0, &riders);
+
+        assert!(gap_between(&world, leader, follower) > 5.0, "got past the wall");
+    }
+
+    #[test]
+    fn a_line_up_puts_the_riders_in_rows_behind_the_line() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let ids: Vec<RiderId> = (0..6).map(|i| world.join_human(&format!("R{i}"), 75.0)).collect();
+
+        let behind = world.line_up(0, &ids);
+
+        let length = world.route(0).length();
+        let spots: Vec<(f64, f64, f64)> = ids
+            .iter()
+            .map(|id| {
+                let r = world.rider(*id).unwrap();
+                (r.lane, (length - r.position) % length, behind[id])
+            })
+            .collect();
+        assert_eq!(
+            spots,
+            vec![
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (2.0, 0.0, 0.0),
+                (3.0, 0.0, 0.0),
+                (0.0, 2.5, 2.5),
+                (1.0, 2.5, 2.5)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_race_counts_from_the_line_also_for_the_back_rows() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let ids: Vec<RiderId> = (0..6).map(|i| world.join_human(&format!("R{i}"), 75.0)).collect();
+
+        world.start_scheduled_race(0, 1, &ids).unwrap();
+
+        assert_eq!(world.rider(ids[0]).unwrap().race_distance(), Some(0.0));
+        assert_eq!(world.rider(ids[5]).unwrap().race_distance(), Some(-2.5));
     }
 
     #[test]
