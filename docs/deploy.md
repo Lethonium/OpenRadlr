@@ -53,7 +53,9 @@ regardless. If no server is running or it does not answer, they continue.
 
 ### 2. Caddy on the same machine
 
-Caddy proxies WebSockets and sets `X-Forwarded-For` on its own:
+Caddy proxies WebSockets and sets `X-Forwarded-For` on its own. The server
+compresses its responses itself (Brotli or gzip); `encode` leaves those as they
+are and only matters for anything else the proxy serves:
 
 ```caddyfile
 ride.example.org {

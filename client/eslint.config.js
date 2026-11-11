@@ -20,7 +20,7 @@ export default [
     },
   },
   {
-    files: ["test/**/*.js", "screenshot.mjs", "screenshotArgs.mjs", "eslint.config.js"],
+    files: ["test/**/*.js", "screenshot.mjs", "screenshotArgs.mjs", "preload.mjs", "eslint.config.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

@@ -37,6 +37,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The workout screen guides every pose: step-by-step instructions for the exercise under way or, during rests, the one coming up; the sun salutation marks the breath in progress; sided poses name the leg in front. A side view of your avatar joins the front view, and the timer and stats moved to the corners so the avatar has the middle (#26)
 
 ### Changed
+- The start screen is ready in about half the time on a phone connection (2.1 s → 1.0 s on 4G; first visit 1.9 MB → 0.7 MB): the server sends the client and the route data compressed (Brotli or gzip), and the page asks for all its scripts at once instead of in five rounds.
 - Start screen: every device (trainer, heart rate, controller) is one line of the same shape: a state dot, its name over what it is doing (live power and cadence, heart rate in bpm, which buttons came through) and its actions. Lines no longer wrap or jump when their state changes; on narrow phones two actions or an error go under the name, and nothing is cut off. The Ride bar leaves room for itself however tall an error makes it.
 
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).

@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::set_header::{SetResponseHeader, SetResponseHeaderLayer};
 use tower_http::trace::TraceLayer;
@@ -313,7 +314,11 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
         let value = HeaderValue::from_str(value).expect("security headers are plain ASCII");
         router.layer(SetResponseHeaderLayer::if_not_present(name.clone(), value))
     });
-    router.layer(TraceLayer::new_for_http())
+    // Brotli or gzip, whichever the browser accepts: the client and the route data shrink to
+    // about a quarter. Not-modified answers and the WebSocket upgrade have no body to compress.
+    router
+        .layer(CompressionLayer::new().br(true).gzip(true))
+        .layer(TraceLayer::new_for_http())
 }
 
 async fn healthz() -> &'static str {

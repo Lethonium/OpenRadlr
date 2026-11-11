@@ -475,6 +475,96 @@ async fn static_files_are_revalidated_on_every_load() {
     assert!(head.contains("cache-control: no-cache"), "{head}");
 }
 
+/// One plain HTTP/1.1 request; the head lower-cased and the raw body.
+async fn raw_request(addr: SocketAddr, path: &str, headers: &str) -> (String, Vec<u8>) {
+    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let request = format!("GET {path} HTTP/1.1\r\nHost: test\r\n{headers}Connection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await.unwrap();
+    let split = response.windows(4).position(|w| w == b"\r\n\r\n").expect("a head");
+    let head = String::from_utf8_lossy(&response[..split]).to_ascii_lowercase();
+    (head, response[split + 4..].to_vec())
+}
+
+fn header_value<'a>(head: &'a str, name: &str) -> Option<&'a str> {
+    head.lines().find_map(|line| line.strip_prefix(&format!("{name}: ")))
+}
+
+fn client_config() -> Config {
+    Config {
+        static_dir: Some(PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../client/public"
+        ))),
+        routes_dir: Some(PathBuf::from(ROUTES_DIR)),
+        ..test_config(0)
+    }
+}
+
+#[tokio::test]
+async fn the_client_is_sent_compressed_to_browsers_that_accept_it() {
+    let addr = start_server_with(client_config()).await;
+    let (head, body) = raw_request(addr, "/js/main.js", "Accept-Encoding: gzip, deflate, br, zstd\r\n").await;
+    assert!(head.starts_with("http/1.1 200"), "{head}");
+    assert_eq!(header_value(&head, "content-encoding"), Some("br"), "{head}");
+    assert!(
+        header_value(&head, "vary").is_some_and(|v| v.contains("accept-encoding")),
+        "{head}"
+    );
+    assert!(head.contains("cache-control: no-cache"), "{head}");
+    let raw = std::fs::metadata(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../client/public/js/main.js"
+    ))
+    .unwrap()
+    .len();
+    assert!((body.len() as u64) < raw / 2, "{} of {raw} bytes", body.len());
+
+    let (head, _) = raw_request(addr, "/styles.css", "Accept-Encoding: gzip\r\n").await;
+    assert_eq!(header_value(&head, "content-encoding"), Some("gzip"), "{head}");
+    let (head, _) = raw_request(addr, "/styles.css", "").await;
+    assert_eq!(header_value(&head, "content-encoding"), None, "{head}");
+}
+
+#[tokio::test]
+async fn a_compressed_file_still_revalidates_to_not_modified() {
+    let addr = start_server_with(client_config()).await;
+    let (head, _) = raw_request(addr, "/js/main.js", "Accept-Encoding: br\r\n").await;
+    let etag = header_value(&head, "etag").expect("an etag").to_owned();
+    let (head, body) = raw_request(
+        addr,
+        "/js/main.js",
+        &format!("Accept-Encoding: br\r\nIf-None-Match: {etag}\r\n"),
+    )
+    .await;
+    assert!(head.starts_with("http/1.1 304"), "{head}");
+    assert!(body.is_empty());
+}
+
+#[tokio::test]
+async fn route_and_map_data_are_sent_compressed() {
+    let addr = start_server_with(client_config()).await;
+    let (head, _) = raw_request(addr, "/api/map?id=valley", "Accept-Encoding: gzip\r\n").await;
+    assert!(head.starts_with("http/1.1 200"), "{head}");
+    assert_eq!(header_value(&head, "content-encoding"), Some("gzip"), "{head}");
+}
+
+#[tokio::test]
+async fn a_websocket_upgrade_that_offers_compression_still_connects() {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let addr = start_server_with(client_config()).await;
+    // Browsers send Accept-Encoding with the upgrade request too.
+    let mut request = format!("ws://{addr}/ws").into_client_request().unwrap();
+    request
+        .headers_mut()
+        .insert("accept-encoding", "gzip, deflate, br".parse().unwrap());
+    let (mut socket, response) = connect_async(request).await.expect("websocket connects");
+    assert_eq!(response.status(), 101);
+    assert!(response.headers().get("content-encoding").is_none());
+    hello(&mut socket).await;
+}
+
 #[tokio::test]
 async fn every_response_carries_security_headers() {
     let config = Config {

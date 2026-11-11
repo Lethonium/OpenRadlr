@@ -12,7 +12,8 @@
     "test": "node --test \"test/**/*.test.js\"",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
-    "screenshot": "node screenshot.mjs"
+    "screenshot": "node screenshot.mjs",
+    "preload": "node preload.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
