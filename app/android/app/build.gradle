@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// The upload key that signs release bundles for Google Play (docs/app.md#google-play).
+// It comes from app/android/keystore.properties (gitignored) or, e.g. in CI, from
+// the OPENRADLR_UPLOAD_* environment variables. Without it, release builds are unsigned.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def uploadKey = { String name, String env -> System.getenv(env) ?: keystoreProperties.getProperty(name) }
+def uploadStoreFile = uploadKey('storeFile', 'OPENRADLR_UPLOAD_STORE_FILE')
+
 android {
     namespace = "com.openradlr.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +18,10 @@ android {
         applicationId "com.openradlr.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Google Play takes every versionCode once: raise it for each upload.
+        // The client comes from the server, so this only changes with the native shell.
         versionCode 1
-        versionName "1.0"
+        versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +29,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (uploadStoreFile) {
+            release {
+                storeFile rootProject.file(uploadStoreFile)
+                storePassword uploadKey('storePassword', 'OPENRADLR_UPLOAD_STORE_PASSWORD')
+                keyAlias uploadKey('keyAlias', 'OPENRADLR_UPLOAD_KEY_ALIAS')
+                keyPassword uploadKey('keyPassword', 'OPENRADLR_UPLOAD_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadStoreFile) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

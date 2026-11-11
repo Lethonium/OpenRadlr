@@ -12,6 +12,7 @@
     "sync": "cap sync",
     "ios": "cap sync ios && cap open ios",
     "android": "cap sync android && cap open android",
+    "android:bundle": "node scripts/bundle-android.mjs",
     "assets": "node scripts/make-assets.mjs && npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor \"#080a0e\" --iconBackgroundColorDark \"#080a0e\" --splashBackgroundColor \"#080a0e\" --splashBackgroundColorDark \"#080a0e\""
   },
   "dependencies": {

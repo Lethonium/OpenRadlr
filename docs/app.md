@@ -110,6 +110,83 @@ npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets 
 - In the app, *Menu → Devices → Device diagnostics* logs every Bluetooth step,
   just like in the browser.
 
+## Google Play
+
+Google Play takes an Android App Bundle (`.aab`) signed with your **upload
+key**. Play App Signing then re-signs it with the app signing key that Google
+keeps. If the upload key is lost, Play support can reset it; the app signing
+key never leaves Google.
+
+### The upload key (once)
+
+Create it outside the repo, with the JDK that comes with Android Studio.
+`keytool` asks for a password:
+
+```bash
+"/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool" \
+  -genkeypair -v -keystore ~/keys/openradlr-upload.jks -alias upload \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Keep the `.jks` file and its password in your password manager. Then tell
+the build where it is, in `app/android/keystore.properties`. Git ignores
+this file, and `*.jks`:
+
+```properties
+storeFile=/Users/you/keys/openradlr-upload.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
+```
+
+In CI, set `OPENRADLR_UPLOAD_STORE_FILE`, `OPENRADLR_UPLOAD_STORE_PASSWORD`,
+`OPENRADLR_UPLOAD_KEY_ALIAS` and `OPENRADLR_UPLOAD_KEY_PASSWORD` instead.
+
+### Build the bundle
+
+```bash
+cd app
+npm run android:bundle   # → android/app/build/outputs/bundle/release/app-release.aab
+```
+
+The script stops if the upload key is missing, or if the app would open a
+server that is not `https://` (a leftover `OPENRADLR_APP_URL`). The client
+comes from the server, so a new bundle is only needed when the native shell
+changes: plugins, permissions, icons, Capacitor. Raise `versionCode` in
+`app/android/app/build.gradle` for every upload; Play accepts each number
+once. A release build doesn't install over a debug build on the same phone,
+because their signatures differ: uninstall the debug build first.
+
+### In the Play Console
+
+1. **Create app**: name *OpenRadlr*, type *App*, *Free*. The package name
+   `com.openradlr.app` is fixed with the first upload.
+2. **Testing → Internal testing**: upload the `.aab`, add yourself as a
+   tester, and install it from Play. When asked, accept Play App Signing.
+3. **App content** (*Policy → App content*):
+   - Privacy policy: <https://openradlr.com/privacy/>
+   - App access: all of it works without a login (Strava is optional).
+   - Ads: none.
+   - Content rating: the questionnaire. Users interact (names, chat).
+   - Target audience: 13 and older. Choosing *not for children* keeps the
+     app out of the Families policy.
+   - Data safety, as in the privacy policy: name and fitness data (power,
+     cadence, position) go to the server for the ride and are processed in
+     memory only; heart rate stays on the device; with Strava, the athlete ID
+     and name are stored until logout (30 days at most). Nothing is shared or
+     sold; uploads to Strava happen only when you press *Upload to Strava*.
+     All traffic is encrypted (https). There are no accounts to delete:
+     *Log out* deletes the Strava login.
+   - Health apps: fitness (indoor cycling with a trainer and heart rate).
+4. **Store listing**: short description (80 characters), full description,
+   the 512 px icon (`client/public/icons/icon-512.png`), a 1024×500 feature
+   graphic and at least two phone screenshots.
+5. **Production**: promote the tested release from internal testing.
+
+Play rejects apps that only wrap a website. OpenRadlr's argument is native
+Bluetooth to trainers, heart rate straps and controllers: put it in the
+description.
+
 ## Test checklist on a device
 
 1. Start screen: the "can't reach Bluetooth trainers" warning is gone.
