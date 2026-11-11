@@ -68,6 +68,34 @@ test("smoother wraps riders of other routes at their own route's line (#14)", ()
   assert.ok(Math.abs(mine.distance - 300) < 1e-6, `mine at ${mine.distance}`);
 });
 
+/** A lane change from 1 to 2 at a lane per second, sent at 4 Hz and drawn at 60 fps. */
+function drawLaneChange() {
+  const smoother = new RiderSmoother(squareRoute());
+  const laneAt = (t) => 1 + Math.min(1, Math.max(0, t - 0.5));
+  const lanes = [];
+  let next = 0;
+  for (let frame = 0; frame <= 150; frame++) {
+    const t = frame / 60;
+    for (; next <= t; next += 0.25) smoother.update([{ id: 1, distance: 10 * next, lane: laneAt(next), speed: 10 }], next);
+    lanes.push({ t, lane: smoother.sample(t)[0].lane });
+  }
+  const speeds = lanes.slice(1).map((l, i) => (l.lane - lanes[i].lane) * 60);
+  return { lanes, speeds };
+}
+
+test("smoother glides a lane change instead of stepping at the update rate", () => {
+  const { speeds } = drawLaneChange();
+  const steepest = Math.max(...speeds.slice(1).map((v, i) => Math.abs(v - speeds[i])));
+  assert.ok(steepest < 0.25, `sideways speed jumps by ${steepest.toFixed(2)} lanes/s between frames`);
+  assert.ok(Math.max(...speeds) < 1.2, `never much faster than the rider moves: ${Math.max(...speeds).toFixed(2)} lanes/s`);
+});
+
+test("smoother settles a lane change in its lane, without overshooting", () => {
+  const { lanes } = drawLaneChange();
+  assert.ok(Math.max(...lanes.map((l) => l.lane)) <= 2 + 1e-9, "never past lane 2");
+  assert.ok(lanes.find((l) => l.lane > 1.98).t <= 1.95, "in lane 2 no later than before the glide");
+});
+
 test("smoother forgets riders that left", () => {
   const smoother = new RiderSmoother(squareRoute());
   smoother.update([{ id: 1, distance: 0, lane: 0, speed: 0 }, { id: 2, distance: 5, lane: 0, speed: 0 }], 0);
