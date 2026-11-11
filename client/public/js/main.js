@@ -833,6 +833,16 @@ function initMenuStage() {
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
   app.redrawStage = drawStage;
+  // A canvas drawn while hidden (the Events tab, the start screen during a ride) has no
+  // size and stays blank once shown: draw again whenever the map or profile changes size.
+  // Their size comes from CSS, so drawing never resizes them again.
+  let stageRedraw = 0;
+  const resized = new ResizeObserver(() => {
+    cancelAnimationFrame(stageRedraw);
+    stageRedraw = requestAnimationFrame(drawStage);
+  });
+  resized.observe($("menu-profile"));
+  resized.observe($("menu-map"));
   app.menu = new MenuStage({
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
