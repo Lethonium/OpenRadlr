@@ -44,7 +44,7 @@ export function installNativeApp({ plugins = nativePlugins(), navigator: nav = g
   };
 }
 
-const aborted = () => Object.assign(new Error("Sign-in canceled."), { name: "AbortError" });
+const aborted = () => Object.assign(new Error("Sign-in canceled."), { name: "AbortError" }); // i18n-ok (an AbortError, never shown)
 
 /**
  * Opens `url` in the system sign-in sheet, where Google and Apple sign-in
@@ -117,7 +117,7 @@ export async function shareFiles({ Filesystem, Share }, files, title) {
   try {
     await Share.share({ files: uris, ...(title && { title }) });
   } catch (error) {
-    if (/cancel/i.test(error?.message ?? "")) throw Object.assign(new Error("Share canceled."), { name: "AbortError" });
+    if (/cancel/i.test(error?.message ?? "")) throw Object.assign(new Error("Share canceled."), { name: "AbortError" }); // i18n-ok (an AbortError, never shown)
     throw error;
   }
 }

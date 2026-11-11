@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "OpenRadlr for iOS and Android: the browser client in a native shell with Bluetooth (Capacitor).",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=22"

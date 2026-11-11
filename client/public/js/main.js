@@ -679,7 +679,7 @@ function initSetup() {
     event.preventDefault();
     const action = $("join").dataset.action;
     // The server rides with Strava accounts only: the button takes the rider there.
-    if (action === "strava") return location.assign("/auth/strava");
+    if (action === "strava") return nativeApp?.signIn ? connectStravaInApp() : location.assign("/auth/strava");
     if (action === "board") return boardFromMenu();
     const typed = $("board-code").value.trim();
     if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
@@ -921,7 +921,7 @@ async function connectStravaInApp() {
     await app.strava.claimAppLogin(ticket);
     await loadStravaAccount();
   } catch (error) {
-    if (error.name !== "AbortError") showMessage(`Connecting Strava failed: ${error.message}`);
+    if (error.name !== "AbortError") showMessage(t("strava.connectFailed", { message: error.message }));
   }
 }
 
@@ -3236,7 +3236,7 @@ async function saveFiles(files) {
   try {
     await nativeApp.saveFiles(files);
   } catch (error) {
-    if (error.name !== "AbortError") notify(`Saving failed: ${error.message}`, "error");
+    if (error.name !== "AbortError") notify(t("photos.saveFailed", { message: error.message }), "error");
   }
 }
 

@@ -92,7 +92,7 @@ export class NativeBluetooth {
     try {
       found = await this.#plugin.requestDevice(scanOptions(options));
     } catch (error) {
-      if (/cancel/i.test(error?.message ?? "")) throw domError("NotFoundError", "User cancelled the requestDevice() chooser.");
+      if (/cancel/i.test(error?.message ?? "")) throw domError("NotFoundError", "User cancelled the requestDevice() chooser."); // i18n-ok (Web Bluetooth's own message)
       throw error;
     }
     this.#grant(found.deviceId);
@@ -232,16 +232,16 @@ class NativeDevice {
   }
 
   #service(uuid) {
-    if (!this.gatt.connected) throw domError("NetworkError", "GATT Server is disconnected.");
+    if (!this.gatt.connected) throw domError("NetworkError", "GATT Server is disconnected."); // i18n-ok
     const serviceUuid = uuidString(uuid);
     const service = this.#services.find((candidate) => uuidString(candidate.uuid) === serviceUuid);
-    if (!service) throw domError("NotFoundError", "No Services matching UUID found in Device.");
+    if (!service) throw domError("NotFoundError", "No Services matching UUID found in Device."); // i18n-ok
     return {
       uuid: serviceUuid,
       getCharacteristic: async (characteristicUuid) => {
         const wanted = uuidString(characteristicUuid);
         if (!service.characteristics?.some((candidate) => uuidString(candidate.uuid) === wanted)) {
-          throw domError("NotFoundError", "No Characteristics matching UUID found in Service.");
+          throw domError("NotFoundError", "No Characteristics matching UUID found in Service."); // i18n-ok
         }
         return this.#characteristic(serviceUuid, wanted);
       },
@@ -312,7 +312,7 @@ class NativeCharacteristic {
 
   #run(method, options = {}) {
     const device = this.#device;
-    if (!device.gatt.connected) return Promise.reject(domError("NetworkError", "GATT Server is disconnected."));
+    if (!device.gatt.connected) return Promise.reject(domError("NetworkError", "GATT Server is disconnected.")); // i18n-ok
     return device.run(() => device.plugin[method]({ deviceId: device.id, service: this.service.uuid, characteristic: this.uuid, ...options }));
   }
 }
