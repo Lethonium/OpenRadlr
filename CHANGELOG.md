@@ -37,11 +37,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The workout screen guides every pose: step-by-step instructions for the exercise under way or, during rests, the one coming up; the sun salutation marks the breath in progress; sided poses name the leg in front. A side view of your avatar joins the front view, and the timer and stats moved to the corners so the avatar has the middle (#26)
 
 ### Changed
+- Start screen: every device (trainer, heart rate, controller) is one line of the same shape: a state dot, its name over what it is doing (live power and cadence, heart rate in bpm, which buttons came through) and its actions. Lines no longer wrap or jump when their state changes; on narrow phones two actions or an error go under the name, and nothing is cut off. The Ride bar leaves room for itself however tall an error makes it.
 
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- Cancelling the device window while trying another strap, trainer or controller no longer shows "Cancelled" over the device that is still connected; each device line now shows what its device really does.
 - On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
 - No more trees on the road where a route rounds a sharp corner at a junction off the map's roads (e.g. at the top of Col de la Forge by the Hilltop Café): every route of the map now keeps its asphalt clear, whichever one is ridden.
 - On routes that aren't a loop (Lanzarote), the start crowd no longer stands in the middle of the road.

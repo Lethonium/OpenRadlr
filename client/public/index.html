@@ -142,13 +142,18 @@
                   <strong data-i18n="start.thisBrowserCanT">This browser can't reach Bluetooth trainers.</strong>
                   <span data-i18n="start.useChrome">Use Chrome or Edge on Android, Windows, macOS or ChromeOS. iPhone, iPad, Safari and Firefox can't, but phone paddles work everywhere.</span>
                 </p>
-                <div class="device-line bluetooth-only">
+                <!-- Every device line: state dot, name over what it's doing, actions on the right (deviceLine() in view/deviceSetup.js) -->
+                <div id="line-trainer" class="device-line bluetooth-only" data-state="idle">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span id="trainer-status" class="device-status" data-i18n="start.noTrainerConnected">No trainer connected</span>
-                  <button type="button" id="reconnect-trainer" class="primary-small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-trainer" class="primary-small" data-gesture-only data-i18n="start.connect">Connect</button>
+                  <span class="device-text">
+                    <span id="trainer-title" class="device-title" data-i18n="devices.smartTrainer">Smart trainer</span>
+                    <span id="trainer-status" class="device-status" aria-live="polite" data-i18n="setup.idle.trainer">Not connected</span>
+                  </span>
+                  <span class="device-actions">
+                    <button type="button" id="reconnect-trainer" class="primary-small" data-gesture-only hidden></button>
+                    <button type="button" id="connect-trainer" class="primary-small" data-gesture-only data-i18n="start.connect">Connect</button>
+                  </span>
                 </div>
-                <p id="live-reading" class="live-reading" aria-live="polite" hidden></p>
                 <p id="power-only-note" class="field-hint" hidden></p>
                 <label id="virtual-shifting-row" class="check" hidden><input id="virtual-shifting" type="checkbox" /> <span data-i18n="start.virtualShifting">Virtual shifting</span> <span class="check-hint" data-i18n="start.zwiftCogOrOne">Zwift Cog or one fixed gear</span></label>
                 <!-- One line: the gear the chain really sits in; shifting happens in software from there -->
@@ -170,21 +175,28 @@
 
               <!-- Optional Bluetooth add-ons -->
               <div id="addons" class="addons">
-                <div id="addon-hr" class="device-line addon">
+                <div id="addon-hr" class="device-line addon" data-state="idle">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span class="addon-name" data-i18n="ride.heartRate">Heart rate</span>
-                  <span id="hr-status" class="device-status" data-i18n="devices.optional">Optional</span>
-                  <button type="button" id="reconnect-hr" class="secondary small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-hr" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
+                  <span class="device-text">
+                    <span id="hr-title" class="device-title" data-i18n="ride.heartRate">Heart rate</span>
+                    <span id="hr-status" class="device-status" aria-live="polite" data-i18n="devices.optional">Optional</span>
+                  </span>
+                  <span class="device-actions">
+                    <button type="button" id="reconnect-hr" class="secondary small" data-gesture-only hidden></button>
+                    <button type="button" id="connect-hr" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
+                  </span>
                 </div>
-                <div id="addon-controller" class="device-line addon trainer-only">
+                <div id="addon-controller" class="device-line addon trainer-only" data-state="idle">
                   <span class="device-dot" aria-hidden="true"></span>
-                  <span class="addon-name" data-i18n="start.controller">Controller</span>
-                  <span id="controller-status" class="device-status" data-i18n="start.zwiftClickPlayOr">Zwift or OpenBikeControl</span>
-                  <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
-                  <button type="button" id="connect-controller" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
+                  <span class="device-text">
+                    <span id="controller-title" class="device-title" data-i18n="start.controller">Controller</span>
+                    <span id="controller-status" class="device-status" aria-live="polite" data-i18n="start.zwiftClickPlayOr">Zwift or OpenBikeControl</span>
+                  </span>
+                  <span class="device-actions">
+                    <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
+                    <button type="button" id="connect-controller" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
+                  </span>
                 </div>
-                <p id="controller-live" class="live-reading trainer-only" aria-live="polite" hidden></p>
               </div>
             </fieldset>
 

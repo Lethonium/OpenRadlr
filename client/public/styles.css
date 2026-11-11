@@ -861,17 +861,6 @@ label output {
   white-space: pre-line;
 }
 
-.live-reading {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.live-reading strong {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
 .diagnostics {
   margin-top: 16px;
   font-size: 14px;
@@ -1068,91 +1057,184 @@ label output {
   display: none;
 }
 
-/* One device per line: status dot, name and status, one action on the right. */
+/*
+ * One device per line, the same in every state (deviceLine() in view/deviceSetup.js):
+ * a state dot, the name over what it's doing, the actions on the right. Nothing
+ * wraps, so a line never jumps when its state changes; only an error or a hint
+ * takes a second line of detail.
+ */
 .device-line {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px 10px;
-  min-height: 44px;
-  padding: 6px 6px 6px 12px;
-  border-radius: 10px;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface-2);
+  transition: border-color 0.2s ease;
 }
 
-.device-line .device-status {
-  flex: 1 1 8em;
+.device-text {
+  display: grid;
+  gap: 1px;
   min-width: 0;
+}
+
+.device-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.device-line button {
-  flex: none;
+/* What it's doing: up to two lines rather than cut off. */
+.device-text .device-status {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
-/* What went wrong and what to try: a sentence, not an ellipsis. */
-.device-line .device-status[data-note="error"] {
-  white-space: normal;
+.device-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--text);
+}
+
+.device-text .device-status {
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.device-actions button,
+.device-line > button,
+.device-line > a {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* The trainer's options (virtual shifting, gears, power-only note) sit under its name. */
+#trainer-panel > :not(.device-line, .bluetooth-note) {
+  margin-left: 37px;
 }
 
 .device-dot {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: 1.5px solid var(--muted);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.device-line:has(.device-status.ok) .device-dot {
+/* Remembered, not connected: a quiet ring. Looking or reconnecting: amber, breathing. */
+.device-line[data-state="remembered"] .device-dot {
+  border-style: dashed;
+}
+
+.device-line[data-state="pending"] .device-dot,
+.device-line[data-state="reconnecting"] .device-dot {
+  border-color: var(--lemon);
+  background: var(--lemon);
+  animation: device-breathe 1.4s ease-in-out infinite;
+}
+
+.device-line[data-state="pending"] .device-status,
+.device-line[data-state="reconnecting"] .device-status {
+  color: var(--text);
+}
+
+/* Connected; live: data arrives right now. */
+.device-line:is([data-state="connected"], [data-state="live"]) .device-dot {
   border-color: #3ddc97;
   background: #3ddc97;
-  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.2);
 }
 
-.device-line:has(.device-status.ok) .device-status {
+.device-line[data-state="live"] .device-dot {
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.22);
+}
+
+.device-line[data-state="live"] .device-status {
+  color: #3ddc97;
+}
+
+/* Connected but silent (asleep, taken by another app), or a connect that failed: what to try, in full. */
+.device-line[data-state="silent"] .device-dot {
+  border-color: var(--lemon);
+  background: var(--lemon);
+}
+
+.device-line[data-state="error"] .device-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+/* An error or a silent device says what to try, in full. */
+.device-line:is([data-state="error"], [data-state="silent"]) .device-status {
+  -webkit-line-clamp: unset;
+}
+
+.device-line[data-state="silent"] .device-status {
+  color: var(--lemon);
+}
+
+.device-line[data-state="error"] {
+  border-color: rgba(255, 93, 93, 0.45);
+}
+
+.device-line[data-state="error"] .device-status {
   color: var(--text);
-  font-weight: 600;
 }
 
-.addon-name {
-  flex: none;
-  font-size: 14px;
+/* Narrow phones: two actions (Reconnect, Other) or an error would squeeze the name to a letter;
+   the actions move under the name instead, the text keeps the full width. */
+@media (max-width: 520px) {
+  .device-line:is([data-state="error"], :has(.device-actions > button:not([hidden]) ~ button:not([hidden]))) {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .device-line:is([data-state="error"], :has(.device-actions > button:not([hidden]) ~ button:not([hidden]))) .device-actions {
+    grid-column: 2;
+  }
 }
 
-.addon.shows-device .addon-name {
-  display: none;
+@keyframes device-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-line .device-dot {
+    animation: none;
+  }
 }
 
 .addons {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.addons .device-line {
-  min-height: 40px;
-  background: none;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 button.small {
   padding: 5px 12px;
   font-size: 14px;
   border-radius: 8px;
-}
-
-/* Data arrives: the live check turns green. */
-.live-reading[data-state="live"] {
-  color: #3ddc97;
-}
-
-/* Data stopped: the trainer fell asleep or another app took it. */
-.live-reading[data-state="silent"] {
-  color: var(--lemon);
 }
 
 /* No Bluetooth in this browser (every iPhone): a friendly note, no dead buttons. */
@@ -1234,8 +1316,9 @@ button.small {
 
 /* One column (tablets, phones): Ride is a bar along the bottom of the screen, whatever is scrolled into view. */
 @media (max-width: 900px) {
+  /* Room for the Ride bar as tall as it is (an error above Ride makes it taller; main.js measures it). */
   .start {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--dock-height, 68px + env(safe-area-inset-bottom)) + 16px);
   }
 
   .dock-actions,
@@ -1334,6 +1417,17 @@ button.small {
 .check-hint {
   color: var(--muted);
   font-size: 13px;
+}
+
+/* Virtual shifting: the hint under its label, not squeezed beside it. */
+#virtual-shifting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 8px;
+}
+
+#virtual-shifting-row .check-hint {
+  grid-column: 2;
 }
 
 /* The workout card needs no trainer: only the heart-rate row of the devices stays. */
@@ -3290,6 +3384,20 @@ body.riding {
   fill: #fc4c02;
 }
 
+/* The Strava line is a device line without a dot: the mark, who you are, one action. */
+.strava-line .device-line > .device-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.strava-line .device-status.ok {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .strava-line .device-status strong {
   color: var(--text);
 }
@@ -4162,6 +4270,14 @@ body {
   min-height: 100dvh;
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
+}
+
+/* Phones: the usual 16 px margin leaves the device lines room for names and actions. */
+@media (max-width: 600px) {
+  .start {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
 }
 
 /* Phones keep the room for the Ride bar along the bottom (the one-column rule above). */

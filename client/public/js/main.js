@@ -7,7 +7,7 @@ import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
@@ -371,6 +371,10 @@ const app = {
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
+  lastHeartRateAt: null,
+  lastHeartRate: null,
+  /** Per device line: a pick or connect in progress, or the one that just failed (deviceLine() decides what shows). */
+  deviceAttempts: { trainer: null, hr: null, controller: null },
   /** The open drawer was opened with the controller (+ and − together): its buttons navigate it. */
   drawerByController: false,
   /** All controllers' presses as one stream (MergedControllers), made with the first controller. */
@@ -588,15 +592,8 @@ async function offerFtp() {
   prompt.hidden = false;
 }
 
-/** Device status lines that applyTranslations resets to their initial text. */
-function renderDeviceStatuses() {
-  if (app.trainer) $("trainer-status").textContent = trainerLabel(app.trainer);
-  if (app.heartRateMonitor) $("hr-status").textContent = app.heartRateMonitor.label;
-  if (app.controllers.length) renderControllerStatus();
-}
-
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderReconnectButtons, renderDeviceStatuses, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
   document.addEventListener("click", (event) => {
     const button = event.target.closest?.("[data-lang]");
     if (button) changeLanguage(button.dataset.lang);
@@ -648,19 +645,14 @@ function initSetup() {
     // Connecting takes seconds on some phones; a second tap meanwhile would pair a controller twice.
     const pick = async (button, names) => {
       button.disabled = true;
-      // Name what's being looked for: the line's own label may be hidden in favour of the device name.
-      // With a controller connected already, the hint goes under the line: the connected half stays in view.
-      const adding = kind === "controller" && app.controllers.length > 0;
+      // What's being looked for goes under the line's name; a connected controller half keeps its name in view.
       const pending = names?.length
         ? t("setup.looking", { names: names.join(" + ") })
-        : adding && expectsOtherHalf(app.controllers)
+        : kind === "controller" && expectsOtherHalf(app.controllers)
           ? t("setup.pickOtherHalf", { label: app.controllers[0].label })
           : t("setup.pickYour", { what: CHOOSER_NAMES()[kind] });
-      const ok = await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), adding ? "controller-live" : DEVICES[kind].statusId, { keepLabel: true, deviceName: names?.[0] ?? null, pending });
-      if (adding && ok) renderControllerCheck();
+      await connectDevice(() => DEVICES[kind].connect(names), (device) => connected(kind, device), kind, { deviceName: names?.[0] ?? null, pending });
       button.disabled = false;
-      if (kind === "controller" && app.controllers.length) renderControllerStatus();
-      renderReconnectButtons();
     };
     $(`connect-${kind}`).addEventListener("click", (event) => pick(event.currentTarget));
     // The chooser lists only the remembered devices: one tap and a confirm.
@@ -742,13 +734,23 @@ function setDifficultyInputs(difficulty) {
 
 // ------------------------------------------------------------ start menu ---
 
+/** Phones: the start menu keeps its last row clear of the Ride bar, however tall the bar gets. */
+function watchDockHeight() {
+  const dock = document.querySelector(".dock-actions");
+  if (!dock || typeof ResizeObserver !== "function") return;
+  new ResizeObserver(() => document.documentElement.style.setProperty("--dock-height", `${dock.offsetHeight}px`)).observe(dock);
+}
+
 function initStartMenu() {
   openStartMenu();
+  watchDockHeight();
   // Countdowns tick every second between the (slower) info refreshes; so does the trainer check.
   setInterval(() => {
     renderEvents();
     if (app.ride) return;
-    renderLiveCheck();
+    // Live checks notice data that stopped.
+    renderDeviceLine("trainer");
+    renderDeviceLine("hr");
     // Nothing sends resistance in the menu: ask a blocked trainer again from here.
     Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
   }, 1000);
@@ -1080,29 +1082,31 @@ function joinEventFromRide(row) {
   if (leaveRide()) joinEventFromMenu(row);
 }
 
-/** @returns {Promise<boolean>} true once connected */
-async function connectDevice(connect, onConnected, statusId, { keepLabel = false, pending = t("devices.connecting"), deviceName = null } = {}) {
-  const status = $(statusId);
-  status.textContent = pending;
-  status.dataset.note = "pending";
-  status.classList.remove("ok");
+/**
+ * Connects a device of `kind`, its line saying so meanwhile. A cancelled
+ * picker leaves the line as it was; a failure says what to try. Of two
+ * attempts at once (a remembered device found while the rider picks), each
+ * only clears its own.
+ * @returns {Promise<boolean>} true once connected
+ */
+async function connectDevice(connect, onConnected, kind, { pending = t("devices.connecting"), deviceName = null } = {}) {
+  const attempt = { state: "pending", text: pending };
+  const settle = (next) => {
+    if (app.deviceAttempts[kind] === attempt) app.deviceAttempts[kind] = next;
+    renderDeviceLines();
+  };
+  app.deviceAttempts[kind] = attempt;
+  renderDeviceLines();
   try {
     const device = await connect();
+    settle(null);
     onConnected(device);
-    // useTrainer() writes its own label (it knows about power-only trainers).
-    if (!keepLabel) status.textContent = device.label;
-    delete status.dataset.note;
-    status.classList.add("ok");
     return true;
   } catch (error) {
-    // Given up quietly: the rider connected another device meanwhile.
-    if (error.name === "AbortError") {
-      delete status.dataset.note;
-      return false;
-    }
-    status.textContent = connectErrorText(error, deviceName);
-    status.dataset.note = "error";
-    if (error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
+    // Given up quietly (another device was connected meanwhile) or the picker was closed: nothing to say.
+    const cancelled = error.name === "AbortError" || /cancel/i.test(error.message ?? "");
+    settle(cancelled ? null : { state: "error", text: connectErrorText(error, deviceName) });
+    if (!cancelled && error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
 }
@@ -1115,21 +1119,18 @@ const hasController = (id) => app.controllers.some((c) => c.id === id);
 /** Each kind of device: through the chooser (`names`: only these) or, already granted, without it. */
 const DEVICES = {
   trainer: {
-    statusId: "trainer-status",
     connect: (names) => SmartTrainer.connect(undefined, { log: deviceLog, names }),
     open: (device) => SmartTrainer.open(device, { log: deviceLog }),
     use: (trainer) => useTrainer(trainer),
     has: () => Boolean(app.trainer),
   },
   hr: {
-    statusId: "hr-status",
     connect: (names) => HeartRateMonitor.connect(undefined, { log: deviceLog, names }),
     open: (device) => HeartRateMonitor.open(device, { log: deviceLog }),
     use: (monitor) => useHeartRateMonitor(monitor),
     has: () => Boolean(app.heartRateMonitor),
   },
   controller: {
-    statusId: "controller-status",
     connect: (names) => connectController(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
     open: (device) => openController(device, { log: deviceLog }),
     use: (controller) => useController(controller),
@@ -1148,42 +1149,76 @@ function missingDevices(kind) {
 function connected(kind, device) {
   knownDevices.remember(kind, device);
   DEVICES[kind].use(device);
-  renderReconnectButtons();
+  renderDeviceLines();
 }
 
 /** What the browser's device window should list, for the line's hint while it is open. */
 const CHOOSER_NAMES = () => ({ trainer: t("setup.chooser.trainer"), hr: t("setup.chooser.hr"), controller: t("setup.chooser.controller") });
 
-/** What each device line says while nothing is connected or remembered. */
-const IDLE_STATUS = () => ({ trainer: t("setup.idle.trainer"), hr: t("setup.idle.hr"), controller: t("setup.idle.controller") });
+/** The real trainer on the line (paddles and the simulator aren't Bluetooth devices). */
+const lineTrainer = () => (app.trainer && deviceKind(app.trainer) === "trainer" ? app.trainer : null);
 
-/** "Reconnect" next to each kind with a remembered device that isn't connected. */
-function renderReconnectButtons() {
-  for (const kind of Object.keys(DEVICES)) {
-    const button = $(`reconnect-${kind}`);
-    const names = [...new Set(missingDevices(kind).map((entry) => entry.name))];
-    button.hidden = !isBluetoothAvailable() || names.length === 0;
-    // The name goes in the status line, the button stays short: nothing gets squeezed to "N…".
-    button.textContent = t("devices.reconnectShort");
-    button.title = t("devices.reconnect", { names: names.join(" + ") });
-    const status = $(DEVICES[kind].statusId);
-    const idle = !DEVICES[kind].has() && !status.dataset.note && !(kind === "controller" && app.controllers.length);
-    if (idle) status.textContent = names.length ? names.join(" + ") : IDLE_STATUS()[kind];
+/** Remembered devices of `kind` that aren't connected, by name. */
+const rememberedNames = (kind) => (isBluetoothAvailable() ? [...new Set(missingDevices(kind).map((entry) => entry.name))] : []);
+
+/** Everything a device line is worked out from (deviceLine() in view/deviceSetup.js). */
+function deviceLineInput(kind) {
+  const base = { kind, remembered: rememberedNames(kind), attempt: app.deviceAttempts[kind] };
+  const since = (at) => (at === null ? null : (now() - at) * 1000);
+  if (kind === "trainer") {
+    const trainer = lineTrainer();
+    if (!trainer) return base;
+    const live = liveCheck({ sinceDataMs: since(app.lastTrainerDataAt), power: app.lastReading?.power, cadence: app.lastReading?.cadence });
+    return { ...base, device: { label: trainerLabel(trainer), connected: trainer.connected !== false }, live };
   }
-  // One main action per line: Reconnect a known device (the chooser then reads "Other"), else connect, change or add.
-  const connectedNow = { trainer: Boolean(app.trainer) && deviceKind(app.trainer) === "trainer", hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
+  if (kind === "hr") {
+    const monitor = app.heartRateMonitor;
+    if (!monitor) return base;
+    return { ...base, device: { label: monitor.label, connected: monitor.connected !== false }, live: heartRateCheck({ sinceDataMs: since(app.lastHeartRateAt), heartRate: app.lastHeartRate }) };
+  }
+  const controllers = app.controllers;
+  if (!controllers.length) return base;
+  // + and − confirmed one by one, or which Click half is missing.
+  const missing = lonelyHalfHint();
+  const seen = new Set(controllers.flatMap((c) => [...c.seen]));
+  const live = { state: missing ? "silent" : seen.size ? "live" : "idle", text: missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null }) };
+  return { ...base, device: { label: controllerLine(controllers), connected: controllers.every((c) => c.connected) }, live };
+}
+
+/** One device line: its dot, name and what it's doing, from deviceLine() alone. */
+function renderDeviceLine(kind) {
+  const line = deviceLine(deviceLineInput(kind));
+  const row = $(kind === "trainer" ? "line-trainer" : `addon-${kind}`);
+  if (row.dataset.state !== line.state) row.dataset.state = line.state;
+  const title = $(`${kind}-title`);
+  if (title.textContent !== line.title) {
+    title.textContent = line.title;
+    title.title = line.title;
+  }
+  const detail = $(`${kind}-status`);
+  if (detail.textContent !== line.detail) {
+    detail.textContent = line.detail;
+    // The whole sentence where a narrow screen cuts it short.
+    detail.title = line.detail;
+  }
+}
+
+/** Every device line with its actions: Reconnect a known device (the chooser then reads "Other"), else connect, change or add. */
+function renderDeviceLines() {
+  const connectedNow = { trainer: Boolean(lineTrainer()), hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
   for (const kind of Object.keys(DEVICES)) {
+    renderDeviceLine(kind);
+    const names = rememberedNames(kind);
     const reconnect = $(`reconnect-${kind}`);
-    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: !reconnect.hidden, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
+    const actions = deviceActions({ kind, connected: connectedNow[kind], remembered: names.length > 0, otherHalf: kind === "controller" && expectsOtherHalf(app.controllers) });
     reconnect.hidden = !actions.reconnect;
+    reconnect.textContent = t("devices.reconnectShort");
+    reconnect.title = t("devices.reconnect", { names: names.join(" + ") });
     const connect = $(`connect-${kind}`);
     connect.textContent = actions.other;
-    // The trainer's first connect is the main action of the card; add-ons stay quiet.
     // The trainer's first connect is the card's main action; so is the missing half of a Click.
     const main = (kind === "trainer" && actions.other === t("setup.action.connect")) || (kind === "controller" && lonelyHalfHint() !== null);
     connect.className = main ? "primary-small" : "secondary small";
-    // A remembered or connected controller's name says what it is ("Zwift Click"): the generic label makes room.
-    $(`addon-${kind}`)?.classList.toggle("shows-device", actions.reconnect || (kind === "controller" && connectedNow.controller));
     // Both halves of a pair are in: nothing more to add.
     connect.hidden = kind === "controller" && app.controllers.length >= 2;
   }
@@ -1209,7 +1244,6 @@ function renderRideModes() {
   const addons = addonsShown(mode, bluetooth, picked);
   $("addon-hr").hidden = !addons.hr;
   $("addon-controller").hidden = !addons.controller;
-  $("controller-live").hidden = !addons.controller || app.controllers.length === 0;
   if (!app.ride && picked?.kind !== "workout") applyRideMode(mode);
 }
 
@@ -1222,27 +1256,14 @@ function applyRideMode(mode) {
     dropTrainer();
     initKnownDevices(["trainer"]);
   } else return;
-  renderReconnectButtons();
-}
-
-/** Under the trainer: waiting, still, the numbers, or no data any more (asleep, taken by another app). */
-function renderLiveCheck() {
-  const reading = $("live-reading");
-  if (reading.hidden || !app.trainer) return;
-  const sinceDataMs = app.lastTrainerDataAt === null ? null : (now() - app.lastTrainerDataAt) * 1000;
-  const check = liveCheck({ sinceDataMs, power: app.lastReading?.power, cadence: app.lastReading?.cadence });
-  reading.textContent = check.text;
-  reading.dataset.state = check.state;
+  renderDeviceLines();
 }
 
 /** No trainer: the smart trainer card waits for one. */
 function dropTrainer() {
   app.trainer?.disconnect();
   app.trainer = null;
-  $("trainer-status").textContent = t("setup.idle.trainer");
-  $("trainer-status").classList.remove("ok");
-  $("live-reading").hidden = true;
-  delete $("trainer-status").dataset.note;
+  renderDeviceLines();
   $("power-only-note").hidden = true;
   $("virtual-shifting-row").hidden = true;
   showShiftingSettings();
@@ -1262,7 +1283,7 @@ function showShiftingSettings() {
  * `getDevices()` get the Reconnect buttons only.
  */
 async function initKnownDevices(kinds = Object.keys(DEVICES)) {
-  renderReconnectButtons();
+  renderDeviceLines();
   const known = knownDevices.list().filter((entry) => kinds.includes(entry.kind));
   if (!isBluetoothAvailable() || !known.length) return;
   const found = await grantedDevices(known);
@@ -1275,7 +1296,7 @@ async function autoConnect(entry, device) {
   const spec = DEVICES[entry.kind];
   const taken = () => (entry.kind === "controller" ? spec.has(entry.id) : spec.has());
   if (taken()) return;
-  const ok = await connectDevice(
+  await connectDevice(
     async () => {
       await whenInRange(device);
       const opened = await spec.open(device);
@@ -1287,11 +1308,9 @@ async function autoConnect(entry, device) {
       return opened;
     },
     (opened) => connected(entry.kind, opened),
-    spec.statusId,
-    { keepLabel: true, deviceName: entry.name, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
+    entry.kind,
+    { deviceName: entry.name, pending: entry.kind === "controller" ? t("devices.pressButtonOn", { name: entry.name }) : t("devices.looking", { name: entry.name }) },
   );
-  // Two controllers share one status line: show the ones that made it.
-  if (!ok && entry.kind === "controller" && app.controllers.length) renderControllerStatus();
 }
 
 function trainerLabel(trainer) {
@@ -1307,7 +1326,7 @@ function showTrainerControl(trainer) {
   const blocked = Boolean(trainer.controlBlocked);
   // Virtual shifting stays on offer while blocked: it works as soon as the trainer is free.
   const could = couldControlResistance(trainer);
-  $("trainer-status").textContent = trainerLabel(trainer);
+  renderDeviceLine("trainer");
   $("power-only-note").hidden = controllable || paddles;
   $("power-only-note").textContent = blocked ? t("devices.blockedNote") : t("devices.powerOnlyNoteLong");
   // Power-only trainers: no ERG, no virtual shifting. A blocked one keeps the rider's choice for when it's free.
@@ -1324,28 +1343,23 @@ function useTrainer(trainer) {
   app.trainer?.disconnect();
   app.trainer = trainer;
   app.lastTrainerDataAt = null;
-  $("trainer-status").classList.add("ok");
-  delete $("trainer-status").dataset.note;
   showTrainerControl(trainer);
   trainer.on("control", () => showTrainerControl(trainer));
 
   // Live check on the setup screen: the rider sees right away whether data arrives.
   app.lastReading = null;
-  $("live-reading").hidden = false;
-  renderLiveCheck();
+  renderDeviceLines();
   trainer.on("data", (reading) => {
     app.lastTrainerDataAt = now();
     app.lastReading = reading;
-    renderLiveCheck();
+    if (!app.ride) renderDeviceLine("trainer");
   });
   trainer.on("disconnected", () => {
-    $("trainer-status").textContent = t("devices.reconnecting");
-    $("trainer-status").classList.remove("ok");
+    renderDeviceLine("trainer");
     notify(t("devices.trainerDisconnected", { label: trainer.label }), "error");
   });
   trainer.on("reconnected", () => {
     showTrainerControl(trainer);
-    $("trainer-status").classList.add("ok");
     notify(t("devices.isBack", { label: trainer.label }));
   });
 }
@@ -1353,19 +1367,24 @@ function useTrainer(trainer) {
 function useHeartRateMonitor(monitor) {
   app.heartRateMonitor?.disconnect();
   app.heartRateMonitor = monitor;
-  const status = $("hr-status");
-  status.textContent = monitor.label;
-  status.classList.add("ok");
+  // The beats on the line: the rider sees the strap works before riding.
+  app.lastHeartRateAt = null;
+  app.lastHeartRate = null;
+  monitor.on("data", ({ heartRate }) => {
+    if (app.heartRateMonitor !== monitor || !Number.isFinite(heartRate)) return;
+    app.lastHeartRateAt = now();
+    app.lastHeartRate = heartRate;
+    if (!app.ride) renderDeviceLine("hr");
+  });
   monitor.on("disconnected", () => {
-    status.textContent = t("devices.reconnecting");
-    status.classList.remove("ok");
+    renderDeviceLine("hr");
     notify(t("devices.trainerDisconnected", { label: monitor.label }), "error");
   });
   monitor.on("reconnected", () => {
-    status.textContent = monitor.label;
-    status.classList.add("ok");
+    renderDeviceLine("hr");
     notify(t("devices.isBack", { label: monitor.label }));
   });
+  renderDeviceLines();
 }
 
 function useController(controller) {
@@ -1374,15 +1393,10 @@ function useController(controller) {
   controller.connectedAt = now();
   app.controllers.push(controller);
   // A half that relays says so (battery, status) within a second; one that stays quiet sends only its own side.
-  setTimeout(() => {
-    renderControllerCheck();
-    renderReconnectButtons();
-  }, 3000);
+  setTimeout(renderDeviceLines, 3000);
   // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
   // In ERG a combined OpenBikeControl press changes the target instead of shifting (shift() ignores it there).
   app.controllerInput ??= new MergedControllers(new ControllerInput({ erg: () => app.training?.mode === "erg" || Boolean(app.studio?.erg) }));
-  $("controller-live").hidden = false;
-  renderControllerCheck();
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
       const known = controller.seen.size;
@@ -1390,12 +1404,9 @@ function useController(controller) {
       const each = pressed.flatMap(alternatives);
       for (const button of each) controller.seen.add(button);
       app.lastControllerPress = { label: controller.label, buttons: each };
-      renderControllerCheck();
       // The first shift tells the half's side: the line names it.
-      if (controller.seen.size !== known) {
-        renderControllerStatus();
-        renderReconnectButtons();
-      }
+      if (controller.seen.size !== known) renderDeviceLines();
+      else renderDeviceLine("controller");
     }
     const found = navigationRoot();
     const screen = !found ? null : found.id === "setup" || found.id === "finish" ? found.id : "drawer";
@@ -1407,9 +1418,9 @@ function useController(controller) {
     if (actions.length) deviceLog.info(`${controller.label} → ${actions.join(", ")} (${root ? `navigating ${root.id}` : "riding"})`);
     for (const action of actions) runAction(action);
   });
-  controller.on("battery", renderControllerStatus);
+  controller.on("battery", () => renderDeviceLine("controller"));
   controller.on("locked", (locked) => {
-    renderControllerCheck();
+    renderDeviceLine("controller");
     // Once per ride: why − moved to B, and that the half comes back by itself.
     if (locked && app.ride && !app.ride.clickLockNoted) {
       app.ride.clickLockNoted = true;
@@ -1418,30 +1429,14 @@ function useController(controller) {
   });
   controller.on("disconnected", () => {
     app.controllerInput.forget(controller.id);
-    renderControllerStatus();
+    renderDeviceLine("controller");
     notify(t("devices.controllerDisconnected", { label: controller.label }), "error");
   });
   controller.on("reconnected", () => {
-    renderControllerStatus();
+    renderDeviceLine("controller");
     notify(t("devices.isBack", { label: controller.label }));
   });
-  renderControllerStatus();
-}
-
-function renderControllerStatus() {
-  const status = $("controller-status");
-  status.textContent = controllerLine(app.controllers);
-  status.classList.toggle("ok", app.controllers.every((c) => c.connected));
-}
-
-/** Under the controller line: + and − confirmed one by one, or which Click half is missing. */
-function renderControllerCheck() {
-  const check = $("controller-live");
-  const missing = lonelyHalfHint();
-  const seen = new Set(app.controllers.flatMap((c) => [...c.seen]));
-  check.textContent = missing ?? controllerCheck({ seen, last: app.lastControllerPress ?? null });
-  check.dataset.state = missing ? "silent" : seen.size ? "live" : "";
-  delete check.dataset.note;
+  renderDeviceLines();
 }
 
 /** A lone Click half that has had time to say it relays, and hasn't. */

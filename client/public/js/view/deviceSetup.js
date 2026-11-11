@@ -75,6 +75,38 @@ export function liveCheck({ sinceDataMs, power, cadence }) {
   return { state: "idle", text: t("setup.live.idle") };
 }
 
+/** The heart rate check on its line: waiting for the first beat, the bpm, or beats that stopped. */
+export function heartRateCheck({ sinceDataMs, heartRate }) {
+  if (sinceDataMs === null || sinceDataMs === undefined) return { state: "waiting", text: t("setup.live.waiting") };
+  if (sinceDataMs > SILENT_AFTER_MS) return { state: "silent", text: t("setup.live.noHeartRate", { s: Math.floor(sinceDataMs / 1000) }) };
+  return { state: "live", text: `♥ ${Math.round(heartRate)} bpm` };
+}
+
+const kindName = () => ({ trainer: t("devices.smartTrainer"), hr: t("ride.heartRate"), controller: t("start.controller") });
+const idleDetail = () => ({ trainer: t("setup.idle.trainer"), hr: t("setup.idle.hr"), controller: t("setup.idle.controller") });
+
+/**
+ * What a device line shows, worked out from the device's state alone, so no
+ * step can leave a stale text behind: a connected device always keeps its
+ * line (trying another one that fails or is cancelled changes nothing), a
+ * dropped one is reconnecting, a pick in progress shows under the name.
+ * @param {{kind: "trainer" | "hr" | "controller", device?: {label: string, connected: boolean} | null, remembered?: string[],
+ *   attempt?: {state: "pending" | "error", text: string} | null, live?: {state: string, text: string} | null}} line
+ * @returns {{state: "idle" | "remembered" | "pending" | "connected" | "live" | "silent" | "reconnecting" | "error", title: string, detail: string}}
+ */
+export function deviceLine({ kind, device = null, remembered = [], attempt = null, live = null }) {
+  const name = device?.label ?? (remembered.length ? remembered.join(" + ") : kindName()[kind]);
+  if (attempt?.state === "pending") return { state: "pending", title: name, detail: attempt.text };
+  if (device && !device.connected) return { state: "reconnecting", title: name, detail: t("devices.reconnecting") };
+  if (device) {
+    const state = live?.state === "live" || live?.state === "silent" ? live.state : "connected";
+    return { state, title: name, detail: live?.text ?? t("setup.connected") };
+  }
+  if (attempt?.state === "error") return { state: "error", title: name, detail: attempt.text };
+  if (remembered.length) return { state: "remembered", title: name, detail: t("setup.remembered") };
+  return { state: "idle", title: name, detail: idleDetail()[kind] };
+}
+
 /**
  * A device line's actions: Reconnect for a remembered device that isn't
  * connected (the chooser then reads "Other"), else one button to connect,
