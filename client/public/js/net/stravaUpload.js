@@ -18,17 +18,25 @@ export class UploadReceipts {
 
   load(key) {
     if (this.#memory.has(key)) return this.#memory.get(key);
+    let stored;
     try {
-      const value = JSON.parse(this.storage.getItem(PREFIX + key));
-      if (!value || !["uploading", "processing", "pending", "check-failed", "uncertain", "success", "rejected", "failed"].includes(value.phase)) return null;
-      if (value.uploadId !== null && !positiveId(value.uploadId)) return null;
-      if (value.activityId !== null && !positiveId(value.activityId)) return null;
-      if (value.phase === "success" && !positiveId(value.activityId)) return null;
-      return value;
+      stored = this.storage.getItem(PREFIX + key);
     } catch {
+      // Only storage that can't be read is unavailable.
       this.available = false;
       return null;
     }
+    let value;
+    try {
+      value = JSON.parse(stored);
+    } catch {
+      return null; // A corrupt receipt is ignored; the storage itself works.
+    }
+    if (!value || !["uploading", "processing", "pending", "check-failed", "uncertain", "success", "rejected", "failed"].includes(value.phase)) return null;
+    if (value.uploadId !== null && !positiveId(value.uploadId)) return null;
+    if (value.activityId !== null && !positiveId(value.activityId)) return null;
+    if (value.phase === "success" && !positiveId(value.activityId)) return null;
+    return value;
   }
 
   save(key, value) {
