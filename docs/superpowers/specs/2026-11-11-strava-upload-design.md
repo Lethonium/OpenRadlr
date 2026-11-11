@@ -57,3 +57,15 @@ The Strava request sends only FIT/TCX, not the summary PNG. The public Strava
 API reference has no media-upload endpoint; images can be attached manually
 through Edit Activity. Do not imply that sharing a file automatically attaches
 it to an existing activity.
+
+## Inline upload states
+
+The account and actions stay in one row through submission, processing, pending,
+success and errors. Busy buttons carry a spinner; a checked Uploaded link opens
+the activity. Retry actions carry an error indicator, while terminal rejection
+links to Strava with its explanation. Details remain in tooltips and accessible
+descriptions, and the live region announces status without adding visible lines.
+Reduced-motion preferences stop the spinner animation. Account names truncate
+when space is tight; the two uncertain-submission actions retain their safeguards.
+Periodic menu refreshes preserve the recovery binding for the same snapshot and
+account, so an in-flight check is not cancelled by a presentation refresh.

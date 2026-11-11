@@ -2898,19 +2898,21 @@ function setupFinishUpload() {
 }
 
 function setupRecoveryUpload() {
-  app.recoveryUpload?.dispose();
-  app.recoveryUpload = null;
   const snapshot = app.unfinished;
   const visible = snapshot?.trainerKind === "trainer" && Boolean(app.info?.strava?.enabled) && snapshot.recorder.samples.length > 0;
   $("unfinished-strava-panel").hidden = !visible;
+  // Menu info refreshes every few seconds. Keep this ride's active request and listeners.
+  if (visible && app.recoveryUpload?.source === snapshot && app.recoveryUpload?.account === app.stravaAccount) return;
+  app.recoveryUpload?.dispose();
+  app.recoveryUpload = null;
   $("discard-unfinished").textContent = t("unfinished.discard");
   if (!visible) return;
-  app.recoveryUpload = mountUpload("unfinished-strava-panel", RideRecorder.from(snapshot.recorder), `OpenRadlr · ${snapshot.routeName}`, {
+  app.recoveryUpload = Object.assign(mountUpload("unfinished-strava-panel", RideRecorder.from(snapshot.recorder), `OpenRadlr · ${snapshot.routeName}`, {
     indoor: snapshot.studio,
     onSuccess: () => {
       if (app.unfinished === snapshot) $("discard-unfinished").textContent = t("unfinished.done");
     },
-  });
+  }), { source: snapshot, account: app.stravaAccount });
 }
 
 // ------------------------------------------------------------- recovery ---

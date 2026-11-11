@@ -87,7 +87,7 @@ test("a freshly connected account can resume a status check after OAuth", () => 
   receipts.save("7:1", { phase: "check-failed", uploadId: 9, activityId: null, code: "not_connected" });
   const binding = bindStravaUpload({ elements: els, client: {}, receipts, key: "7:1", account });
   assert.equal(els.connect.hidden, true);
-  assert.equal(els.action.textContent, t("strava.action.check"));
+  assert.equal(els.action.textContent, t("strava.action.retryCheck"));
   binding.dispose();
 });
 
@@ -97,4 +97,29 @@ test("a ready upload needs only the account and action", () => {
   assert.equal(view.status, "");
   assert.equal(view.detail, "");
   assert.equal(view.action, t("unfinished.uploadStrava"));
+});
+
+test("processing puts a spinner and progress label on the action", () => {
+  const view = uploadPresentation(state("processing"), account);
+  assert.equal(view.spinner, true);
+  assert.equal(view.action, t("strava.state.processing"));
+});
+
+test("success is a checked activity button without a separate visible status", () => {
+  const view = uploadPresentation(state("success", { activityId: 77 }), account);
+  assert.equal(view.activityLabel, t("strava.state.success"));
+  assert.equal(view.tone, "success");
+});
+
+test("a failed check keeps retrying on the same error action", () => {
+  const view = uploadPresentation(state("check-failed", { uploadId: 9 }), account);
+  assert.equal(view.action, t("strava.action.retryCheck"));
+  assert.equal(view.tone, "error");
+});
+
+test("a rejected upload has an inline failure link with its explanation", () => {
+  const view = uploadPresentation(state("rejected", { error: "duplicate" }), account);
+  assert.equal(view.activityLabel, t("strava.state.rejected"));
+  assert.equal(view.tone, "error");
+  assert.match(view.detail, /duplicate/);
 });

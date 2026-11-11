@@ -13,7 +13,7 @@ Branch: `fix/strava-upload-state`, based on `origin/main`.
 
 ## Result
 
-Implemented in PR #68. `make check` passes: 1,208 client tests and 549 Rust
+Implemented in PR #68. `make check` passes: 1,212 client tests and 549 Rust
 tests, plus formatting and lint. Desktop and 390px browser verification used
 the real local backend with an injected BLE power meter and intercepted Strava
 responses (shortened polling delays for the ad-hoc UI check). Pending → menu
@@ -30,3 +30,11 @@ image-attachment hint. Verified the downloaded PNG filename and short-screen
 button/footer bounds in the browser, alongside the existing desktop/mobile flow.
 The interactive preview now leaves native confirmation dialogs open for a human
 response; Playwright's default auto-dismiss caused the reported flicker.
+
+Inline-state follow-up: spinner and progress inside the busy action, a checked
+Uploaded activity link, and error/retry actions in the same row. No visible
+status/detail paragraphs; explanations remain in tooltips and accessible
+descriptions, with live announcements. All six settled states retain the same
+row height at 320, 390 and 1280px, including German and a long account name.
+The browser flow also reproduced and verified the fix for periodic menu info
+refreshes cancelling recovery polling. The complete flow still submits once.
