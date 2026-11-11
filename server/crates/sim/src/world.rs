@@ -1000,7 +1000,7 @@ impl World {
                     (false, false) => 0.0,
                 };
                 if rider.boxed_s < spacing.squeeze_after_s {
-                    rider.speed = rider.speed.min(spacing.speed_limit(gap, ahead.speed));
+                    rider.speed = spacing.hold(rider.speed, speed_before, spacing.speed_limit(gap, ahead.speed), dt);
                 }
             } else {
                 rider.boxed_s = 0.0;
@@ -2311,6 +2311,62 @@ mod tests {
         }
 
         assert_eq!(world.rider(follower).unwrap().target_lane, 1, "stayed on the wheel");
+    }
+
+    #[test]
+    fn a_rider_suddenly_too_close_drops_back_gently() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 100.5, 1, 8.7);
+        put(&mut world, follower, 100.0, 1, 8.7);
+
+        let mut hardest: f64 = 0.0;
+        for _ in 0..(8.0 / DT) as usize {
+            let before = world.rider(follower).unwrap().speed;
+            ride(&mut world, DT, &[(leader, 200.0), (follower, 200.0)]);
+            hardest = hardest.max((before - world.rider(follower).unwrap().speed) / DT);
+        }
+
+        let max_brake = SpacingParams::default().max_brake;
+        assert!(hardest <= max_brake + 0.2, "no jolt: braked at {hardest:.1} m/s²");
+        assert!(
+            gap_between(&world, follower, leader) > SpacingParams::default().min_gap - 0.1,
+            "made room again"
+        );
+    }
+
+    #[test]
+    fn a_rider_ridden_through_keeps_its_speed() {
+        let mut world = empty_world(
+            Route::new(RouteSpec {
+                id: "one".into(),
+                name: "One lane".into(),
+                lanes: 1,
+                seed: 1,
+                points: vec![Point::new(0.0, 0.0, 0.0), Point::new(5000.0, 0.0, 0.0)],
+                markers: vec![],
+                walk: vec![],
+            })
+            .unwrap(),
+        );
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 110.0, 0, 8.6);
+        put(&mut world, follower, 100.0, 0, 8.6);
+
+        let mut slowest = f64::INFINITY;
+        for _ in 0..(90.0 / DT) as usize {
+            ride(&mut world, DT, &[(leader, 200.0), (follower, 260.0)]);
+            slowest = slowest.min(world.rider(leader).unwrap().speed);
+        }
+
+        assert!(gap_between(&world, leader, follower) > 2.0, "slipped through");
+        assert!(
+            slowest > 8.6 - 0.6,
+            "not braked by the rider going through: {:.1} km/h",
+            slowest * 3.6
+        );
     }
 
     /// A wall across all four lanes: `leader` in lane 1 ahead of `follower`,

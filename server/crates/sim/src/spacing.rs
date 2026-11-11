@@ -15,6 +15,13 @@ pub struct SpacingParams {
     pub min_gap: f64,
     /// Seconds to close the remaining gap down to `min_gap`.
     pub close_s: f64,
+    /// Closer than `min_gap`, a rider drops back at most this much slower
+    /// than the leader (m/s): room opens gently, and a rider just ridden
+    /// through by a faster one is hardly slowed.
+    pub drop_back: f64,
+    /// Hardest the spacing ever brakes (m/s²), like easing off the pedals:
+    /// no jolt when a rider suddenly finds a wheel close ahead.
+    pub max_brake: f64,
     /// A rider ahead closer than this (m) makes a stronger rider pull out to pass.
     pub pass_look: f64,
     /// Pull out when, at the leader's speed and in clear air, the rider would
@@ -38,6 +45,8 @@ impl Default for SpacingParams {
         Self {
             min_gap: 2.0,
             close_s: 0.5,
+            drop_back: 0.5,
+            max_brake: 2.0,
             pass_look: 8.0,
             pass_accel: 0.01,
             pass_smooth_s: 5.0,
@@ -50,7 +59,14 @@ impl Default for SpacingParams {
 impl SpacingParams {
     /// Fastest a rider may ride `gap` metres behind a rider going `ahead_speed`.
     pub fn speed_limit(&self, gap: f64, ahead_speed: f64) -> f64 {
-        (ahead_speed + (gap - self.min_gap) / self.close_s.max(1e-6)).max(0.0)
+        let closing = (gap - self.min_gap) / self.close_s.max(1e-6);
+        (ahead_speed + closing.max(-self.drop_back)).max(0.0)
+    }
+
+    /// Speed after holding a rider going `speed` (from `before`, one tick of
+    /// `dt` ago) to `limit`, braking no harder than `max_brake`.
+    pub fn hold(&self, speed: f64, before: f64, limit: f64, dt: f64) -> f64 {
+        speed.min(limit.max(before - self.max_brake * dt))
     }
 
     /// Lane and metres behind the start line of the `index`-th rider of a
@@ -82,6 +98,23 @@ mod tests {
         let p = SpacingParams::default();
         assert!(p.speed_limit(1.5, 8.0) < 8.0);
         assert_eq!(p.speed_limit(0.0, 0.5), 0.0);
+    }
+
+    #[test]
+    fn far_too_close_a_rider_drops_back_only_a_little_slower_than_the_leader() {
+        let p = SpacingParams::default();
+        assert!((p.speed_limit(0.2, 8.0) - (8.0 - p.drop_back)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn holding_back_never_brakes_harder_than_easing_off() {
+        let p = SpacingParams::default();
+        assert!((p.hold(9.0, 9.0, 5.0, 0.05) - (9.0 - p.max_brake * 0.05)).abs() < 1e-9);
+        assert!((p.hold(9.0, 9.0, 8.99, 0.05) - 8.99).abs() < 1e-9);
+        assert!(
+            (p.hold(7.0, 9.0, 8.0, 0.05) - 7.0).abs() < 1e-9,
+            "a climb slows it more anyway"
+        );
     }
 
     #[test]
