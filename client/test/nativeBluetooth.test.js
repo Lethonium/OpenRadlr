@@ -79,6 +79,31 @@ test("asks for the Bluetooth permission only once", async () => {
   assert.equal(fake.calls.filter((call) => call.method === "initialize").length, 1);
 });
 
+test("a refused Bluetooth permission is a NotAllowedError, as in browsers", async () => {
+  const { fake, bluetooth } = setup();
+  fake.fail.initialize = "Permission denied."; // the Android plugin's words; iOS says "BLE permission denied"
+  await assert.rejects(bluetooth.requestDevice({ filters: [{ services: [0x1826] }] }), { name: "NotAllowedError" });
+});
+
+test("a phone without Bluetooth LE reports a missing adapter, as in browsers", async () => {
+  const { fake, bluetooth } = setup();
+  fake.fail.initialize = "BLE is not available.";
+  await assert.rejects(bluetooth.requestDevice({ filters: [{ services: [0x1826] }] }), { name: "NotFoundError", message: /adapter/ });
+});
+
+test("Bluetooth switched off is told apart from a cancelled picker", async () => {
+  const { bluetooth } = setup([trainerDevice()], { enabled: false });
+  await assert.rejects(bluetooth.requestDevice({ filters: [{ services: [0x1826] }] }), { message: /adapter/ });
+});
+
+test("Bluetooth switched off is noticed on the next try after turning it on", async () => {
+  const fake = fakeBlePlugin({ devices: [trainerDevice()], enabled: false });
+  const bluetooth = new NativeBluetooth({ plugin: fake.plugin, storage: memoryStorage() });
+  await assert.rejects(bluetooth.requestDevice({ filters: [{ services: [0x1826] }] }));
+  fake.plugin.isEnabled = async () => ({ value: true });
+  assert.equal((await bluetooth.requestDevice({ filters: [{ services: [0x1826] }] })).name, trainerDevice().name);
+});
+
 test("a smart trainer streams power and follows the road through the native plugin", async () => {
   const { fake, bluetooth } = setup();
   const trainer = await SmartTrainer.connect(bluetooth);

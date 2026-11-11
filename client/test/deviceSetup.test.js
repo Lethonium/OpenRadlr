@@ -55,7 +55,7 @@ test("connect errors in plain words: what to do, not what the browser said", () 
   assert.match(connectErrorText(err("NotFoundError", "Bluetooth adapter not available.")), /Bluetooth is off/);
   assert.match(connectErrorText(err("TimeoutError"), "KICKR CORE"), /No answer from KICKR CORE.*other apps/);
   assert.match(connectErrorText(err("NetworkError", "GATT operation failed for unknown reason.")), /Couldn't connect.*pedal/);
-  assert.match(connectErrorText(err("SecurityError")), /blocked .*browser settings/);
+  assert.match(connectErrorText(err("SecurityError")), /isn't allowed to use Bluetooth.*site settings.*phone's settings/);
   assert.match(connectErrorText(new Error("This device offers neither FTMS Indoor Bike Data nor Cycling Power data.")), /doesn't send power/);
   assert.match(connectErrorText(new Error("Something odd")), /Something odd.*Device diagnostics/);
 });

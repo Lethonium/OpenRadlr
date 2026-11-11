@@ -72,6 +72,15 @@ function commonPrefix(texts) {
 }
 
 const domError = (name, message) => Object.assign(new Error(message), { name });
+const noAdapter = () => domError("NotFoundError", "Bluetooth adapter not available."); // i18n-ok (Chrome's own message)
+
+/** The plugin's start-up failures as the errors a browser gives, so the device setup explains them. */
+function initializeError(error) {
+  const message = error?.message ?? String(error);
+  if (/permission denied/i.test(message)) return domError("NotAllowedError", message);
+  if (/not available|unsupported/i.test(message)) return noAdapter();
+  return error;
+}
 
 export class NativeBluetooth {
   #plugin;
@@ -88,6 +97,9 @@ export class NativeBluetooth {
   /** Opens the app's device picker. Cancelling it rejects with a NotFoundError, as in browsers. */
   async requestDevice(options) {
     await this.#initialize();
+    // Switched off, the picker would just stay empty: say so, as Chrome does.
+    const enabled = await this.#plugin.isEnabled?.();
+    if (enabled && !enabled.value) throw noAdapter();
     let found;
     try {
       found = await this.#plugin.requestDevice(scanOptions(options));
@@ -112,7 +124,7 @@ export class NativeBluetooth {
   #initialize() {
     this.#ready ??= Promise.resolve(this.#plugin.initialize({ androidNeverForLocation: true })).catch((error) => {
       this.#ready = null;
-      throw error;
+      throw initializeError(error);
     });
     return this.#ready;
   }

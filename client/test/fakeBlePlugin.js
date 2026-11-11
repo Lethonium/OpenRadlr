@@ -7,7 +7,7 @@
 const BASE = "-0000-1000-8000-00805f9b34fb";
 const full = (uuid) => (typeof uuid === "number" ? `${uuid.toString(16).padStart(8, "0")}${BASE}` : uuid);
 
-export function fakeBlePlugin({ devices = [], chosen = devices[0]?.deviceId } = {}) {
+export function fakeBlePlugin({ devices = [], chosen = devices[0]?.deviceId, enabled = true } = {}) {
   const listeners = new Map();
   const connected = new Set();
   const calls = [];
@@ -24,6 +24,10 @@ export function fakeBlePlugin({ devices = [], chosen = devices[0]?.deviceId } = 
   const plugin = {
     async initialize(options) {
       record("initialize", options);
+    },
+    async isEnabled() {
+      record("isEnabled");
+      return { value: enabled };
     },
     async requestDevice(options) {
       record("requestDevice", options);
