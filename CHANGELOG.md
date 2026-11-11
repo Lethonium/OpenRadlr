@@ -9,6 +9,10 @@ title is the release note.
 
 The first release.
 
+### Fixed
+
+- Phone ride screen: no panel covers the top buttons or another panel any more. In landscape the broadcast stats bar, the workout chip, the studio cue, targets and controls, and the training band each have their own place; upright, the training chip, race row and workout stats sit in rows under the buttons, and the paddle hint wraps. The lane buttons are see-through, and the milestone banner keeps to the free middle.
+
 ### Added
 
 - **iOS and Android app (preview):** `app/` wraps the client in a Capacitor
