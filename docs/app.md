@@ -92,7 +92,9 @@ your Mac, use the Mac's LAN address, not `localhost`.
 The app icon comes from the client's maskable icon
 (`client/public/icons/icon-maskable-512.png`). The splash screen is the README
 emblem (`docs/assets/openradlr-emblem.png`), centred on the icon's dark
-background `#080a0e`. To regenerate every size for iOS and Android after one
+background `#080a0e`. Android 12 and later draw their own splash screen: there
+the emblem is `splash_icon` (one per density, scaled so all of it fits the
+circle Android shows) on the same colour (`res/values/styles.xml`). To regenerate every size for iOS and Android after one
 of them changes:
 
 ```bash
