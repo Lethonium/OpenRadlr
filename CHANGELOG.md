@@ -44,6 +44,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- The start menu's elevation profile (and route map) no longer stays an empty box when the route loaded while it was out of view, e.g. on the Events tab or during a ride: both are drawn again once they show.
 - Cancelling the device window while trying another strap, trainer or controller no longer shows "Cancelled" over the device that is still connected; each device line now shows what its device really does.
 - On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
 - No more trees on the road where a route rounds a sharp corner at a junction off the map's roads (e.g. at the top of Col de la Forge by the Hilltop Café): every route of the map now keeps its asphalt clear, whichever one is ridden.
