@@ -34,6 +34,7 @@ import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescript
 import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
 import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
+import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
@@ -85,7 +86,7 @@ import { BUILD } from "./build.js";
 import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
-import { WorkoutSession } from "./workout/workoutSession.js";
+import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
@@ -250,6 +251,7 @@ const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
 let removeDrawerPanel = null;
+nativeApp?.onBack?.(goBack);
 /** Below this the menu fills the screen and shows its page list first. */
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
@@ -3505,6 +3507,35 @@ function toggleMenu() {
 function closeTopPanel() {
   if (app.finished) return;
   panels.closeTop();
+}
+
+/** Android's back button: one step back (input/back.js). @returns {boolean} false on the start menu, where the app goes to the background */
+function goBack() {
+  const riding = document.body.classList.contains("riding");
+  const workout = !document.body.classList.contains("working-out") ? null : $("workout-summary").hidden ? "running" : "summary";
+  switch (backAction({ finished: app.finished, panelOpen: panels.isOpen, riding, workout, figureOpen: app.workoutFigure !== null })) {
+    case "leaveRide":
+      leaveRide();
+      return true;
+    case "stepBack":
+      panels.back();
+      return true;
+    case "askEndWorkout":
+      runWorkoutActions(endAfterAsking(app.workout, () => confirm(t("workout.confirmEnd"))));
+      return true;
+    case "leaveWorkout":
+      endRide();
+      return true;
+    case "askFinish":
+      app.menuDialog?.open();
+      showFinishConfirm();
+      return true;
+    case "closeFigure":
+      pickWorkoutFigure(app.workoutPick, null);
+      return true;
+    default:
+      return false;
+  }
 }
 
 /** Closes the left drawer and the menu. */

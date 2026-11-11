@@ -256,3 +256,29 @@ test("on a wide screen a nav entry keeps the focus on itself", () => {
   race.fire("click");
   assert.equal(fakeEl.active, race);
 });
+
+test("back through the stack on a narrow screen: page to list, then closed", () => {
+  const { dialog, stack } = setup({ narrow: true });
+  dialog.open("race");
+  assert.equal(stack.back(), true);
+  assert.equal(dialog.page, null);
+  assert.equal(dialog.isOpen, true);
+  assert.equal(stack.back(), true);
+  assert.equal(dialog.isOpen, false);
+});
+
+test("back through the stack on a wide screen closes the dialog at once", () => {
+  const { dialog, stack } = setup();
+  dialog.open("race");
+  assert.equal(stack.back(), true);
+  assert.equal(dialog.isOpen, false);
+});
+
+test("back through the stack cancels the confirm step before leaving its page", () => {
+  const { dialog, stack, root } = setup({ narrow: true });
+  dialog.open("race");
+  dialog.showConfirm();
+  stack.back();
+  assert.equal(root.getAttribute("data-confirm"), null);
+  assert.equal(dialog.page, "race");
+});

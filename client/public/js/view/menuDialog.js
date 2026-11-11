@@ -77,11 +77,21 @@ export function createMenuDialog({
     opener = null;
   }
 
+  /** On a phone, a page goes back to the page list; false when there is no such step. */
+  function backToList() {
+    if (!narrow() || nav.page === null) return false;
+    const left = nav.page;
+    nav.back();
+    render();
+    navEls.find((el) => el.dataset.menuNav === left)?.focus();
+    return true;
+  }
+
   function openDialog(pageId) {
     if (!open) {
       open = true;
       opener = getActiveElement();
-      removeDialog = stack.push({ close });
+      removeDialog = stack.push({ close, back: backToList });
       if (!narrow()) nav.open(pageIds[0]); else nav.back();
       render();
       onChange({ open, confirming });
@@ -130,12 +140,7 @@ export function createMenuDialog({
   on(backdrop, "click", (event) => { if (event.target === backdrop) close(); });
   // On a phone the list and the page swap places, so the tapped entry (or the
   // back button) disappears: focus moves to what is shown in its place.
-  on(backEl, "click", () => {
-    const left = nav.page;
-    nav.back();
-    render();
-    navEls.find((el) => el.dataset.menuNav === left)?.focus();
-  });
+  on(backEl, "click", () => backToList());
   on(closeEl, "click", () => close());
   for (const el of navEls) {
     on(el, "click", () => {
