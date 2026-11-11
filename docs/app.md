@@ -178,9 +178,11 @@ because their signatures differ: uninstall the debug build first.
      All traffic is encrypted (https). There are no accounts to delete:
      *Log out* deletes the Strava login.
    - Health apps: fitness (indoor cycling with a trainer and heart rate).
-4. **Store listing**: short description (80 characters), full description,
-   the 512 px icon (`client/public/icons/icon-512.png`), a 1024×500 feature
-   graphic and at least two phone screenshots.
+4. **Store listing**: category *Health & Fitness*, type *App*. Title, short
+   and full description and release notes, in English and German, are in
+   `app/android/fastlane/metadata/android/` (the layout `fastlane supply`
+   uploads). Images: the 512 px icon (`client/public/icons/icon-maskable-512.png`),
+   a 1024×500 feature graphic and 2–8 phone screenshots (9:16 or 16:9).
 5. **Production**: promote the tested release from internal testing.
 
 Play rejects apps that only wrap a website. OpenRadlr's argument is native
