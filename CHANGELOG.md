@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.1.0 (2026-11-11)
+
+
+### Features
+
+* Add a ghost of the best lap on each loop route ([#58](https://github.com/Lethonium/OpenRadlr/issues/58)) ([51d68dc](https://github.com/Lethonium/OpenRadlr/commit/51d68dc2552df081951d0ec1402c2f54dc8b9b03))
+* Add banners over the road and personal milestone banners ([#61](https://github.com/Lethonium/OpenRadlr/issues/61)) ([73deb43](https://github.com/Lethonium/OpenRadlr/commit/73deb43a49aa59ef4ca2583ffa5f5cee39d69aab))
+* Add golden lemons to collect along the routes ([#57](https://github.com/Lethonium/OpenRadlr/issues/57)) ([2e40715](https://github.com/Lethonium/OpenRadlr/commit/2e407154adb5e509fcadae6b840dbaa20c7fd631))
+* **app:** Add an iOS and Android app with native Bluetooth ([#8](https://github.com/Lethonium/OpenRadlr/issues/8)) ([63ca386](https://github.com/Lethonium/OpenRadlr/commit/63ca3864b598e506db2f1dc7cd9f58c989a4092f))
+* **app:** Step back with Android's back button instead of closing ([#78](https://github.com/Lethonium/OpenRadlr/issues/78)) ([79cccd0](https://github.com/Lethonium/OpenRadlr/commit/79cccd0df4471a2491909e3d38de24f871be37f6))
+* Give bots character: a cast, moves and company around riders ([#67](https://github.com/Lethonium/OpenRadlr/issues/67)) ([1137aee](https://github.com/Lethonium/OpenRadlr/commit/1137aee1da75e2b665ddb0f96ac35296a209ed8f))
+* Guide workout poses with steps and a side view ([#60](https://github.com/Lethonium/OpenRadlr/issues/60)) ([83f374b](https://github.com/Lethonium/OpenRadlr/commit/83f374b205e48f9fa278ee75a96117e18f0729a8))
+* Line the climbs with a crowd that cheers riders on ([#59](https://github.com/Lethonium/OpenRadlr/issues/59)) ([747327d](https://github.com/Lethonium/OpenRadlr/commit/747327d39b5e1468374e6ab6d81f494e6df8bbca))
+* Simplify the start menu header: language dropdown, footer version, update toast ([#77](https://github.com/Lethonium/OpenRadlr/issues/77)) ([d5c0ba8](https://github.com/Lethonium/OpenRadlr/commit/d5c0ba812c05552e04830de40450e6ec7b6ddf42))
+
+
+### Bug Fixes
+
+* **client:** Draw the route profile again once it is shown ([#73](https://github.com/Lethonium/OpenRadlr/issues/73)) ([cbced3b](https://github.com/Lethonium/OpenRadlr/commit/cbced3be2f761ab1a1bf896dc8c755b454a1ef6d))
+* Draw the summary card at 4:3 so Strava doesn't crop it ([#65](https://github.com/Lethonium/OpenRadlr/issues/65)) ([510f6a2](https://github.com/Lethonium/OpenRadlr/commit/510f6a281475328645bcc0db14c52355e5559a54)), closes [#66](https://github.com/Lethonium/OpenRadlr/issues/66)
+* Keep trees off routes where they round a junction's corner ([#62](https://github.com/Lethonium/OpenRadlr/issues/62)) ([8b24e08](https://github.com/Lethonium/OpenRadlr/commit/8b24e085d850d8cb2c950abc2abe83f3413998a8))
+* Make Strava uploads resumable and preserve ride recovery ([#68](https://github.com/Lethonium/OpenRadlr/issues/68)) ([63463f1](https://github.com/Lethonium/OpenRadlr/commit/63463f115eebf3aff91161e148a3a627893fae8d))
+
+
+### Performance Improvements
+
+* Load the start screen about twice as fast ([#74](https://github.com/Lethonium/OpenRadlr/issues/74)) ([3457d77](https://github.com/Lethonium/OpenRadlr/commit/3457d776bacc79d05fa606b0bb1b40a650795b50))
+
 ## [Unreleased]
 
 ### Changed
