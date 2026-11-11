@@ -1,0 +1,85 @@
+# Git hooks. Install once per clone with `make hooks`; see CONTRIBUTING.md.
+#
+# Commit-stage hooks are fast and check only the files being committed.
+# The pre-push hook runs `make lint` (rustfmt, clippy, ESLint) so it stays fast;
+# the full `make check` is left to CI — run it before opening a pull request.
+minimum_pre_commit_version: "3.5.0"
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-json
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-executables-have-shebangs
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-case-conflict
+
+  # Catches API tokens, private keys and high-entropy secrets. The baseline
+  # records the false positives that were reviewed when it was created; new
+  # findings fail the hook. Refresh it with `make secrets-baseline`.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        stages: [pre-commit, pre-push]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: local
+    hooks:
+      # The make targets keep the hooks working for contributors who only have
+      # Docker (see the Makefile); they check the whole workspace, not one file.
+      - id: rustfmt
+        name: rustfmt (server)
+        entry: make --no-print-directory fmt-check
+        language: system
+        files: ^server/.*\.rs$
+        pass_filenames: false
+
+      - id: eslint
+        name: ESLint (client)
+        entry: make --no-print-directory lint-client
+        language: system
+        files: ^client/.*\.js$
+        pass_filenames: false
+
+      # Python wrappers because the official hooks need Go or Docker.
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: python
+        additional_dependencies: [actionlint-py==1.7.12.25]
+        files: ^\.github/workflows/.*\.ya?ml$
+
+      - id: hadolint
+        name: hadolint
+        entry: hadolint
+        language: python
+        additional_dependencies: [hadolint-py==2.15.1.3]
+        types: [dockerfile]
+        # The identify tags treat Dockerfile.dockerignore as a Dockerfile.
+        exclude: \.dockerignore$
+
+      - id: lint
+        name: make lint
+        entry: make --no-print-directory lint
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

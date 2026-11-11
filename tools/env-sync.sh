@@ -45,9 +45,10 @@ if [ -z "$added" ]; then
   exit 0
 fi
 
+last_byte=$(tail -c1 "$env")
 {
   # Keep a newline between the old last line and the new section.
-  [ -n "$(tail -c1 "$env")" ] && echo
+  [ -n "$last_byte" ] && echo
   echo
   echo "# === Added from $(basename "$example") on $(date +%Y-%m-%d) ==="
   printf '%s\n' "$added"

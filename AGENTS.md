@@ -17,6 +17,9 @@ repeat it. Here is the operational knowledge on top of that.
 ## Testing
 - `make check` = lint + all tests; it runs exactly what CI runs. Run it before
   claiming anything is done.
+- `make hooks` installs the pre-commit and pre-push git hooks: pre-commit
+  checks the files being committed, pre-push runs `make lint`. The full check
+  is left to CI (see CONTRIBUTING.md, [Git hooks](CONTRIBUTING.md#git-hooks)).
 - Client: `node --test "test/**/*.test.js"` (plain node, fakes for sockets/timers/
   storage/devices — no browser needed). Server: `cargo test --workspace`, including
   the end-to-end WebSocket tests in `server/crates/server/tests/`.

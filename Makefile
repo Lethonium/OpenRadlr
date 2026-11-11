@@ -36,7 +36,7 @@ endif
 .PHONY: help
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make \033[36m<target>\033[0m\n"} \
-		/^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2 } \
+		/^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 } \
 		/^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
 ##@ Run
@@ -135,8 +135,7 @@ test-client: ## Run the browser client tests
 lint: lint-server lint-client ## Check formatting and lints
 
 .PHONY: lint-server
-lint-server: ## rustfmt check and clippy with warnings as errors
-	$(CARGO) fmt --all -- --check
+lint-server: fmt-check ## rustfmt check and clippy with warnings as errors
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 .PHONY: lint-client
@@ -154,6 +153,32 @@ client/node_modules: client/package.json
 .PHONY: fmt
 fmt: ## Format the Rust code
 	$(CARGO) fmt --all
+
+.PHONY: fmt-check
+fmt-check: ## Check the Rust formatting without changing files
+	$(CARGO) fmt --all -- --check
+
+.PHONY: hooks
+hooks: ## Install the git hooks (pre-commit and pre-push)
+	@command -v pre-commit >/dev/null 2>&1 || { \
+		echo "pre-commit not found. Install it first with:"; \
+		echo "  uv tool install pre-commit    # or: pipx install pre-commit"; \
+		exit 1; \
+	}
+	pre-commit install --install-hooks
+
+.PHONY: hooks-update
+hooks-update: ## Update the pinned hook versions
+	pre-commit autoupdate
+
+.PHONY: secrets-baseline
+secrets-baseline: ## Rebuild .secrets.baseline after reviewing the new findings
+	@command -v uvx >/dev/null 2>&1 || { \
+		echo "uvx not found. Run:"; \
+		echo "  pipx run --spec detect-secrets==1.5.0 detect-secrets scan --baseline .secrets.baseline"; \
+		exit 1; \
+	}
+	uvx --from detect-secrets==1.5.0 detect-secrets scan --baseline .secrets.baseline
 
 .PHONY: check
 check: lint test ## Everything CI runs
