@@ -26,7 +26,8 @@ sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync", "signal"] }
-tower-http = { version = "0.7", features = ["fs", "set-header", "trace"] }
+# Compression: the client is about 1.3 MB of JS, CSS and JSON; Brotli or gzip sends a quarter of it.
+tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "fs", "set-header", "trace"] }
 tracing = "0.1"
 # OpenBikeNet link: one outgoing WebSocket (wss with bundled roots, no system OpenSSL).
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
