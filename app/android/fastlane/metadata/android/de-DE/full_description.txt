@@ -1,0 +1,36 @@
+OpenRadlr ist Indoor-Radfahren für deine Smart-Rolle: Fahr durch eine Inselwelt, zusammen mit Freunden, Fremden und Bots. Ohne Abo, ohne Konto, ohne Werbung, und der Code ist Open Source.
+
+VERBINDET SICH PER BLUETOOTH
+• Smart-Rollen mit Bluetooth FTMS oder Cycling Power, etwa ein Wahoo KICKR Core oder eine Van Rysel D500. Ein Leistungsmesser auf einer klassischen Rolle geht auch.
+• Herzfrequenzgurte.
+• Controller zum Schalten und Lenken: Zwift Click, Play und Ride sowie OpenBikeControl.
+• Bekannte Geräte verbinden sich beim Öffnen der App von selbst.
+
+EINE INSEL, ALLE DARAUF
+Wähl eine Strecke und fahr dieselben Straßen wie alle anderen auf dem Server: das Tal, die Klippen, einen Pass und drei Cafés. Der Widerstand der Rolle folgt der Steigung.
+
+NIE EINE LEERE STRASSE
+Wenn wenig los ist, fahren Bots mit, jeder mit eigener Form und eigenem Stil. Sie sind immer als Bots markiert und machen Platz, wenn Menschen dazukommen.
+
+WINDSCHATTEN, RENNEN UND EVENTS
+Häng dich an ein Hinterrad und spar Watt. Gruppenfahrten und Rennen laufen nach Plan: Tritt während des Countdowns bei und fahr um die Anstiege und Sprints.
+
+SPIN-STUDIO
+Alle 30 Minuten startet ein Kurs. Coach Lemon sagt die Blöcke an, die Ziele richten sich nach deiner FTP, und die Raumtafel zählt die Zeit im Zielbereich.
+
+WORKOUTS IM ERG-MODUS
+Fahr die eingebauten Einheiten oder importiere eigene .zwo-Dateien: Die Rolle hält die Watt. Ein FTP-Test legt deine Zonen fest.
+
+WORKOUTS MIT EIGENEM KÖRPERGEWICHT
+Kurze Zirkel von 4 bis 15 Minuten am Outdoor-Gym des Cafés, jede Übung Schritt für Schritt gezeigt. Kein Rad nötig.
+
+VIRTUELLES SCHALTEN
+Gänge für Singlespeed-Setups wie die Zwift Cog. Schalte auf dem Bildschirm oder mit einem Zwift Click, Play oder Ride.
+
+STRAVA UND FAHRTDATEIEN
+Lade eine Fahrt als virtuelle Fahrt mit Höhenmetern und Karte zu Strava hoch. Oder speichere sie als .fit, .gpx oder .tcx.
+
+DATENSPARSAM
+Dein Profil, deine Fahrten und Einstellungen bleiben auf deinem Handy. Deine Herzfrequenz verlässt es nur in einer Fahrt, die du zu Strava hochlädst. Was eine Fahrt braucht, hält der Server im Speicher und vergisst es, wenn du gehst.
+
+Die App öffnet app.openradlr.com und braucht eine Internetverbindung. Eigener Server für deinen Verein oder zu Hause? OpenRadlr läuft in einem einzigen Docker-Container: github.com/Lethonium/OpenRadlr

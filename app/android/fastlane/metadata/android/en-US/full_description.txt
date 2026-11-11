@@ -1,0 +1,36 @@
+OpenRadlr is indoor cycling for your smart trainer: ride an island world together with friends, strangers and bots. No subscription, no account, no ads, and the code is open source.
+
+CONNECTS OVER BLUETOOTH
+• Smart trainers that speak Bluetooth FTMS or Cycling Power, like a Wahoo KICKR Core or a Van Rysel D500. A power meter on a classic trainer works too.
+• Heart rate straps.
+• Controllers for shifting and steering: Zwift Click, Play and Ride, and OpenBikeControl.
+• Known devices reconnect by themselves when you open the app.
+
+ONE ISLAND, EVERYONE ON IT
+Pick a route and ride the same roads as everyone else on the server: the valley, the cliffs, a col and three cafés. The trainer's resistance follows the gradient.
+
+NEVER AN EMPTY ROAD
+Bots ride along when it's quiet, each with its own fitness and style. They're always marked as bots and make room as people join.
+
+DRAFTING, RACES AND EVENTS
+Sit on a wheel to save watts. Group rides and races run on a schedule: join one during its countdown, then go for the climbs and the sprints.
+
+SPIN STUDIO
+A group class starts every 30 minutes. Coach Lemon calls the blocks, targets follow your FTP, and the room board ranks time on target.
+
+WORKOUTS IN ERG MODE
+Ride the built-in sessions or import your own .zwo files: the trainer holds the watts. An FTP test sets your zones.
+
+BODYWEIGHT WORKOUTS
+Short circuits of 4 to 15 minutes at the café's outdoor gym, each move shown step by step. No bike needed.
+
+VIRTUAL SHIFTING
+Gears for single-speed setups like the Zwift Cog. Shift on screen or with a Zwift Click, Play or Ride.
+
+STRAVA AND RIDE FILES
+Finish a ride and upload it to Strava as a virtual ride, with its climbing and a map. Or save it as .fit, .gpx or .tcx.
+
+PRIVATE BY DESIGN
+Your profile, ride history and settings stay on your phone. Your heart rate only leaves it inside a ride you upload to Strava. What a ride needs is kept in the server's memory and forgotten when you leave.
+
+The app opens app.openradlr.com and needs an internet connection. Want your own server for your club or your home? OpenRadlr runs in a single Docker container: github.com/Lethonium/OpenRadlr
