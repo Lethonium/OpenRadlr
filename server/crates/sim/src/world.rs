@@ -40,11 +40,12 @@ pub type RouteIndex = usize;
 /// Tunables of the simulation. Everything has a sensible default.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimConfig {
-    /// Humans plus bots the world keeps riding on every route at least
-    /// (0: no bots at all). More come with the humans, see `bots_near_human`.
+    /// Humans plus bots the world keeps riding on every route
+    /// (`OPENRADLR_TARGET_RIDERS`; 0: no bots at all).
     pub target_riders: usize,
     /// Bots every human riding a route keeps around them: up to
-    /// `company_radius_m` ahead or `company_behind_m` behind.
+    /// `company_radius_m` ahead or `company_behind_m` behind. They come out
+    /// of the route's `target_riders`: far bots make room, the count stays.
     pub bots_near_human: usize,
     /// How far ahead along the route a bot keeps a human company.
     pub company_radius_m: f64,
@@ -53,8 +54,6 @@ pub struct SimConfig {
     pub company_behind_m: f64,
     /// New bots appear at least this far from every human (out of sight).
     pub spawn_clear_m: f64,
-    /// Most riders on one route, however many humans ride it.
-    pub max_route_riders: usize,
     pub physics: PhysicsParams,
     pub draft: DraftParams,
     pub bot_tuning: BotTuning,
@@ -89,7 +88,6 @@ impl Default for SimConfig {
             company_radius_m: 1500.0,
             company_behind_m: 400.0,
             spawn_clear_m: 350.0,
-            max_route_riders: 48,
             physics: PhysicsParams::default(),
             draft: DraftParams::default(),
             bot_tuning: BotTuning::default(),
@@ -1204,18 +1202,6 @@ impl World {
         }
     }
 
-    /// Riders a route keeps: `target_riders` at least, more with every
-    /// human riding it (`bots_near_human` each), at most `max_route_riders`.
-    /// No bots at all with `target_riders == 0`.
-    pub fn route_target(&self, route: RouteIndex) -> usize {
-        if self.config.target_riders == 0 {
-            return 0;
-        }
-        let humans = self.company_humans(route).len();
-        let wanted = humans * (1 + self.config.bots_near_human);
-        wanted.min(self.config.max_route_riders).max(self.config.target_riders)
-    }
-
     /// Riders of `route` that count towards its population: everyone but seated riders.
     fn population(&self, route: RouteIndex) -> usize {
         self.riders
@@ -1252,12 +1238,12 @@ impl World {
             && !self.seat_of.contains_key(&r.id)
     }
 
-    /// Keeps every route at its target (see `route_target`): company for its
-    /// humans first, then groups where the route is emptiest; surplus bots
-    /// leave once no human is nearby.
+    /// Keeps every route at `target_riders`: company for its humans first
+    /// (far bots making room), then groups where the route is emptiest;
+    /// surplus bots leave once no human is nearby.
     fn balance_population(&mut self) {
+        let target = self.config.target_riders;
         for route in 0..self.routes.len() {
-            let target = self.route_target(route);
             self.keep_company(route, target);
             while self.population(route) < target {
                 let room = target - self.population(route);
@@ -2981,24 +2967,18 @@ mod tests {
     }
 
     #[test]
-    fn the_population_target_follows_the_humans() {
+    fn a_route_keeps_its_target_however_many_humans_want_company() {
         let config = SimConfig {
             target_riders: 12,
-            bots_near_human: 6,
-            max_route_riders: 30,
+            bot_despawn_distance_m: 0.0,
             ..SimConfig::default()
         };
         let mut world = company_world(config, 1);
-        assert_eq!(world.route_target(0), 12);
-        world.join_human("Anna", 70.0);
-        world.join_human("Ben", 70.0);
-        assert_eq!(world.route_target(0), 14);
-        for name in ["Cleo", "Dan", "Eva"] {
+        for name in ["Anna", "Ben", "Cleo", "Dan", "Eva"] {
             world.join_human(name, 70.0);
+            world.tick(DT);
+            assert_eq!(world.riders().count(), 12, "after {name} joined");
         }
-        assert_eq!(world.route_target(0), 30, "capped at max_route_riders");
-        world.tick(DT);
-        assert_eq!(world.riders().count(), 30);
     }
 
     #[test]
@@ -3020,7 +3000,7 @@ mod tests {
         for seed in 0..8 {
             let mut world = company_world(
                 SimConfig {
-                    target_riders: 1,
+                    target_riders: 7,
                     ..SimConfig::default()
                 },
                 seed,
@@ -3057,8 +3037,7 @@ mod tests {
             // One human and their company fill the route: every new bot is company.
             let mut world = company_world(
                 SimConfig {
-                    target_riders: 1,
-                    max_route_riders: 7,
+                    target_riders: 7,
                     ..SimConfig::default()
                 },
                 seed,
@@ -3091,7 +3070,6 @@ mod tests {
     fn a_full_route_brings_its_far_bots_to_a_lonely_human() {
         let config = SimConfig {
             target_riders: 6,
-            max_route_riders: 6,
             ..SimConfig::default()
         };
         let mut world = company_world(config, 3);
@@ -3123,8 +3101,9 @@ mod tests {
             1,
         );
         let anna = world.join_human("Anna", 70.0);
+        assert_eq!(world.company_humans(0).len(), 1);
         world.start_race(1, Some(anna)).unwrap();
-        assert_eq!(world.route_target(0), 1);
+        assert!(world.company_humans(0).is_empty());
     }
 
     fn spawn_a_group(world: &mut World, at_least: usize) -> Vec<RiderId> {

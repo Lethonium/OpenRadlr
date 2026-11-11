@@ -16,7 +16,7 @@ The rethink has four parts:
 - **who the bots are:** names, a riding type, a team kit;
 - **how they ride:** moves, limited by how much energy they have left;
 - **where they appear:** around the riders who are online, in groups;
-- **how many there are:** the count scales with the humans on a route.
+- **how many there are:** unchanged, `OPENRADLR_TARGET_RIDERS` per route; company comes out of it.
 
 The aim is that every ride has someone to chase, someone to ride with and now and then someone who attacks you.
 
@@ -131,18 +131,28 @@ A first try had the spawns 350–1,200 m ahead and counted bots up to 1,500 m be
 
 ### Making room
 
-When the route is already at its population target:
+When the route is already at its target:
 
 - a bot more than `bot_despawn_distance_m` from every human, and not keeping anyone company, is removed to make room;
 - surplus bots leave as before: the one farthest from humans first, and only out of sight.
 
-## How many: the count follows the humans
+## How many: unchanged, `OPENRADLR_TARGET_RIDERS`
 
-The population target of a route is `max(target_riders, humans × (1 + bots_near_human))`, capped at `max_route_riders` (48).
+A route keeps `target_riders` riders, humans plus bots, as before. That's the existing `OPENRADLR_TARGET_RIDERS`: 12 by default, 75 in production. Company doesn't add bots. It moves the route's own bots: far ones make room, and groups take their place around the humans.
 
-- `target_riders` keeps its meaning. It is the floor, and its default stays 12.
 - With `target_riders = 0`, a route has no bots at all: the OpenBikeNet velodrome and the tests.
-- With no humans online nothing changes: twelve bots per route, now in groups.
+- With no humans online nothing changes but the groups.
+- With many humans and a small target, the company is thinner: each human gets what is left, and the humans are company for each other.
+
+A first draft grew the target with the humans (`humans × 7`, capped at a new, fixed 48). That left two settings for one thing, and with production's 75 the cap did nothing. So `OPENRADLR_TARGET_RIDERS` stays the one setting.
+
+Simulated hours on Col de la Forge (one rider at 75% of a 3.0 W/kg FTP; the other riders started with them):
+
+| target | humans | riders | bots within 150 m (mean) | no bot within 300 m |
+|---|---|---|---|---|
+| 12 | 1 | 12 | 2.7 | 64 s |
+| 75 | 1 | 75 | 3.4 | 75 s |
+| 12 | 3 | 12 | 2.9 | 322 s |
 
 ## Protocol (additive, no version bump)
 
@@ -186,7 +196,7 @@ All of these tests are deterministic and use the injected RNG:
   - names are unique;
   - groups spawn together, wait for each other and split up;
   - company spawns out of sight, ahead or behind, at the right levels;
-  - the population target follows the humans;
+  - the route keeps its target however many humans want company;
   - `target_riders = 0` means no bots.
 - **Server:** the new fields on bots, and their absence on humans.
 - **Client:**

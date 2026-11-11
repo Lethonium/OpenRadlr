@@ -68,7 +68,7 @@ that died after its rider was taken over by a new one can't touch the rider.
    captain's road, then copies speed, position and lane to every seat.
 5. Lanes move towards their target lane (one lane per second).
 6. Finishers are recorded; the race completes when every participant finished.
-7. Bots are spawned or removed to keep each route's target: `target_riders` at least, more with every human riding it. Each human keeps a few bots around (groups spawn out of sight, ahead to chase or behind to come by), and far bots make room for them (#64, ADR 0022).
+7. Bots are spawned or removed to keep `OPENRADLR_TARGET_RIDERS` riders on every route. Each human keeps a few of them around: far bots make room, and groups spawn out of sight, ahead to chase or behind to come by (#64, ADR 0022).
 8. The game core sends events to their route, every fifth tick each client the
    state of the riders around them, and new resistance
    whenever a rider's grade changed by at least 0.1 %.
