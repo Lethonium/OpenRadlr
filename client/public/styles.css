@@ -6114,7 +6114,7 @@ body.working-out #paddles {
   }
 
   .ride[data-layout="training"] .targets {
-    left: var(--gap);
+    left: calc(2 * var(--gap) + 56px);
     bottom: calc(124px + var(--gap));
     transform: none;
   }
