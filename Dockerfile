@@ -43,7 +43,8 @@ ENV OPENRADLR_BIND=0.0.0.0:8080 \
 # Strava logins live here (a volume in docker-compose.yml); owned by the server's user.
 RUN mkdir -p /app/data && chown openradlr:openradlr /app/data
 
-USER openradlr
+# Numeric form keeps the same ids and works with orchestrators (hadolint DL3066).
+USER 10001:10001
 WORKDIR /app
 EXPOSE 8080
 

@@ -5,9 +5,10 @@ Thanks for helping build OpenRadlr! This guide covers how we work.
 ## Workflow
 
 1. Create a branch from `main`.
-2. Write a failing test, make it pass, refactor (see below).
-3. Run `make check` — it runs exactly what CI runs.
-4. Open a pull request with a short description of *why* the change is needed.
+2. Install the git hooks once per clone with `make hooks` (see [Git hooks](#git-hooks)).
+3. Write a failing test, make it pass, refactor (see below).
+4. Run `make check` — it runs exactly what CI runs.
+5. Open a pull request with a short description of *why* the change is needed.
 
 Commit messages use Conventional Commits with an imperative description
 (`feat: Add sprint marker to route format`). Use `fix:` for bug fixes and `!`
@@ -15,6 +16,41 @@ or a `BREAKING CHANGE:` footer for breaking changes. For squash merges, make
 the PR title a Conventional Commit and preserve relevant footers in the squash
 commit body. See [Releases](docs/releases.md) for versioning and maintainer setup.
 Keep pull requests focused; split refactorings from behaviour changes.
+
+## Git hooks
+
+The repository uses [pre-commit](https://pre-commit.com) to catch problems
+before they reach CI. Install it once per clone:
+
+```bash
+uv tool install pre-commit    # or: pipx install pre-commit
+make hooks
+```
+
+`make hooks` installs two hooks:
+
+- **pre-commit** checks only the files being committed: whitespace and line
+  endings, JSON/YAML/TOML, large files, secrets, rustfmt, ESLint, ShellCheck,
+  actionlint and hadolint.
+- **pre-push** runs `make lint` (rustfmt, clippy, ESLint) — fast enough for
+  every push. The full `make check` is left to CI, where it runs on the pull
+  request; run it yourself before opening one.
+
+Bypass a hook with `git commit --no-verify` / `git push --no-verify`, or skip
+one by id, for example `SKIP=eslint git commit ...`. A pull request still runs
+the lint and test jobs in CI.
+
+If the secret scanner flags a false positive, review it, then update and check
+the baseline:
+
+```bash
+make secrets-baseline
+git diff .secrets.baseline
+```
+
+Update the pinned hook versions from time to time with `make hooks-update`.
+The hooks use the same Makefile targets as the rest of the workflow, so they
+fall back to Docker when `cargo` or `npm` is not installed.
 
 ## Dependency updates
 
