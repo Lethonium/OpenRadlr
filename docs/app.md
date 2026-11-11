@@ -98,7 +98,7 @@ circle Android shows) on the same colour (`res/values/styles.xml`). To regenerat
 of them changes:
 
 ```bash
-npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets generate
+npm run assets   # scripts/make-assets.mjs → app/assets/ → capacitor-assets generate (fetched by npx)
 ```
 
 ### Debugging

@@ -24,6 +24,12 @@ updates:
     patterns: ["*"]
     multi-ecosystem-group: weekly-dependencies
   - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
+  - package-ecosystem: npm
     directory: /landing
     schedule:
       interval: weekly
