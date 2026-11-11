@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app icon's own background (#080a0e), also the web view's before the page loads. -->
+    <color name="splashBackground">#080a0e</color>
+</resources>

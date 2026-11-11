@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **iOS and Android app (preview):** `app/` wraps the client in a Capacitor
+  shell, so iPhones and iPads can connect smart trainers, heart rate straps
+  and Zwift controllers. That is impossible in any iOS browser. A polyfill
+  (`ble/nativeBluetooth.js`) gives the existing device code the Web
+  Bluetooth it expects, backed by native Bluetooth. Inside the app the screen
+  stays on and ride files open the share sheet. *Connect with Strava* uses the
+  system sign-in sheet, so Google and Apple sign-in work too. On iOS, devices
+  stay connected while the app is in the background. Browsers are unaffected
+  ([docs/app.md](docs/app.md), ADR 0021).
 - Bots with character (#64): every bot is a named rider of a made-up cast ("Gus Tailwind", "Penny Farthing") (and, rarely, Goldie Lemon in lemon yellow) with a riding type (rouleur, climber, sprinter, attacker, tourer) and a team kit, the same everywhere. Bots now race you: they take turns on the front of a group and swing off, attack near the top of a climb, take up the chase when you come past and sprint for the line, as long as their energy (W′) lasts. They ride in groups that spawn out of sight around every rider (mostly a group ahead to chase, sometimes one coming up from behind),; the number of riders per route is still `OPENRADLR_TARGET_RIDERS`. The 3D view shows bots in their team's kit, the rider list names their type, and the ticker calls out moves near you.
 - Golden lemons: a few lemons float over the road, each in one lane, and move to new places every day (the same for every rider). Ride through one in its lane to collect it; they grow back every lap. A pickup shows in the ticker with your all-time count, and the finish screen lists the ride's lemons. No counter on the HUD: it's an easter egg.
 - Ghost lap: your best lap on a loop route is kept in the browser, and a see-through rider labelled "Best lap" rides it again from the line, lane changes and all. The HUD shows the live gap ("Best lap +4.2 s", red behind, green ahead), and a faster lap becomes the new ghost at once. Hidden in races and events.
@@ -28,11 +37,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The workout screen guides every pose: step-by-step instructions for the exercise under way or, during rests, the one coming up; the sun salutation marks the breath in progress; sided poses name the leg in front. A side view of your avatar joins the front view, and the timer and stats moved to the corners so the avatar has the middle (#26)
 
 ### Changed
+- Start screen: every device (trainer, heart rate, controller) is one line of the same shape: a state dot, its name over what it is doing (live power and cadence, heart rate in bpm, which buttons came through) and its actions. Lines no longer wrap or jump when their state changes; on narrow phones two actions or an error go under the name, and nothing is cut off. The Ride bar leaves room for itself however tall an error makes it.
 
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- Cancelling the device window while trying another strap, trainer or controller no longer shows "Cancelled" over the device that is still connected; each device line now shows what its device really does.
+- On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
 - No more trees on the road where a route rounds a sharp corner at a junction off the map's roads (e.g. at the top of Col de la Forge by the Hilltop Café): every route of the map now keeps its asphalt clear, whichever one is ridden.
 - On routes that aren't a loop (Lanzarote), the start crowd no longer stands in the middle of the road.
 - Workouts: the statue plinths no longer flicker, the camera frames your own rider below the timer instead of the mat's centre, joining a workout no longer shows a black screen while the gym's world is built again, and the start menu no longer shows an empty map box on the Workout and Studio tabs (#26).
