@@ -56,7 +56,7 @@ repeat it. Here is the operational knowledge on top of that.
 - **Protocol changes:** update `docs/protocol.md`, both sides, bump
   `PROTOCOL_VERSION` for breaking changes.
 - **Structural decisions:** add an ADR to `docs/adr/` (NNNN-short-name.md;
-  context, decision, consequences). There are 19 so far.
+  context, decision, consequences). There are 20 so far.
 - **Feature design:** significant features go through the superpowers workflow —
   a design spec and an implementation plan in `docs/superpowers/{specs,plans}/`
   (see the 2026-10-19 examples). Follow that pattern for new features.

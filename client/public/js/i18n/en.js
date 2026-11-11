@@ -108,7 +108,7 @@ export default {
   "ride.gap": "Gap",
   "ride.aroundYou": "Around you",
   "ride.3dViewOfThe": "3D view of the road behind your rider",
-  "ride.ridersAroundYouOne": "Riders around you, one row per lane",
+  "ride.mapOfTheRoad": "Top-down map of the road around you",
   "ride.3dViewOfThe2": "3D view of the spin studio",
   "ride.leftPaddle": "Left paddle",
   "ride.rightPaddle": "Right paddle",

@@ -11,7 +11,7 @@ const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (blo
 
 /**
  * The view a screen opens in: the workout is the 3D gym whatever 2D/3D
- * preference was saved (its HUD sits on the world, the 2D peloton has nothing
+ * preference was saved (its HUD sits on the world, the 2D map has nothing
  * to show), the ride follows the saved preference.
  */
 export function startingViewMode(saved, { workout = false } = {}) {

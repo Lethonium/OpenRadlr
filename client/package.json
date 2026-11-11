@@ -2,7 +2,7 @@
   "name": "openradlr-client",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenRadlr browser client (proof of concept): Web Bluetooth trainers and a 2D view.",
+  "description": "OpenRadlr browser client (proof of concept): Web Bluetooth trainers and a 2D map view.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {

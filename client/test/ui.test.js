@@ -4,7 +4,6 @@ import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
 import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
 import { describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, riderSections } from "../public/js/view/panels.js";
-import { lemonsInWindow, ridersInWindow } from "../public/js/view/pelotonView.js";
 import { profileScale } from "../public/js/view/profileView.js";
 import { minimapTransform } from "../public/js/view/minimapView.js";
 import { squareRoute } from "./helpers.js";
@@ -165,14 +164,6 @@ test("describes race status and events", () => {
   assert.equal(describeEvent({ kind: "event_finished", event_id: "e", event_kind: "group_ride", results: [result("Ben", 0.5)] }, 1), "Event finished");
 });
 
-test("peloton window keeps riders around me only", () => {
-  const route = squareRoute();
-  const me = { id: 1, distance: 5 };
-  const visible = ridersInWindow(me, [me, { id: 2, distance: 990 }, { id: 3, distance: 60 }, { id: 4, distance: 500 }], route);
-  assert.deepEqual(visible.map((v) => v.rider.id), [1, 2]);
-  assert.equal(visible[1].gap, -15);
-});
-
 test("profile and minimap scales map into the canvas", () => {
   const route = squareRoute();
   const scale = profileScale(route, 1016, 200);
@@ -184,13 +175,6 @@ test("profile and minimap scales map into the canvas", () => {
   const project = minimapTransform(route.bounds, 300, 300, 25);
   assert.deepEqual(project({ x: 0, y: 0 }), { x: 25, y: 275 });
   assert.deepEqual(project({ x: 250, y: 250 }), { x: 275, y: 25 });
-});
-
-test("peloton labels only collide within the same lane", async () => {
-  const { overlaps } = await import("../public/js/view/pelotonView.js");
-  assert.equal(overlaps({ left: 0, right: 50, row: 1 }, { left: 40, right: 90, row: 1 }), true);
-  assert.equal(overlaps({ left: 0, right: 50, row: 1 }, { left: 40, right: 90, row: 2 }), false);
-  assert.equal(overlaps({ left: 0, right: 50, row: 1 }, { left: 70, right: 90, row: 1 }), false);
 });
 
 test("shifting and view keys map to actions", () => {
@@ -251,16 +235,3 @@ test("edits are kept as they're typed, each field only once it's valid", () => {
   assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).cog, 16);
 });
 
-test("the peloton shows the golden lemons near me that are still there", () => {
-  const route = squareRoute();
-  const me = { id: 1, distance: 5, lane: 1 };
-  const lemons = [
-    { id: "a", distance: 30, lane: 2, collected: false },
-    { id: "b", distance: 20, lane: 0, collected: true },
-    { id: "c", distance: 990, lane: 3, collected: false },
-    { id: "d", distance: 400, lane: 1, collected: false },
-  ];
-  const shown = lemonsInWindow(me, lemons, route);
-  assert.deepEqual(shown.map((s) => s.lemon.id), ["a", "c"]);
-  assert.equal(shown[1].gap, -15);
-});

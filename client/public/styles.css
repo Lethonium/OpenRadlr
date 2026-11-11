@@ -1581,6 +1581,7 @@ button.small {
   --hud-muted: #c3cad3;
   --num: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
   --gap: 20px;
+  --band-height: 250px;
 }
 
 body.riding {
@@ -1595,7 +1596,7 @@ body.riding {
 }
 
 .world-wrap,
-.canvas-peloton {
+.canvas-ride-map {
   position: absolute;
   inset: 0;
 }
@@ -1606,15 +1607,19 @@ body.riding {
 }
 
 .canvas-world,
-.canvas-peloton {
+.canvas-ride-map {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.ride[data-layout="training"] .world-wrap,
-.ride[data-layout="training"] .canvas-peloton {
-  bottom: 250px;
+/* The training layout leaves the view the upper part, as it does for 3D. */
+.ride[data-layout="training"] .world-wrap {
+  bottom: var(--band-height);
+}
+
+.ride[data-layout="training"] .canvas-ride-map {
+  height: calc(100% - var(--band-height));
 }
 
 .hud {
@@ -2222,7 +2227,7 @@ body.riding {
 .targets {
   position: absolute;
   left: 50%;
-  bottom: 300px;
+  bottom: calc(var(--band-height) + 50px);
   transform: translateX(-50%);
   display: flex;
   overflow: hidden;
@@ -2252,7 +2257,7 @@ body.riding {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 250px;
+  height: var(--band-height);
   background: #12161b;
   border-top: 1px solid var(--glass-line);
   display: grid;
@@ -4049,7 +4054,7 @@ body.riding {
 .ride:not([data-mode="studio"]) .studio-only,
 .ride[data-mode="studio"] .route-only,
 .ride[data-mode="studio"] .layout:not(.layout-studio),
-.ride[data-mode="studio"] .canvas-peloton,
+.ride[data-mode="studio"] .canvas-ride-map,
 .ride[data-mode="studio"] #world-wrap {
   display: none !important;
 }
@@ -5365,7 +5370,7 @@ body.aboard #event-call-button {
 /* ===================================================================== */
 
 body.working-out #hud,
-body.working-out #peloton,
+body.working-out #ride-map,
 body.working-out #paddles {
   display: none !important;
 }

@@ -252,6 +252,25 @@ export const temperate = Object.freeze({
   farIslandDark: COLORS.farIslandDark,
   rock: COLORS.rock,
   sand: SAND,
+  /** Colours of the 2D map's symbols: buildings and their outlines (0–1 RGB like the rest). */
+  map: Object.freeze({
+    house: Object.freeze({
+      fill: Object.freeze([0.455, 0.298, 0.22]),
+      fillAlpha: 0.46,
+      edge: Object.freeze([0.847, 0.78, 0.608]),
+      edgeAlpha: 0.85,
+      ridge: Object.freeze([0.91, 0.839, 0.675]),
+      ridgeAlpha: 0.45,
+    }),
+    cafe: Object.freeze({
+      fill: Object.freeze([0.557, 0.361, 0.243]),
+      fillAlpha: 0.52,
+      edge: Object.freeze([0.91, 0.839, 0.675]),
+      edgeAlpha: 0.95,
+      ridge: Object.freeze([0.949, 0.878, 0.714]),
+      ridgeAlpha: 0.6,
+    }),
+  }),
   seaFloor: SEA_FLOOR,
   palette: PALETTE,
   models,
@@ -265,5 +284,7 @@ export const temperate = Object.freeze({
     tree: plantTree,
     tuft: plantTuft,
     flower: plantFlower,
+    /** The two greens of the 2D map's tree dots. */
+    mapColors: Object.freeze([Object.freeze([0.302, 0.49, 0.227]), Object.freeze([0.376, 0.561, 0.271])]),
   }),
 });

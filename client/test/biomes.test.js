@@ -45,6 +45,21 @@ test("a biome brings everything the world draws with", () => {
     assert.ok(biome.sky.clouds.count > 0, `${id} has clouds`);
     assert.equal(biome.sky.clouds.color.length, 4, `${id} has a cloud colour`);
     assert.equal(biome.preview.sky.length, 3, `${id} has a picker swatch`);
+    assert.equal(biome.flora.mapColors.length, 2, `${id} has two 2D tree colours`);
+    for (const color of biome.flora.mapColors) assert.equal(color.length, 3, `${id} has an RGB 2D tree colour`);
+    // The 2D map takes its season's colours from the biome only (rideMapTheme
+    // has no fallbacks): buildings, outlines and the alpha of each.
+    for (const kind of ["house", "cafe"]) {
+      const spec = biome.map?.[kind];
+      assert.ok(spec, `${id} has 2D map colours for a ${kind}`);
+      for (const key of ["fill", "edge", "ridge"]) {
+        assert.equal(spec[key].length, 3, `${id} has an RGB 2D ${kind} ${key}`);
+        assert.ok(spec[key].every((channel) => channel >= 0 && channel <= 1), `${id}'s 2D ${kind} ${key} is in 0–1`);
+      }
+      for (const key of ["fillAlpha", "edgeAlpha", "ridgeAlpha"]) {
+        assert.ok(spec[key] === undefined || (spec[key] > 0 && spec[key] <= 1), `${id}'s 2D ${kind} ${key} is an opacity`);
+      }
+    }
     if (biome.weather) {
       assert.ok(biome.weather.count > 0, `${id} has weather particles`);
       assert.equal(biome.weather.color.length, 4, `${id} has a weather colour`);

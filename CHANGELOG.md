@@ -37,6 +37,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Start menu: the language switch is a compact dropdown (any future language shows up in it), the version and Privacy link sit in a quiet footer, and a new version shows a "Reload / Later" toast instead of a link in the header. On phones the tabs share one row instead of scrolling.
 - Installed on a phone or tablet (home screen), OpenRadlr no longer locks itself to landscape: it turns with the device, so the start menu and the ride also work in portrait.
+- The 2D ride map now follows the selected season and time of day, like the 3D world: winter paints snow, ice and pine tree dots, golden hour and dusk tint the ground, water, road and buildings, and `auto` follows the local clock. The start menu's map uses the same palette, so the season carries from the menu into the ride.
+- The 2D view is a top-down map of the road around you: the coast, every road, the ridden road with its lane markings, and nearby riders, with your marker heading up. It replaces the lane strip that stretched over the whole window and had nothing to show when riding alone. In the Training layout the map ends above the workout band. When you're drafting, a soft band marks the gap ahead of you, as the lane strip did; the golden lemons and the best-lap ghost keep their places on the map.
+- The 2D map has small tree dots in and near forests and thin outline houses in villages, plus the café at the start. They come from the route's scenery zones and the map's cafés, are generated once and culled to the view; no extra requests. Tree dots now scale with the map's zoom, so they grow with the road instead of staying pin-sized.
 
 ### Added
 

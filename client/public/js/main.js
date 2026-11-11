@@ -73,7 +73,7 @@ import {
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
-import { drawPeloton } from "./view/pelotonView.js";
+import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
 import { ftpProvenance } from "./view/ftpProvenance.js";
@@ -398,6 +398,8 @@ const app = {
   /** The menu's 3D view, handed over to the ride when it was built for the joined route. */
   menuView: null,
   viewMode: "2d",
+  /** The selected time of day, also used by the 2D map when there is no 3D view. */
+  timeMode: TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day",
   hud: null,
   layoutChoice: "auto",
   layout: "cockpit",
@@ -849,7 +851,7 @@ function initMenuStage() {
     $("menu-profile").hidden = !route;
     // Docked in the corner, the map points at the picked route; with none (Workout, Studio) it is an empty box.
     $("menu-map").hidden = !route && $("setup").classList.contains("map-docked");
-    drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
+    drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null, biome: app.biome, timeMode: app.timeMode });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
   app.redrawStage = drawStage;
@@ -4130,10 +4132,12 @@ function setQuality(quality) {
 }
 
 function setTimeMode(mode) {
-  if (!app.view3d) return;
-  app.view3d.setTimeMode(mode);
-  $("time-mode").value = mode;
-  writeSetting(TIME_KEY, mode);
+  const next = TIME_MODES.includes(mode) ? mode : "day";
+  app.timeMode = next;
+  // The 2D map has no view to configure, but it reads the same setting.
+  app.view3d?.setTimeMode(next);
+  $("time-mode").value = next;
+  writeSetting(TIME_KEY, next);
   app.viewPopover?.refresh();
 }
 
@@ -4141,7 +4145,7 @@ function setViewMode(mode, { remember = true } = {}) {
   const use3d = mode === "3d" && Boolean(app.view3d);
   app.viewMode = use3d ? "3d" : "2d";
   $("world-wrap").hidden = !use3d;
-  $("peloton").hidden = use3d;
+  $("ride-map").hidden = use3d;
   $("view-3d").setAttribute("aria-pressed", String(use3d));
   $("view-2d").setAttribute("aria-pressed", String(!use3d));
   $("scene-controls").hidden = !use3d;
@@ -4420,11 +4424,11 @@ function frame() {
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
   } else {
-    drawPeloton($("peloton"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, colors, lemons: app.lemonHunt?.lemons });
+    drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
   if (app.sceneRequests.length) {
-    const scene = grabScene(app.viewMode === "3d" ? $("world3d") : $("peloton"));
+    const scene = grabScene(app.viewMode === "3d" ? $("world3d") : $("ride-map"));
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
