@@ -199,8 +199,20 @@
               <div id="unfinished-save" class="unfinished-actions" hidden>
                 <button type="button" id="unfinished-fit" class="secondary" data-i18n="unfinished.downloadFit">Download FIT</button>
                 <button type="button" id="unfinished-photos" class="secondary" hidden data-i18n="unfinished.downloadPhotos">Download photos</button>
-                <button type="button" id="unfinished-strava" class="secondary" hidden data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+
               </div>
+              <section id="unfinished-strava-panel" class="strava-upload" aria-labelledby="unfinished-strava-panel-title" hidden>
+              <h3 id="unfinished-strava-panel-title" data-i18n="strava.title">Strava</h3>
+              <p id="unfinished-strava-panel-account" class="field-hint"></p>
+              <p id="unfinished-upload-status" class="upload-state" role="status" aria-live="polite"></p>
+              <p id="unfinished-strava-panel-detail" class="field-hint"></p>
+              <div class="upload-actions">
+                <button type="button" id="unfinished-strava" class="strava-button" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+                <a id="unfinished-strava-panel-connect" class="strava-button" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
+                <a id="unfinished-strava-panel-activity" class="secondary upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+              </div>
+              <p id="unfinished-strava-panel-storage" class="warning" hidden data-i18n="strava.storageWarning">Upload status can’t be saved in this browser. Keep this page open until confirmed, or download your ride.</p>
+            </section>
               <p id="unfinished-status" class="muted"></p>
             </section>
             <div id="activity-panel" class="activity-panel" role="tabpanel">
@@ -950,13 +962,28 @@
                 <button type="button" id="ftp-prompt-dismiss" class="secondary" data-i18n="ride.notNow">Not now</button>
               </div>
             </section>
+            <section id="finish-strava" class="strava-upload" aria-labelledby="finish-strava-title" hidden>
+              <h3 id="finish-strava-title" data-i18n="strava.title">Strava</h3>
+              <p id="finish-strava-account" class="field-hint"></p>
+              <p id="upload-status" class="upload-state" role="status" aria-live="polite"></p>
+              <p id="finish-strava-detail" class="field-hint"></p>
+              <div class="upload-actions">
+                <button type="button" id="upload-strava" class="strava-button" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+                <a id="finish-strava-connect" class="strava-button" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
+                <a id="finish-strava-activity" class="secondary upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+              </div>
+              <p id="finish-strava-storage" class="warning" hidden data-i18n="strava.storageWarning">Upload status can’t be saved in this browser. Keep this page open until confirmed, or download your ride.</p>
+            </section>
+            <section id="finish-files" class="finish-files">
+            <h3 class="save-files-title" data-i18n="finish.saveFiles">Download your ride</h3>
             <div class="modal-actions">
-              <button type="button" id="upload-strava" class="strava-button" hidden data-i18n="unfinished.uploadStrava">Upload to Strava</button>
               <button type="button" id="download-tcx" class="secondary" data-i18n="ride.downloadTcx">Download .tcx</button>
               <button type="button" id="download-gpx" class="secondary" data-i18n="ride.downloadGpx">Download .gpx</button>
               <button type="button" id="download-fit" class="secondary" data-i18n="ride.downloadFit">Download .fit</button>
             </div>
-            <p id="upload-status" class="field-hint" aria-live="polite"></p>
+            </section>
+            <p id="finish-note" class="field-hint"></p>
+            <p id="finish-retained" class="field-hint" hidden data-i18n="finish.retained">Not ready to upload? Your ride and photos stay in this browser when you go back to the menu.</p>
 
             <section class="photos" aria-labelledby="photos-title">
               <h3 id="photos-title"><span data-i18n="photos.title">Photos</span> <span id="photos-count" class="muted"></span></h3>

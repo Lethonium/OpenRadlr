@@ -111,3 +111,10 @@ test("an unfinished snapshot behaves as before", () => {
   assert.equal(continueAllowed(snapshot({ finished: false }), options), true);
   assert.ok(unfinishedLabel(snapshot({ finished: false }), { now: NOW, formatDistance }).startsWith("Unfinished ride · "));
 });
+
+test("saving reports whether the recovery copy was written", async () => {
+  const good = new RideAutosave({ store: mapStore() });
+  assert.equal(await good.save(snapshot()), true);
+  const bad = new RideAutosave({ store: { put: async () => { throw new Error("quota"); } }, log: () => {} });
+  assert.equal(await bad.save(snapshot()), false);
+});

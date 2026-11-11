@@ -5813,3 +5813,28 @@ body.working-out #paddles {
     margin-bottom: 16px;
   }
 }
+
+/* Strava is one workflow, independent of the ride-file downloads. */
+.strava-upload {
+  border: 1px solid var(--border);
+  border-left: 3px solid #fc4c02;
+  border-radius: 10px;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  background: var(--bg);
+  min-width: 0;
+}
+.strava-upload h3, .strava-upload p, .save-files-title { margin: 0; }
+.strava-upload h3, .save-files-title { font-size: 15px; }
+.strava-upload .upload-state { font-weight: 600; overflow-wrap: anywhere; }
+.strava-upload .field-hint { line-height: 1.5; overflow-wrap: anywhere; }
+.strava-upload[data-state="success"] { border-left-color: var(--green, #49b87c); }
+.upload-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.upload-actions > * { min-height: 44px; text-align: center; }
+.upload-link { display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; }
+.strava-upload[aria-busy="true"] .strava-button { cursor: progress; }
+@media (max-width: 600px) {
+  .upload-actions > * { width: 100%; }
+}
+.finish-files { display: grid; gap: 10px; }

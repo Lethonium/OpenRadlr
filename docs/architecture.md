@@ -208,3 +208,14 @@ away; it only falls back to its cache offline, and never caches `/api`,
 Trainers without a control point (power meters, some basic trainers) are
 "power only": the ride works the same, but ERG and virtual shifting are off,
 and workouts run *guided* (targets shown, resistance unchanged).
+
+### Strava upload state
+
+The finish and recovery screens share `view/stravaUploadView.js`, backed by the
+injected `net/stravaUpload.js` controller. Submission, processing, delayed or
+interrupted checks, uncertain submission and confirmed activity creation are
+separate states. Accepted upload IDs survive reloads in account/ride-scoped
+localStorage receipts; retrying them checks status instead of posting again.
+Unsaved finished rides stay in browser recovery on return to the menu. Only an
+activity ID confirms success; no automatic upload happens on reload. See
+[ADR 0021](adr/0021-strava-upload-receipts.md).
