@@ -4175,6 +4175,18 @@ body {
   padding-top: max(18px, env(safe-area-inset-top));
 }
 
+/* Edge to edge (the app on Android 15+, iOS home screen): the status bar lies over the page.
+   Outside a ride a strip in the page's colour keeps scrolled text from running under the clock. */
+body:not(.riding)::after {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  height: env(safe-area-inset-top);
+  background: var(--bg);
+  pointer-events: none;
+}
+
 .hud {
   top: env(safe-area-inset-top);
   right: env(safe-area-inset-right);
