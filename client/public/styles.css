@@ -5790,12 +5790,26 @@ body.working-out #paddles {
   border-radius: 50%;
 }
 
-/* Phones: a tighter header, so the language, status and tabs read as one block. */
+/* No options yet (still loading) or only one language: nothing to choose, so nothing shown. */
+.lang-select:empty,
+.lang-select[hidden] {
+  display: none;
+}
+
+/* Phones: one 12px rhythm down the header (logo row, status, tabs) and 16px at the sides. */
 @media (max-width: 520px) {
   .start-head {
-    padding-top: max(12px, env(safe-area-inset-top));
+    padding-top: max(16px, env(safe-area-inset-top));
     padding-bottom: 0;
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .start-grid {
+    margin-top: 0;
+  }
+
+  .activity-tabs {
+    margin-bottom: 16px;
   }
 }

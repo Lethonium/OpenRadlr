@@ -483,13 +483,15 @@ function relocalise() {
 /** Fills the language dropdown from the supported locales and selects the current one. */
 function renderLanguageSelect() {
   const select = $("lang-select");
+  const options = languageOptions(getLocale());
   select.replaceChildren(
-    ...languageOptions(getLocale()).map(({ code, label, selected }) => {
+    ...options.map(({ code, label, selected }) => {
       const option = new Option(label, code, false, selected);
       option.lang = code;
       return option;
     }),
   );
+  select.hidden = options.length < 2;
 }
 
 /** localStorage, or undefined where even touching it throws. */
