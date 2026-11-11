@@ -218,4 +218,4 @@ separate states. Accepted upload IDs survive reloads in account/ride-scoped
 localStorage receipts; retrying them checks status instead of posting again.
 Unsaved finished rides stay in browser recovery on return to the menu. Only an
 activity ID confirms success; no automatic upload happens on reload. See
-[ADR 0021](adr/0021-strava-upload-receipts.md).
+[ADR 0023](adr/0023-strava-upload-receipts.md).
