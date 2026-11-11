@@ -13,11 +13,11 @@ test("pending processing offers a status check rather than upload", () => {
   assert.equal(view.busy, false);
 });
 
-test("success replaces upload with an activity link and photo instructions", () => {
+test("success replaces upload with an activity link without repeating image instructions", () => {
   const view = uploadPresentation(state("success", { activityId: 77 }), account);
   assert.equal(view.action, null);
   assert.equal(view.activity, "https://www.strava.com/activities/77");
-  assert.match(view.detail, /photos/);
+  assert.equal(view.detail, "");
 });
 
 test("a disconnected account gets a connect action", () => {
@@ -89,4 +89,12 @@ test("a freshly connected account can resume a status check after OAuth", () => 
   assert.equal(els.connect.hidden, true);
   assert.equal(els.action.textContent, t("strava.action.check"));
   binding.dispose();
+});
+
+
+test("a ready upload needs only the account and action", () => {
+  const view = uploadPresentation(state("idle"), account);
+  assert.equal(view.status, "");
+  assert.equal(view.detail, "");
+  assert.equal(view.action, t("unfinished.uploadStrava"));
 });

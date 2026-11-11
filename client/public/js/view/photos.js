@@ -80,6 +80,15 @@ export class PhotoAlbum {
   }
 }
 
+/** Keep the summary save action distinct from the optional collection of photos. */
+export function photoActions(album, shareable) {
+  return {
+    summaryEnabled: Boolean(album.summary),
+    allVisible: album.photos.length > 0,
+    shareVisible: shareable && album.images.length > 0,
+  };
+}
+
 /** The stats shown on an in-ride photo, in display order. */
 export function photoStats({ distanceM, elapsedS, power, speed, gradePercent }) {
   return [

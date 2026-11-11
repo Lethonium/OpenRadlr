@@ -13,7 +13,7 @@ Branch: `fix/strava-upload-state`, based on `origin/main`.
 
 ## Result
 
-Implemented in PR #68. `make check` passes: 1,196 client tests and 511 Rust
+Implemented in PR #68. `make check` passes: 1,208 client tests and 549 Rust
 tests, plus formatting and lint. Desktop and 390px browser verification used
 the real local backend with an injected BLE power meter and intercepted Strava
 responses (shortened polling delays for the ad-hoc UI check). Pending → menu
@@ -22,3 +22,11 @@ a recovered FIT keeps the activity link/photos available. German disconnected
 and missing-permission states were also checked. No real activity or live
 OAuth round trip was performed. Screenshots are in
 `~/.cache/openradlr/screenshots/strava-{ready-desktop,pending-desktop,pending-mobile,success-mobile,permission-mobile-de}.png`.
+
+Visual follow-up: reused the existing compact Strava account row, removed ready
+prose and coloured card treatment, collapsed file formats, and moved the footer
+into normal flow. Added an explicit summary PNG save action and one short manual
+image-attachment hint. Verified the downloaded PNG filename and short-screen
+button/footer bounds in the browser, alongside the existing desktop/mobile flow.
+The interactive preview now leaves native confirmation dialogs open for a human
+response; Playwright's default auto-dismiss caused the reported flicker.

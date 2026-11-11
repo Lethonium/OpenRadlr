@@ -42,3 +42,18 @@ once; immediate success/rejection; ambiguous submission; unavailable storage;
 disposal during submission/poll; account-scoped receipts; safe view actions;
 recovery retention. Run make check and inspect desktop/mobile screenshots with
 the real backend and intercepted Strava responses.
+
+## Visual review
+
+Use the existing start-menu Strava row: small brand mark, account name, and a
+quiet outlined action. No nested card, coloured status border, ready headline,
+or introductory paragraph. Only progress and problems need status copy. Image
+instructions belong once in Summary & photos, with an explicit Save summary
+image action. File formats are collapsed under Download ride file. The finish
+footer stays in normal flow so it cannot cover an upload button on a short
+screen.
+
+The Strava request sends only FIT/TCX, not the summary PNG. The public Strava
+API reference has no media-upload endpoint; images can be attached manually
+through Edit Activity. Do not imply that sharing a file automatically attaches
+it to an existing activity.

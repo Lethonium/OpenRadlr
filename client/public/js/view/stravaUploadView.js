@@ -5,13 +5,13 @@ import { StravaUpload } from "../net/stravaUpload.js";
 /** One state-appropriate action, shared by the summary and recovered ride. */
 export function uploadPresentation(state, account) {
   const view = { busy: false, action: null, connect: false, activity: null, status: "", detail: "" };
-  if (state.phase === "success") return { ...view, status: t("strava.state.success"), detail: t("strava.photos"), activity: activityUrl(state.activityId) };
+  if (state.phase === "success") return { ...view, status: t("strava.state.success"), activity: activityUrl(state.activityId) };
   const authError = ["not_connected", "upload_not_allowed"].includes(state.code);
-  if (!account?.can_upload || authError) return { ...view, connect: true, status: t("strava.state.connect"), detail: t(account && state.code !== "not_connected" ? "strava.permission" : "strava.connectHint") };
+  if (!account?.can_upload || authError) return { ...view, connect: true, detail: t(account && state.code !== "not_connected" ? "strava.permission" : "strava.connectHint") };
   switch (state.phase) {
     case "uploading":
     case "processing":
-      return { ...view, busy: true, action: t(state.phase === "uploading" ? "strava.uploading" : "strava.action.checking"), status: t(state.phase === "uploading" ? "strava.state.uploading" : "strava.state.processing"), detail: t("strava.keepOpen") };
+      return { ...view, busy: true, action: t(state.phase === "uploading" ? "strava.uploading" : "strava.action.checking"), status: t(state.phase === "uploading" ? "strava.state.uploading" : "strava.state.processing") };
     case "pending":
     case "check-failed":
       return { ...view, action: t("strava.action.check"), status: t(state.phase === "pending" ? "strava.state.pending" : "strava.state.check-failed"), detail: t("strava.checkHint") };
@@ -22,7 +22,7 @@ export function uploadPresentation(state, account) {
     case "failed":
       return { ...view, action: t("strava.action.retry"), status: t("strava.state.failed"), detail: t("strava.failedHint") };
     default:
-      return { ...view, action: t("unfinished.uploadStrava"), status: t("strava.state.ready"), detail: t("strava.readyHint") };
+      return { ...view, action: t("unfinished.uploadStrava") };
   }
 }
 
@@ -37,7 +37,9 @@ export function bindStravaUpload({ elements, client, receipts, key, account, mak
     elements.account.textContent = account ? t("strava.account", { name: account.name }) : "";
     elements.account.hidden = !account;
     elements.status.textContent = view.status;
+    elements.status.hidden = !view.status;
     elements.detail.textContent = view.detail;
+    elements.detail.hidden = !view.detail;
     elements.action.textContent = view.action ?? "";
     elements.action.hidden = !view.action;
     elements.action.disabled = view.busy;

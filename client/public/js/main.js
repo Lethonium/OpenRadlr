@@ -72,7 +72,7 @@ import {
   splitLine,
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
-import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoFileName, photoStats } from "./view/photos.js";
+import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawPeloton } from "./view/pelotonView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -3191,6 +3191,10 @@ function initPhotos() {
     // Let the menu close before the next frame is captured.
     requestAnimationFrame(() => takePhoto());
   });
+  $("download-summary").addEventListener("click", () => {
+    const image = app.album.summary;
+    if (image) downloadBlob(image.blob, image.name);
+  });
   $("download-photos").addEventListener("click", () => {
     saveFiles(app.album.images);
   });
@@ -3237,11 +3241,12 @@ function takePhoto() {
 function renderPhotos() {
   const photos = app.album.photos;
   const images = app.album.images;
+  const actions = photoActions(app.album, canShareFiles());
+  $("download-summary").disabled = !actions.summaryEnabled;
   $("photos-count").textContent = photos.length ? `(${photos.length})` : "";
-  $("photos-hint").hidden = photos.length > 0;
-  $("download-photos").hidden = images.length === 0;
-  $("download-photos").textContent = images.length === 1 ? t("photos.downloadOne") : t("photos.downloadAll");
-  $("share-photos").hidden = !canShareFiles() || images.length === 0;
+  $("download-photos").hidden = !actions.allVisible;
+  $("download-photos").textContent = t("photos.downloadAll");
+  $("share-photos").hidden = !actions.shareVisible;
   $("photo-list").replaceChildren(
     ...images.map((photo) => {
       const item = document.createElement("li");

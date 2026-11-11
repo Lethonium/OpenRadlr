@@ -5814,27 +5814,29 @@ body.working-out #paddles {
   }
 }
 
-/* Strava is one workflow, independent of the ride-file downloads. */
+/* Finish/recovery account row uses the same quiet treatment as the start menu. */
 .strava-upload {
-  border: 1px solid var(--border);
-  border-left: 3px solid #fc4c02;
-  border-radius: 10px;
-  padding: 16px;
   display: grid;
-  gap: 8px;
-  background: var(--bg);
+  gap: 6px;
   min-width: 0;
+  padding-block: 12px;
+  border-block: 1px solid var(--border);
 }
-.strava-upload h3, .strava-upload p, .save-files-title { margin: 0; }
-.strava-upload h3, .save-files-title { font-size: 15px; }
-.strava-upload .upload-state { font-weight: 600; overflow-wrap: anywhere; }
-.strava-upload .field-hint { line-height: 1.5; overflow-wrap: anywhere; }
-.strava-upload[data-state="success"] { border-left-color: var(--green, #49b87c); }
+
+.strava-upload h3, .strava-upload p { margin: 0; }
+.strava-upload h3 { font-size: 14px; font-weight: 600; }
+.strava-upload .field-hint { line-height: 1.4; overflow-wrap: anywhere; }
+.upload-identity { display: flex; align-items: center; flex: 1 1 180px; gap: 8px; min-width: 0; }
+.upload-identity .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upload-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.upload-actions > * { min-height: 44px; text-align: center; }
-.upload-link { display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; }
+.upload-link { color: var(--text); text-underline-offset: 3px; padding-block: 8px; }
 .strava-upload[aria-busy="true"] .strava-button { cursor: progress; }
+.finish-files > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding-block: 4px; }
+.finish-files[open] > summary { margin-bottom: 10px; }
+#finish .modal-card { scroll-padding-bottom: 96px; }
+#finish .modal-nav { position: static; margin: 0; padding: 14px 0 0; }
+#finish-note:empty { display: none; }
 @media (max-width: 600px) {
-  .upload-actions > * { width: 100%; }
+  .strava-upload .upload-actions { flex: 1 0 100%; }
+  .strava-upload .upload-actions > * { flex: 1; min-height: 40px; }
 }
-.finish-files { display: grid; gap: 10px; }

@@ -202,15 +202,20 @@
 
               </div>
               <section id="unfinished-strava-panel" class="strava-upload" aria-labelledby="unfinished-strava-panel-title" hidden>
-              <h3 id="unfinished-strava-panel-title" data-i18n="strava.title">Strava</h3>
-              <p id="unfinished-strava-panel-account" class="field-hint"></p>
-              <p id="unfinished-upload-status" class="upload-state" role="status" aria-live="polite"></p>
-              <p id="unfinished-strava-panel-detail" class="field-hint"></p>
-              <div class="upload-actions">
-                <button type="button" id="unfinished-strava" class="strava-button" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
-                <a id="unfinished-strava-panel-connect" class="strava-button" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
-                <a id="unfinished-strava-panel-activity" class="secondary upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+              <div class="strava-row">
+                <div class="upload-identity">
+                  <svg class="strava-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.39 17.94l-2.09-4.12h-3.07L15.39 24l5.15-10.18h-3.08M10.2 0L3.16 13.82h4.15l2.89-5.48 2.88 5.48h4.12z" /></svg>
+                  <h3 id="unfinished-strava-panel-title" data-i18n="strava.title">Strava</h3>
+                  <span id="unfinished-strava-panel-account" class="muted"></span>
+                </div>
+                <div class="upload-actions">
+                  <button type="button" id="unfinished-strava" class="strava-button small" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+                  <a id="unfinished-strava-panel-connect" class="strava-button small" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
+                  <a id="unfinished-strava-panel-activity" class="upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+                </div>
               </div>
+              <p id="unfinished-upload-status" class="field-hint" role="status" aria-live="polite" hidden></p>
+              <p id="unfinished-strava-panel-detail" class="field-hint" hidden></p>
               <p id="unfinished-strava-panel-storage" class="warning" hidden data-i18n="strava.storageWarning">Upload status can’t be saved in this browser. Keep this page open until confirmed, or download your ride.</p>
             </section>
               <p id="unfinished-status" class="muted"></p>
@@ -963,34 +968,40 @@
               </div>
             </section>
             <section id="finish-strava" class="strava-upload" aria-labelledby="finish-strava-title" hidden>
-              <h3 id="finish-strava-title" data-i18n="strava.title">Strava</h3>
-              <p id="finish-strava-account" class="field-hint"></p>
-              <p id="upload-status" class="upload-state" role="status" aria-live="polite"></p>
-              <p id="finish-strava-detail" class="field-hint"></p>
-              <div class="upload-actions">
-                <button type="button" id="upload-strava" class="strava-button" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
-                <a id="finish-strava-connect" class="strava-button" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
-                <a id="finish-strava-activity" class="secondary upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+              <div class="strava-row">
+                <div class="upload-identity">
+                  <svg class="strava-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.39 17.94l-2.09-4.12h-3.07L15.39 24l5.15-10.18h-3.08M10.2 0L3.16 13.82h4.15l2.89-5.48 2.88 5.48h4.12z" /></svg>
+                  <h3 id="finish-strava-title" data-i18n="strava.title">Strava</h3>
+                  <span id="finish-strava-account" class="muted"></span>
+                </div>
+                <div class="upload-actions">
+                  <button type="button" id="upload-strava" class="strava-button small" data-i18n="unfinished.uploadStrava">Upload to Strava</button>
+                  <a id="finish-strava-connect" class="strava-button small" href="/auth/strava" hidden data-i18n="strava.action.connect">Connect Strava</a>
+                  <a id="finish-strava-activity" class="upload-link" target="_blank" rel="noopener" hidden data-i18n="strava.view">View on Strava</a>
+                </div>
               </div>
+              <p id="upload-status" class="field-hint" role="status" aria-live="polite" hidden></p>
+              <p id="finish-strava-detail" class="field-hint" hidden></p>
               <p id="finish-strava-storage" class="warning" hidden data-i18n="strava.storageWarning">Upload status can’t be saved in this browser. Keep this page open until confirmed, or download your ride.</p>
             </section>
-            <section id="finish-files" class="finish-files">
-            <h3 class="save-files-title" data-i18n="finish.saveFiles">Download your ride</h3>
-            <div class="modal-actions">
-              <button type="button" id="download-tcx" class="secondary" data-i18n="ride.downloadTcx">Download .tcx</button>
-              <button type="button" id="download-gpx" class="secondary" data-i18n="ride.downloadGpx">Download .gpx</button>
-              <button type="button" id="download-fit" class="secondary" data-i18n="ride.downloadFit">Download .fit</button>
-            </div>
-            </section>
+            <details id="finish-files" class="finish-files">
+              <summary data-i18n="finish.saveFiles">Download ride file</summary>
+              <div class="modal-actions">
+                <button type="button" id="download-tcx" class="secondary" data-i18n="ride.downloadTcx">Download .tcx</button>
+                <button type="button" id="download-gpx" class="secondary" data-i18n="ride.downloadGpx">Download .gpx</button>
+                <button type="button" id="download-fit" class="secondary" data-i18n="ride.downloadFit">Download .fit</button>
+              </div>
+            </details>
             <p id="finish-note" class="field-hint"></p>
-            <p id="finish-retained" class="field-hint" hidden data-i18n="finish.retained">Not ready to upload? Your ride and photos stay in this browser when you go back to the menu.</p>
+            <p id="finish-retained" class="field-hint" hidden data-i18n="finish.retained">Saved in this browser. You can return to it from the menu.</p>
 
             <section class="photos" aria-labelledby="photos-title">
-              <h3 id="photos-title"><span data-i18n="photos.title">Photos</span> <span id="photos-count" class="muted"></span></h3>
+              <h3 id="photos-title"><span data-i18n="photos.title">Summary &amp; photos</span> <span id="photos-count" class="muted"></span></h3>
               <ul id="photo-list" class="photo-list"></ul>
-              <p id="photos-hint" class="field-hint" data-i18n="photos.hint">Take photos while you ride with the camera button or P. The summary card comes with them; save them here and add them to your Strava activity.</p>
+              <p class="field-hint" data-i18n="photos.stravaHint">Add images manually in Strava.</p>
               <div class="modal-actions">
-                <button type="button" id="download-photos" data-i18n="photos.downloadAll">Download all images</button>
+                <button type="button" id="download-summary" class="secondary" disabled data-i18n="photos.saveSummary">Save summary image</button>
+                <button type="button" id="download-photos" class="secondary" data-i18n="photos.downloadAll">Download all images</button>
                 <button type="button" id="share-photos" class="secondary" hidden data-i18n="photos.share">Share…</button>
               </div>
             </section>
