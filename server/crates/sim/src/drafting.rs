@@ -1,8 +1,9 @@
 //! Drafting (riding in someone's slipstream).
 //!
-//! A rider who is between `min_gap` and `max_gap` metres behind another rider
-//! in the same lane gets a reduced drag area. The reduction is largest close
-//! behind the leader and fades linearly to zero at `max_gap`.
+//! A rider up to `max_gap` metres behind another rider in the same lane gets a
+//! reduced drag area. Gaps are measured middle to middle, so `min_gap` is about
+//! a bike length: the closest a rider gets (see [`crate::spacing`]). The
+//! reduction is largest from there on in and fades linearly to zero at `max_gap`.
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DraftParams {
@@ -17,8 +18,8 @@ pub struct DraftParams {
 impl Default for DraftParams {
     fn default() -> Self {
         Self {
-            min_gap: 0.5,
-            max_gap: 5.0,
+            min_gap: 2.0,
+            max_gap: 6.5,
             max_reduction: 0.3,
             lane_tolerance: 0.5,
         }
@@ -28,10 +29,10 @@ impl Default for DraftParams {
 impl DraftParams {
     /// CdA multiplier for a rider `gap` metres behind the next rider ahead.
     pub fn cda_factor(&self, gap: f64) -> f64 {
-        if !(self.min_gap..=self.max_gap).contains(&gap) {
+        if gap <= 0.0 || gap > self.max_gap {
             return 1.0;
         }
-        let t = (gap - self.min_gap) / (self.max_gap - self.min_gap);
+        let t = (gap.max(self.min_gap) - self.min_gap) / (self.max_gap - self.min_gap);
         1.0 - self.max_reduction * (1.0 - t)
     }
 
@@ -47,21 +48,27 @@ mod tests {
     #[test]
     fn full_reduction_right_behind_the_leader() {
         let p = DraftParams::default();
-        assert!((p.cda_factor(0.5) - 0.7).abs() < 1e-9);
+        assert!((p.cda_factor(2.0) - 0.7).abs() < 1e-9);
+    }
+
+    #[test]
+    fn closer_than_a_bike_length_is_still_the_full_draft() {
+        let p = DraftParams::default();
+        assert!((p.cda_factor(1.2) - 0.7).abs() < 1e-9);
     }
 
     #[test]
     fn reduction_fades_out_linearly() {
         let p = DraftParams::default();
-        assert!((p.cda_factor(2.75) - 0.85).abs() < 1e-9);
-        assert!((p.cda_factor(5.0) - 1.0).abs() < 1e-9);
+        assert!((p.cda_factor(4.25) - 0.85).abs() < 1e-9);
+        assert!((p.cda_factor(6.5) - 1.0).abs() < 1e-9);
     }
 
     #[test]
-    fn no_draft_outside_the_window() {
+    fn no_draft_beyond_the_window() {
         let p = DraftParams::default();
-        assert_eq!(p.cda_factor(0.2), 1.0);
-        assert_eq!(p.cda_factor(5.1), 1.0);
+        assert_eq!(p.cda_factor(0.0), 1.0);
+        assert_eq!(p.cda_factor(6.6), 1.0);
         assert_eq!(p.cda_factor(100.0), 1.0);
     }
 
