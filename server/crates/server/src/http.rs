@@ -153,6 +153,9 @@ pub struct RouteSummary {
     pub players: usize,
     /// Of those, the riders on phone paddles.
     pub phone_players: usize,
+    /// Riders of other apps ride this route too (OpenBikeNet is connected); absent otherwise.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shared: bool,
 }
 
 impl RouteSummary {
@@ -165,6 +168,7 @@ impl RouteSummary {
             elevation_gain_m: entry.elevation_gain_m.round(),
             players: entry.game.players_on(&entry.file.id),
             phone_players: entry.game.phones_on(&entry.file.id),
+            shared: entry.shared,
         }
     }
 }

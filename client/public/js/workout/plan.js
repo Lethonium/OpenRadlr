@@ -7,14 +7,21 @@
 import { t } from "../i18n/i18n.js";
 import { VENUES } from "./venues.js";
 
-/** The exercise ids the server and the 3D gym know about, with display names. */
+/** The exercise ids the server and the 3D gym know about, with display names, a one-line cue and whether a pose is sided (right half, then left). */
 export const EXERCISES = Object.freeze({
-  squats: { get name() { return t("workout.exercise.squats"); } },
-  situps: { get name() { return t("workout.exercise.situps"); } },
-  pushups: { get name() { return t("workout.exercise.pushups"); } },
-  jumping_jacks: { get name() { return t("workout.exercise.jumpingJacks"); } },
-  plank: { get name() { return t("workout.exercise.plank"); } },
-  burpees: { get name() { return t("workout.exercise.burpees"); } },
+  squats: { get name() { return t("workout.exercise.squats"); }, get cue() { return t("workout.cue.squats"); } },
+  situps: { get name() { return t("workout.exercise.situps"); }, get cue() { return t("workout.cue.situps"); } },
+  pushups: { get name() { return t("workout.exercise.pushups"); }, get cue() { return t("workout.cue.pushups"); } },
+  jumping_jacks: { get name() { return t("workout.exercise.jumpingJacks"); }, get cue() { return t("workout.cue.jumpingJacks"); } },
+  plank: { get name() { return t("workout.exercise.plank"); }, get cue() { return t("workout.cue.plank"); } },
+  burpees: { get name() { return t("workout.exercise.burpees"); }, get cue() { return t("workout.cue.burpees"); } },
+  sun_salutation: { get name() { return t("workout.exercise.sunSalutation"); }, get cue() { return t("workout.cue.sunSalutation"); } },
+  forward_fold: { get name() { return t("workout.exercise.forwardFold"); }, get cue() { return t("workout.cue.forwardFold"); } },
+  downward_dog: { get name() { return t("workout.exercise.downwardDog"); }, get cue() { return t("workout.cue.downwardDog"); } },
+  cobra: { get name() { return t("workout.exercise.cobra"); }, get cue() { return t("workout.cue.cobra"); } },
+  child_pose: { get name() { return t("workout.exercise.childPose"); }, get cue() { return t("workout.cue.childPose"); } },
+  low_lunge: { get name() { return t("workout.exercise.lowLunge"); }, get cue() { return t("workout.cue.lowLunge"); }, sided: true },
+  pigeon: { get name() { return t("workout.exercise.pigeon"); }, get cue() { return t("workout.cue.pigeon"); }, sided: true },
 });
 
 const MAX_BLOCKS = 200;

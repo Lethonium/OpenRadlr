@@ -10,7 +10,11 @@ Thanks for helping build OpenRadlr! This guide covers how we work.
 4. Run `make check` — it runs exactly what CI runs.
 5. Open a pull request with a short description of *why* the change is needed.
 
-Commit messages use the imperative mood (`Add sprint marker to route format`).
+Commit messages use Conventional Commits with an imperative description
+(`feat: Add sprint marker to route format`). Use `fix:` for bug fixes and `!`
+or a `BREAKING CHANGE:` footer for breaking changes. For squash merges, make
+the PR title a Conventional Commit and preserve relevant footers in the squash
+commit body. See [Releases](docs/releases.md) for versioning and maintainer setup.
 Keep pull requests focused; split refactorings from behaviour changes.
 
 ## Git hooks

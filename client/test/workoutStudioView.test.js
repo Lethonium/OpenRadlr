@@ -4,6 +4,8 @@ import { createPlan, planPositionAt, withGetReady } from "../public/js/workout/p
 import { WorkoutSession } from "../public/js/workout/workoutSession.js";
 import { createCue } from "../public/js/workout/cue.js";
 import { blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "../public/js/view/workoutStudioView.js";
+import { EXERCISES } from "../public/js/workout/plan.js";
+import { t } from "../public/js/i18n/i18n.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 // The full-body preset with get-ready: squats 30-70, rest 70-90, sit-ups 90-130, rest 130-150, …
@@ -206,4 +208,33 @@ test("the workout opens in 3D whatever view was saved; a ride follows the saved 
   assert.equal(startingViewMode("2d", { workout: true }), "3d");
   assert.equal(startingViewMode("2d"), "2d");
   assert.equal(startingViewMode(null), "3d");
+});
+
+const yogaAt = (elapsed) =>
+  planPositionAt(
+    withGetReady(
+      createPlan({
+        id: "y",
+        name: "Yoga",
+        blocks: [
+          { kind: "exercise", exercise: "cobra", seconds: 60 },
+          { kind: "rest", seconds: 10 },
+          { kind: "exercise", exercise: "pigeon", seconds: 60 },
+        ],
+      }),
+    ),
+    elapsed,
+  );
+
+test("the cue line shows the exercise's cue", () => {
+  assert.equal(workoutHudText(yogaAt(40), { state: "block", heartRate: null }).cue, EXERCISES.cobra.cue);
+});
+
+test("the second half of a sided block says switch sides", () => {
+  const position = { ...yogaAt(130), side: "left" };
+  assert.equal(workoutHudText(position, { state: "block", heartRate: null }).cue, t("workout.switchSides"));
+});
+
+test("rest has no cue", () => {
+  assert.equal(workoutHudText(yogaAt(95), { state: "block", heartRate: null }).cue, "");
 });

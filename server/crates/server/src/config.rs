@@ -4,12 +4,14 @@
 //! lookup as a function. Production passes `std::env::var`, tests pass a map.
 
 use crate::guard::ConnectionLimits;
+use crate::obn::link::Heartbeat;
 use crate::strava::StravaConfig;
 use openradlr_sim::SimConfig;
 use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthMode {
@@ -101,6 +103,13 @@ pub struct Config {
     pub analytics: Option<Analytics>,
     /// The operator's privacy policy, linked from the start menu (`OPENRADLR_PRIVACY_URL`).
     pub privacy_url: Option<String>,
+    /// The OpenBikeNet server to share the velodrome with (`OPENRADLR_OBN_URL`); `None` = not connected.
+    pub obn_url: Option<String>,
+    /// Base of the reconnect delay to OpenBikeNet (no environment variable; for tests).
+    pub obn_backoff_unit: Duration,
+    /// When a quiet OpenBikeNet server is pinged and given up on (no environment variable;
+    /// the spec's 20 s and 10 s, shorter in tests).
+    pub obn_heartbeat: Heartbeat,
 }
 
 /// A Plausible-compatible analytics script the client loads on request of the operator.
@@ -386,6 +395,16 @@ impl Config {
             )?;
         }
 
+        let obn_url = reader.raw("OPENRADLR_OBN_URL").filter(|url| !url.is_empty());
+        if let Some(url) = &obn_url {
+            reader.check(
+                "OPENRADLR_OBN_URL",
+                url,
+                url.starts_with("ws://") || url.starts_with("wss://"),
+                "must be a ws:// or wss:// URL",
+            )?;
+        }
+
         Ok(Self {
             bind_addr: reader.parse("OPENRADLR_BIND", SocketAddr::from(([0, 0, 0, 0], 8080)))?,
             route_file: reader
@@ -431,6 +450,9 @@ impl Config {
             event_lobby_s,
             analytics,
             privacy_url,
+            obn_url,
+            obn_backoff_unit: Duration::from_secs(1),
+            obn_heartbeat: Heartbeat::default(),
         })
     }
 
@@ -658,6 +680,16 @@ mod tests {
         assert_eq!(c.privacy_url.as_deref(), Some("https://example.org/privacy/"));
         let err = config(&[("OPENRADLR_PRIVACY_URL", "javascript:alert(1)")]).unwrap_err();
         assert_eq!(err.key, "OPENRADLR_PRIVACY_URL");
+    }
+
+    #[test]
+    fn obn_url_must_be_websocket() {
+        assert_eq!(config(&[]).unwrap().obn_url, None);
+        assert_eq!(config(&[("OPENRADLR_OBN_URL", "")]).unwrap().obn_url, None);
+        let c = config(&[("OPENRADLR_OBN_URL", "wss://obn.example/v0")]).unwrap();
+        assert_eq!(c.obn_url.as_deref(), Some("wss://obn.example/v0"));
+        let err = config(&[("OPENRADLR_OBN_URL", "https://x")]).unwrap_err();
+        assert_eq!(err.key, "OPENRADLR_OBN_URL");
     }
 
     #[test]

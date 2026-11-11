@@ -434,10 +434,11 @@ export class MenuStage {
   }
 
   /**
-   * Stops the menu. Returns the 3D view if it was built for `routeId` (ready
-   * for the ride: no highlights, nothing else holds it), else null.
+   * Stops the menu. Returns the 3D view if it was built for `routeId`, or for
+   * any route of the map `map` (the world is per map; the ride switches its
+   * route), ready for the ride: no highlights, nothing else holds it. Else null.
    */
-  takeView(routeId) {
+  takeView(routeId, map = null) {
     this.#stopped = true;
     this.deps.clearTimer(this.#buildTimer);
     if (this.#frame !== null) this.deps.cancelFrame(this.#frame);
@@ -446,7 +447,8 @@ export class MenuStage {
     this.#view = null;
     if (!view) return null;
     view.setHighlights([]);
-    if (this.#viewRouteId === routeId && this.#viewBiome === this.#biome()) return view;
+    const sameWorld = this.#viewRouteId === routeId || (map !== null && map === this.#viewMap);
+    if (sameWorld && this.#viewBiome === this.#biome()) return view;
     view.dispose();
     return null;
   }

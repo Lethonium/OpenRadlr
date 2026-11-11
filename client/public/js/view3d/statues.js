@@ -24,9 +24,9 @@ const SCALE = 1.15;
 const ROW_HALF = 7.5;
 const MAX_SPACING = 3;
 /** Plinth sizes `[x, height, z]`; a lying figure's long axis runs along X, the row's. */
-const PLINTHS = Object.freeze({ upright: [0.9, 1.0, 0.9], lying: [2.0, 0.6, 0.8] });
+export const PLINTHS = Object.freeze({ upright: [0.9, 1.0, 0.9], lying: [2.0, 0.6, 0.8] });
 const GLOW_BAR = 0.06;
-const GLOW_MARGIN = 0.05;
+const GLOW_MARGIN = 0.08;
 /** Per-face brightness of granite. */
 const SPECKLE = [0.9, 1.08, 0.96, 1.04, 0.92, 1.0];
 
@@ -54,9 +54,13 @@ export function statueSlots(count) {
   return Array.from({ length: count }, (_, i) => ({ x: (i - (count - 1) / 2) * spacing }));
 }
 
-function recolour(mesh, [r, g, b]) {
+function recolour(mesh, [r, g, b], opaque = false) {
   const colors = Float32Array.from(mesh.colors);
-  for (let i = 0; i < colors.length; i += 4) [colors[i], colors[i + 1], colors[i + 2]] = [r, g, b];
+  for (let i = 0; i < colors.length; i += 4) {
+    [colors[i], colors[i + 1], colors[i + 2]] = [r, g, b];
+    // A biome rig may carry tint masks (winter's scarf); a statue is one stone.
+    if (opaque) colors[i + 3] = 0;
+  }
   return { ...mesh, colors };
 }
 
@@ -76,7 +80,7 @@ function plinthMesh([sx, sy, sz], x, material) {
 /** A thin band round the plinth's top edge (bronze patina). */
 function bandMesh([sx, sy, sz], x, colour) {
   const m = new MeshBuilder();
-  m.box([x, sy - 0.04, 0], [sx + 0.02, 0.08, sz + 0.02], colour);
+  m.box([x, sy - 0.05, 0], [sx + 0.02, 0.08, sz + 0.02], colour);
   return m.build();
 }
 
@@ -96,7 +100,7 @@ function glowRing([sx, sy, sz], x) {
 /** Where each part of `exercise`'s frozen figure goes at `scale`, and the box round them. */
 function pose(exercise, lying, scale, parts) {
   const clip = CLIPS[exercise];
-  const frozen = settle(poseAt(clip, STATUE_MOMENT[exercise].t), clip.plant);
+  const frozen = settle(poseAt(clip, STATUE_MOMENT[exercise].t), clip.plant, parts);
   const base = multiply(placement([0, 0, 0], lying ? Math.PI / 2 : 0), scaling(scale));
   const placed = bodyTransforms(frozen, look).map(({ mesh, model }) => ({ mesh, model: multiply(base, model) }));
   const lo = [Infinity, Infinity, Infinity];
@@ -115,12 +119,12 @@ function pose(exercise, lying, scale, parts) {
 }
 
 /** The figure of `exercise` frozen at its moment, resting on a plinth top at `top`, centred over `x`. */
-function appendFigure(out, parts, exercise, x, plinth) {
+function appendFigure(out, parts, exercise, x, plinth, scale) {
   const lying = plinth === "lying";
-  let figure = pose(exercise, lying, SCALE, parts);
+  let figure = pose(exercise, lying, scale, parts);
   // A lying body that outgrows its plinth is shrunk to fit it.
   const length = figure.hi[0] - figure.lo[0];
-  if (lying && length > PLINTHS.lying[0]) figure = pose(exercise, lying, (SCALE * PLINTHS.lying[0]) / length, parts);
+  if (lying && length > PLINTHS.lying[0]) figure = pose(exercise, lying, (scale * PLINTHS.lying[0]) / length, parts);
   const { placed, lo, hi } = figure;
   // A lying body is centred over its plinth; a standing one keeps the clip's own spot.
   const at = [lying ? x - (lo[0] + hi[0]) / 2 : x, PLINTHS[plinth][1] - lo[1], lying ? -(lo[2] + hi[2]) / 2 : 0];
@@ -128,11 +132,17 @@ function appendFigure(out, parts, exercise, x, plinth) {
   for (const { mesh, model } of placed) out.append(parts.get(mesh), multiply(lift, model));
 }
 
-/** One row of statues: `{ mesh, glows, tops }`; `glows[i]` rings plinth `i`, `tops[i]` is its height. */
-export function buildStatues(figures, materialName) {
+/**
+ * One row of statues: `{ mesh, glows, tops }`; `glows[i]` rings plinth `i`,
+ * `tops[i]` is its height. `rig` is a biome's workout rig (`{ parts, scale }`,
+ * see `biome.workout`); without one the human rider is cast.
+ */
+export function buildStatues(figures, materialName, rig = null) {
   if (!Object.hasOwn(STATUE_MATERIALS, materialName)) throw new Error(`Unknown statue material "${materialName}".`);
   const material = STATUE_MATERIALS[materialName];
-  const parts = new Map(Object.entries(PARTS).map(([name, build]) => [name, recolour(build(), material.figure)]));
+  const builders = rig?.parts ?? PARTS;
+  const scale = SCALE * (rig?.scale ?? 1);
+  const parts = new Map(Object.entries(builders).map(([name, build]) => [name, recolour(build(), material.figure, Boolean(rig))]));
   const out = new MeshBuilder();
   const slots = statueSlots(figures.length);
   const glows = [];
@@ -143,7 +153,7 @@ export function buildStatues(figures, materialName) {
     const { x } = slots[i];
     out.append(plinthMesh(size, x, material), placement([0, 0, 0]));
     if (material.accent) out.append(bandMesh(size, x, material.accent), placement([0, 0, 0]));
-    appendFigure(out, parts, exercise, x, plinth);
+    appendFigure(out, parts, exercise, x, plinth, scale);
     glows.push(glowRing(size, x));
     tops.push(size[1]);
   });

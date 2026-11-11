@@ -66,6 +66,7 @@
               <header class="stage-head">
                 <h1 id="routes-title" data-i18n="menu.routes.title">Where do you want to ride?</h1>
                 <p id="stage-stats" class="stage-stats"></p>
+                <p id="shared-note" class="lede shared-note" hidden></p>
                 <p id="routes-lede" class="lede" data-i18n="menu.stage.rideLede">Everyone on the same route rides together — friends, strangers and bots.</p>
               </header>
               <!-- The window the drone camera looks through (and the map until the island is ready). -->
@@ -179,7 +180,7 @@
                 <div id="addon-controller" class="device-line addon trainer-only">
                   <span class="device-dot" aria-hidden="true"></span>
                   <span class="addon-name" data-i18n="start.controller">Controller</span>
-                  <span id="controller-status" class="device-status" data-i18n="start.zwiftClickPlayOr">Zwift Click, Play or Ride</span>
+                  <span id="controller-status" class="device-status" data-i18n="start.zwiftClickPlayOr">Zwift or OpenBikeControl</span>
                   <button type="button" id="reconnect-controller" class="secondary small" data-gesture-only hidden></button>
                   <button type="button" id="connect-controller" class="secondary small" data-gesture-only data-i18n="start.add">Add</button>
                 </div>
@@ -277,6 +278,7 @@
               </div>
             </div>
             <span class="workout-next" data-w="next"></span>
+            <span class="workout-cue" data-w="cue"></span>
           </div>
           <div class="workout-stats glass">
             <div><span class="caption" data-i18n="ride.block">Block</span><strong data-w="block" data-i18n="ride.block11">Block 1/1</strong></div>
@@ -693,6 +695,7 @@
                         <button type="button" id="workout-start" data-i18n="drawer.startWorkout">Start workout</button>
                         <button type="button" id="workout-import" class="secondary" data-i18n="drawer.importZwo">Import .zwo</button>
                       </div>
+                      <canvas id="workout-preview" class="canvas-workout-preview" aria-label="Power profile of the selected workout" data-i18n-attr="aria-label:drawer.workoutPreview"></canvas>
                       <p id="workout-description" class="field-hint"></p>
                     </div>
                     <div id="workout-running" class="workout-actions" hidden>

@@ -17,6 +17,7 @@
   --me: #ff7a1a;
   --human: #4cc3ff;
   --bot: #8f99a8;
+  --remote: #2ec4a6;
   --climb: rgba(255, 93, 93, 0.12);
   --sprint: rgba(76, 195, 255, 0.12);
   --radius: 10px;
@@ -1397,6 +1398,12 @@ button.small {
 
 .workout-picker select {
   width: 100%;
+}
+
+.canvas-workout-preview {
+  /* A fixed height, like .canvas-workout: a percentage would grow with the backing store. */
+  width: 100%;
+  height: 56px;
 }
 
 .workout-actions {
@@ -2946,6 +2953,12 @@ body.riding {
   font-weight: 400;
 }
 
+.badge.badge-remote,
+.label3d .badge.badge-remote {
+  color: var(--remote);
+  border-color: var(--remote);
+}
+
 .dot {
   display: inline-block;
   width: 8px;
@@ -2957,6 +2970,10 @@ body.riding {
 
 .dot.bot {
   background: var(--bot);
+}
+
+.dot.remote {
+  background: var(--remote);
 }
 
 .race-controls {
@@ -5144,6 +5161,14 @@ body.working-out #paddles {
 .workout-next {
   color: var(--hud-muted);
   font-weight: 600;
+}
+
+.workout-cue {
+  color: var(--hud-muted);
+  font-size: 0.85em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .workout-stats {

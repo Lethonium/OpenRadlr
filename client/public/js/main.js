@@ -8,8 +8,8 @@ import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
 import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, expectsOtherHalf, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
-import { ZwiftController } from "./ble/zwiftController.js";
-import { ControllerInput, MergedControllers, controllerNavigates } from "./input/controller.js";
+import { connectController, openController } from "./ble/controllers.js";
+import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { viewControls } from "./view/viewControls.js";
@@ -78,7 +78,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession } from "./workout/workoutSession.js";
@@ -87,7 +87,7 @@ import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
-import { drawWorkout } from "./view/workoutView.js";
+import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
@@ -792,6 +792,8 @@ function initMenuStage() {
   const drawStage = () => {
     const { route, routes } = shown;
     $("menu-profile").hidden = !route;
+    // Docked in the corner, the map points at the picked route; with none (Workout, Studio) it is an empty box.
+    $("menu-map").hidden = !route && $("setup").classList.contains("map-docked");
     drawMapPreview($("menu-map"), { routes, selectedId: route?.id ?? null, network: shown.network ?? null });
     if (route) drawProfile($("menu-profile"), { route, riders: [], myId: null, colors: themeColors() });
   };
@@ -856,10 +858,10 @@ function stageOffset(stage) {
   return [clamp(((rect.left + rect.width / 2) / window.innerWidth) * 2 - 1), clamp(1 - ((rect.top + rect.height / 2) / window.innerHeight) * 2)];
 }
 
-/** Ends the menu; keeps its 3D view for the ride if it shows `routeId`. */
-function closeMenuStage(routeId) {
+/** Ends the menu; keeps its 3D view for the ride if it shows `routeId` or a route of `map`. */
+function closeMenuStage(routeId, map = null) {
   if (!app.menu) return;
-  app.menuView = app.menu.takeView(routeId);
+  app.menuView = app.menu.takeView(routeId, map);
   app.menu = null;
   clearTimeout(app.mapDockTimer);
   $("setup").classList.remove("world-ready", "map-docked", "world-building");
@@ -942,6 +944,9 @@ function renderStartMenu() {
     renderStartMenu();
   });
   $("stage-stats").textContent = activity === "events" ? "" : stageStats(selected);
+  const shared = sharedNote(selected);
+  $("shared-note").hidden = !shared;
+  $("shared-note").textContent = shared;
   const cards = routesFor(activity, routes);
   $("route-list").hidden = !showsCards(activity, cards);
   renderRoutes($("route-list"), cards, selected?.id ?? null, (id) => {
@@ -1070,8 +1075,8 @@ const DEVICES = {
   },
   controller: {
     statusId: "controller-status",
-    connect: (names) => ZwiftController.connect(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
-    open: (device) => ZwiftController.open(device, { log: deviceLog }),
+    connect: (names) => connectController(undefined, { log: deviceLog, names, isConnected: (device) => hasController(device.id) }),
+    open: (device) => openController(device, { log: deviceLog }),
     use: (controller) => useController(controller),
     // Any trainer or strap will do; controllers count one by one (a Play is two).
     has: (id) => hasController(id),
@@ -1319,14 +1324,17 @@ function useController(controller) {
     renderReconnectButtons();
   }, 3000);
   // All controllers feed one stream: a Click's two halves may both report a press (one relays the other).
-  app.controllerInput ??= new MergedControllers(new ControllerInput());
+  // In ERG a combined OpenBikeControl press changes the target instead of shifting (shift() ignores it there).
+  app.controllerInput ??= new MergedControllers(new ControllerInput({ erg: () => app.training?.mode === "erg" || Boolean(app.studio?.erg) }));
   $("controller-live").hidden = false;
   renderControllerCheck();
   controller.on("buttons", (pressed) => {
     if (pressed.length) {
       const known = controller.seen.size;
-      for (const button of pressed) controller.seen.add(button);
-      app.lastControllerPress = { label: controller.label, buttons: pressed };
+      // An OpenBikeControl press may stand for several buttons: each counts as seen.
+      const each = pressed.flatMap(alternatives);
+      for (const button of each) controller.seen.add(button);
+      app.lastControllerPress = { label: controller.label, buttons: each };
       renderControllerCheck();
       // The first shift tells the half's side: the line names it.
       if (controller.seen.size !== known) {
@@ -1588,7 +1596,8 @@ async function joinRide(restored = null) {
     resumeToken: restored?.snapshot.resumeToken,
     resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
   });
-  closeMenuStage(route?.kind === "studio" ? null : route?.id);
+  const studio = route?.kind === "studio";
+  closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
   if (app.pendingEventId) {
     connection.joinEvent(app.pendingEventId);
     app.pendingEventId = null;
@@ -1656,7 +1665,7 @@ async function joinWorkout(profile, errors) {
   wireConnection(connection);
   app.connection = connection;
   app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
-  closeMenuStage(routeId);
+  closeMenuStage(routeId, app.routeFile.map?.id ?? null);
   app.workoutPlan = plan;
   app.workout = new WorkoutSession({ plan, now, wallNow: () => Date.now() });
   startRide();
@@ -2120,7 +2129,7 @@ function startWorkout() {
   app.workoutHeartRate = null;
   app.workoutAudio = "AudioContext" in globalThis ? new AudioContext() : null;
   // The server drops a joined connection after 120 s of silence: repeat the exercise as a keepalive.
-  app.workoutKeepalive = startKeepalive({ send: (exercise) => app.connection?.workout(exercise), current: () => app.workout?.currentExercise() ?? null });
+  app.workoutKeepalive = startKeepalive({ send: (exercise, side) => app.connection?.workout(exercise, side), current: () => [app.workout?.currentExercise() ?? null, app.workout?.currentSide() ?? null] });
   app.workoutCue = createCue({
     audioContext: app.workoutAudio,
     vibrate: navigator.vibrate ? (ms) => navigator.vibrate(ms) : null,
@@ -2157,8 +2166,8 @@ function startWorkout() {
 
 /** Carries out what the workout session decided. */
 function runWorkoutActions(actions) {
-  for (const [kind, value] of actions) {
-    if (kind === "send") app.connection.workout(value);
+  for (const [kind, value, side] of actions) {
+    if (kind === "send") app.connection.workout(value, side);
     else if (kind === "cue") {
       if (app.profile.workoutCues !== false) app.workoutCue?.();
     } else if (kind === "finished") finishWorkout();
@@ -2184,7 +2193,7 @@ function workoutFrame() {
   }
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart } : rider));
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
     app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
   }
 }
@@ -3445,6 +3454,7 @@ function initTraining({ simulated, setSimPower }) {
   const training = app.training;
   renderWorkoutOptions(0);
   $("workout-select").addEventListener("change", () => renderWorkoutDescription());
+  new ResizeObserver(renderWorkoutDescription).observe($("workout-preview"));
 
   $("mode-sim").addEventListener("click", () => training.setMode("sim"));
   $("mode-erg").addEventListener("click", () => training.setMode("erg"));
@@ -3572,6 +3582,7 @@ function renderWorkoutOptions(selected) {
 function renderWorkoutDescription() {
   const chosen = app.workouts[Number($("workout-select").value)];
   $("workout-description").textContent = chosen ? workoutDescription(chosen) : "";
+  drawWorkoutPreview($("workout-preview"), chosen);
 }
 
 function renderTraining({ simulated }) {
@@ -3681,6 +3692,11 @@ function initViews() {
   // Building the world (with the other routes on its map) takes a moment,
   // off the main thread where possible; ride in 2D meanwhile. A season changed
   // meanwhile is picked up when this build lands.
+  if (app.workout) {
+    // A workout has no 2D view: say what the empty screen is waiting for.
+    $("workout-note").textContent = t("workout.buildingGym");
+    $("workout-note").hidden = false;
+  }
   buildRideWorld();
 }
 
@@ -3716,6 +3732,7 @@ function show3d(scene, view = null) {
   app.view3d.network = app.network;
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
+  if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
   $("view-3d").disabled = false;
   const camera = readSetting(CAMERA_KEY);
   if (CAMERA_MODES[camera]) app.view3d.setCameraMode(camera);

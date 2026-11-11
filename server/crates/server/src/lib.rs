@@ -32,6 +32,7 @@ pub mod headers;
 pub mod healthcheck;
 pub mod http;
 pub mod map_file;
+pub mod obn;
 pub mod players;
 pub mod protocol;
 pub mod resume;

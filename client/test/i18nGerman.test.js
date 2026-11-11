@@ -23,6 +23,8 @@ test("race status and online summary", () => {
   assert.equal(raceStatus({ phase: "countdown", remaining_s: 9.2, laps: 1 }), "Rennen startet in 10 s · 1 Runde");
   assert.equal(raceStatus({ phase: "countdown", remaining_s: 9, laps: 3 }), "Rennen startet in 9 s · 3 Runden");
   assert.equal(onlineSummary(4, [], { humans: 2, bots: 1 }).text, "4 Fahrer online · 2 auf dieser Strecke · 1 Bot");
+  assert.equal(onlineSummary(1, [], { humans: 1, bots: 0, remote: 1 }).text, "1 Fahrer online · 1 aus einer anderen App");
+  assert.equal(onlineSummary(1, [], { humans: 1, bots: 0, remote: 3 }).text, "1 Fahrer online · 3 aus anderen Apps");
 });
 
 test("event banner, FTP offer, split labels and vehicle label", () => {
@@ -36,7 +38,7 @@ test("event banner, FTP offer, split labels and vehicle label", () => {
 test("stage headline and workout presets read in German", () => {
   setLocale("de");
   assert.equal(stageHeadline({ kind: "workout" }), "Wähle dein Workout");
-  assert.equal(workoutTagline(PRESETS), "3 Workouts · 4–12 Min.");
+  assert.equal(workoutTagline(PRESETS), "6 Workouts · 4–15 Min.");
   assert.equal(PRESETS[0].name, "Ganzkörper");
   assert.match(planSummary(PRESETS[0]), /^Kniebeugen 40 s · Pause 20 s/);
 });

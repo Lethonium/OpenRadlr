@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { encodeSetTargetPower } from "../public/js/ble/ftms.js";
 import { SimulatedTrainer, SmartTrainer } from "../public/js/ble/devices.js";
@@ -8,16 +8,24 @@ import {
   WorkoutPlayer,
   createWorkout,
   intervals,
+  overUnders,
   parseZwo,
   positionAt,
   ramp,
+  segmentLabel,
+  series,
   steady,
   totalDuration,
+  workoutDescription,
+  workoutName,
   zoneFor,
 } from "../public/js/ride/workout.js";
+import { setLocale } from "../public/js/i18n/i18n.js";
 import { Emitter } from "../public/js/util/emitter.js";
 import { fakeScheduler } from "./helpers.js";
 import { fakeTrainer } from "./fakeBluetooth.js";
+
+afterEach(() => setLocale("en"));
 
 // --- FTMS ERG ---------------------------------------------------------------
 
@@ -172,7 +180,7 @@ test("rejects files that are not workouts", () => {
 // --- training control -------------------------------------------------------
 
 import { TrainingControl } from "../public/js/ride/trainingControl.js";
-import { workoutShapes } from "../public/js/view/workoutView.js";
+import { drawWorkout, drawWorkoutPreview, workoutShapes } from "../public/js/view/workoutView.js";
 
 test("training control: sim by default, manual ERG with clamped steps", () => {
   const control = new TrainingControl({ ftp: 250 });
@@ -274,4 +282,119 @@ test("a locked workout ignores adjust and skipSegment until it stops", () => {
   assert.equal(control.adjust(1), true);
   control.skipSegment();
   assert.equal(control.tick(0).finished, true);
+});
+
+// --- ERG session building blocks ---------------------------------------------
+
+test("intervals can leave out the recovery after the last rep", () => {
+  const segments = intervals(3, 30, 1.2, 15, 0.6, { lastRecovery: false });
+  assert.equal(segments.length, 5);
+  assert.equal(segments.at(-1).label, "Interval 3/3");
+  assert.equal(intervals(3, 30, 1.2, 15, 0.6).at(-1).label, "Recovery 3/3");
+});
+
+test("an imported .zwo keeps the recovery after its last interval", () => {
+  const workout = parseZwo('<workout_file><workout><IntervalsT Repeat="2" OnDuration="30" OnPower="1.2" OffDuration="15" OffPower="0.6"/></workout></workout_file>');
+  assert.equal(workout.segments.at(-1).kind, "off");
+});
+
+test("series prefixes labels and puts a break only between sets", () => {
+  const segments = series(2, 180, 0.6, () => intervals(2, 30, 1.2, 15, 0.6, { lastRecovery: false }));
+  assert.deepEqual(segments.map((s) => s.label), [
+    "Series 1/2 · Interval 1/2", "Series 1/2 · Recovery 1/2", "Series 1/2 · Interval 2/2",
+    "Series break",
+    "Series 2/2 · Interval 1/2", "Series 2/2 · Recovery 1/2", "Series 2/2 · Interval 2/2",
+  ]);
+  assert.deepEqual([segments[3].durationS, segments[3].from, segments[3].to, segments[3].kind], [180, 0.6, 0.6, "off"]);
+});
+
+test("a single series has no break", () => {
+  assert.equal(series(1, 180, 0.6, () => intervals(1, 30, 1.2, 15, 0.6)).length, 2);
+});
+
+test("overUnders alternates under and over blocks", () => {
+  const segments = overUnders(2, 120, 0.95, 60, 1.05);
+  assert.deepEqual(segments.map((s) => [s.label, s.durationS, s.from, s.kind]), [
+    ["Under 1/2", 120, 0.95, "on"], ["Over 1/2", 60, 1.05, "on"],
+    ["Under 2/2", 120, 0.95, "on"], ["Over 2/2", 60, 1.05, "on"],
+  ]);
+});
+
+test("segmentLabel translates series, under, over and the break", () => {
+  assert.equal(segmentLabel("Series 2/3 · Interval 5/13"), "Series 2/3 · Interval 5/13");
+  setLocale("de");
+  assert.equal(segmentLabel("Series 2/3 · Interval 5/13"), "Serie 2/3 · Intervall 5/13");
+  assert.equal(segmentLabel("Series 1/3 · Under 2/3"), "Serie 1/3 · Unter 2/3");
+  assert.equal(segmentLabel("Over 1/3"), "Über 1/3");
+  assert.equal(segmentLabel("Series break"), "Serienpause");
+});
+
+test("segmentLabel leaves labels it does not know alone", () => {
+  setLocale("de");
+  assert.equal(segmentLabel("Series 1/2 · Hill repeat"), "Serie 1/2 · Hill repeat");
+  assert.equal(segmentLabel("Series of hills"), "Series of hills");
+});
+
+// --- sourced ERG sessions -----------------------------------------------------
+
+const preset = (name) => PRESET_WORKOUTS.find((w) => w.name === name);
+
+test("the sourced sessions have the planned shape", () => {
+  const expected = { "Seiler 4×8": [9, 3180, 1.05], "Rønnestad 30/15": [79, 2970, 1.2], "40/20 4×8": [65, 3100, 1.15], "Over-unders 3×9": [22, 3120, 1.05] }; // i18n-ok
+  for (const [name, [blocks, seconds, peak]] of Object.entries(expected)) {
+    const workout = preset(name);
+    assert.equal(workout.segments.length, blocks, name);
+    assert.equal(totalDuration(workout), seconds, name);
+    assert.equal(Math.max(...workout.segments.map((s) => s.from)), peak, name);
+  }
+});
+
+test("Rønnestad 30/15 has 12 reliefs per series and 3 minutes between series", () => {
+  const { segments } = preset("Rønnestad 30/15");
+  assert.equal(segments.filter((s) => s.label.startsWith("Series 2/3 · Recovery")).length, 12);
+  assert.equal(segments.filter((s) => s.label === "Series break" && s.durationS === 180).length, 2);
+});
+
+test("sessions are shown with a translated name and description", () => {
+  setLocale("de");
+  assert.match(workoutDescription(preset("Over-unders 3×9")), /nicht aus einer veröffentlichten Studie/);
+  assert.equal(workoutName(preset("40/20 4×8")), "40/20 4×8");
+  assert.equal(PRESET_WORKOUTS.at(-1).name, "ERG check 10");
+});
+
+function fakeCanvas(clientWidth = 200) {
+  const log = { fills: [], strokes: 0, clears: 0 };
+  const ctx = {
+    globalAlpha: 1, setTransform() {}, clearRect() { log.clears += 1; }, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+    fill() { log.fills.push(ctx.globalAlpha); }, stroke() { log.strokes += 1; },
+  };
+  return { canvas: { clientWidth, clientHeight: 56, width: 0, height: 0, getContext: () => ctx }, log };
+}
+const previewWorkout = () => createWorkout({ name: "P", segments: [steady(60, 0.5), steady(60, 1.2)] });
+
+test("the preview draws every block at full alpha and no now-line", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkoutPreview(canvas, previewWorkout());
+  assert.deepEqual(log.fills, [0.9, 0.9]);
+  assert.equal(log.strokes, 0);
+});
+
+test("the in-ride chart still dims finished blocks and draws the now-line", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkout(canvas, { workout: previewWorkout(), elapsedS: 60, colors: { text: "#fff" } });
+  assert.deepEqual(log.fills, [0.35, 0.9]);
+  assert.equal(log.strokes, 1);
+});
+
+test("the preview survives a hidden canvas", () => {
+  const { canvas, log } = fakeCanvas(0);
+  assert.doesNotThrow(() => drawWorkoutPreview(canvas, previewWorkout()));
+  assert.equal(log.fills.length, 2);
+});
+
+test("the preview clears when no workout is selected", () => {
+  const { canvas, log } = fakeCanvas();
+  drawWorkoutPreview(canvas, undefined);
+  assert.equal(log.clears, 1);
+  assert.equal(log.fills.length, 0);
 });

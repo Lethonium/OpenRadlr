@@ -44,6 +44,21 @@ test("holding Space pauses once, not on every key repeat", () => {
   assert.equal(pauses, 1);
 });
 
+test("names the riders from other apps in the online summary", () => {
+  const humans = [{ is_bot: false }];
+  assert.equal(
+    onlineSummary(1, humans, { humans: 1, bots: 0, remote: 1 }).text,
+    "1 rider online · 1 from another app",
+  );
+  assert.equal(
+    onlineSummary(1, humans, { humans: 1, bots: 0, remote: 2 }).text,
+    "1 rider online · 2 from other apps",
+  );
+  // Without the server's count the remote riders are counted from the list.
+  const listed = [{ is_bot: false }, { is_bot: false, app: "incyclist" }];
+  assert.equal(onlineSummary(null, listed).text, "1 rider online · 1 from another app");
+});
+
 test("counts riders online on the server and on this route", () => {
   const riders = [{ is_bot: false }, { is_bot: true }, { is_bot: true }, { is_bot: false }];
   assert.deepEqual(onlineSummary(5, riders), { count: 5, text: "5 riders online · 2 on this route · 2 bots" });

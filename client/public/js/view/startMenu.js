@@ -226,6 +226,11 @@ export function routeDescription(route) {
   return text === key ? (route.description ?? "") : text;
 }
 
+/** What the start menu says about a route shared with other apps (OpenBikeNet); nothing for any other. */
+export function sharedNote(route) {
+  return route?.shared === true ? t("menu.shared.note") : "";
+}
+
 /** What a route card shows. */
 export function routeCard(route) {
   const studio = route.kind === "studio";
@@ -241,6 +246,7 @@ export function routeCard(route) {
     riders: workout ? null : routeRiders(route),
     active: (route.players ?? 0) > 0,
     special: studio || workout,
+    shared: route.shared === true,
   };
 }
 
@@ -264,6 +270,7 @@ export function renderRoutes(list, routes, selectedId, onSelect) {
         if (card.title) button.title = card.title;
         const head = element("span", "route-head");
         head.append(element("strong", "route-name", card.name), element("span", "route-tag", card.tag));
+        if (card.shared) head.append(element("span", "route-tag route-shared", t("menu.shared")));
         button.append(head);
         if (card.description) button.append(element("span", "route-description", card.description));
         const foot = element("span", "route-foot");

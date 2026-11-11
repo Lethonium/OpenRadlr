@@ -43,6 +43,7 @@ export function drawWorkout(canvas, { workout, elapsedS, colors }) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  if (elapsedS === null) return;
   const nowX = (Math.min(elapsedS, total) / total) * width;
   ctx.strokeStyle = colors.text;
   ctx.lineWidth = 2;
@@ -50,4 +51,11 @@ export function drawWorkout(canvas, { workout, elapsedS, colors }) {
   ctx.moveTo(nowX, 0);
   ctx.lineTo(nowX, height);
   ctx.stroke();
+}
+
+/** A static power profile of a workout (no "now" line); clears the canvas when there is none. */
+export function drawWorkoutPreview(canvas, workout) {
+  prepareCanvas(canvas);
+  if (!workout) return;
+  drawWorkout(canvas, { workout, elapsedS: null });
 }
