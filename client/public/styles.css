@@ -2990,6 +2990,23 @@ body.riding {
   white-space: nowrap;
 }
 
+.rider-name.split {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.rider-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.rider-name.split .badge {
+  flex: none;
+}
+
 .rider-gap,
 .rider-power {
   text-align: right;

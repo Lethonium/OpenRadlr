@@ -39,6 +39,7 @@ import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOptio
 import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
+import { BotCalls } from "./ride/botCalls.js";
 import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { RideHistory, rideRecord } from "./ride/rideHistory.js";
@@ -331,6 +332,8 @@ const app = {
   splits: [],
   shownSplits: 0,
   splitToastTimer: null,
+  /** Bots' moves near me, called out in the ticker (#64). */
+  botCalls: new BotCalls(),
   /** Golden lemons on my route (null off the routes, in the studio and workouts), and how many this ride collected. */
   lemonHunt: null,
   lemonsThisRide: 0,
@@ -1440,6 +1443,13 @@ function runAction(action) {
 }
 
 /** A message for the rider: kept in the feed drawer and shown briefly on the HUD. */
+const BOT_CALL_TEXT = Object.freeze({ attack: "bots.attack", sprint: "bots.sprint", answer: "bots.answer", pull: "bots.pull" });
+
+/** A line in the ticker when a bot near me starts a move (#64). */
+function callBotMoves(riders, me) {
+  for (const call of app.botCalls.update({ riders, me, route: app.route, nowS: now() })) notify(t(BOT_CALL_TEXT[call.move], { name: call.name }));
+}
+
 function notify(text, kind = "event") {
   appendFeed($("feed"), text, kind);
   if (!$("hud-ticker")) return;
@@ -1787,6 +1797,7 @@ function endRide() {
     splits: [],
     shownSplits: 0,
     splitToastTimer: (clearTimeout(app.splitToastTimer), ($("split-toast").hidden = true), null),
+    botCalls: new BotCalls(),
     lemonHunt: null,
     lemonsThisRide: 0,
     lemonTotal: 0,
@@ -1873,6 +1884,7 @@ function wireConnection(connection) {
     app.state = { ...message, riders: riders.filter(onMyRoute), elsewhere };
     // The workout screen has none of the ride panels.
     if (!app.workout) updatePanels();
+    if (!app.workout && app.route) callBotMoves(riders, me);
   });
   on("studio_state", (message) => {
     app.state = message;

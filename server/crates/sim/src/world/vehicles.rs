@@ -378,7 +378,7 @@ impl World {
         let id = self.allocate_id();
         let taken: Vec<&str> = self.riders.values().map(|r| r.name.as_str()).collect();
         let name = names::generate_unique(self.rng.as_mut(), &taken);
-        let mut profile = BotProfile::random(self.rng.as_mut());
+        let mut profile = BotProfile::character(&name, self.rng.as_mut());
         profile.ftp_wkg = level_wkg;
         let lane = self.routes[route].lanes() / 2;
         let mass_kg = profile.weight_kg;

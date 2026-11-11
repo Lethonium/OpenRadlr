@@ -68,7 +68,7 @@ that died after its rider was taken over by a new one can't touch the rider.
    captain's road, then copies speed, position and lane to every seat.
 5. Lanes move towards their target lane (one lane per second).
 6. Finishers are recorded; the race completes when every participant finished.
-7. Bots are spawned or removed to keep the target rider count.
+7. Bots are spawned or removed to keep `OPENRADLR_TARGET_RIDERS` riders on every route. Each human keeps a few of them around: far bots make room, and groups spawn out of sight, ahead to chase or behind to come by (#64, ADR 0022).
 8. The game core sends events to their route, every fifth tick each client the
    state of the riders around them, and new resistance
    whenever a rider's grade changed by at least 0.1 %.
@@ -126,7 +126,7 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 | `island.js` | The map as an island: coast a seeded margin beyond the outermost roads, beaches, cliffs, sea floor |
 | `menuCamera.js`, `highlight.js` | Start menu: drone orbit over the island, glide down to the picked route and follow it (cuts with reduced motion); glowing band on the picked route with climbs, sprints and a start beacon |
 | `worldScene.js`, `worldWorker.js` | Build the world in a module worker and hand the meshes over without copying (falls back to building in place) |
-| `riderModel.js` | Low-poly cyclist; jersey parts are tinted (me orange, humans blue, bots grey); skin, helmet, bike and size vary per rider (deterministic from the id); cranks turn, legs follow the pedals by two-bone IK (`legPose`), spoked wheels spin |
+| `riderModel.js` | Low-poly cyclist; jersey parts are tinted (me orange, humans blue, bots in their team's kit, see `view/botKits.js`, else grey); skin, helmet, bike and size vary per rider (deterministic from the id); cranks turn, legs follow the pedals by two-bone IK (`legPose`), spoked wheels spin |
 | `zones.js` | Scenery zones from the route file, or seeded defaults (village, river, forest) |
 | `features.js` | River carving and water, stone bridge, village (houses, church, pavements, lamps, signs), farms with animals, wind turbines, spectators (at the finish, climbs and sprints, lining the last 600 m of each climb), guard rails, warning signs, flamme rouge |
 | `lemonModel.js` | The golden lemon floating over the road (lemons are placed by `ride/lemons.js`) |

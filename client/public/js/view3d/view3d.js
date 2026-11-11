@@ -3,6 +3,7 @@
  * floating name labels. Same inputs as the 2D views (smoothed riders), so it
  * needs no protocol changes.
  */
+import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
@@ -67,6 +68,14 @@ export function hexToRgb(hex) {
   const n = Number.parseInt(full, 16);
   if (!Number.isFinite(n) || full.length !== 6) return [0.6, 0.6, 0.6];
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/** Bot teams' kit colours as tints (#64). */
+const KIT_TINTS = new Map(Object.entries(TEAM_KITS).map(([team, hex]) => [team, hexToRgb(hex)]));
+
+/** A bot's jersey: its team's kit, else the bot grey. */
+function botTint(rider, tints) {
+  return (botKit(rider) && KIT_TINTS.get(rider.team)) || tints.bot;
 }
 
 /**
@@ -656,7 +665,7 @@ export class View3D {
       const seatModel = multiply(base, placement(seat.hip, seat.yaw));
       // The hip stays put when the rider is scaled: scale about it, then bring the solo hip to the origin.
       const legsModel = multiply(seatModel, multiply(scaling(look.scale), placement([0, -hy, -hz])));
-      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
       bodies.push({ variant: look.variant, model: multiply(seatModel, scaling(look.scale)), tint });
       limbs.push(...this.#legs(legsModel, look, this.#pedal(rider.id, seatCadence(rider), dt)));
       heads.set(rider.id, transformPoint(seatModel, [0, 0.62 * look.scale + 0.55, 0]).slice(0, 3));
@@ -718,7 +727,7 @@ export class View3D {
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
-      const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? tints.bot : tints.human;
+      const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
       const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
       visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
     }
