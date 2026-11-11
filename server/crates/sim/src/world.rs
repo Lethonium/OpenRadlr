@@ -294,6 +294,8 @@ struct Slot {
     on_route: bool,
     position: f64,
     lane: f64,
+    /// The lane it is moving to (its lane once settled).
+    target_lane: f64,
     speed: f64,
     accel: f64,
     /// Lanes either side of `lane` that this slot blocks when others test
@@ -983,6 +985,13 @@ impl World {
                 };
                 let wants_past = rider.pass_urge > spacing.pass_accel;
                 let mut boxed = false;
+                // Moving over while the rider ahead moves into the same lane:
+                // back into the lane just left, instead of weaving out and back.
+                if !settled {
+                    if let Some(back) = field.turn_back_lane(me, rider.target_lane, spacing) {
+                        rider.target_lane = back;
+                    }
+                }
                 if wants_past && settled {
                     match field.passing_lane(me, spacing) {
                         Some(lane) => {
@@ -1059,6 +1068,7 @@ impl World {
             on_route: rider.off_route.is_none(),
             position: rider.position,
             lane: rider.lane,
+            target_lane: f64::from(rider.target_lane),
             speed: rider.speed,
             accel: rider.accel,
             half_width,
@@ -1903,16 +1913,48 @@ impl Field<'_> {
         [current - 1.0, current + 1.0]
             .into_iter()
             .filter(|&lane| (0.0..lanes).contains(&lane))
-            .find(|&lane| {
-                !self.slots.iter().any(|s| {
-                    s.id != me.id
-                        && (s.lane - lane).abs() < s.half_width.max(me.half_width) + 0.5
-                        && self
-                            .gap_to(me, s)
-                            .is_some_and(|gap| gap > -spacing.min_gap && gap < spacing.pass_look)
-                })
-            })
+            .find(|&lane| self.free_to_pass_in(me, lane, spacing))
             .map(|lane| lane as u8)
+    }
+
+    /// Whether `lane` is clear around `me` for passing: nobody in it, or on
+    /// the way into it, from just behind to `pass_look` ahead. A rider ahead
+    /// already leaving it doesn't count.
+    fn free_to_pass_in(&self, me: &Slot, lane: f64, spacing: &SpacingParams) -> bool {
+        !self.slots.iter().any(|s| {
+            if s.id == me.id {
+                return false;
+            }
+            let Some(gap) = self
+                .gap_to(me, s)
+                .filter(|&gap| gap > -spacing.min_gap && gap < spacing.pass_look)
+            else {
+                return false;
+            };
+            let in_it = (s.lane - lane).abs() < s.half_width.max(me.half_width) + 0.5;
+            let leaving = s.target_lane != lane && gap > 0.0;
+            s.target_lane == lane || (in_it && !leaving)
+        })
+    }
+
+    /// While `me` moves over to `target`: the lane it came from, when a rider
+    /// just ahead is moving into `target` too and that lane is clear again.
+    fn turn_back_lane(&self, me: &Slot, target: u8, spacing: &SpacingParams) -> Option<u8> {
+        let target = f64::from(target);
+        let from = if target > me.lane {
+            me.lane.floor()
+        } else {
+            me.lane.ceil()
+        };
+        let cut_in = self.slots.iter().any(|s| {
+            s.id != me.id
+                && s.target_lane == target
+                && (s.lane - target).abs() > 1e-9
+                && self
+                    .gap_to(me, s)
+                    .is_some_and(|gap| gap > 0.0 && gap < spacing.pass_look)
+        });
+        (cut_in && from != target && self.free_to_pass_in(me, from, spacing)).then_some(from as u8)
     }
 
     fn lane_view(&self, me: &Slot) -> LaneView {
@@ -2366,6 +2408,36 @@ mod tests {
             slowest > 8.6 - 0.6,
             "not braked by the rider going through: {:.1} km/h",
             slowest * 3.6
+        );
+    }
+
+    #[test]
+    fn pulling_out_a_rider_turns_back_when_the_rider_ahead_moves_into_the_same_lane() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        // Both just set off from lane 1 towards lane 2, the leader 4 m ahead.
+        put(&mut world, leader, 104.0, 1, 8.5);
+        put(&mut world, follower, 100.0, 1, 8.5);
+        for id in [leader, follower] {
+            let rider = world.riders.get_mut(&id).unwrap();
+            rider.lane = 1.1;
+            rider.target_lane = 2;
+        }
+
+        let mut widest: f64 = 0.0;
+        for _ in 0..(10.0 / DT) as usize {
+            ride(&mut world, DT, &[(leader, 150.0), (follower, 400.0)]);
+            widest = widest.max(world.rider(follower).unwrap().lane);
+        }
+
+        assert!(
+            widest < 1.3,
+            "turned back at once instead of weaving: reached lane {widest:.2}"
+        );
+        assert!(
+            gap_between(&world, leader, follower) > 2.0,
+            "went past on the side the leader left"
         );
     }
 
