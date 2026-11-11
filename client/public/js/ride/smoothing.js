@@ -4,6 +4,12 @@
  * Each rider is dead-reckoned from its last snapshot using its speed, and the
  * error against new snapshots is blended out over a short time instead of
  * snapping. Distances wrap around the loop.
+ *
+ * Lanes glide: the lane is drawn one update back, between the last two
+ * snapshots, and a critically damped spring follows that line. A lane change
+ * moves at the server's pace, eased in and out, instead of stepping at 4 Hz
+ * (each new snapshot used to kick the sideways speed). The spring makes up
+ * for the delay: a change still lands as soon as it used to.
  */
 /** Distances of riders off every route (#15) just grow: no loop to wrap around. */
 const OPEN_ROAD = Object.freeze({ wrap: (d) => d, signedGap: (a, b) => b - a });
@@ -16,11 +22,13 @@ export class RiderSmoother {
    * @param {{maxExtrapolationS?: number, correctionRate?: number, routeOf?: (rider: object) => object | undefined}} [options]
    *   `routeOf` finds a rider's own route (riders of other routes on the map, #14); `route` without it
    */
-  constructor(route, { maxExtrapolationS = 0.6, correctionRate = 6, routeOf = () => undefined } = {}) {
+  constructor(route, { maxExtrapolationS = 0.6, correctionRate = 6, laneDelayS = 0.25, laneStiffness = 18, routeOf = () => undefined } = {}) {
     this.route = route;
     this.routeOf = routeOf;
     this.maxExtrapolationS = maxExtrapolationS;
     this.correctionRate = correctionRate;
+    this.laneDelayS = laneDelayS;
+    this.laneStiffness = laneStiffness;
   }
 
   /**
@@ -34,13 +42,15 @@ export class RiderSmoother {
       seen.add(rider.id);
       const entry = this.#riders.get(rider.id);
       if (!entry) {
-        this.#riders.set(rider.id, { snapshot: rider, receivedAt: nowS, display: rider.distance, lane: rider.lane, sampledAt: nowS });
+        const lanes = [{ t: nowS, lane: rider.lane }];
+        this.#riders.set(rider.id, { snapshot: rider, receivedAt: nowS, display: rider.distance, lane: rider.lane, laneSpeed: 0, lanes, sampledAt: nowS });
         continue;
       }
       // Onto another route (or off every route): its distances start afresh.
       if (entry.snapshot.route !== rider.route) entry.display = rider.distance;
       entry.snapshot = rider;
       entry.receivedAt = nowS;
+      entry.lanes = [...entry.lanes.slice(-2), { t: nowS, lane: rider.lane }];
     }
     for (const id of this.#riders.keys()) if (!seen.has(id)) this.#riders.delete(id);
   }
@@ -62,7 +72,7 @@ export class RiderSmoother {
       const error = route.signedGap(entry.display, target);
       // Large jumps (e.g. teleport to the race start) are applied immediately.
       entry.display = Math.abs(error) > 50 ? target : route.wrap(entry.display + error * blend);
-      entry.lane += (snapshot.lane - entry.lane) * blend;
+      this.#glideLane(entry, nowS, dt);
       entry.sampledAt = nowS;
 
       const smoothed = { ...snapshot, distance: entry.display, lane: entry.lane };
@@ -72,4 +82,32 @@ export class RiderSmoother {
     }
     return result;
   }
+
+  /** Moves `entry.lane` along the lane one update back, through a critically damped spring. */
+  #glideLane(entry, nowS, dt) {
+    const target = laneAt(entry.lanes, nowS - this.laneDelayS);
+    // A long pause (a hidden tab): no spring to wind up, just be there.
+    if (dt > 0.5) {
+      entry.lane = target;
+      entry.laneSpeed = 0;
+      return;
+    }
+    const w = this.laneStiffness;
+    // Small steps keep the spring stable at any frame rate.
+    for (let left = dt; left > 1e-9; left -= 1 / 120) {
+      const step = Math.min(left, 1 / 120);
+      entry.laneSpeed += (w * w * (target - entry.lane) - 2 * w * entry.laneSpeed) * step;
+      entry.lane += entry.laneSpeed * step;
+    }
+  }
+}
+
+/** The lane at time `t` on the line through the snapshots (oldest first), held before and after them. */
+function laneAt(lanes, t) {
+  const next = lanes.findIndex((s) => s.t > t);
+  if (next === 0) return lanes[0].lane;
+  if (next < 0) return lanes.at(-1).lane;
+  const a = lanes[next - 1];
+  const b = lanes[next];
+  return a.lane + ((b.lane - a.lane) * (t - a.t)) / (b.t - a.t);
 }
