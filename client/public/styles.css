@@ -4162,7 +4162,13 @@ body {
   min-height: 100dvh;
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
-  padding-bottom: max(40px, env(safe-area-inset-bottom));
+}
+
+/* Phones keep the room for the Ride bar along the bottom (the one-column rule above). */
+@media (min-width: 901px) {
+  .start {
+    padding-bottom: max(40px, env(safe-area-inset-bottom));
+  }
 }
 
 .start-head {

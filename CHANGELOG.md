@@ -42,6 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
 
 ### Fixed
+- On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
 - No more trees on the road where a route rounds a sharp corner at a junction off the map's roads (e.g. at the top of Col de la Forge by the Hilltop Café): every route of the map now keeps its asphalt clear, whichever one is ridden.
 - On routes that aren't a loop (Lanzarote), the start crowd no longer stands in the middle of the road.
 - Workouts: the statue plinths no longer flicker, the camera frames your own rider below the timer instead of the mat's centre, joining a workout no longer shows a black screen while the gym's world is built again, and the start menu no longer shows an empty map box on the Workout and Studio tabs (#26).
