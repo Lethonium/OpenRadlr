@@ -5898,6 +5898,7 @@ body.working-out #paddles {
     clip-path: inset(50%);
     white-space: nowrap;
   }
+}
 
 /* ===================================================================== */
 /* Phone ride screen: nothing covers the top buttons or another panel.    */
@@ -5910,13 +5911,16 @@ body.working-out #paddles {
   --hud-row-gap: 8px;
 }
 
-/* The lane buttons are a side channel: see-through, no blur, so they never read as a main control. */
-.lane-button {
-  background: rgba(15, 18, 22, 0.22);
-  border-color: rgba(255, 255, 255, 0.14);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  color: rgba(255, 255, 255, 0.8);
+/* On phones (either way up) the lane buttons are a side channel: see-through,
+   no blur, so they never read as a main control. Larger screens keep theirs. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .lane-button {
+    background: rgba(15, 18, 22, 0.22);
+    border-color: rgba(255, 255, 255, 0.14);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: rgba(255, 255, 255, 0.8);
+  }
 }
 
 /* Upright phones. */
@@ -6094,14 +6098,17 @@ body.working-out #paddles {
     bottom: 124px;
   }
 
+  /* The band's side stats fit two to a row. */
   .band {
     height: 124px;
-    grid-template-columns: 130px minmax(0, 1fr) 130px;
+    grid-template-columns: 156px minmax(0, 1fr) 156px;
   }
 
   .band-stats {
     padding: 8px 12px;
-    gap: 6px;
+    grid-template-columns: 1fr 1fr;
+    align-content: center;
+    gap: 4px 12px;
   }
 
   .band-chart {
@@ -6135,21 +6142,19 @@ body.working-out #paddles {
     text-overflow: clip;
   }
 
-  /* The simulator stepper owns the top-left corner: the race row and the workout chip go below it. */
+  /* The race row spans the width: the first row under the buttons, or below the simulator
+     stepper, which owns the top-left corner (as for the workout chip). */
   .race-top {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+  }
+
+  .hud:has(#sim-stepper:not([hidden])) .race-top {
     top: 72px;
   }
 
   .hud:has(#sim-stepper:not([hidden])) .workout-chip {
     top: 72px;
     max-width: calc(100% - 2 * var(--gap) - 340px);
-  }
-
-  /* The band's side stats fit two to a row. */
-  .band-stats {
-    grid-template-columns: 1fr 1fr;
-    align-content: center;
-    gap: 4px 12px;
   }
 
   .band-stats .caption {
@@ -6165,10 +6170,6 @@ body.working-out #paddles {
     flex: 1 1 0;
     flex-basis: 0;
     order: 0;
-  }
-
-  .band {
-    grid-template-columns: 156px minmax(0, 1fr) 156px;
   }
 
   /* The milestone banner sits between the top rows and the lane buttons. */
