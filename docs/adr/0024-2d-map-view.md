@@ -1,4 +1,4 @@
-# 20. The 2D view is a top-down map
+# 24. The 2D view is a top-down map
 
 Date: 2026-11-02 · Status: accepted
 
