@@ -201,6 +201,22 @@ test("picked devices come back from getDevices, so remembered ones connect on th
   assert.deepEqual(found.map(({ device }) => device.id), ["strap-1"]);
 });
 
+test("a remembered device keeps its name when the phone returns it without one", async () => {
+  const { fake, storage } = setup([strapDevice("strap-1", "Google Fitbit Air")]);
+  await new NativeBluetooth({ plugin: fake.plugin, storage }).requestDevice({ filters: [{ services: [0x180d] }] });
+  // Android's getDevices() after a restart: the id, no name.
+  fake.plugin.getDevices = async ({ deviceIds }) => ({ devices: deviceIds.map((deviceId) => ({ deviceId })) });
+  const [device] = await new NativeBluetooth({ plugin: fake.plugin, storage }).getDevices();
+  assert.equal(device.name, "Google Fitbit Air");
+});
+
+test("devices remembered before names were stored still come back", async () => {
+  const { fake, storage } = setup([strapDevice("strap-1", "Google Fitbit Air")]);
+  storage.setItem("openradlr.nativeDevices", JSON.stringify(["strap-1"]));
+  const [device] = await new NativeBluetooth({ plugin: fake.plugin, storage }).getDevices();
+  assert.equal(device.id, "strap-1");
+});
+
 test("in a browser nothing native is installed", () => {
   const nav = {};
   assert.equal(nativePlugins({}), null);

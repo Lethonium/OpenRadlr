@@ -107,17 +107,19 @@ export class NativeBluetooth {
       if (/cancel/i.test(error?.message ?? "")) throw domError("NotFoundError", "User cancelled the requestDevice() chooser."); // i18n-ok (Web Bluetooth's own message)
       throw error;
     }
-    this.#grant(found.deviceId);
+    this.#grant(found.deviceId, found.name);
     return this.#device(found);
   }
 
   /** The devices picked before, so remembered ones connect without the picker (#43). */
   async getDevices() {
-    const ids = this.#granted();
-    if (!ids.length) return [];
+    const granted = this.#granted();
+    if (!granted.length) return [];
     await this.#initialize();
-    const { devices = [] } = await this.#plugin.getDevices({ deviceIds: ids });
-    return devices.map((found) => this.#device(found));
+    const { devices = [] } = await this.#plugin.getDevices({ deviceIds: granted.map((entry) => entry.id) });
+    // After a restart Android knows the id only: the name comes from when it was picked.
+    const nameOf = (id) => granted.find((entry) => entry.id === id)?.name;
+    return devices.map((found) => this.#device({ ...found, name: found.name ?? nameOf(found.deviceId) }));
   }
 
   /** Asks for the Bluetooth permission once; again on the next call if it failed. */
@@ -139,19 +141,25 @@ export class NativeBluetooth {
     return device;
   }
 
+  /** @returns {{id: string, name?: string}[]} picked devices, oldest first (early versions stored ids only) */
   #granted() {
     try {
-      const ids = JSON.parse(this.#storage?.getItem(GRANTED_KEY) ?? "[]");
-      return Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : [];
+      const entries = JSON.parse(this.#storage?.getItem(GRANTED_KEY) ?? "[]");
+      if (!Array.isArray(entries)) return [];
+      return entries
+        .map((entry) => (typeof entry === "string" ? { id: entry } : entry))
+        .filter((entry) => typeof entry?.id === "string")
+        .map(({ id, name }) => (typeof name === "string" ? { id, name } : { id }));
     } catch {
       return [];
     }
   }
 
-  #grant(id) {
-    const ids = [...this.#granted().filter((known) => known !== id), id].slice(-MAX_GRANTED);
+  #grant(id, name) {
+    const entry = typeof name === "string" && name ? { id, name } : { id };
+    const entries = [...this.#granted().filter((known) => known.id !== id), entry].slice(-MAX_GRANTED);
     try {
-      this.#storage?.setItem(GRANTED_KEY, JSON.stringify(ids));
+      this.#storage?.setItem(GRANTED_KEY, JSON.stringify(entries));
     } catch {
       // A convenience: without storage the rider just picks devices again.
     }

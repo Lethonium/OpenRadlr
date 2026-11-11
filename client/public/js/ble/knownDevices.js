@@ -42,7 +42,9 @@ export class KnownDevices {
    * @param {{id?: string, label?: string, name?: string}} device
    */
   remember(kind, device) {
-    const name = device.name ?? device.label;
+    // The same device found again may come without its name (a phone's list after a restart): keep the known one.
+    const known = this.of(kind).find((entry) => entry.id === device.id);
+    const name = device.name ?? known?.name ?? device.label;
     if (!KINDS.includes(kind) || !device.id || !name) return;
     const others = this.list().filter((entry) => entry.kind !== kind);
     const same = this.of(kind).filter((entry) => kind === "controller" && entry.id !== device.id);
