@@ -2855,7 +2855,7 @@ function saveFinishedSnapshot() {
 }
 
 /** The same panel renders a finished ride and a ride restored from browser recovery. */
-function mountUpload(prefix, recorder, name, { indoor, splits = [], onSuccess }) {
+function mountUpload(prefix, recorder, name, { indoor, splits = [], onSuccess, onConnect }) {
   const action = prefix === "finish-strava" ? "upload-strava" : "unfinished-strava";
   const status = prefix === "finish-strava" ? "upload-status" : "unfinished-upload-status";
   const elements = Object.fromEntries(["account", "detail", "connect", "activity", "storage"].map((part) => [part, $(`${prefix}-${part}`)]));
@@ -2868,6 +2868,7 @@ function mountUpload(prefix, recorder, name, { indoor, splits = [], onSuccess })
     makeFile: () => recorder.toFit({ indoor, splits }),
     name,
     onSuccess,
+    onConnect: nativeApp?.signIn ? () => connectStravaInApp() : onConnect,
     confirm: (message) => confirm(message),
   });
 }
@@ -2881,6 +2882,11 @@ function setupFinishUpload() {
   if (!visible) return;
   app.finishUpload = mountUpload("finish-strava", recorder, rideName(), {
     indoor: Boolean(app.studio), splits: app.finishSplits,
+    onConnect: async () => {
+      await app.finishSave;
+      if (!app.finishRecoverable && !confirm(t("strava.connectUnsaved"))) return;
+      location.assign("/auth/strava");
+    },
     onSuccess: () => {
       if (app.recorder !== recorder) return;
       // Keep the snapshot/photos until leaving, so reconnecting or saving photos is safe.
@@ -2888,13 +2894,6 @@ function setupFinishUpload() {
       $("finish-retained").hidden = true;
     },
   });
-  const connect = $("finish-strava-connect");
-  connect.onclick = async (event) => {
-    event.preventDefault();
-    await app.finishSave;
-    if (!app.finishRecoverable && !confirm(t("strava.connectUnsaved"))) return;
-    location.assign(connect.href);
-  };
 }
 
 function setupRecoveryUpload() {
@@ -3195,7 +3194,7 @@ function initPhotos() {
   });
   $("download-summary").addEventListener("click", () => {
     const image = app.album.summary;
-    if (image) downloadBlob(image.blob, image.name);
+    if (image) saveFiles([image]);
   });
   $("download-photos").addEventListener("click", () => {
     saveFiles(app.album.images);

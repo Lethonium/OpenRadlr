@@ -48,7 +48,7 @@ function element() {
   return { hidden: false, disabled: false, textContent: "", dataset: {}, setAttribute() {},
     addEventListener: (name, fn) => listeners.set(name, fn),
     removeEventListener: (name) => listeners.delete(name),
-    click: () => listeners.get("click")?.(),
+    click: (event) => listeners.get("click")?.(event),
   };
 }
 function elements() {
@@ -122,4 +122,28 @@ test("a rejected upload has an inline failure link with its explanation", () => 
   assert.equal(view.activityLabel, t("strava.state.rejected"));
   assert.equal(view.tone, "error");
   assert.match(view.detail, /duplicate/);
+});
+
+
+test("the upload row uses the native sign-in callback instead of navigating the web view", async () => {
+  const els = elements();
+  let signedIn = 0;
+  let prevented = false;
+  const binding = bindStravaUpload({ elements: els, account: null, onConnect: async () => { signedIn++; } });
+  await els.connect.click({ preventDefault: () => { prevented = true; } });
+  assert.equal(signedIn, 1);
+  assert.equal(prevented, true);
+  binding.dispose();
+  await els.connect.click({ preventDefault() {} });
+  assert.equal(signedIn, 1);
+});
+
+
+test("the browser upload row leaves the OAuth link navigation intact", () => {
+  const els = elements();
+  let prevented = false;
+  const binding = bindStravaUpload({ elements: els, account: null });
+  els.connect.click({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, false);
+  binding.dispose();
 });

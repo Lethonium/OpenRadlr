@@ -13,7 +13,7 @@ Branch: `fix/strava-upload-state`, based on `origin/main`.
 
 ## Result
 
-Implemented in PR #68. `make check` passes: 1,212 client tests and 549 Rust
+Implemented in PR #68. `make check` passes: 1,259 client tests and 553 Rust
 tests, plus formatting and lint. Desktop and 390px browser verification used
 the real local backend with an injected BLE power meter and intercepted Strava
 responses (shortened polling delays for the ad-hoc UI check). Pending → menu
@@ -38,3 +38,9 @@ descriptions, with live announcements. All six settled states retain the same
 row height at 320, 390 and 1280px, including German and a long account name.
 The browser flow also reproduced and verified the fix for periodic menu info
 refreshes cancelling recovery polling. The complete flow still submits once.
+
+Rebased onto the native-app integration in main. Kept app login/claim tests and
+the native file-sharing paths. Finish/recovery account actions use an injected
+connect callback for native system sign-in; ordinary browser OAuth links retain
+their navigation. The summary-image save action uses the same saveFiles adapter
+as the other native downloads. Both connect paths have binding-level tests.
