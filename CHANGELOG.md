@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Start menu: the language switch is a compact dropdown (any future language shows up in it), the version and Privacy link sit in a quiet footer, and a new version shows a "Reload / Later" toast instead of a link in the header. On phones the tabs share one row instead of scrolling.
+- Installed on a phone or tablet (home screen), OpenRadlr no longer locks itself to landscape: it turns with the device, so the start menu and the ride also work in portrait.
 
 ### Added
 
