@@ -164,6 +164,24 @@ the ride already shows the 2D view. <kbd>V</kbd> toggles 3D and 2D, <kbd>C</kbd>
 cycles cameras, <kbd>T</kbd> cycles the time of day; *Graphics: Low* turns off the
 shadow map and grass for weaker GPUs. Devices without WebGL 2 fall back to 2D.
 
+### 2D view
+
+`view/rideMapView.js` draws the alternative view: a top-down map around the
+rider. The camera is heading-up with the rider mid-screen and the canvas height
+spanning 120 m (the cockpit's paddle meter overlays the lower third). Once the
+map network is loaded, the island's coast and a coarse hillshade from the
+network's heights are drawn first; then the map's tree dots and thin outline
+houses (from the route's scenery zones and the map's cafés, scaled with the
+zoom), every road as a thin context line, the road being ridden at full width
+with edge lines and dashed lane dividers, the golden lemons still on the road,
+the draft gap ahead of me when I am drafting, and the riders around me,
+including my best lap's ghost. Without a network it draws the current route
+on land, so the view needs neither WebGL 2 nor an extra request while the world
+builds. `view/rideMapTheme.js` colours it from the selected biome's 2D palette
+(the biome is the palette's only source) and the time-of-day preset, so the 2D
+map follows the same season and light as the 3D world. The map is clipped above
+the workout band in the Training layout, like the 3D view.
+
 ### Ride screen
 
 The 3D (or 2D) view fills the window and the HUD is an overlay. `#ride` carries

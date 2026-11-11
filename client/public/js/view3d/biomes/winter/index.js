@@ -5,7 +5,7 @@
  */
 import { winterModels } from "./buildings.js";
 import { plantFlower, plantTree, plantTuft } from "./flora.js";
-import { ICE, SNOW, WINTER_PALETTE } from "./palette.js";
+import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
 import { buildPenguin, penguinWorkoutParts } from "./people.js";
 import { terrainColor } from "./terrain.js";
 
@@ -90,6 +90,35 @@ export const winter = Object.freeze({
   rock: Object.freeze([0.45, 0.47, 0.5]),
   sand: Object.freeze([0.8, 0.86, 0.92]),
   seaFloor: Object.freeze([0.18, 0.26, 0.32]),
+  /** The 2D map under snow: pale ground, dark water and ploughed roads. The
+   *  ridden road is well below the snow's brightness, so it stays the most
+   *  readable thing on the map (also dimmed at dusk), and the white edge
+   *  lines and amber markings read against the darker asphalt. */
+  map: Object.freeze({
+    land: SNOW,
+    sea: Object.freeze([0.2, 0.31, 0.42]),
+    sand: Object.freeze([0.8, 0.86, 0.92]),
+    road: Object.freeze([0.45, 0.48, 0.54]),
+    contextRoad: Object.freeze([0.62, 0.65, 0.71]),
+    marking: Object.freeze([0.86, 0.68, 0.28]),
+    edge: Object.freeze([0.96, 0.96, 0.95]),
+    house: Object.freeze({
+      fill: STONE,
+      fillAlpha: 0.5,
+      edge: SNOW,
+      edgeAlpha: 0.95,
+      ridge: ICE,
+      ridgeAlpha: 0.55,
+    }),
+    cafe: Object.freeze({
+      fill: TIMBER,
+      fillAlpha: 0.58,
+      edge: SNOW,
+      edgeAlpha: 1,
+      ridge: ICE,
+      ridgeAlpha: 0.7,
+    }),
+  }),
   palette: WINTER_PALETTE,
   models: winterModels,
   /** The roadside crowd becomes clapping penguins; the scarf takes the per-person tint. */
@@ -133,5 +162,7 @@ export const winter = Object.freeze({
     tree: plantTree,
     tuft: plantTuft,
     flower: plantFlower,
+    /** Dark pines and snow-laden branches for the 2D map's tree dots. */
+    mapColors: Object.freeze([PINE, ICE]),
   }),
 });

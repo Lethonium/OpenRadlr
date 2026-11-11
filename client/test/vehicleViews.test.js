@@ -5,8 +5,6 @@ import { CAMERA_MODES, vehicleSettings } from "../public/js/view3d/chaseCamera.j
 import { layoutOf, placedVehicles, seatCadence } from "../public/js/view3d/vehicleScene.js";
 import { vehicleLayout } from "../public/js/view3d/vehicleModel.js";
 import { minimapDots } from "../public/js/view/minimapView.js";
-import { PELOTON_WINDOW, pelotonItems } from "../public/js/view/pelotonView.js";
-import { squareRoute } from "./helpers.js";
 
 const seated = (id, name, seat, { vehicleId = 5, kind = "beer_bike", seats = 5, captain = false, distance = 100, ...rest } = {}) => ({
   id,
@@ -47,17 +45,8 @@ test("2D markers: one per vehicle at its captain, solo riders left alone", () =>
   );
 });
 
-test("peloton and minimap show a vehicle once, larger than a bike", () => {
-  const route = squareRoute();
+test("the minimap shows a vehicle once, larger than a bike", () => {
   const riders = [solo(9, "Zed", 110), seated(1, "Ben", 0), seated(2, "Anna", 1, { captain: true })];
-  const items = pelotonItems(riders[1], riders, route);
-  assert.equal(items.length, 2);
-  const bike = items.find((i) => i.rider.id === 9);
-  const vehicle = items.find((i) => i.big);
-  assert.equal(vehicle.label, "Anna's beer bike");
-  assert.ok(vehicle.lengthM > bike.lengthM);
-  assert.ok(vehicle.mine);
-  assert.ok(Math.abs(vehicle.gap) <= PELOTON_WINDOW.ahead);
   const dots = minimapDots(riders, 1);
   assert.equal(dots.length, 2);
   assert.equal(dots.at(-1).label, "Anna's beer bike");
