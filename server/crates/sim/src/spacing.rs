@@ -17,9 +17,14 @@ pub struct SpacingParams {
     pub close_s: f64,
     /// A rider ahead closer than this (m) makes a stronger rider pull out to pass.
     pub pass_look: f64,
-    /// Pull out when the rider would still speed up by this much (m/s²) at the
-    /// leader's speed in clear air: at equal power it would not speed up at all.
+    /// Pull out when, at the leader's speed and in clear air, the rider would
+    /// speed up by this much more (m/s²) than the leader actually does. At
+    /// equal power that is zero, also while a group speeds up together;
+    /// 0.01 m/s² is about 8 W of surplus at 30 km/h.
     pub pass_accel: f64,
+    /// That surplus is averaged over about this long (s), so a surge or a
+    /// trainer's jittery power doesn't take a rider out of the draft.
+    pub pass_smooth_s: f64,
     /// Held behind with no free lane for this long (s), a rider that wants
     /// past slips through: a gap the lanes can't show, and no wall of riders
     /// across the road holds a stronger rider back for good.
@@ -34,7 +39,8 @@ impl Default for SpacingParams {
             min_gap: 2.0,
             close_s: 0.5,
             pass_look: 8.0,
-            pass_accel: 0.03,
+            pass_accel: 0.01,
+            pass_smooth_s: 5.0,
             squeeze_after_s: 3.0,
             grid_row: 2.5,
         }

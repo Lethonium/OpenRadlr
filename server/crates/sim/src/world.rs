@@ -158,6 +158,11 @@ pub struct Rider {
     pub workout: bool,
     /// Seconds held behind a slower rider with no free lane to pass in (see [`SpacingParams::squeeze_after_s`]).
     pub boxed_s: f64,
+    /// How much faster than the rider ahead this rider could ride out of its
+    /// draft, averaged (m/s², see [`SpacingParams::pass_smooth_s`]).
+    pub pass_urge: f64,
+    /// Acceleration in the last tick (m/s²): what a rider behind compares itself with.
+    pub accel: f64,
 }
 
 /// A rider off their route: the road they ride and how far into it.
@@ -290,6 +295,7 @@ struct Slot {
     position: f64,
     lane: f64,
     speed: f64,
+    accel: f64,
     /// Lanes either side of `lane` that this slot blocks when others test
     /// whether they ride in its lane (`draft.lane_tolerance` for a rider).
     half_width: f64,
@@ -611,6 +617,8 @@ impl World {
                 parked: false,
                 workout: false,
                 boxed_s: 0.0,
+                pass_urge: 0.0,
+                accel: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -948,9 +956,10 @@ impl World {
                 grade_percent: grade,
                 cda_factor,
             };
+            let speed_before = rider.speed;
             rider.speed = physics::step_speed(&self.config.physics, &input, dt);
             // Keep off the wheel ahead; pull out to pass when strong enough to
-            // ride faster than it even out of its draft.
+            // ride faster than it even out of its draft, for a moment at least.
             // Boxed in with every lane taken, it slips through after a while.
             if let Some((gap, ahead)) = ahead {
                 let spacing = &self.config.spacing;
@@ -960,8 +969,19 @@ impl World {
                     cda_factor: 1.0,
                     ..input
                 };
-                let wants_past = gap < spacing.pass_look
-                    && physics::acceleration(&self.config.physics, &at_their_speed) > spacing.pass_accel;
+                // Compared with what the leader really does: riders speeding up
+                // together at equal power stay in the draft.
+                // A spike counts for no more than about 40 W, so only a surplus
+                // that lasts adds up to a pass.
+                let cap = 5.0 * spacing.pass_accel;
+                let surplus =
+                    (physics::acceleration(&self.config.physics, &at_their_speed) - ahead.accel).clamp(-cap, cap);
+                rider.pass_urge = if gap < spacing.pass_look {
+                    rider.pass_urge + (surplus - rider.pass_urge) * (dt / spacing.pass_smooth_s.max(dt))
+                } else {
+                    0.0
+                };
+                let wants_past = rider.pass_urge > spacing.pass_accel;
                 let mut boxed = false;
                 if wants_past && settled {
                     match field.passing_lane(me, spacing) {
@@ -984,11 +1004,13 @@ impl World {
                 }
             } else {
                 rider.boxed_s = 0.0;
+                rider.pass_urge = 0.0;
             }
             if rider.parked {
                 // The brake holds a parked rider at a stop, even on a descent.
                 rider.speed = (rider.speed - self.config.park_brake_mps2 * dt).max(0.0);
             }
+            rider.accel = (rider.speed - speed_before) / dt;
             let advance = rider.speed * dt;
             roads.advance(rider, advance);
             rider.odometer += advance;
@@ -1038,6 +1060,7 @@ impl World {
             position: rider.position,
             lane: rider.lane,
             speed: rider.speed,
+            accel: rider.accel,
             half_width,
             wide,
             draft,
@@ -1573,6 +1596,8 @@ impl World {
                 parked: false,
                 workout: false,
                 boxed_s: 0.0,
+                pass_urge: 0.0,
+                accel: 0.0,
             },
         );
         self.events.push(WorldEvent::RiderJoined {
@@ -2209,6 +2234,83 @@ mod tests {
             "passed beside, not through: {closest}"
         );
         assert!(gap_between(&world, leader, follower) > 10.0, "went past");
+    }
+
+    /// `follower` on `leader`'s wheel in lane 1, both settled at 200 W.
+    fn on_the_wheel(world: &mut World) -> (RiderId, RiderId) {
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(world, leader, 102.0, 1, 8.7);
+        put(world, follower, 100.0, 1, 8.7);
+        ride(world, 20.0, &[(leader, 200.0), (follower, 200.0)]);
+        (leader, follower)
+    }
+
+    #[test]
+    fn riders_speeding_up_together_at_equal_power_stay_in_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let leader = world.join_human("Leader", 75.0);
+        let follower = world.join_human("Follower", 75.0);
+        put(&mut world, leader, 102.2, 1, 5.0);
+        put(&mut world, follower, 100.0, 1, 5.0);
+
+        ride(&mut world, 30.0, &[(leader, 200.0), (follower, 200.0)]);
+
+        assert_eq!(
+            world.rider(follower).unwrap().target_lane,
+            1,
+            "not pulled out of the draft"
+        );
+        assert!(gap_between(&world, follower, leader) < 2.5, "still on the wheel");
+    }
+
+    #[test]
+    fn a_rider_a_tenth_stronger_passes_instead_of_waiting_on_the_wheel() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 90.0, &[(leader, 200.0), (follower, 220.0)]);
+
+        assert!(gap_between(&world, leader, follower) > 2.0, "went past");
+    }
+
+    #[test]
+    fn on_the_wheel_a_rider_keeps_up_with_a_fifth_less_power() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 60.0, &[(leader, 200.0), (follower, 160.0)]);
+
+        assert_eq!(world.rider(follower).unwrap().lane, 1.0, "still in the leader's lane");
+        assert!(gap_between(&world, follower, leader) < 2.5, "held the wheel");
+    }
+
+    #[test]
+    fn a_moments_surge_does_not_pull_a_rider_out_of_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+
+        ride(&mut world, 0.5, &[(leader, 200.0), (follower, 320.0)]);
+        ride(&mut world, 10.0, &[(leader, 200.0), (follower, 200.0)]);
+
+        assert_eq!(world.rider(follower).unwrap().target_lane, 1, "stayed on the wheel");
+    }
+
+    #[test]
+    fn a_trainers_jittery_power_does_not_pull_a_rider_out_of_the_draft() {
+        let mut world = empty_world(flat_loop(10_000.0));
+        let (leader, follower) = on_the_wheel(&mut world);
+        // A new reading every second, up to 25 W either side of the leader's 200 W.
+        let mut seed = 7u64;
+        for _ in 0..60 {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let jitter = ((seed >> 33) as f64 / f64::from(u32::MAX >> 1) * 2.0 - 1.0) * 25.0;
+            ride(&mut world, 1.0, &[(leader, 200.0), (follower, 200.0 + jitter)]);
+        }
+
+        assert_eq!(world.rider(follower).unwrap().target_lane, 1, "stayed on the wheel");
     }
 
     /// A wall across all four lanes: `leader` in lane 1 ahead of `follower`,
