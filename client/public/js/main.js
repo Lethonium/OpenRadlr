@@ -101,7 +101,7 @@ import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
-import { onRoute, ridesElsewhere } from "./ride/roadRiders.js";
+import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
@@ -4347,8 +4347,7 @@ function updatePanels() {
   if (!me) return;
   if (app.menuDialog?.isOpen) renderMenuStatus();
   const routes = routesOf(app.info);
-  const routeName = (id) => routes.find((route) => route.id === id)?.name ?? id;
-  const elsewhere = (app.state.elsewhere ?? []).map((rider) => ({ rider, routeName: routeName(rider.route) }));
+  const elsewhere = (app.state.elsewhere ?? []).map((rider) => ({ rider, routeName: elsewhereName(rider, routes) }));
   const sections = riderSections(me, app.state.riders, app.route, elsewhere);
   renderRiderList($("rider-list"), sections.humans, app.riderId);
   renderRiderList($("bot-list"), sections.bots, app.riderId);

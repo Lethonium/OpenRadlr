@@ -258,6 +258,7 @@ export default {
   "ftp.prompt.test": "Mit dem Stufentest gemessen.",
   "ftp.prompt.twenty": "Aus deinen besten 20 Minuten.",
   "ftp.prompt.recent": "Aus deinen besten Belastungen der letzten 90 Tage.",
+  "panels.spinStudio": "Spinning-Studio",
   "panels.lap.one": "{n} Runde",
   "panels.lap.other": "{n} Runden",
   "panels.race.starts": "Rennen startet in {s} s · {laps}",
