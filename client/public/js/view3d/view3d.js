@@ -36,6 +36,7 @@ import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { INSTRUCTOR } from "./studioLayout.js";
 import { StudioLayer } from "./studioLayer.js";
+import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { VEHICLE_KINDS } from "../ride/vehicle.js";
@@ -316,6 +317,9 @@ export class GymCamera {
     return this;
   }
 }
+
+/** In the studio, riders this close to the camera (bikes stand 1.4 m apart) would fill the screen. */
+const STUDIO_NEAR_HIDE = 1.2;
 
 export class View3D {
   /** The workout's side-view box (see `workoutMode`), null while riding. */
@@ -725,7 +729,13 @@ export class View3D {
     const me = placed.find((p) => p.rider.id === myId);
     const myVehicle = me?.rider.vehicle ? layoutOf(me.rider.vehicle.kind, me.rider.vehicle.seats) : null;
     if (me?.gym && this.camera instanceof GymCamera) this.camera.focusOn(me.gym.spot.position);
-    if (me) this.camera.update(me.rider.distance, me.rider.lane, dt, myVehicle);
+    if (this.camera instanceof StudioCamera) {
+      // A class in the building: my rider sits in a room, not on the road.
+      const seat = riders.find((r) => r.id === myId && r.studio)?.studio;
+      if (seat) this.camera.place(seat.room, seat.seat);
+      this.camera.cadence = myCadence ?? 0;
+      this.camera.update(0, 0, dt);
+    } else if (me) this.camera.update(me.rider.distance, me.rider.lane, dt, myVehicle);
     if (!this.camera.eye) return;
 
     const lens = this.lens;
@@ -768,10 +778,13 @@ export class View3D {
       const seated = this.#studio.riders(riders);
       for (const { rider, position, forward, yaw } of [...seated, ...this.#studio.coaches()]) {
         const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
-        if (fromCamera > 600) continue;
+        const mine = rider.id === myId;
+        if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && rider.id !== INSTRUCTOR.id)) continue;
         const tint = rider.id === INSTRUCTOR.id ? tints.bot : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
         const parts = this.#riderParts(rider, position, forward, rider.cadence ?? (rider.power > 0 ? 85 : 0), dt);
-        visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts });
+        // In my own point of view the camera sits in my head: the body is left out, the bike stays.
+        const hidden = mine && this.camera.mode === "pov" ? { torso: [], limbs: [] } : {};
+        visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts, ...hidden });
       }
     }
 
