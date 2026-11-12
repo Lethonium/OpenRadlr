@@ -106,7 +106,7 @@ function start() {
   let wasLive = false;
   const render = () => {
     const status = model.status;
-    $("cockpit-waiting").textContent = t("cockpit.waiting", { name: name ?? "" });
+    $("cockpit-waiting").textContent = name ? t("cockpit.waiting", { name }) : t("cockpit.waitingTablet");
     $("cockpit-waiting").hidden = status !== "waiting" || !$("cockpit-invalid").hidden;
     $("cockpit-tiles").hidden = status === "waiting" && !editing;
     $("cockpit-badge").hidden = status !== "stale";

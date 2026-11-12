@@ -816,6 +816,8 @@ function openStartMenu() {
       app.info = null;
     }
     app.infoLoaded = true;
+    // Second screens need a server that relays them (ADR 0026).
+    $("screens").hidden = !app.info?.screens;
     renderStartMenu();
   };
   initMenuStage();
