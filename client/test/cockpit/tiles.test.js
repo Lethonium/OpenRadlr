@@ -155,3 +155,9 @@ test("the map and the profile draw the route and the rider on it", () => {
     assert.ok(ctx.calls.filter(([name]) => name === "arc").length >= 1, `${id} draws the rider`);
   }
 });
+
+test("a new cockpit shows the power graph and the map", () => {
+  const ids = DEFAULT_LAYOUT.map((entry) => entry.id);
+  assert.ok(ids.includes("powerGraph"));
+  assert.ok(ids.includes("minimap"));
+});

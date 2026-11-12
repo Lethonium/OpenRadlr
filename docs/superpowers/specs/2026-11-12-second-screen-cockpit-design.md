@@ -161,8 +161,11 @@ pages from the server.
   - the latest state of the host's rider;
   - the latest display frame;
   - the workout plan;
-  - a 20-minute history at 1 Hz of power, heart rate and cadence, for the
-    graphs.
+  - a 20-minute history at 1 Hz of power, heart rate, cadence and speed,
+    for the graphs;
+  - the geometry of the route the host's rider is on, which
+    `cockpit/routeFollower.js` loads from `/api/route` once per route, for the
+    map and profile tiles.
 
   It also derives the 3 s average power.
 - **What the screen shows:**
@@ -186,12 +189,16 @@ and `wide`.
 4. `grade` half, `elapsed` half
 5. `workout` wide: the workout graph with the current step and target.
    It's hidden outside a workout.
-6. `zones` wide: a bar of time in each power zone
-7. `avgPower` half, `np` half
-8. `kj` half, `distance` half
+6. `powerGraph` wide: power over the last 20 minutes, with an FTP line
+7. `minimap` big: the route from above with the rider on it. It's hidden
+   in the studio and off the loaded route (on the rider's own road).
+8. `zones` wide: a bar of time in each power zone
+9. `avgPower` half, `np` half
+10. `kj` half, `distance` half
 
 **Available to add:** `efforts` (5 s, 1 min, 5 min, 20 min), `load`,
-`climbed`, `avgHeartRate`, `powerGraph` (wide), `hrGraph` (wide), `laps`,
+`climbed`, `avgHeartRate`, `hrGraph` (wide), `speedGraph` (wide), `profile`
+(wide, the route's elevation profile; hidden like `minimap`), `laps`,
 `raceGaps`.
 
 ### Layout and edit mode
