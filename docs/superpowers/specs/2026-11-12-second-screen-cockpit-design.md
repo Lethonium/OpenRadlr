@@ -127,7 +127,8 @@ cockpit is the first screen to use it.
     `climbedM`, `kJ`, `avgHeartRate`, `avgPower`, `weightedPower`, `load`
     and `efforts`;
   - `zones_s`: seconds in each power zone;
-  - `workout`: `{ id, step, step_elapsed_s, target_w, cadence }`.
+  - `cadence`: rpm, when known.
+  - `workout`: `{ id, step, step_elapsed_s, target_w }`.
 
   The workout plan's step list goes once per workout start as
   `{ workout_plan: { id, name, steps } }`. It doesn't go every second, so

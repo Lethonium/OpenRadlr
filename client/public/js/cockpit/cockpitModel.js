@@ -83,7 +83,7 @@ export class CockpitModel {
   get name() { return this.#rider?.name ?? this.#name; }
   get hostName() { return this.#name; }
   get power() { return this.#rider?.power ?? null; }
-  get cadence() { return this.#rider?.cadence ?? this.#frame.workout?.cadence ?? null; }
+  get cadence() { return this.#rider?.cadence ?? this.#frame.cadence ?? null; }
   get speed() { return this.#rider?.speed ?? null; }
   get lap() { return this.#rider?.lap ?? null; }
   get race() { return this.#race; }

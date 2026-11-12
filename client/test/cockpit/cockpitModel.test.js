@@ -36,6 +36,9 @@ test("the rider comes from state or studio_state", () => {
   const { model } = setup();
   model.onState(state(210, { cadence: 88 }));
   assert.deepEqual([model.power, model.cadence, model.speed], [210, 88, 8]);
+  model.onState(state(210, {}));
+  model.onDisplay({ cadence: 77 });
+  assert.equal(model.cadence, 77);
   model.onState({ type: "studio_state", riders: [{ id: 2, name: "Anna", power: 150, cadence: 95, speed: 7 }] });
   assert.deepEqual([model.power, model.cadence, model.speed], [150, 95, 7]);
 });

@@ -27,7 +27,7 @@ function zoneSeconds(samples, ftp) {
  * @param {?number} [input.heartRate] bpm
  * @param {?number} [input.grade] percent
  * @param {number} input.ftp watts
- * @param {?number} [input.cadence] rpm, sent with the workout step
+ * @param {?number} [input.cadence] rpm
  * @param {{summary: object, samples: object[], pauses: object[]}} input.recording
  * @param {?{workout: {name: string, segments: object[]}, state: object}} [input.workout]
  *   the running workout and its position (`TrainingControl#workoutState`, target adjusted)
@@ -36,14 +36,13 @@ export function displayFrame({ heartRate, grade, ftp, cadence, recording, workou
   const frame = {};
   if (Number.isFinite(heartRate)) frame.hr = heartRate;
   if (Number.isFinite(grade)) frame.grade = grade;
+  if (Number.isFinite(cadence)) frame.cadence = cadence;
   frame.ftp = ftp;
   frame.stats = liveStats({ ...recording, ftp });
   frame.zones_s = zoneSeconds(recording.samples, ftp);
   const state = workout?.state;
   if (state && !state.finished && state.segment) {
-    const step = { id: workout.workout.name, step: state.index, step_elapsed_s: Math.round(state.segment.durationS - state.segmentRemainingS), target_w: state.targetWatts };
-    if (Number.isFinite(cadence)) step.cadence = cadence;
-    frame.workout = step;
+    frame.workout = { id: workout.workout.name, step: state.index, step_elapsed_s: Math.round(state.segment.durationS - state.segmentRemainingS), target_w: state.targetWatts };
   }
   return frame;
 }

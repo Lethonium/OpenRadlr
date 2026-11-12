@@ -46,7 +46,12 @@ test("the workout step and target come from the training state", () => {
   const workout = createWorkout({ name: "Test", segments: [steady(60, 0.5), steady(120, 1)] });
   const state = { ...positionAt(workout, 90), targetWatts: 190, elapsedS: 90 };
   const frame = displayFrame({ ftp: 190, cadence: 88, recording: recording([100, 100]), workout: { workout, state } });
-  assert.deepEqual(frame.workout, { id: "Test", step: 1, step_elapsed_s: 30, target_w: 190, cadence: 88 });
+  assert.deepEqual(frame.workout, { id: "Test", step: 1, step_elapsed_s: 30, target_w: 190 });
+});
+
+test("cadence is sent on every ride, not only in a workout", () => {
+  assert.equal(displayFrame({ ftp: 190, cadence: 88, recording: recording([100]) }).cadence, 88);
+  assert.equal("cadence" in displayFrame({ ftp: 190, cadence: null, recording: recording([100]) }), false);
 });
 
 test("a finished workout adds no workout field", () => {
