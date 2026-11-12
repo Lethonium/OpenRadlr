@@ -171,8 +171,10 @@ are therefore stable for every seated rider.
   `studio: { room, seat }`, `power`, `cadence`, `is_bot`, and no route
   position; they have no physics, drafting, races or events, and are not
   counted in `players` (the studio counts them).
-- Rider ids: studio riders and road riders share the server's id space, so
-  no clash.
+- Rider ids: the studio and each route world count ids from 1, so they
+  would clash. The studio's ids start at `0xE000_0000` instead (below the
+  OpenBikeNet range at `0xF000_0000`); ids are opaque to clients, so this is
+  not a protocol change.
 
 ### The road in the studio
 
