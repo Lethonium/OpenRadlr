@@ -109,6 +109,7 @@ import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
+import { displayFrame, workoutPlanFrame } from "./display/displayFrame.js";
 import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
 import { createScreensDialog } from "./view/screensDialog.js";
 
@@ -376,6 +377,7 @@ const app = {
   unfinished: null,
   reconnector: null,
   autosaveTimer: null,
+  displayTimer: null,
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
@@ -1529,11 +1531,43 @@ function notify(text, kind = "event") {
 
 const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
 const COCKPIT_KEY = "openradlr.cockpit";
+const DISPLAY_INTERVAL_MS = 1000;
 
 /** The screen key to host with: only once a phone has been paired. */
 function pairedScreenKey() {
   const storage = browserStorage();
   return storage && isPaired(storage) ? screenKey(storage, randomBytes) : undefined;
+}
+
+/**
+ * Once a second, sends the paired screens what only this tablet knows (heart rate, grade,
+ * live figures, workout). The workout's plan goes once per workout and connection.
+ */
+function startDisplayFeed() {
+  clearInterval(app.displayTimer);
+  if (!pairedScreenKey()) return;
+  let planSent = { connection: null, workout: null };
+  app.displayTimer = setInterval(() => {
+    const connection = app.connection;
+    if (!connection || !app.recorder || !app.session) return;
+    const training = app.training;
+    const workout = training?.workout ?? null;
+    if (workout && (planSent.connection !== connection || planSent.workout !== workout)) {
+      connection.sendDisplay(workoutPlanFrame(workout, app.profile.ftp));
+      planSent = { connection, workout };
+    }
+    const state = workout ? training.workoutState() : null;
+    connection.sendDisplay(
+      displayFrame({
+        heartRate: app.session.latest.heartRate,
+        grade: app.session.serverGrade,
+        ftp: app.profile.ftp,
+        cadence: app.session.latest.cadence,
+        recording: overviewRecording(),
+        workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
+      }),
+    );
+  }, DISPLAY_INTERVAL_MS);
 }
 
 /** Pairing from the start menu, and turning this device into a cockpit. */
@@ -1876,6 +1910,7 @@ function endRide() {
   app.session?.stop();
   app.reconnector?.stop();
   clearInterval(app.autosaveTimer);
+  clearInterval(app.displayTimer);
   // Leaving on purpose: the server frees the rider at once instead of holding them (#73).
   app.connection?.leave();
   app.wakeLock.release();
@@ -1968,6 +2003,7 @@ function endRide() {
     paddleView: null,
     reconnector: null,
     autosaveTimer: null,
+    displayTimer: null,
   });
 
   // A fresh ride screen; the 3D canvases move over, keeping their WebGL contexts.
@@ -2131,6 +2167,7 @@ function startRide() {
   initAfkPrompt();
   initPhotos();
   startAutosave();
+  startDisplayFeed();
   notify(t("ride.welcome", { server: info.server_name }));
   // One loop per ride: it ends with the ride.
   const ride = app.ride;
