@@ -6,7 +6,7 @@ import { FakeSocket } from "./helpers.js";
 
 test("builds protocol messages", () => {
   assert.equal(ClientMessages.hello().protocol_version, PROTOCOL_VERSION);
-  assert.deepEqual(ClientMessages.join({ name: "Anna", weightKg: 70 }), { type: "join", name: "Anna", weight_kg: 70 });
+  assert.deepEqual(ClientMessages.join({ name: "Anna", weightKg: 70 }), { type: "join", name: "Anna", weight_kg: 70, features: ["studio_riders"] });
   assert.equal(ClientMessages.join({ name: "Anna", weightKg: 70, routeId: "col" }).route_id, "col");
   assert.equal(ClientMessages.join({ name: "Anna", weightKg: 70, routeId: "spin-studio", ftp: 240 }).ftp_w, 240);
   assert.equal(ClientMessages.join({ name: "A", weightKg: 70, level: 245 }).level_w, 245);
@@ -196,4 +196,8 @@ test("physics is null when the server sends none", async () => {
   socket().receive({ type: "joined", rider_id: 7 });
   await joined;
   assert.equal(connection.physics, null);
+});
+
+test("join sends the studio_riders feature", () => {
+  assert.deepEqual(ClientMessages.join({ name: "Anna", weightKg: 70 }).features, ["studio_riders"]);
 });

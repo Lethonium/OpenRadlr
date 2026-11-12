@@ -13,7 +13,7 @@ import { pixelText } from "./pixelFont.js";
 
 /** 4.6 m of room plus a 0.3 m slab. */
 export const FLOOR_HEIGHT = 4.9;
-const SLAB = 0.3;
+export const SLAB = 0.3;
 const WALL = 0.3;
 const MULLION_SPACING = 2;
 

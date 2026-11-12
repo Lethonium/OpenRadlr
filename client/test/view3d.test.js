@@ -372,7 +372,7 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer()) {
+function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined) {
   const route = squareRoute();
   const world = {
     biome,
@@ -385,6 +385,7 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
     rotors: [],
     spectators: [],
     gyms,
+    studio,
   };
   const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
   return { view, renderer };
@@ -956,4 +957,28 @@ test("a bot rides in its team's kit; one without a known team in the bot colour"
   };
   assert.deepEqual(tintAt(teamed), [0x4f, 0x8f, 0x3a]);
   assert.deepEqual(tintAt(plain), [0, 0, 255]);
+});
+
+test("a world without a studio site has no studio and ignores studio riders", () => {
+  const { view, renderer } = gymView([]);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }], myId: null, timeS: 1, colors });
+  assert.equal(view.studioSite, null);
+  assert.equal(renderer.draws.length > 0, true);
+});
+
+test("a world with a studio site draws the building and its riders", () => {
+  const studio = { position: [100, 100, 80], yaw: 0 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
+  assert.deepEqual(view.studioSite, studio);
+  view.camera.update(100, 1, 0);
+  const frame = (riders) => {
+    renderer.draws.length = 0;
+    view.render({ riders, myId: null, timeS: 1, colors });
+    return renderer.draws.length;
+  };
+  const empty = frame([]);
+  const seated = frame([{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }]);
+  assert.ok(empty > 0, "the building is drawn");
+  assert.ok(seated > empty, "the seated rider adds meshes");
 });
