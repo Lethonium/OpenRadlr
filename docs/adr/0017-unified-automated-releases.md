@@ -23,7 +23,9 @@ receive the existing CI checks. Maintainers choose when to merge the release PR.
 
 - Client-only and server-only changes can both trigger an application release.
 - Contributors use Conventional Commits for commits landing on `main`.
-- Maintainers provision and renew the token and reconcile manual `[Unreleased]`
-  notes with generated entries when reviewing a release.
+- Maintainers provision and renew the token. Release Please alone writes
+  `CHANGELOG.md` from the PR titles; there are no hand-written notes to
+  reconcile (since 0.1.0, when an `[Unreleased]` list kept apart from the
+  generated sections was dropped).
 - Deployment and artifact publication remain separate from release creation.
 - New versioned components must be added to the synchronized file list.

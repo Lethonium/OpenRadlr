@@ -1,45 +1,13 @@
 # Changelog
 
-All notable changes to this project are documented here.
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Release Please writes this file: each release gets a section made from the
+Conventional Commit titles of the pull requests merged since the last one
+(see [docs/releases.md](docs/releases.md)). Don't edit it by hand; a clear PR
+title is the release note.
 
 ## 0.1.0 (2026-11-11)
 
-
-### Features
-
-* Add a ghost of the best lap on each loop route ([#58](https://github.com/Lethonium/OpenRadlr/issues/58)) ([51d68dc](https://github.com/Lethonium/OpenRadlr/commit/51d68dc2552df081951d0ec1402c2f54dc8b9b03))
-* Add banners over the road and personal milestone banners ([#61](https://github.com/Lethonium/OpenRadlr/issues/61)) ([73deb43](https://github.com/Lethonium/OpenRadlr/commit/73deb43a49aa59ef4ca2583ffa5f5cee39d69aab))
-* Add golden lemons to collect along the routes ([#57](https://github.com/Lethonium/OpenRadlr/issues/57)) ([2e40715](https://github.com/Lethonium/OpenRadlr/commit/2e407154adb5e509fcadae6b840dbaa20c7fd631))
-* **app:** Add an iOS and Android app with native Bluetooth ([#8](https://github.com/Lethonium/OpenRadlr/issues/8)) ([63ca386](https://github.com/Lethonium/OpenRadlr/commit/63ca3864b598e506db2f1dc7cd9f58c989a4092f))
-* **app:** Step back with Android's back button instead of closing ([#78](https://github.com/Lethonium/OpenRadlr/issues/78)) ([79cccd0](https://github.com/Lethonium/OpenRadlr/commit/79cccd0df4471a2491909e3d38de24f871be37f6))
-* Give bots character: a cast, moves and company around riders ([#67](https://github.com/Lethonium/OpenRadlr/issues/67)) ([1137aee](https://github.com/Lethonium/OpenRadlr/commit/1137aee1da75e2b665ddb0f96ac35296a209ed8f))
-* Guide workout poses with steps and a side view ([#60](https://github.com/Lethonium/OpenRadlr/issues/60)) ([83f374b](https://github.com/Lethonium/OpenRadlr/commit/83f374b205e48f9fa278ee75a96117e18f0729a8))
-* Line the climbs with a crowd that cheers riders on ([#59](https://github.com/Lethonium/OpenRadlr/issues/59)) ([747327d](https://github.com/Lethonium/OpenRadlr/commit/747327d39b5e1468374e6ab6d81f494e6df8bbca))
-* Simplify the start menu header: language dropdown, footer version, update toast ([#77](https://github.com/Lethonium/OpenRadlr/issues/77)) ([d5c0ba8](https://github.com/Lethonium/OpenRadlr/commit/d5c0ba812c05552e04830de40450e6ec7b6ddf42))
-
-
-### Bug Fixes
-
-* **client:** Draw the route profile again once it is shown ([#73](https://github.com/Lethonium/OpenRadlr/issues/73)) ([cbced3b](https://github.com/Lethonium/OpenRadlr/commit/cbced3be2f761ab1a1bf896dc8c755b454a1ef6d))
-* Draw the summary card at 4:3 so Strava doesn't crop it ([#65](https://github.com/Lethonium/OpenRadlr/issues/65)) ([510f6a2](https://github.com/Lethonium/OpenRadlr/commit/510f6a281475328645bcc0db14c52355e5559a54)), closes [#66](https://github.com/Lethonium/OpenRadlr/issues/66)
-* Keep trees off routes where they round a junction's corner ([#62](https://github.com/Lethonium/OpenRadlr/issues/62)) ([8b24e08](https://github.com/Lethonium/OpenRadlr/commit/8b24e085d850d8cb2c950abc2abe83f3413998a8))
-* Make Strava uploads resumable and preserve ride recovery ([#68](https://github.com/Lethonium/OpenRadlr/issues/68)) ([63463f1](https://github.com/Lethonium/OpenRadlr/commit/63463f115eebf3aff91161e148a3a627893fae8d))
-
-
-### Performance Improvements
-
-* Load the start screen about twice as fast ([#74](https://github.com/Lethonium/OpenRadlr/issues/74)) ([3457d77](https://github.com/Lethonium/OpenRadlr/commit/3457d776bacc79d05fa606b0bb1b40a650795b50))
-
-## [Unreleased]
-
-### Changed
-
-- Start menu: the language switch is a compact dropdown (any future language shows up in it), the version and Privacy link sit in a quiet footer, and a new version shows a "Reload / Later" toast instead of a link in the header. On phones the tabs share one row instead of scrolling.
-- Installed on a phone or tablet (home screen), OpenRadlr no longer locks itself to landscape: it turns with the device, so the start menu and the ride also work in portrait.
-- The 2D ride map now follows the selected season and time of day, like the 3D world: winter paints snow, ice and pine tree dots, golden hour and dusk tint the ground, water, road and buildings, and `auto` follows the local clock. The start menu's map uses the same palette, so the season carries from the menu into the ride.
-- The 2D view is a top-down map of the road around you: the coast, every road, the ridden road with its lane markings, and nearby riders, with your marker heading up. It replaces the lane strip that stretched over the whole window and had nothing to show when riding alone. In the Training layout the map ends above the workout band. When you're drafting, a soft band marks the gap ahead of you, as the lane strip did; the golden lemons and the best-lap ghost keep their places on the map.
-- The 2D map has small tree dots in and near forests and thin outline houses in villages, plus the café at the start. They come from the route's scenery zones and the map's cafés, are generated once and culled to the view; no extra requests. Tree dots now scale with the map's zoom, so they grow with the road instead of staying pin-sized.
+The first release.
 
 ### Added
 
@@ -63,7 +31,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Ghost lap: your best lap on a loop route is kept in the browser, and a see-through rider labelled "Best lap" rides it again from the line, lane changes and all. The HUD shows the live gap ("Best lap +4.2 s", red behind, green ahead), and a faster lap becomes the new ghost at once. Hidden in races and events.
 - Crowds along the route: spectators line the last 600 m of every climb in loose groups, thicker towards the top, and every sprint line gets a crowd behind barriers. They turn towards a rider coming by and cheer harder (penguins clap faster), and some wave flags. The more riders are online, the more of them come out; bots don't count.
 - Banners along the route: the arches carry their names (OPENRADLR, KOM, SPRINT), banners count down the last kilometre of a climb ("1 KM", "500 M") and mark halfway round a loop. A lemon-yellow banner celebrates personal milestones: 100, 250, 500… km (or miles) in all, every Everest climbed in all, and the first time over the top of a climb.
-
 - Four research-backed ERG sessions (Seiler 4×8, Rønnestad 30/15, 40/20, over-unders), each naming its source, and a power-profile preview of the selected session in the workout picker. (#26)
 - A velodrome: a flat 250 m oval with no bots. With `OPENRADLR_OBN_URL` set it is shared with riders of other apps (Incyclist, VeloPopuli, ...) through an OpenBikeNet server: the start menu marks it *Shared* and says what is sent (name, position, speed, power and cadence; never heart rate). Riders from other apps get their own tint, a label with their app, and a badge in the rider list. Without the variable nothing leaves the server. A switch to stop sharing power and cadence follows in #36. See ADR 0020.
 - OpenBikeControl controllers (and apps such as BikeControl that act as one) connect with *Connect controller*, next to Zwift's: shift, change lane, navigate menus, adjust power or the ERG target, change the camera and take photos. A press that sends several actions at once (e.g. shift up, harder and select) acts once: it shifts while riding, changes the ERG target in ERG, and selects in a menu. See docs/devices.md.
@@ -79,13 +46,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The workout screen guides every pose: step-by-step instructions for the exercise under way or, during rests, the one coming up; the sun salutation marks the breath in progress; sided poses name the leg in front. A side view of your avatar joins the front view, and the timer and stats moved to the corners so the avatar has the middle (#26)
 
 ### Changed
+
+- Start menu: the language switch is a compact dropdown (any future language shows up in it), the version and Privacy link sit in a quiet footer, and a new version shows a "Reload / Later" toast instead of a link in the header. On phones the tabs share one row instead of scrolling.
+- Installed on a phone or tablet (home screen), OpenRadlr no longer locks itself to landscape: it turns with the device, so the start menu and the ride also work in portrait.
 - The start screen is ready in about half the time on a phone connection (2.1 s → 1.0 s on 4G; first visit 1.9 MB → 0.7 MB): the server sends the client and the route data compressed (Brotli or gzip), and the page asks for all its scripts at once instead of in five rounds.
 - Start screen: every device (trainer, heart rate, controller) is one line of the same shape: a state dot, its name over what it is doing (live power and cadence, heart rate in bpm, which buttons came through) and its actions. Lines no longer wrap or jump when their state changes; on narrow phones two actions or an error go under the name, and nothing is cut off. The Ride bar leaves room for itself however tall an error makes it.
-
 - Riding speeds are calibrated: 200 W on the flat is about 31 km/h for 75 kg, descents are slower, and heavier riders have more air drag (#22).
 - Climb feel no longer applies with virtual shifting; the gears do it (#22).
+- "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.
+- Finishing a ride is final: Finish ride asks first, then shows the summary with its chart; there is no "Keep riding" any more, and the ride can't be continued from the start menu afterwards (#19).
+- Start screen: tabs for Ride, Studio, Workout and Events; the picked route is described once, above compact route cards.
+- Start screen: "How are you riding?" picks a smart trainer, phone paddles or the simulator; the choice is remembered. Heart rate and controllers are optional add-ons on their own lines.
+- Start screen: the Ride button is always in reach, at the bottom of the panel on wide screens and in a bar along the bottom on tablets and phones. Splits, auto-pause and units are folded into Settings.
+- Start screen opening: placeholders while the server answers, "Loading the island…" while it builds, then the island fades in and the camera descends from high above onto the picked route before the map docks in its corner.
+- Start screen: Strava is one line in the Rider section (connect, or who you're connected as); where a server requires Strava, the Ride button connects it. Boarding a friend's vehicle is a code field under Ride: a valid code turns Ride into Board.
+- `make dev` reads an optional `.env.dev` (see `.env.dev.example`), e.g. for all routes or to try Strava locally.
+- Name, weight, FTP and settings are kept in the browser as soon as they change, not only when a ride starts.
 
 ### Fixed
+
 - The start menu's elevation profile (and route map) no longer stays an empty box when the route loaded while it was out of view, e.g. on the Events tab or during a ride: both are drawn again once they show.
 - Cancelling the device window while trying another strap, trainer or controller no longer shows "Cancelled" over the device that is still connected; each device line now shows what its device really does.
 - On phones and tablets the start menu scrolls all the way down again: its last row (Settings) no longer stays hidden behind the Ride bar.
@@ -104,8 +83,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A menu opened with the mouse during a ride no longer turns the Click's shifters into menu navigation; a menu opened with the Click (+ and − together) is still navigated with it.
 - Controller navigation in the start menu goes on from where the focus is (e.g. the button just clicked to pair), and skips the build label and privacy link.
 - The device report traces each controller press to its result ("Zwift Click → shiftDown (riding)", "Gear 12 → 11", or why a shift was ignored), notes window and tab switches, and with `?debug=controller` keeps every controller packet.
-
-### Fixed
 - A trainer held by another app (Zwift, its own app) is shown as "resistance blocked" with what to do, instead of looking connected while resistance never follows the road; OpenRadlr asks for control again every 10 s.
 - Connecting no longer hangs on "Connecting…": every attempt gives up after 15 s, and Chrome's often failing first connect is retried.
 - Connect errors say what to try ("Is it awake, and free of other apps?") instead of the browser's message.
@@ -117,21 +94,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A two-piece Zwift Click pairs like a pair: after one half the button reads "Add other half", each half is named by its side ("Zwift Click − 70 % · + 68 %"), the check confirms + and − one by one, and picking the half that's already connected says to pick the other one.
 - Virtual shifting's gear is one line ("Chain on 34 × 14 teeth"); the device report counts a controller's idle messages, so it shows whether a controller sends anything at all.
 - The ride's summary card is 4:3, the shape Strava shows photos in, so its sides are no longer cut off there (#66).
-
-### Changed
-- "Trainer difficulty" is now "Climb feel", explained, in Settings and the ride menu.
-- Finishing a ride is final: Finish ride asks first, then shows the summary with its chart; there is no "Keep riding" any more, and the ride can't be continued from the start menu afterwards (#19).
-
-### Changed
-- Start screen: tabs for Ride, Studio, Workout and Events; the picked route is described once, above compact route cards.
-- Start screen: "How are you riding?" picks a smart trainer, phone paddles or the simulator; the choice is remembered. Heart rate and controllers are optional add-ons on their own lines.
-- Start screen: the Ride button is always in reach, at the bottom of the panel on wide screens and in a bar along the bottom on tablets and phones. Splits, auto-pause and units are folded into Settings.
-- Start screen opening: placeholders while the server answers, "Loading the island…" while it builds, then the island fades in and the camera descends from high above onto the picked route before the map docks in its corner.
-- Start screen: Strava is one line in the Rider section (connect, or who you're connected as); where a server requires Strava, the Ride button connects it. Boarding a friend's vehicle is a code field under Ride: a valid code turns Ride into Board.
-- `make dev` reads an optional `.env.dev` (see `.env.dev.example`), e.g. for all routes or to try Strava locally.
-- Name, weight, FTP and settings are kept in the browser as soon as they change, not only when a ride starts.
-
-### Fixed
 - The picked route's band no longer flickers orange and white where routes share a road (it lay at the same height as the other routes' bands).
 - The drone camera behind the start menu glides: it takes the road's bends in smooth arcs, flights ease in and out without a jolt, and a new world is swapped in only once the camera has landed.
 - The start menu no longer flickers: no live blur over the moving island, and route cards and tabs are only redrawn when they change.
