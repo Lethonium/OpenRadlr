@@ -107,6 +107,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         vehicle_code,
                         resume_token,
                         resume,
+                        features,
                     } => {
                         // A dropped connection coming back: the same rider, wherever they ride (#73).
                         if let Some((token, world)) =
@@ -161,6 +162,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         match world.join(name, weight_kg, ftp_w, level_w, route.map(str::to_owned), vehicle_code, start_m, sink).await {
                             Ok(Ok(JoinedRider { rider_id, epoch: joined_epoch })) => {
                                 if !device.is_trainer() && world.send(Command::SetDevice { rider_id, device }).await.is_err() {
+                                    break;
+                                }
+                                if features.iter().any(|f| f == "studio_riders")
+                                    && world.send(Command::SetStudioRiders { rider_id }).await.is_err()
+                                {
                                     break;
                                 }
                                 session.joined(rider_id, device, now());

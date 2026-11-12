@@ -14,6 +14,7 @@
 //! * [`runtime`] — async game loop task and its command channel
 //! * [`game`] — synchronous game core: clients, broadcasts, resistance
 //! * [`studio`] — the spin studio's game core: rooms, class state
+//! * [`studio_mirror`] — the studio's riders on the road and the road's riders at the studio
 //! * [`vehicle_codes`] — registry of boarding codes across worlds
 //! * [`protocol`] — JSON message types and mapping from the simulation
 //!
@@ -45,6 +46,7 @@ pub mod stats;
 pub mod strava;
 pub mod strava_api;
 pub mod studio;
+pub mod studio_mirror;
 pub mod vehicle_codes;
 pub mod worlds;
 
