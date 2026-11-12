@@ -74,6 +74,13 @@ body {
   padding: 0 12px 16px;
 }
 
+/* A phone on its side or a tablet: two rows of tiles side by side. */
+@media (min-width: 640px) {
+  .cockpit-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .tile {
   background: var(--surface);
   border: 1px solid var(--border);
