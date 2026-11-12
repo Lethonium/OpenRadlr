@@ -4,6 +4,7 @@ import { DEFAULT_LAYOUT, TILES, tileById } from "../../public/js/cockpit/tiles.j
 import { CockpitModel } from "../../public/js/cockpit/cockpitModel.js";
 import { setUnits } from "../../public/js/util/format.js";
 import { setLocale } from "../../public/js/i18n/i18n.js";
+import { squareRoute } from "../helpers.js";
 
 setLocale("en");
 setUnits("metric");
@@ -39,7 +40,7 @@ test("every tile has a label key, sizes and a value or a draw", () => {
 test("the catalogue has the tiles of the spec", () => {
   assert.deepEqual(
     TILES.map((t) => t.id).sort(),
-    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "speedGraph", "laps", "raceGaps"].sort(),
+    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "speedGraph", "minimap", "profile", "laps", "raceGaps"].sort(),
   );
 });
 
@@ -132,5 +133,25 @@ test("every tile label is translated", async () => {
   for (const tile of TILES) {
     assert.ok(tile.labelKey in en, `en ${tile.labelKey}`);
     assert.ok(tile.labelKey in de, `de ${tile.labelKey}`);
+  }
+});
+
+test("the map and the profile show only while the rider is on the loaded route", () => {
+  const model = riding();
+  for (const id of ["minimap", "profile"]) assert.equal(tileById(id).hidden(model), true, `${id} without a route`);
+  model.setRoute(squareRoute());
+  for (const id of ["minimap", "profile"]) assert.equal(tileById(id).hidden(model), true, `${id} on another route`);
+  model.onState({ type: "state", riders: [{ id: 1, name: "Anna", power: 250, speed: 10, route: "square", distance: 300 }] });
+  for (const id of ["minimap", "profile"]) assert.equal(tileById(id).hidden(model), false, `${id} on the route`);
+});
+
+test("the map and the profile draw the route and the rider on it", () => {
+  const model = riding();
+  model.setRoute(squareRoute());
+  model.onState({ type: "state", riders: [{ id: 1, name: "Anna", power: 250, speed: 10, route: "square", distance: 300 }] });
+  for (const id of ["minimap", "profile"]) {
+    const ctx = fakeContext();
+    tileById(id).draw(ctx, model, 300, 120);
+    assert.ok(ctx.calls.filter(([name]) => name === "arc").length >= 1, `${id} draws the rider`);
   }
 });

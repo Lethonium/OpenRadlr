@@ -15,6 +15,7 @@ import { CockpitConnection } from "./cockpitConnection.js";
 import { CockpitModel } from "./cockpitModel.js";
 import { EditMode } from "./editMode.js";
 import { loadLayout } from "./layout.js";
+import { RouteFollower } from "./routeFollower.js";
 import { tileById } from "./tiles.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
@@ -30,6 +31,13 @@ function pairing(storage) {
   } catch {
     return null;
   }
+}
+
+/** A route file from the server the cockpit is paired through, for the map tiles. */
+async function fetchRoute(id) {
+  const response = await fetch(`/api/route?id=${encodeURIComponent(id)}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
 /** One tile's element, built once; `update` refreshes it from the model. */
@@ -97,7 +105,11 @@ function start() {
     name = status.name ?? name;
     model.onStatus(status);
   });
-  connection.on("state", (message) => model.onState(message, name));
+  const routes = new RouteFollower({ fetchRoute, onRoute: (route) => model.setRoute(route) });
+  connection.on("state", (message) => {
+    model.onState(message, name);
+    routes.follow(model.routeId);
+  });
   connection.on("display", (data) => model.onDisplay(data));
   connection.on("invalid", () => {
     $("cockpit-invalid").hidden = false;

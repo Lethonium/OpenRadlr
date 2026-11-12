@@ -8,6 +8,8 @@
  */
 import { distanceUnit, formatDistance, formatDuration, formatElevation, formatGrade, formatNumber, formatSpeed, speedUnit } from "../util/format.js";
 import { powerZone } from "../view/hud.js";
+import { paintMinimap } from "../view/minimapView.js";
+import { paintProfile } from "../view/profileView.js";
 import { ZONE_COLORS } from "../view/workoutView.js";
 
 const NONE = "–";
@@ -17,6 +19,20 @@ const GRID = "#2a313b";
 const TEXT = "#e8ecf1";
 const HR_COLOR = "#ff5d5d";
 const SPEED_COLOR = "#4fc3f7";
+/** The main app's map colours (styles.css), for the minimap and profile views. */
+const MAP_COLORS = Object.freeze({
+  text: TEXT,
+  muted: MUTED,
+  road: "#3a434f",
+  terrain: "#24402f",
+  terrainEdge: "#5fb47c",
+  me: ACCENT,
+  human: "#4cc3ff",
+  bot: "#8f99a8",
+  remote: "#2ec4a6",
+  climb: "rgba(255, 93, 93, 0.12)",
+  sprint: "rgba(76, 195, 255, 0.12)",
+});
 
 const FORMAT = { speed: formatSpeed, distance: formatDistance, duration: formatDuration, grade: formatGrade, number: formatNumber, elevation: formatElevation };
 
@@ -88,6 +104,18 @@ function drawHrGraph(ctx, model, w, h) {
 function drawSpeedGraph(ctx, model, w, h) {
   const series = model.history.speed;
   drawSeries(ctx, series, w, h, { color: SPEED_COLOR, max: Math.max(10, ...series), floor: -1 });
+}
+
+/** The map tiles show while the rider rides the loaded route; studio and own roads have none. */
+const offRoute = (model) => !model.route || model.routeId !== model.route.id;
+const onRouteView = (model) => ({ route: model.route, riders: [model.rider], myId: model.rider.id, colors: MAP_COLORS });
+
+function drawMinimap(ctx, model, w, h) {
+  if (!offRoute(model)) paintMinimap(ctx, w, h, onRouteView(model));
+}
+
+function drawProfile(ctx, model, w, h) {
+  if (!offRoute(model)) paintProfile(ctx, w, h, onRouteView(model));
 }
 
 /** Time in each power zone as six bars, tallest = most time. */
@@ -175,6 +203,8 @@ export const TILES = Object.freeze([
   graph("powerGraph", ["wide", "big"], drawPowerGraph),
   graph("hrGraph", ["wide", "big"], drawHrGraph),
   graph("speedGraph", ["wide", "big"], drawSpeedGraph),
+  graph("minimap", ["wide", "big"], drawMinimap, offRoute),
+  graph("profile", ["wide", "big"], drawProfile, offRoute),
   number("laps", ["half", "wide"], (m) => (inRace(m) ? `${m.lap} / ${m.race.laps}` : NONE), { hidden: (m) => !inRace(m) }),
   graph("raceGaps", ["wide", "big"], drawRaceGaps, (m) => !(m.race?.results?.length > 0)),
 ]);

@@ -106,3 +106,14 @@ test("a state with no rider keeps the last figures", () => {
   model.onState({ type: "state", riders: [] });
   assert.equal(model.power, 120);
 });
+
+test("the route follows the host's rider", () => {
+  const { model } = setup();
+  assert.equal(model.routeId, null);
+  model.onState(state(200, { route: "hills", distance: 1200 }));
+  assert.equal(model.routeId, "hills");
+  assert.equal(model.distance, 1200);
+  const route = { id: "hills" };
+  model.setRoute(route);
+  assert.equal(model.route, route);
+});

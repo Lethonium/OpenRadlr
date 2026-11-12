@@ -946,6 +946,8 @@ export default {
   "cockpit.tile.powerGraph": "Power over time",
   "cockpit.tile.hrGraph": "Heart rate over time",
   "cockpit.tile.speedGraph": "Speed over time",
+  "cockpit.tile.minimap": "Map",
+  "cockpit.tile.profile": "Elevation profile",
   "cockpit.tile.laps": "Lap",
   "cockpit.tile.raceGaps": "Race result",
 };

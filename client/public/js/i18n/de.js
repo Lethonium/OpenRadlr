@@ -946,6 +946,8 @@ export default {
   "cockpit.tile.powerGraph": "Leistung im Verlauf",
   "cockpit.tile.hrGraph": "Herzfrequenz im Verlauf",
   "cockpit.tile.speedGraph": "Tempo im Verlauf",
+  "cockpit.tile.minimap": "Karte",
+  "cockpit.tile.profile": "Höhenprofil",
   "cockpit.tile.laps": "Runde",
   "cockpit.tile.raceGaps": "Rennergebnis",
 };

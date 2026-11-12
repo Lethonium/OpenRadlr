@@ -18,6 +18,7 @@ export class CockpitModel {
   #race = null;
   #frame = {};
   #plan = null;
+  #route = null;
   #recent = [];
   #lastHistoryAt = null;
   #history = { power: [], hr: [], cadence: [], speed: [] };
@@ -67,6 +68,11 @@ export class CockpitModel {
     if (!data.workout) this.#plan = null;
   }
 
+  /** The geometry of the route the rider is on, once loaded (see RouteFollower). */
+  setRoute(route) {
+    this.#route = route;
+  }
+
   #push(series, value) {
     const list = this.#history[series];
     list.push(value);
@@ -88,6 +94,10 @@ export class CockpitModel {
   get cadence() { return this.#rider?.cadence ?? this.#frame.cadence ?? null; }
   get speed() { return this.#rider?.speed ?? null; }
   get lap() { return this.#rider?.lap ?? null; }
+  get rider() { return this.#rider; }
+  get routeId() { return this.#rider?.route ?? null; }
+  get distance() { return this.#rider?.distance ?? null; }
+  get route() { return this.#route; }
   get race() { return this.#race; }
   get hr() { return this.#frame.hr ?? null; }
   get grade() { return this.#frame.grade ?? null; }
