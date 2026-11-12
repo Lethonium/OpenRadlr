@@ -63,8 +63,9 @@ export class StudioLayer {
     this.#handles = { base: up(shell.base), floor: up(shell.floor), roof: up(shell.roof), glass: up(shell.glass), room: up(room.room), accents: up(room.accents) };
   }
 
+  /** Storeys for the studio's rooms, or more where riders sit on a higher floor (road views never hear the room count). */
   get floors() {
-    return floorCount(this.#rooms);
+    return Math.max(floorCount(this.#rooms), this.#open);
   }
 
   /** How many floors have a room, from the studio's room count. */
