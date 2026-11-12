@@ -46,3 +46,10 @@ world they talk to.
   per seat).
 - Class plans are compiled in for now; loading them from files (and `.zwo`)
   is a follow-up.
+
+## Since ADR 25
+
+The studio is a glass building in the valley world on maps with a `valley-cafe`
+node, one floor per room, and its riders show on the road
+([ADR 25](0025-spin-studio-building.md)). Rooms now close from the top only, and
+studio rider ids start at `0xE000_0000`. The separate dark studio canvas is gone.
