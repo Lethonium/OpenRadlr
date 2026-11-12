@@ -34,6 +34,8 @@ import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { buildLemon } from "./lemonModel.js";
 import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
+import { INSTRUCTOR } from "./studioLayout.js";
+import { StudioLayer } from "./studioLayer.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { VEHICLE_KINDS } from "../ride/vehicle.js";
@@ -326,6 +328,9 @@ export class View3D {
   /** Statue rows by gym: `{ handle, glows, tops, xs, model, row }`. */
   #statues = new Map();
   #glow = { gym: null, index: null };
+  /** The spin studio building of the valley, null where the world has no site for it. */
+  #studio = null;
+  #studioSite = null;
   #pedalPhase = new Map();
   #wheelPhase = new Map();
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
@@ -367,6 +372,8 @@ export class View3D {
     this.overview = world.overview ?? null;
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];
+    this.#studioSite = world.studio ?? null;
+    this.#studio = world.studio ? new StudioLayer(this.renderer, world.studio) : null;
 
     this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
 
@@ -449,6 +456,16 @@ export class View3D {
         model: placement(row.position, row.yaw),
       });
     }
+  }
+
+  /** Where the studio stands (`scene.studio`), or null. */
+  get studioSite() {
+    return this.#studioSite;
+  }
+
+  /** How many rooms the studio has now; the building grows or shrinks by floors. */
+  setStudioRooms(rooms) {
+    this.#studio?.setRooms(rooms);
   }
 
   /** Lights the ring of plinth `index` at `gym`; `null` switches the glow off. */
@@ -696,7 +713,7 @@ export class View3D {
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
-    const onRoads = riders.map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
+    const onRoads = riders.filter((rider) => !rider.studio).map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
     // Workout riders train at the gym by their road position (#77), not on the road.
     const gymSpots = this.#gymSpots(onRoads);
     const placed = onRoads.map((p) => {
@@ -744,6 +761,18 @@ export class View3D {
       if (!parts) continue;
       vehicles.push({ ...parts, fromCamera });
       for (const [id, head] of parts.heads) seatHeads.set(id, head);
+    }
+
+    // The spin studio's riders sit on their bikes in the building, with the coach on every open floor.
+    if (this.#studio) {
+      const seated = this.#studio.riders(riders);
+      for (const { rider, position, forward, yaw } of [...seated, ...this.#studio.coaches()]) {
+        const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
+        if (fromCamera > 600) continue;
+        const tint = rider.id === INSTRUCTOR.id ? tints.bot : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
+        const parts = this.#riderParts(rider, position, forward, rider.cadence ?? (rider.power > 0 ? 85 : 0), dt);
+        visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts });
+      }
     }
 
     const eye = this.camera.eye;
@@ -853,7 +882,7 @@ export class View3D {
     const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
-      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id)) phases.delete(id);
+      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
     }
   }
 
@@ -904,6 +933,8 @@ export class View3D {
       if (glow) this.renderer.drawBright(glow, model, 0.9);
     }
 
+    this.#studio?.draw("opaque", eye);
+
     // Pass 3: blended — sea and soft contact shadows under the bikes.
     this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
@@ -911,6 +942,7 @@ export class View3D {
       if (part.ghost || part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
     }
+    this.#studio?.draw("glass", eye);
     // Ghosts last, see-through over everything else.
     for (const part of visible) {
       if (!part.ghost) continue;
@@ -1005,6 +1037,7 @@ export class View3D {
   }
 
   dispose() {
+    this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
