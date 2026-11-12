@@ -942,7 +942,7 @@ export default {
   "cockpit.tile.load": "Belastung",
   "cockpit.tile.climbed": "Höhenmeter",
   "cockpit.tile.avgHeartRate": "Ø Herzfrequenz",
-  "cockpit.tile.powerGraph": "Leistung",
+  "cockpit.tile.powerGraph": "Leistung im Verlauf",
   "cockpit.tile.hrGraph": "Herzfrequenz im Verlauf",
   "cockpit.tile.laps": "Runde",
   "cockpit.tile.raceGaps": "Rennergebnis",

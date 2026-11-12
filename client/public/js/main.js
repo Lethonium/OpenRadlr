@@ -1532,6 +1532,8 @@ function notify(text, kind = "event") {
 const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
 const COCKPIT_KEY = "openradlr.cockpit";
 const DISPLAY_INTERVAL_MS = 1000;
+// The plan goes out again now and then, for a screen that opens or reconnects mid-workout.
+const PLAN_RESEND_TICKS = 10;
 
 /** The screen key to host with: only once a phone has been paired. */
 function pairedScreenKey() {
@@ -1546,15 +1548,16 @@ function pairedScreenKey() {
 function startDisplayFeed() {
   clearInterval(app.displayTimer);
   if (!pairedScreenKey()) return;
-  let planSent = { connection: null, workout: null };
+  let planSent = { connection: null, workout: null, ticks: 0 };
   app.displayTimer = setInterval(() => {
     const connection = app.connection;
     if (!connection || !app.recorder || !app.session) return;
     const training = app.training;
     const workout = training?.workout ?? null;
-    if (workout && (planSent.connection !== connection || planSent.workout !== workout)) {
+    planSent.ticks++;
+    if (workout && (planSent.connection !== connection || planSent.workout !== workout || planSent.ticks >= PLAN_RESEND_TICKS)) {
       connection.sendDisplay(workoutPlanFrame(workout, app.profile.ftp));
-      planSent = { connection, workout };
+      planSent = { connection, workout, ticks: 0 };
     }
     const state = workout ? training.workoutState() : null;
     connection.sendDisplay(

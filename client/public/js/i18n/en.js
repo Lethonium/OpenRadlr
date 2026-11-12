@@ -942,7 +942,7 @@ export default {
   "cockpit.tile.load": "Load",
   "cockpit.tile.climbed": "Climbed",
   "cockpit.tile.avgHeartRate": "Average heart rate",
-  "cockpit.tile.powerGraph": "Power",
+  "cockpit.tile.powerGraph": "Power over time",
   "cockpit.tile.hrGraph": "Heart rate over time",
   "cockpit.tile.laps": "Lap",
   "cockpit.tile.raceGaps": "Race result",
