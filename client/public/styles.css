@@ -6339,3 +6339,81 @@ body.working-out #paddles {
   }
 }
 
+/* Phones: the status row is for live riding feedback (drafting, best lap, group gap). A race
+   you're not in is announced by its join banner and, in landscape, the route profile's line;
+   as a pill it took a whole row and said the same twice. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  #race-status {
+    display: none;
+  }
+}
+
+/* Very short landscape screens (a phone browser with its address bar, about 330px tall),
+   training: a lower band, and the status pills move onto the targets' row, to the right. */
+@media (max-height: 360px) and (orientation: landscape) {
+  .ride[data-layout="training"] .band {
+    height: 112px;
+  }
+
+  .ride[data-layout="training"] .world-wrap,
+  .ride[data-layout="training"] .canvas-peloton {
+    bottom: 112px;
+  }
+
+  .ride[data-layout="training"] .targets {
+    bottom: calc(112px + var(--gap));
+  }
+
+  .ride[data-layout="training"] .hud-status {
+    top: auto;
+    left: auto;
+    transform: none;
+    right: calc(2 * var(--gap) + 56px);
+    bottom: calc(112px + var(--gap) + 12px);
+  }
+}
+
+/* The smallest upright screens (a small phone's browser, about 560px tall). Training: a
+   150px band, the lane buttons on the targets' row and slimmer targets between them. Race:
+   the stepper under the race rows and the lane buttons under the stepper. */
+@media (max-width: 760px) and (max-height: 600px) and (orientation: portrait) {
+  .ride[data-layout="training"] {
+    --band-height: 150px;
+  }
+
+  .ride[data-layout="training"] .lane-button {
+    top: auto;
+    bottom: calc(var(--band-height) + 12px);
+  }
+
+  .ride[data-layout="training"] .targets > div {
+    padding: 6px 8px;
+  }
+
+  .ride[data-layout="race"] .sim-stepper {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    bottom: auto;
+  }
+
+  .ride[data-layout="race"] .lane-button {
+    top: calc(var(--top-stack) + 2 * var(--hud-row-gap) + 140px);
+  }
+}
+
+/* The smallest landscape screens (a small phone's browser, about 280px tall), training:
+   targets on one line without captions, and shorter lane buttons under the top rows. */
+@media (max-height: 300px) and (orientation: landscape) {
+  .ride[data-layout="training"] .targets .caption {
+    display: none;
+  }
+
+  .ride[data-layout="training"] .targets .num-xl {
+    font-size: 28px;
+  }
+
+  .ride[data-layout="training"] .lane-button {
+    top: calc(var(--top-stack) + 4px);
+    height: 56px;
+  }
+}
+
