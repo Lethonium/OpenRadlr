@@ -1836,9 +1836,23 @@ body.riding {
   font-weight: 600;
 }
 
+/* Drafting: dark glass like the other pills, so it reads in front of a bright sky; blue marks the slipstream. */
 .pill-draft {
-  background: rgba(76, 195, 255, 0.28);
-  border: 1px solid rgba(76, 195, 255, 0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--glass);
+  border: 1px solid rgba(76, 195, 255, 0.6);
+  color: var(--text);
+}
+
+.pill-draft::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4cc3ff;
+  box-shadow: 0 0 6px rgba(76, 195, 255, 0.8);
 }
 
 /* Gap to my best lap's ghost: green ahead, red behind. */
@@ -6003,7 +6017,7 @@ body.working-out #paddles {
 
   /* The milestone banner keeps to the free middle: under the top rows, between the side buttons. */
   .milestone-banner {
-    top: max(18%, 232px);
+    top: max(18%, 232px, calc(var(--top-stack) + 2 * var(--hud-row-gap) + 32px));
     max-width: calc(100vw - 2 * (var(--gap) + 68px));
     padding: 10px 20px;
   }
@@ -6174,7 +6188,7 @@ body.working-out #paddles {
 
   /* The milestone banner sits between the top rows and the lane buttons. */
   .milestone-banner {
-    top: 112px;
+    top: max(112px, calc(var(--top-stack) + 2 * var(--hud-row-gap) + 32px));
     max-width: calc(100vw - 2 * (var(--gap) + 56px + var(--gap)));
     padding: 8px 20px;
   }
@@ -6190,3 +6204,92 @@ body.working-out #paddles {
     bottom: calc(42% + 8px);
   }
 }
+
+/* Phones: the status pills (drafting, best lap, group gap…) have one home, centred one row
+   under the lowest panel the layout puts at the top (--top-stack, its bottom edge). The
+   milestone banner goes below them. The glass is a little denser than on large screens,
+   so small captions stay readable in front of a bright sky. */
+@media (max-width: 760px) {
+  .ride {
+    --glass: rgba(15, 18, 22, 0.82);
+    --top-stack: calc(var(--gap) + var(--hud-row));
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 159px;
+  }
+
+  .ride[data-layout="training"] {
+    --top-stack: 172px;
+  }
+
+  .ride[data-layout="race"] {
+    --top-stack: 213px;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride {
+    --glass: rgba(15, 18, 22, 0.82);
+    --top-stack: calc(var(--gap) + var(--hud-row));
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 140px;
+  }
+
+  .ride[data-layout="training"] {
+    --top-stack: 106px;
+  }
+
+  .ride[data-layout="race"] {
+    --top-stack: 150px;
+  }
+}
+
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout] .hud-status {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+  }
+}
+
+/* Short upright phones, training: a lower band (it was half empty), the targets just above it,
+   and the simulator stepper beside the status row, so targets, stepper and lane buttons each
+   keep their own room. */
+@media (max-width: 760px) and (max-height: 700px) and (orientation: portrait) {
+  .ride[data-layout="training"] {
+    --band-height: 190px;
+  }
+
+  .ride[data-layout="training"] .targets {
+    bottom: calc(var(--band-height) + 12px);
+  }
+
+  .ride[data-layout="training"] .sim-stepper {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    bottom: auto;
+  }
+}
+
+/* Landscape phones, race: the lane buttons start under the race row. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout="race"] .lane-button {
+    top: max(38%, calc(var(--top-stack) + var(--hud-row-gap)));
+  }
+}
+
+/* Phones: the W/kg under the broadcast power stays one line. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .bar .bar-sub {
+    white-space: nowrap;
+  }
+}
+
+/* Small landscape phones (≤760 wide) also match the narrow rule that hides the band's side
+   stats; landscape has room for them, so they come back and the chart keeps the middle. */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .band-stats {
+    display: grid;
+  }
+}
+
