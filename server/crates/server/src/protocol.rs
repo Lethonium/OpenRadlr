@@ -4,6 +4,7 @@
 //! for the full description. Bump [`PROTOCOL_VERSION`] on breaking changes.
 
 use crate::obn::remote::RemoteRider;
+use crate::screens::WatchView;
 use openradlr_sim::events::{EventInfo, EventKind, EventLength, EventNotice, EventResult, EventView};
 use openradlr_sim::physics::RiderPhysics;
 use openradlr_sim::race::{RaceEvent, RacePhase, RaceResult};
@@ -70,6 +71,10 @@ pub enum ClientMessage {
         /// Where the ride left off; the server places the rider there.
         #[serde(default)]
         resume: Option<ResumePoint>,
+        /// The second-screen key of this tablet: the ride is relayed to the
+        /// screens watching it.
+        #[serde(default)]
+        screen_key: Option<String>,
     },
     Telemetry {
         power: f64,
@@ -128,6 +133,25 @@ pub enum ClientMessage {
         /// Which side a sided pose is held on (`right` or `left`); the session checks it.
         #[serde(default)]
         side: Option<String>,
+    },
+    /// Offer a pairing code for the second screen `key`, named `name`.
+    PairOffer {
+        key: String,
+        name: String,
+    },
+    /// Claim a pairing code from a second screen.
+    PairClaim {
+        code: String,
+    },
+    /// Watch the screen `key` ride (no seat is taken).
+    Watch {
+        key: String,
+        #[serde(default)]
+        view: WatchView,
+    },
+    /// Opaque display data for the paired screens.
+    Display {
+        data: serde_json::Value,
     },
     /// Answer to an `afk_warning`: the rider is still there.
     Stay,
@@ -1159,6 +1183,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
             }
         );
         assert_eq!(
@@ -1174,6 +1199,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
             }
         );
         let paddler =
