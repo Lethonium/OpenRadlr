@@ -16,6 +16,7 @@
 //! * [`studio`] — the spin studio's game core: rooms, class state
 //! * [`vehicle_codes`] — registry of boarding codes across worlds
 //! * [`pair_codes`] — registry of pairing codes that pair a second screen to a tablet
+//! * [`screens`] — relay of a tablet's messages to its paired second screens
 //! * [`protocol`] — JSON message types and mapping from the simulation
 //!
 //! [`app::build`] composes everything; it is the composition root used by
@@ -40,6 +41,7 @@ pub mod protocol;
 pub mod resume;
 pub mod route_file;
 pub mod runtime;
+pub mod screens;
 pub mod secure_random;
 pub mod session;
 pub mod session_store;
