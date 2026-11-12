@@ -7,6 +7,7 @@
 
 use crate::afk::{AfkEvent, AfkWatch};
 use crate::guard::{ConnectionLimits, TokenBucket};
+use crate::pair_codes::PAIR_CODE_TTL_S;
 use crate::protocol::{
     ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, Side, PROTOCOL_VERSION,
 };
@@ -142,6 +143,8 @@ pub struct Session {
     dropped: u32,
     opened_s: f64,
     last_message_s: f64,
+    /// When this connection last offered a pairing code: it then waits for the claim.
+    offered_s: Option<f64>,
     afk: AfkWatch,
 }
 
@@ -158,6 +161,7 @@ impl Session {
             dropped: 0,
             opened_s: now_s,
             last_message_s: now_s,
+            offered_s: None,
             afk: AfkWatch::inert(),
         }
     }
@@ -195,6 +199,10 @@ impl Session {
             Phase::Joined(_) if now_s - self.last_message_s > self.limits.idle_timeout_s => {
                 Some(ServerMessage::error("idle_timeout", "no messages for too long"))
             }
+            Phase::AwaitingJoin if self.offered_s.is_some() => self
+                .offered_s
+                .filter(|offered_s| now_s - offered_s > PAIR_CODE_TTL_S)
+                .map(|_| ServerMessage::error("pair_code_expired", "the pairing code has expired")),
             Phase::AwaitingHello | Phase::AwaitingJoin if now_s - self.opened_s > self.limits.handshake_timeout_s => {
                 Some(ServerMessage::error(
                     "handshake_timeout",
@@ -296,6 +304,7 @@ impl Session {
             },
             (Phase::AwaitingJoin, ClientMessage::PairOffer { key, name }) => {
                 if valid_screen_key(&key) {
+                    self.offered_s = Some(now_s);
                     Action::PairOffer { key, name }
                 } else {
                     bad_screen_key()
@@ -881,6 +890,20 @@ mod tests {
             Action::PairClaim { code: "ABC234".into() }
         );
         assert_eq!(s.phase(), Phase::AwaitingJoin);
+    }
+
+    #[test]
+    fn an_offered_code_keeps_the_connection_open_until_it_expires() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(
+            &format!(r#"{{"type":"pair_offer","key":"{KEY}","name":"Tablet"}}"#),
+            1.0,
+        );
+        assert_eq!(s.expired(1.0 + PAIR_CODE_TTL_S), None);
+        assert!(
+            matches!(s.expired(1.0 + PAIR_CODE_TTL_S + 1.0), Some(ServerMessage::Error { ref code, .. }) if code == "pair_code_expired")
+        );
     }
 
     #[test]
