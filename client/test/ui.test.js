@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
 import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
-import { describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, riderSections } from "../public/js/view/panels.js";
+import { describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, riderSections } from "../public/js/view/panels.js";
 import { profileScale } from "../public/js/view/profileView.js";
 import { minimapTransform } from "../public/js/view/minimapView.js";
 import { squareRoute } from "./helpers.js";
@@ -235,3 +235,12 @@ test("edits are kept as they're typed, each field only once it's valid", () => {
   assert.equal(keepValid(previous, { chainring: 5, cog: 16 }).cog, 16);
 });
 
+
+test("the race row says what the race does, also when I'm not in it", () => {
+  const running = { phase: "running", laps: 2, elapsed_s: 375 };
+  assert.equal(raceCaption({ phase: "idle" }, null, "Free ride", "–"), "No race running · start one from the menu (M)");
+  assert.equal(raceCaption(running, null, raceStatus(running, null), "–"), "Race in progress · 6:15 · you are free riding");
+  assert.equal(raceCaption({ phase: "finished", laps: 2 }, null, raceStatus({ phase: "finished" }, null), "–"), raceStatus({ phase: "finished" }, null));
+  assert.equal(raceCaption({ phase: "countdown", remaining_s: 9, laps: 2 }, null, "Race starts in 9 s · 2 laps", "–"), "Race starts in 9 s · 2 laps");
+  assert.equal(raceCaption(running, { toGoM: 15400 }, "Lap 1/2 · 6:15", "15.4 km"), "Lap 1/2 · 6:15 · 15.4 km to the finish");
+});
