@@ -96,6 +96,10 @@ cockpit is the first screen to use it.
   - It doesn't take a player slot or count in `players`.
   - It counts toward the per-address connection cap.
   - The AFK timeout doesn't apply to it.
+- **Privacy:** heart rate now passes through the server, to the rider's own
+  paired screens only, and only while one is paired. It is never stored or
+  logged. `ride/rideSession.js` says heart rate never reaches the server;
+  that comment and the privacy note in the ADR say this instead.
 - **Advertising:** `/api/info` gains `screens: true`. Clients show the
   second-screen controls only when it is there.
 - **Restarts:** the server forgets all hubs and codes on restart. Both
@@ -118,7 +122,7 @@ cockpit is the first screen to use it.
   once a second while riding and its result is sent. Fields, each optional:
   - `hr` (bpm);
   - `grade` (percent, the last `resistance`);
-  - `ftp`, `hr_max`;
+  - `ftp`;
   - `stats`: the `liveStats` result, that is `elapsedS`, `distanceM`,
     `climbedM`, `kJ`, `avgHeartRate`, `avgPower`, `weightedPower`, `load`
     and `efforts`;
@@ -175,8 +179,8 @@ and `wide`.
 
 **Default layout** (top to bottom, phone held upright):
 1. `power3s` big, coloured by power zone (`powerZone` from `view/hud.js`)
-2. `heartRate` big, coloured by HR zone. It's hidden while no HR has
-   arrived.
+2. `heartRate` big, uncoloured (the profile has no maximum heart rate to
+   derive zones from). It's hidden while no HR has arrived.
 3. `cadence` half, `speed` half
 4. `grade` half, `elapsed` half
 5. `workout` wide: the workout graph with the current step and target.
