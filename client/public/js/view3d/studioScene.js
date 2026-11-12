@@ -50,6 +50,16 @@ const STUDIO_LIGHT = Object.freeze({
 });
 
 const FOV_Y = (60 * Math.PI) / 180;
+/**
+ * The riders the room-only view draws: none too close to the camera, except
+ * me, and not me in my own point of view (the camera sits in my head).
+ */
+export function shownInRoom(placed, myId, eye, mode) {
+  return placed.filter(({ rider, position }) =>
+    rider.id === myId ? mode !== "pov" : Math.hypot(position[0] - eye[0], position[2] - eye[2]) > NEAR_CAMERA_HIDE,
+  );
+}
+
 /** Riders this close to the camera (horizontally) would fill the screen; they're not drawn. */
 const NEAR_CAMERA_HIDE = 1.2;
 
@@ -153,7 +163,7 @@ export class StudioView3D {
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), coach: hexToRgb(colors.accent) };
     const placed = riders.map((rider) => ({ rider, position: seatPosition(rider.seat), yaw: 0 }));
     placed.push({ rider: { id: INSTRUCTOR.id, name: INSTRUCTOR.name, is_bot: false, coach: true }, position: INSTRUCTOR.position, yaw: INSTRUCTOR.yaw });
-    const visible = placed.filter(({ rider, position }) => rider.id === myId || Math.hypot(position[0] - eye[0], position[2] - eye[2]) > NEAR_CAMERA_HIDE);
+    const visible = shownInRoom(placed, myId, eye, this.cameraMode);
     const drawn = visible.map(({ rider, position, yaw }) => {
       const cadence = rider.coach ? coachCadence : rider.id === myId ? (myCadence ?? 0) : (rider.cadence ?? 0);
       const speed = rider.coach ? (coachCadence > 0 ? 9 : 0) : (rider.speed ?? 0);

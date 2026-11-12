@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, seatPosition, studioCamera } from "../public/js/view3d/studioScene.js";
+import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
 import { buildStudioRoom } from "../public/js/view3d/studioRoom.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
@@ -38,4 +38,14 @@ test("the room mesh: walls and floor face into the room, accents glow separately
     const toCentre = centre.map((c, axis) => c - p[axis]);
     assert.ok(normal.reduce((sum, n, axis) => sum + n * toCentre[axis], 0) > 0, `shell triangle ${i / 3} faces inwards`);
   }
+});
+
+test("the room-only view leaves me out in my own point of view", () => {
+  const placed = [
+    { rider: { id: 7 }, position: seatPosition(3) },
+    { rider: { id: 8 }, position: seatPosition(12) },
+  ];
+  const eye = studioCamera("pov", 3).eye;
+  assert.deepEqual(shownInRoom(placed, 7, eye, "seat").map(({ rider }) => rider.id), [7, 8]);
+  assert.deepEqual(shownInRoom(placed, 7, eye, "pov").map(({ rider }) => rider.id), [8]);
 });
