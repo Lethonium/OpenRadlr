@@ -4074,8 +4074,7 @@ body.riding {
 .ride:not([data-mode="studio"]) .studio-only,
 .ride[data-mode="studio"] .route-only,
 .ride[data-mode="studio"] .layout:not(.layout-studio),
-.ride[data-mode="studio"] .canvas-ride-map,
-.ride[data-mode="studio"] #world-wrap {
+.ride[data-mode="studio"] .canvas-ride-map {
   display: none !important;
 }
 

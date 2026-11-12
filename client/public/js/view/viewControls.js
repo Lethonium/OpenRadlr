@@ -8,7 +8,7 @@ import { LAYOUT_CHOICES, LAYOUT_LABELS } from "./hud.js";
 
 const CAMERA_KEYS = {
   chase: "camera.chase", close: "camera.close", drone: "camera.drone", side: "camera.side",
-  seat: "camera.seat", wide: "camera.wide", coach: "camera.coach",
+  seat: "camera.seat", pov: "camera.pov", wide: "camera.wide", coach: "camera.coach",
 };
 const TIME_KEYS = { auto: "viewPopover.timeAuto", day: "drawer.timeDay", golden: "drawer.timeGolden", dusk: "drawer.timeDusk" };
 

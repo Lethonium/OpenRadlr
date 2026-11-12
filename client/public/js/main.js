@@ -100,7 +100,9 @@ import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
-import { INSTRUCTOR, STUDIO_CAMERAS, StudioView3D } from "./view3d/studioScene.js";
+import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
+import { studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { installNativeApp } from "./native/app.js";
 import { PaddleView } from "./view/paddleView.js";
@@ -1917,7 +1919,7 @@ function endRide() {
 
   // A fresh ride screen; the 3D canvases move over, keeping their WebGL contexts.
   const fresh = rideTemplate.cloneNode(true);
-  for (const id of ["world3d", "labels3d", "studio3d", "studio-labels"]) fresh.querySelector(`#${id}`).replaceWith($(id));
+  for (const id of ["world3d", "labels3d"]) fresh.querySelector(`#${id}`).replaceWith($(id));
   $("ride").replaceWith(fresh);
   // The template predates the pickers being filled: build the fresh screen's options too.
   initBiomePicker();
@@ -2344,7 +2346,7 @@ function startStudio({ simulated, setSimPower }) {
   const studio = app.studio;
   $("ride").dataset.mode = "studio";
   $("hud-route").textContent = app.route.name;
-  $("studio-wrap").hidden = false;
+  $("world-wrap").hidden = false;
   $("sim-panel").hidden = !simulated;
 
   const renderControls = () => {
@@ -2381,16 +2383,7 @@ function startStudio({ simulated, setSimPower }) {
   });
   renderControls();
 
-  if (isWebGl2Available()) {
-    try {
-      app.studioView = new StudioView3D($("studio3d"), $("studio-labels"));
-      const camera = readSetting(STUDIO_CAMERA_KEY);
-      if (STUDIO_CAMERAS.includes(camera)) app.studioView.cameraMode = camera;
-    } catch (error) {
-      console.error(error);
-      notify(t("studio.unavailable3d"), "error");
-    }
-  }
+  if (isWebGl2Available()) buildStudioWorld();
 
   app.actions = {
     powerUp: () => adjust(+1),
@@ -2403,6 +2396,50 @@ function startStudio({ simulated, setSimPower }) {
     closePanels: () => closeTopPanel(),
   };
   app.ride.unbindKeyboard = bindKeyboard(window, app.actions);
+}
+
+/**
+ * The class is ridden in the valley, inside the studio building. Without a
+ * valley on the server, or if its world cannot be built, in the room alone.
+ */
+function buildStudioWorld() {
+  const ride = app.ride;
+  const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  $("view-note").textContent = t("view.building");
+  studioWorld({ routes: routesOf(app.info), biome: app.biome, fetchRouteFile, fetchNetwork: fetchNetworkFile, buildScene })
+    .then((world) => {
+      if (app.ride !== ride) return;
+      if (!world) return studioRoomOnly();
+      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene);
+      view.routes = world.routes;
+      view.network = world.network;
+      view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
+      view.setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+      view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
+      app.view3d = view;
+      $("view-note").textContent = "";
+    })
+    .catch((error) => {
+      console.error(error);
+      if (app.ride === ride) studioRoomOnly();
+    });
+}
+
+/** The fallback: the training room alone, the glass a flat sky. */
+function studioRoomOnly() {
+  $("view-note").textContent = "";
+  try {
+    app.studioView = new StudioView3D($("world3d"), $("labels3d"));
+    app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
+  } catch (error) {
+    console.error(error);
+    notify(t("studio.unavailable3d"), "error");
+  }
+}
+
+/** The riders of the studio scene: my room's in their seats, then the other floors and the road. */
+function studioSceneRiders(state) {
+  return [...state.riders.map((rider) => ({ ...rider, route: null, studio: { room: state.room, seat: rider.seat } })), ...(state.road_riders ?? [])];
 }
 
 /** The coach reads a cue out loud, if the rider wants that. */
@@ -2451,13 +2488,16 @@ function studioFrame() {
 
   // The coach pedals at the cadence the block asks for.
   const coachCadence = position?.cadence ? (position.cadence[0] + position.cadence[1]) / 2 : 75;
-  if (app.studioView) {
+  if (app.view3d) {
+    app.view3d.setStudioRooms(studio.state.rooms);
+    app.view3d.render({ riders: studioSceneRiders(studio.state), myId: app.riderId, myCadence: cadence, timeS: time, colors: themeColors() });
+  } else if (app.studioView) {
     const colors = themeColors();
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
     app.studioView.render({ riders, myId: app.riderId, myCadence: cadence, coachCadence, timeS: time, colors: { ...colors, accent } });
   }
   if (app.sceneRequests.length) {
-    const scene = app.studioView ? grabScene($("studio3d")) : null;
+    const scene = app.view3d || app.studioView ? grabScene($("world3d")) : null;
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
@@ -3408,7 +3448,7 @@ function initViewPopover() {
     stack: panels,
     matchNarrow: matchMedia(MENU_NARROW_QUERY),
     selected: () => ({
-      camera: app.studio ? app.studioView?.cameraMode : app.view3d?.camera.mode,
+      camera: studioCameraMode() ?? app.view3d?.camera.mode,
       layout: app.layoutChoice,
       mode: app.viewMode,
       time: $("time-mode").value,
@@ -4091,7 +4131,7 @@ function show3d(scene, view = null) {
 
 /** C: the next camera of this ride's View controls (the workout's gym camera does not cycle). */
 function cycleCamera() {
-  const current = app.studio ? app.studioView?.cameraMode : app.view3d?.camera.mode;
+  const current = app.studio ? studioCameraMode() : app.view3d?.camera.mode;
   const cameras = viewControls({ studio: Boolean(app.studio) }).cameras;
   const index = cameras.findIndex((camera) => camera.id === current);
   if (index < 0) return;
@@ -4100,11 +4140,19 @@ function cycleCamera() {
   if (app.studio) notify(t("camera.label", { mode: next.label }));
 }
 
+/** The studio camera on screen: in the building's world or in the room alone; undefined outside a class. */
+function studioCameraMode() {
+  if (!app.studio) return undefined;
+  return app.view3d ? app.view3d.camera.mode : app.studioView?.cameraMode;
+}
+
 /** Switches the road's or the studio's camera and remembers it. */
 function setCamera(id) {
   if (app.studio) {
-    if (!app.studioView || !STUDIO_CAMERAS.includes(id)) return;
-    app.studioView.cameraMode = id;
+    if (!STUDIO_CAMERAS.includes(id)) return;
+    if (app.view3d) app.view3d.setCameraMode(id);
+    else if (app.studioView) app.studioView.cameraMode = id;
+    else return;
     writeSetting(STUDIO_CAMERA_KEY, id);
   } else {
     if (!app.view3d || !CAMERA_MODES[id]) return;
@@ -4117,7 +4165,7 @@ function setCamera(id) {
 
 /** A road camera mode's name; the workout's gym camera is not one of the ride's modes. */
 function cameraName(mode) {
-  return { chase: t("camera.chase"), close: t("camera.close"), drone: t("camera.drone"), side: t("camera.side") }[mode] ?? t("camera.gym");
+  return { chase: t("camera.chase"), close: t("camera.close"), drone: t("camera.drone"), side: t("camera.side"), seat: t("camera.seat"), pov: t("camera.pov"), wide: t("camera.wide"), coach: t("camera.coach") }[mode] ?? t("camera.gym");
 }
 
 function renderCameraButton() {

@@ -6,7 +6,8 @@
  */
 import { invert, lookAt, multiply, perspective, placement, rotationXAbout, scaling } from "./math.js";
 import { buildStudioRoom } from "./studioRoom.js";
-import { INSTRUCTOR, ROOM, ROW_GAP, STAGE, seatPosition } from "./studioLayout.js";
+import { INSTRUCTOR, ROOM, STAGE, seatPosition } from "./studioLayout.js";
+import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "./studioCamera.js";
 import { Renderer, createContext } from "./renderer.js";
 import {
   RIDER_GEOMETRY,
@@ -30,19 +31,8 @@ import { sunShadowMatrix } from "./lighting.js";
 
 export { INSTRUCTOR, ROOM, STAGE, seatPosition };
 
-export const STUDIO_CAMERAS = Object.freeze(["seat", "wide", "coach"]);
-export const STUDIO_CAMERA_LABELS = Object.freeze({ seat: "Behind me", wide: "Whole room", coach: "Coach's view" }); // i18n-ok (English id label; the UI translates by mode)
-
-/** Camera eye and target for a mode, from my seat. */
-export function studioCamera(mode, mySeat) {
-  const coachHead = [INSTRUCTOR.position[0], INSTRUCTOR.position[1] + 1.2, INSTRUCTOR.position[2]];
-  if (mode === "wide") return { eye: [0, 3.9, ROOM.back - 0.6], target: [0, 0.6, -3.5] };
-  // Just in front of the coach, over the stage edge (the coach is hidden: too close).
-  if (mode === "coach") return { eye: [0, 2.5, STAGE.z + 1.1], target: [0, 0.8, ROW_GAP] };
-  // Over my shoulder, in front of the row behind me.
-  const seat = seatPosition(mySeat ?? 3);
-  return { eye: [seat[0] * 0.9, seat[1] + 2.25, seat[2] + 1.9], target: [coachHead[0], coachHead[1] - 0.4, coachHead[2]] };
-}
+export { STUDIO_CAMERAS, cameraModeOf, studioCamera };
+export const STUDIO_CAMERA_LABELS = Object.freeze({ seat: "Behind me", pov: "My view", wide: "Whole room", coach: "Coach's view" }); // i18n-ok (English id label; the UI translates by mode)
 
 /** Standalone daylight: a key light from above the stage and a bright sky, no fog. */
 const STUDIO_LIGHT = Object.freeze({
@@ -156,7 +146,7 @@ export class StudioView3D {
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     const me = riders.find((r) => r.id === myId);
-    const { eye, target } = studioCamera(this.cameraMode, me?.seat);
+    const { eye, target } = studioCamera(this.cameraMode, me?.seat, { cadence: myCadence ?? 0, timeS });
     const viewProjection = multiply(perspective(FOV_Y, width / height, 0.1, 60), lookAt(eye, target));
     const inverseViewProjection = invert(viewProjection);
 
