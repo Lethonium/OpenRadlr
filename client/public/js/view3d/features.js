@@ -862,6 +862,37 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
   return { center: [pos[0], base + gym.top, pos[2]], yaw, spots, cafeId, statueRow: { position: [rowX, base, rowZ], yaw } };
 }
 
+// ------------------------------------------------------------ spin studio ---
+
+/** Metres after the start line where the spin studio stands, across the road from the café. */
+export const STUDIO_DISTANCE = CAFE_DISTANCE + 12;
+/** The studio's footprint in its local frame (riders face -Z; the glass front is at `front`). */
+export const STUDIO_FOOTPRINT = Object.freeze({ halfWidth: 8.5, front: -10, back: 8 });
+/** Metres between the road edge and the studio's glass front. */
+const STUDIO_SETBACK = 8;
+
+/**
+ * Where the spin studio stands: on the side opposite the café, glass front
+ * facing the road, on the highest ground under its footprint, which it
+ * reserves (plus a metre). Null where `avoid` says so or something stands there.
+ *
+ * @returns {{position: number[], yaw: number} | null}
+ */
+export function studioSite(route, terrain, { occupancy, avoid = () => false }) {
+  const side = -1;
+  const { halfWidth, front, back } = STUDIO_FOOTPRINT;
+  const f = roadFrame(route, route.wrap(STUDIO_DISTANCE));
+  const origin = add(f.center, scale(f.right, side * (roadHalfWidth(route.lanes) + STUDIO_SETBACK - front)));
+  const yaw = yawFor(scale(f.right, -side));
+  const local = (x, z) => [origin[0] + x * Math.cos(yaw) + z * Math.sin(yaw), origin[2] - x * Math.sin(yaw) + z * Math.cos(yaw)];
+  const [midX, midZ] = local(0, (front + back) / 2);
+  const reach = Math.hypot(halfWidth, (back - front) / 2) + 1;
+  if (avoid(origin[0], origin[2], 10) || avoid(midX, midZ, 10) || occupancy.blocked(midX, midZ, reach)) return null;
+  const y = terrain ? Math.max(...[-halfWidth, halfWidth].flatMap((x) => [front, back].map((z) => terrain.height(...local(x, z))))) : f.center[1];
+  occupancy.add(midX, midZ, reach);
+  return { position: [origin[0], y, origin[2]], yaw };
+}
+
 const cafeCache = new Map();
 function cafeModel(biome) {
   let cafe = cafeCache.get(biome.id);
