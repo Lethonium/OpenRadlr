@@ -26,9 +26,9 @@ an app) with a 3D and a 2D view.
 
 <p align="center">
   <img src="docs/assets/screenshot-ride.png" width="49%"
-       alt="Riding Rolling Hills in the 3D view: the rider on a village road, with speed, power and grade in the HUD">
+       alt="A race start on Rolling Hills at golden hour: the rider in a pack of bots past a cheering crowd, drafting, with power, speed and grade at the top, the riders nearby, the route map and the elevation profile">
   <img src="docs/assets/screenshot-menu.png" width="49%"
-       alt="Start menu: the island in 3D, route map and elevation profile, rider settings and devices">
+       alt="Start menu: the island in 3D with the picked route, its map and elevation profile, the route cards, and the rider panel with Strava, the way of riding and the devices">
 </p>
 
 ## Quick start
