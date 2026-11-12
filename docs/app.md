@@ -190,7 +190,9 @@ because their signatures differ: uninstall the debug build first.
      app out of the Families policy.
    - Data safety, as in the privacy policy: name and fitness data (power,
      cadence, position) go to the server for the ride and are processed in
-     memory only; heart rate stays on the device; with Strava, the athlete ID
+     memory only; heart rate stays on the device unless a second screen is
+     paired, and then passes through the server to that screen only (ADR
+     0026); with Strava, the athlete ID
      and name are stored until logout (30 days at most). Nothing is shared or
      sold; uploads to Strava happen only when you press *Upload to Strava*.
      All traffic is encrypted (https). There are no accounts to delete:
