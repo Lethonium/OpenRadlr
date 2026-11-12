@@ -64,6 +64,19 @@ export function raceStatus(race, myLap) {
   }
 }
 
+/**
+ * The race layout's caption: my way to the finish while I race; otherwise what the
+ * route's race does (counting down, running without me, finished), and only with no
+ * race at all the hint to start one.
+ * @param {{phase?: string}} race @param {?{toGoM: number}} standing mine, if I race
+ * @param {string} status raceStatus() for me @param {string} toGo the distance left, formatted
+ */
+export function raceCaption(race, standing, status, toGo) {
+  if (standing) return t("race.caption.toFinish", { status, distance: toGo });
+  if (!race?.phase || race.phase === "idle") return t("race.caption.none");
+  return status;
+}
+
 /** Human-readable text for a game event, or null to ignore it. */
 /**
  * Who is riding right now: humans on the whole server (from /api/info) and

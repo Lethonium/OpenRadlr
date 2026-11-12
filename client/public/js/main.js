@@ -71,7 +71,7 @@ import {
   splitLabel,
   splitLine,
 } from "./view/hud.js";
-import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
+import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
@@ -4343,7 +4343,9 @@ function updatePanels() {
   hud.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
   hud.set("lap", standing ? `${standing.lap}/${standing.laps}` : "–");
   hud.set("to-go", standing ? formatLength(standing.toGoM) : "–");
-  hud.set("race-caption", standing ? t("race.caption.toFinish", { status, distance: formatLength(standing.toGoM) }) : race.phase === "countdown" ? status : t("race.caption.none"));
+  hud.set("race-caption", raceCaption(race, standing, status, standing ? formatLength(standing.toGoM) : "–"));
+  // The progress bar only while I race; otherwise the caption alone, centred in its box.
+  $("race-timeline").hidden = !standing;
 }
 
 /**

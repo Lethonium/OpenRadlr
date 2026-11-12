@@ -1009,9 +1009,10 @@ label output {
 }
 
 .label3d .badge {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.4);
   color: #e8ecf1;
+  font-weight: 600;
 }
 
 /* How are you riding? Three cards, one choice; its panel below does one thing at a time. */
@@ -1836,9 +1837,23 @@ body.riding {
   font-weight: 600;
 }
 
+/* Drafting: dark glass like the other pills, so it reads in front of a bright sky; blue marks the slipstream. */
 .pill-draft {
-  background: rgba(76, 195, 255, 0.28);
-  border: 1px solid rgba(76, 195, 255, 0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--glass);
+  border: 1px solid rgba(76, 195, 255, 0.6);
+  color: var(--text);
+}
+
+.pill-draft::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4cc3ff;
+  box-shadow: 0 0 6px rgba(76, 195, 255, 0.8);
 }
 
 /* Gap to my best lap's ghost: green ahead, red behind. */
@@ -1937,14 +1952,16 @@ body.riding {
 
 /* --- A · cockpit ----------------------------------------------------- */
 
+/* The scrim under the cockpit numbers: eased, so it fades out without a visible start, and
+   down past the HUD's safe-area inset to the screen's edge (no band under the gesture bar). */
 .layout-cockpit::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: 300px;
-  background: linear-gradient(to top, rgba(10, 12, 15, 0.8), rgba(10, 12, 15, 0));
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  height: calc(var(--cockpit-scrim, 300px) + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(10, 12, 15, 0.8) 0%, rgba(10, 12, 15, 0.74) 12%, rgba(10, 12, 15, 0.62) 25%, rgba(10, 12, 15, 0.47) 38%, rgba(10, 12, 15, 0.33) 50%, rgba(10, 12, 15, 0.2) 62%, rgba(10, 12, 15, 0.1) 75%, rgba(10, 12, 15, 0.03) 88%, rgba(10, 12, 15, 0) 100%);
 }
 
 .cluster {
@@ -1952,8 +1969,10 @@ body.riding {
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
-  display: flex;
-  align-items: flex-end;
+  /* Equal sides, so the gauge sits exactly in the middle whatever the numbers' widths. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
   gap: 32px;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
 }
@@ -2355,9 +2374,10 @@ body.riding {
 .race-timeline {
   flex: 1;
   min-width: 0;
-  padding: 10px 16px 4px;
+  padding: 10px 16px;
   display: grid;
-  gap: 2px;
+  align-content: center;
+  gap: 4px;
 }
 
 .canvas-timeline {
@@ -4727,7 +4747,7 @@ body:not(.riding)::after {
   }
 
   .layout-cockpit::before {
-    height: 160px;
+    --cockpit-scrim: 160px;
   }
 
   .cluster {
@@ -5062,7 +5082,7 @@ body.paddling .layout-cockpit::before {
   top: calc(-1 * env(safe-area-inset-top));
   bottom: auto;
   height: calc(170px + env(safe-area-inset-top));
-  background: linear-gradient(to bottom, rgba(10, 12, 15, 0.72), rgba(10, 12, 15, 0.35) 55%, rgba(10, 12, 15, 0));
+  background: linear-gradient(to bottom, rgba(10, 12, 15, 0.72) 0%, rgba(10, 12, 15, 0.67) 12%, rgba(10, 12, 15, 0.56) 25%, rgba(10, 12, 15, 0.42) 38%, rgba(10, 12, 15, 0.3) 50%, rgba(10, 12, 15, 0.18) 62%, rgba(10, 12, 15, 0.09) 75%, rgba(10, 12, 15, 0.03) 88%, rgba(10, 12, 15, 0) 100%);
 }
 
 body.paddling .cluster {
@@ -5899,3 +5919,651 @@ body.working-out #paddles {
     white-space: nowrap;
   }
 }
+
+/* ===================================================================== */
+/* Phone ride screen: nothing covers the top buttons or another panel.    */
+/* One rhythm: --gap at the edges, 8px between rows, rows 44px tall (the  */
+/* top button row), so every panel sits on the same grid.                 */
+/* ===================================================================== */
+
+:root {
+  --hud-row: 44px;
+  --hud-row-gap: 8px;
+}
+
+/* On phones (either way up) the lane buttons are a side channel: see-through,
+   no blur, so they never read as a main control. Larger screens keep theirs. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .lane-button {
+    background: rgba(15, 18, 22, 0.22);
+    border-color: rgba(255, 255, 255, 0.14);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: rgba(255, 255, 255, 0.8);
+  }
+}
+
+/* Upright phones. */
+@media (max-width: 760px) {
+  /* Training: the workout chip takes the row under the buttons, its actions the row below. */
+  .ride[data-layout="training"] .workout-chip {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+    left: var(--gap);
+    right: var(--gap);
+    min-width: 0;
+    padding: 8px 14px;
+  }
+
+  .ride[data-layout="training"] .workout-chip strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ride[data-layout="training"] .training-actions {
+    top: calc(var(--gap) + 2 * (var(--hud-row) + var(--hud-row-gap)) + 12px);
+    left: var(--gap);
+    right: var(--gap);
+    justify-content: center;
+  }
+
+  /* Race and the bar share the same first row under the buttons. */
+  .race-top {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+    left: var(--gap);
+    right: var(--gap);
+  }
+
+  .bar {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+  }
+
+  /* Workout: three stats fit the row beside the ring, whatever the language. */
+  .workout-stats {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .workout-stats > div {
+    min-width: 0;
+  }
+
+  .workout-stats .caption {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .workout-stats strong {
+    font-size: 18px;
+  }
+
+  .training-actions > button {
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+
+  /* Training: the targets stay clear of the lane buttons on both sides. */
+  .ride[data-layout="training"] .targets {
+    bottom: 262px;
+  }
+
+  .ride[data-layout="training"] .targets > div {
+    padding: 8px 10px;
+  }
+
+  .ride[data-layout="training"] .targets .num-xl {
+    font-size: 40px;
+  }
+
+  /* Studio: the controls sit one row-gap above the targets. */
+  .studio-controls {
+    bottom: 286px;
+  }
+
+  /* The milestone banner keeps to the free middle: under the top rows, between the side buttons. */
+  .milestone-banner {
+    top: max(18%, 232px, calc(var(--top-stack) + 2 * var(--hud-row-gap) + 32px));
+    max-width: calc(100vw - 2 * (var(--gap) + 68px));
+    padding: 10px 20px;
+  }
+
+  /* Paddles: the hint wraps instead of ending in an ellipsis. */
+  .paddle-hint {
+    white-space: normal;
+    text-align: center;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* Phones on their side (short screens): panels move beside the buttons, not under them. */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Broadcast: the stats bar drops to the row under the buttons. */
+  .bar {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+  }
+
+  .bar > div {
+    padding: 6px 14px;
+  }
+
+  /* Training: chip in the button row, to the left of the buttons; actions under them. */
+  .ride[data-layout="training"] .workout-chip {
+    top: var(--gap);
+    left: var(--gap);
+    right: auto;
+    max-width: calc(100% - 3 * var(--gap) - 400px);
+    padding: 6px 12px;
+  }
+
+  .ride[data-layout="training"] .training-actions {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+    left: auto;
+    right: var(--gap);
+    justify-content: flex-end;
+  }
+
+  /* Studio: controls and targets stack down the right edge, the rider keeps the middle. */
+  .studio-board {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+    width: 200px;
+    max-height: calc(100% - var(--gap) - var(--hud-row) - var(--hud-row-gap) - 128px);
+  }
+
+  .studio-controls {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+    right: var(--gap);
+    bottom: auto;
+    transform: none;
+  }
+
+  .studio-targets {
+    top: calc(var(--gap) + 2 * (var(--hud-row) + var(--hud-row-gap)));
+    bottom: auto;
+    left: auto;
+    right: var(--gap);
+    transform: none;
+  }
+
+  .studio-targets .num-xl {
+    font-size: 36px;
+  }
+
+  .studio-targets > div {
+    padding: 6px 14px;
+  }
+
+  .studio-band {
+    padding: 6px 12px;
+    gap: 4px;
+  }
+
+  .studio-band .canvas-workout {
+    height: 34px;
+  }
+
+  .studio-band-stats .num-m {
+    font-size: 20px;
+  }
+
+  /* Studio: the "next" line would not fit the cue's short row. */
+  .studio-next {
+    display: none;
+  }
+
+  /* Training: a short band, so the world keeps room; the targets move to the free left edge. */
+  .ride[data-layout="training"] .world-wrap,
+  .ride[data-layout="training"] .canvas-peloton {
+    bottom: 124px;
+  }
+
+  /* The band's side stats fit two to a row. */
+  .band {
+    height: 124px;
+    grid-template-columns: 196px minmax(0, 1fr) 196px;
+  }
+
+  .band-stats {
+    padding: 8px 12px;
+    grid-template-columns: 1fr 1fr;
+    align-content: center;
+    gap: 4px 12px;
+  }
+
+  .band-chart {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .band .canvas-workout {
+    height: 56px;
+  }
+
+  .ride[data-layout="training"] .targets {
+    left: calc(2 * var(--gap) + 56px);
+    bottom: calc(124px + var(--gap));
+    transform: none;
+  }
+
+  .ride[data-layout="training"] .targets .num-xl {
+    font-size: 40px;
+  }
+
+  .ride[data-layout="training"] .targets > div {
+    padding: 6px 12px;
+  }
+
+  /* Paddles: the hint wraps in the narrower meter. */
+  .paddle-hint {
+    white-space: normal;
+    text-align: center;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  /* The race row spans the width: the first row under the buttons, or below the simulator
+     stepper, which owns the top-left corner (as for the workout chip). */
+  .race-top {
+    top: calc(var(--gap) + var(--hud-row) + var(--hud-row-gap));
+  }
+
+  .hud:has(#sim-stepper:not([hidden])) .race-top {
+    top: 72px;
+  }
+
+  .hud:has(#sim-stepper:not([hidden])) .workout-chip {
+    top: 72px;
+    max-width: calc(100% - 2 * var(--gap) - 340px);
+  }
+
+  .band-stats .caption {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .band-stats .num-s {
+    white-space: nowrap;
+  }
+
+  .band-stats .num-s {
+    font-size: 18px;
+  }
+
+  /* Race: the timeline shares the row, so the row stays one line tall. */
+  .race-timeline {
+    flex: 1 1 0;
+    flex-basis: 0;
+    order: 0;
+  }
+
+  /* The milestone banner sits between the top rows and the lane buttons. */
+  .milestone-banner {
+    top: max(112px, calc(var(--top-stack) + 2 * var(--hud-row-gap) + 32px));
+    max-width: calc(100vw - 2 * (var(--gap) + 56px + var(--gap)));
+    padding: 8px 20px;
+  }
+}
+
+/* Short upright screens (small phones): lane buttons and the stepper sit lower, below the top rows. */
+@media (max-width: 760px) and (max-height: 700px) and (orientation: portrait) {
+  .lane-button {
+    top: 58%;
+  }
+
+  .sim-stepper {
+    bottom: calc(42% + 8px);
+  }
+}
+
+/* Phones: the status pills (drafting, best lap, group gap…) have one home, centred one row
+   under the lowest panel the layout puts at the top (--top-stack, its bottom edge). The
+   milestone banner goes below them. The glass is a little denser than on large screens,
+   so small captions stay readable in front of a bright sky. */
+@media (max-width: 760px) {
+  .ride {
+    --glass: rgba(15, 18, 22, 0.82);
+    --top-stack: calc(var(--gap) + var(--hud-row));
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 159px;
+  }
+
+  .ride[data-layout="training"] {
+    --top-stack: 172px;
+  }
+
+  .ride[data-layout="race"] {
+    --top-stack: 213px;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride {
+    --glass: rgba(15, 18, 22, 0.82);
+    /* The simulator stepper at the top left is 58px tall, the buttons 44px. */
+    --top-stack: calc(var(--gap) + 58px);
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 140px;
+  }
+
+  .ride[data-layout="training"] {
+    --top-stack: 106px;
+  }
+
+  .ride[data-layout="race"] {
+    --top-stack: 150px;
+  }
+}
+
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout] .hud-status {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+  }
+}
+
+/* Short upright phones, training: a lower band (it was half empty), the targets just above it,
+   and the simulator stepper beside the status row, so targets, stepper and lane buttons each
+   keep their own room. */
+@media (max-width: 760px) and (max-height: 700px) and (orientation: portrait) {
+  .ride[data-layout="training"] {
+    --band-height: 190px;
+  }
+
+  .ride[data-layout="training"] .targets {
+    bottom: calc(var(--band-height) + 12px);
+  }
+
+  .ride[data-layout="training"] .sim-stepper {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    bottom: auto;
+  }
+}
+
+/* Landscape phones, race: the lane buttons start under the race row. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout="race"] .lane-button {
+    top: max(38%, calc(var(--top-stack) + var(--hud-row-gap)));
+  }
+}
+
+/* Phones: the W/kg under the broadcast power stays one line. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .bar .bar-sub {
+    white-space: nowrap;
+  }
+}
+
+/* Small landscape phones (≤760 wide) also match the narrow rule that hides the band's side
+   stats; landscape has room for them, so they come back and the chart keeps the middle. */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .band-stats {
+    display: grid;
+  }
+}
+
+/* Phones: one type scale for the ride screen. 12 captions · 13 buttons and units · 16 text ·
+   18 emphasis · 24/26 and 28/32 numbers (upright/landscape) · 40 big numbers · 54 the hero
+   number. Sizes that sat between the steps snap to the nearest one. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .sim-readout .caption {
+    font-size: 12px;
+  }
+
+  .unit,
+  .bar-sub,
+  #workout-block {
+    font-size: 13px;
+  }
+
+  #event-call-text,
+  #event-call-button,
+  .workout-chip #workout-name {
+    font-size: 16px;
+  }
+
+  .ride .num-xl {
+    font-size: 40px;
+  }
+
+  .milestone-banner {
+    font-size: 18px;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .race-power .num-xl {
+    font-size: 54px;
+  }
+
+  .milestone-banner {
+    font-size: 24px;
+  }
+}
+
+/* Phones: the status row is for live riding feedback (drafting, best lap, group gap). A race
+   you're not in is announced by its join banner and, in landscape, the route profile's line;
+   as a pill it took a whole row and said the same twice. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  #race-status {
+    display: none;
+  }
+}
+
+/* Very short landscape screens (a phone browser with its address bar, about 330px tall),
+   training: a lower band, and the status pills move onto the targets' row, to the right. */
+@media (max-height: 360px) and (orientation: landscape) {
+  .ride[data-layout="training"] .band {
+    height: 112px;
+  }
+
+  .ride[data-layout="training"] .world-wrap,
+  .ride[data-layout="training"] .canvas-peloton {
+    bottom: 112px;
+  }
+
+  .ride[data-layout="training"] .targets {
+    bottom: calc(112px + var(--gap));
+  }
+
+}
+
+/* The smallest upright screens (a small phone's browser, about 560px tall). Training: a
+   150px band, the lane buttons on the targets' row and slimmer targets between them. Race:
+   the stepper under the race rows and the lane buttons under the stepper. */
+@media (max-width: 760px) and (max-height: 600px) and (orientation: portrait) {
+  .ride[data-layout="training"] {
+    --band-height: 150px;
+  }
+
+  .ride[data-layout="training"] .lane-button {
+    top: auto;
+    bottom: calc(var(--band-height) + 12px);
+  }
+
+  .ride[data-layout="training"] .targets > div {
+    padding: 6px 8px;
+  }
+
+  .ride[data-layout="race"] .sim-stepper {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    bottom: auto;
+  }
+
+  .ride[data-layout="race"] .lane-button {
+    top: calc(var(--top-stack) + 2 * var(--hud-row-gap) + 140px);
+  }
+}
+
+/* The smallest landscape screens (a small phone's browser, about 280px tall), training:
+   targets on one line without captions, and shorter lane buttons under the top rows. */
+@media (max-height: 300px) and (orientation: landscape) {
+  .ride[data-layout="training"] .targets .caption {
+    display: none;
+  }
+
+  .ride[data-layout="training"] .targets .num-xl {
+    font-size: 28px;
+  }
+
+  .ride[data-layout="training"] .lane-button {
+    top: calc(var(--top-stack) + 4px);
+    height: 56px;
+  }
+}
+
+/* Notices (status pills, junction, race and event calls, sprint/KOM countdown, splits,
+   milestones). Large screens: the wrapper makes no box, each keeps its own place. The
+   sprint/KOM countdown belongs to the race layout. */
+.hud-notices {
+  display: contents;
+}
+
+.ride:not([data-layout="race"]) .marker-banner {
+  display: none;
+}
+
+/* Phones: they stack in one centred column under the top panels, between the side rails
+   (stepper, lane buttons), so two at once never cover each other. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .hud-notices {
+    position: absolute;
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    left: calc(var(--gap) + 64px + var(--hud-row-gap));
+    right: calc(var(--gap) + 64px + var(--hud-row-gap));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--hud-row-gap);
+    pointer-events: none;
+  }
+
+  .hud-notices > * {
+    position: static;
+    transform: none;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .hud-notices .race-call {
+    white-space: normal;
+  }
+
+  .hud-notices .milestone-banner.show {
+    animation-name: milestone-in-column;
+  }
+
+  /* The status pills wrap instead of running off a narrow screen. */
+  .hud-notices .hud-status {
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  /* Beside the live pills, one notice at a time, the most urgent: a junction to choose at,
+     a race or event to join, then a split, a milestone, the sprint/KOM countdown. */
+  .hud-notices:has(#junction:not([hidden])) :is(#race-call, #event-call, #split-toast, #milestone-banner, #marker-banner),
+  .hud-notices:has(#race-call:not([hidden])) :is(#event-call, #split-toast, #milestone-banner, #marker-banner),
+  .hud-notices:has(#event-call:not([hidden])) :is(#split-toast, #milestone-banner, #marker-banner),
+  .hud-notices:has(#split-toast:not([hidden])) :is(#milestone-banner, #marker-banner),
+  .hud-notices:has(#milestone-banner:not([hidden])) #marker-banner {
+    display: none;
+  }
+}
+
+@keyframes milestone-in-column {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.92);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+/* Landscape phones, training: the targets hold the left; the notices sit at the right above
+   the band, growing upwards. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout="training"] .hud-notices {
+    top: auto;
+    /* The targets reach about 53 % of the width. */
+    left: 56%;
+    right: calc(2 * var(--gap) + 56px);
+    bottom: calc(124px + var(--gap));
+    align-items: flex-end;
+  }
+}
+
+@media (max-height: 360px) and (orientation: landscape) {
+  .ride[data-layout="training"] .hud-notices {
+    bottom: calc(112px + var(--gap));
+  }
+}
+
+/* Short upright phones, cockpit: the stepper moves up beside the status row and the lane
+   buttons sit just above the cluster (90px from the bottom, 132px tall on these phones), so
+   neither reaches into the numbers. */
+@media (max-width: 760px) and (max-height: 700px) and (orientation: portrait) {
+  .ride[data-layout="cockpit"] .sim-stepper {
+    top: calc(var(--top-stack) + var(--hud-row-gap));
+    bottom: auto;
+  }
+
+  .ride[data-layout="cockpit"] .lane-button {
+    top: auto;
+    bottom: calc(90px + 132px + var(--hud-row-gap));
+  }
+}
+
+/* Small screens, training: no race or event calls; mid-workout they don't matter, and the
+   room belongs to the targets. */
+@media (max-width: 760px) and (max-height: 600px) and (orientation: portrait),
+  (max-height: 400px) and (orientation: landscape) {
+  .ride[data-layout="training"] :is(#race-call, #event-call) {
+    display: none;
+  }
+}
+
+/* Short landscape screens, race: the lane buttons fit between the race rows and the power
+   box. */
+@media (max-height: 360px) and (orientation: landscape) {
+  .ride[data-layout="race"] .lane-button {
+    height: 48px;
+  }
+}
+
+/* The smallest landscape screens (about 280px): the live pills and a junction only, and in a
+   race no lane buttons (passing is automatic). */
+@media (max-height: 300px) and (orientation: landscape) {
+  .hud-notices :is(#race-call, #event-call, #split-toast, #milestone-banner, #marker-banner) {
+    display: none;
+  }
+
+  .ride[data-layout="race"] .lane-controls {
+    display: none;
+  }
+
+  /* In a workout the best-lap ghost says little; the drafting pill keeps the row. */
+  .ride[data-layout="training"] #ghost-gap {
+    display: none;
+  }
+}
+
+/* Landscape phones, race: the power and stats boxes hold the bottom left (about 310px), so
+   the notices centre in the room to their right. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ride[data-layout="race"] .hud-notices {
+    left: calc(var(--gap) + 320px);
+  }
+}
+

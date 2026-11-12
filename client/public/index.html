@@ -541,33 +541,39 @@
             <button type="button" id="shift-up" class="gear-button" aria-label="Harder gear (E)" data-i18n-attr="aria-label:ride.harderGearE">+</button>
           </div>
 
-          <div class="hud-status route-only">
-            <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
-            <span id="draft-status" class="pill pill-draft" hidden></span>
-            <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
-            <span id="group-gap" class="pill glass" hidden></span>
-            <span id="sharing-line" class="pill glass" hidden></span>
-            <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
-          </div>
+          <!-- Notices: status pills, junction, race and event calls, sprint/KOM countdown, splits and
+               milestones. On large screens each keeps its own place; on phones they stack (styles.css). -->
+          <div class="hud-notices">
+            <div class="hud-status route-only">
+              <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
+              <span id="draft-status" class="pill pill-draft" hidden></span>
+              <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
+              <span id="group-gap" class="pill glass" hidden></span>
+              <span id="sharing-line" class="pill glass" hidden></span>
+              <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
+            </div>
 
-          <div id="junction" class="junction glass route-only" role="group" aria-labelledby="junction-title" hidden>
-            <span id="junction-title" class="junction-title" data-i18n="ride.junction">Junction</span>
-            <div id="junction-options" class="junction-options"></div>
-            <span class="junction-hint muted" data-i18n="ride.toChoose">← → to choose</span>
-          </div>
+            <div id="junction" class="junction glass route-only" role="group" aria-labelledby="junction-title" hidden>
+              <span id="junction-title" class="junction-title" data-i18n="ride.junction">Junction</span>
+              <div id="junction-options" class="junction-options"></div>
+              <span class="junction-hint muted" data-i18n="ride.toChoose">← → to choose</span>
+            </div>
 
-          <div id="race-call" class="race-call glass route-only" hidden>
-            <span><strong id="race-call-title" data-i18n="ride.race">Race</strong> <span id="race-call-text" class="muted"></span></span>
-            <button type="button" id="race-call-button" class="primary-small" data-i18n="ride.joinRace">Join race</button>
-          </div>
+            <div id="race-call" class="race-call glass route-only" hidden>
+              <span><strong id="race-call-title" data-i18n="ride.race">Race</strong> <span id="race-call-text" class="muted"></span></span>
+              <button type="button" id="race-call-button" class="primary-small" data-i18n="ride.joinRace">Join race</button>
+            </div>
 
-          <div id="event-call" class="race-call event-call glass route-only" hidden>
-            <span id="event-call-text"></span>
-            <button type="button" id="event-call-button" class="primary-small" data-i18n="ride.joinJ">Join (J)</button>
-          </div>
+            <div id="event-call" class="race-call event-call glass route-only" hidden>
+              <span id="event-call-text"></span>
+              <button type="button" id="event-call-button" class="primary-small" data-i18n="ride.joinJ">Join (J)</button>
+            </div>
 
-          <ul id="hud-ticker" class="hud-ticker" aria-live="polite"></ul>
-          <p id="milestone-banner" class="milestone-banner" aria-live="polite" hidden></p>
+            <ul id="hud-ticker" class="hud-ticker" aria-live="polite"></ul>
+            <p id="milestone-banner" class="milestone-banner" aria-live="polite" hidden></p>
+            <div class="marker-banner" id="marker-banner" hidden><span class="caption" data-m="banner-label" data-i18n="ride.sprint">Sprint</span><strong data-m="banner-distance">600 m</strong></div>
+            <p id="split-toast" class="toast-split glass" role="status" hidden></p>
+          </div>
 
           <!-- Touch screens: lanes (and roads at a junction) without a keyboard -->
           <div class="lane-controls route-only" id="lane-controls">
@@ -728,7 +734,6 @@
               </div>
               <div class="glass race-box"><span class="caption" data-i18n="ride.toGo">To go</span><span class="num-m" data-m="to-go">–</span></div>
             </div>
-            <div class="marker-banner" id="marker-banner" hidden><span class="caption" data-m="banner-label" data-i18n="ride.sprint">Sprint</span><strong data-m="banner-distance">600 m</strong></div>
             <div id="race-groups-panel" class="groups glass" hidden>
               <h2><span data-i18n="ride.groups">Groups</span> <span data-i18n="ride.gap">Gap</span></h2>
               <ol id="race-groups" class="group-list"></ol>
@@ -1017,7 +1022,6 @@
         </div>
 
         <div id="photo-flash" class="photo-flash" aria-hidden="true" hidden></div>
-        <p id="split-toast" class="toast-split glass" role="status" hidden></p>
         <p id="trainer-warning" class="warning toast-warning" hidden data-i18n="ride.noDataFromYour">No data from your trainer. Check that no other app (Zwift, phone app) is connected to it, then reload.</p>
         <div id="pause-pill" class="pause-pill" role="status" hidden></div>
         <div id="afk-prompt" class="afk-prompt" role="alertdialog" aria-labelledby="afk-title" aria-describedby="afk-text" hidden>
