@@ -15,7 +15,7 @@ use crate::protocol::{
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
 use crate::stats::DistanceStats;
-use crate::studio_mirror::StudioMirror;
+use crate::studio_mirror::{StudioMirror, StudioSeat, SEAT_TTL_S};
 use crate::vehicle_codes::VehicleCodes;
 use openradlr_sim::bot::human_level_wkg;
 use openradlr_sim::events::Events;
@@ -220,6 +220,28 @@ struct StudioLink {
     mirror: StudioMirror,
     anchor: (f64, f64),
     viewers: HashSet<RiderId>,
+    /// The generation of the seats last seen and this world's clock when it changed.
+    seen_generation: u64,
+    changed_at_s: f64,
+    /// The studio's seats as of the last broadcast; none once they went stale.
+    seats: Vec<StudioSeat>,
+}
+
+impl StudioLink {
+    /// Reads the mirror: seats whose generation has not changed for [`SEAT_TTL_S`] of
+    /// `now_s` (this world's clock) are gone, as the studio stopped publishing.
+    fn refresh(&mut self, now_s: f64) {
+        let (generation, seats) = self.mirror.seats_snapshot();
+        if generation != self.seen_generation {
+            self.seen_generation = generation;
+            self.changed_at_s = now_s;
+        }
+        self.seats = if now_s - self.changed_at_s > SEAT_TTL_S {
+            Vec::new()
+        } else {
+            seats
+        };
+    }
 }
 
 /// What a world with an OpenBikeNet route needs: where it is, the way out and the riders in.
@@ -286,6 +308,9 @@ impl GameCore {
             mirror,
             anchor,
             viewers: HashSet::new(),
+            seen_generation: 0,
+            changed_at_s: 0.0,
+            seats: Vec::new(),
         });
         self
     }
@@ -385,7 +410,7 @@ impl GameCore {
             return state;
         };
         // Humans first; all seats share one place, so there is no distance to sort by.
-        let mut seats = studio.mirror.seats(self.clock_s());
+        let mut seats = studio.seats.clone();
         seats.sort_by_key(|s| s.is_bot);
         let room = self.settings.max_visible_riders.saturating_sub(riders.len());
         riders.extend(seats.iter().take(room).map(RiderState::studio_seat));
@@ -992,6 +1017,10 @@ impl GameCore {
 
         let mut closed = Vec::new();
         if self.tick.is_multiple_of(self.settings.broadcast_every()) {
+            let now_s = self.clock_s();
+            if let Some(studio) = &mut self.studio {
+                studio.refresh(now_s);
+            }
             if let Some(studio) = &self.studio {
                 studio.mirror.publish_road(nearest_riders(
                     &self.world,
@@ -2722,7 +2751,7 @@ mod tests {
         let (asker, asker_sink) = join(&mut game, "Asker");
         let (_, other_sink) = join(&mut game, "Other");
         game.set_studio_riders(asker);
-        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)], game.clock_s());
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)]);
         asker_sink.take();
         other_sink.take();
         tick_to_broadcast(&mut game);
@@ -2731,11 +2760,31 @@ mod tests {
     }
 
     #[test]
+    fn stale_studio_seats_vanish_after_a_second() {
+        let (mut game, mirror) = studio_game(0, 50);
+        let (asker, sink) = join(&mut game, "Asker");
+        game.set_studio_riders(asker);
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)]);
+        tick_to_broadcast(&mut game);
+        assert!(last_riders(&sink).iter().any(|r| r.studio.is_some()));
+        let ticks_in_two_seconds = (2.0 / game.settings().tick_seconds()) as usize;
+        for _ in 0..ticks_in_two_seconds {
+            game.tick();
+        }
+        sink.take();
+        tick_to_broadcast(&mut game);
+        assert!(last_riders(&sink).iter().all(|r| r.studio.is_none()));
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)]);
+        tick_to_broadcast(&mut game);
+        assert!(last_riders(&sink).iter().any(|r| r.studio.is_some()));
+    }
+
+    #[test]
     fn studio_riders_are_not_counted_as_route_riders() {
         let (mut game, mirror) = studio_game(0, 50);
         let (asker, sink) = join(&mut game, "Asker");
         game.set_studio_riders(asker);
-        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)], game.clock_s());
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)]);
         let players = game.player_count();
         sink.take();
         tick_to_broadcast(&mut game);
@@ -2758,10 +2807,7 @@ mod tests {
         let (asker, sink) = join(&mut game, "Asker");
         join(&mut game, "Other");
         game.set_studio_riders(asker);
-        mirror.publish_seats(
-            (1..=5).map(|i| studio_seat(0xE000_0000 + i, false)).collect(),
-            game.clock_s(),
-        );
+        mirror.publish_seats((1..=5).map(|i| studio_seat(0xE000_0000 + i, false)).collect());
         sink.take();
         tick_to_broadcast(&mut game);
         assert_eq!(last_riders(&sink).len(), 3);

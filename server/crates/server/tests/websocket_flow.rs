@@ -319,6 +319,100 @@ async fn the_spin_studio_is_listed_with_its_timetable_and_seats_riders() {
 }
 
 #[tokio::test]
+async fn info_reports_the_studios_open_rooms() {
+    let addr = start_server(0).await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(info["studio"]["rooms"], 1);
+}
+
+/// A valley server (the map with the Valley Café), a studio rider and a road rider
+/// who asks to see studio riders.
+async fn valley_server() -> SocketAddr {
+    start_server_with(Config {
+        routes_dir: Some(PathBuf::from(ROUTES_DIR)),
+        ..test_config(0)
+    })
+    .await
+}
+
+/// Reads up to `limit` messages of `wanted` type until `found` accepts one.
+async fn find_message(
+    socket: &mut Socket,
+    wanted: &str,
+    limit: usize,
+    found: impl Fn(&Value) -> bool,
+) -> Option<Value> {
+    for _ in 0..limit {
+        let message = expect_type(socket, wanted).await;
+        if found(&message) {
+            return Some(message);
+        }
+    }
+    None
+}
+
+#[tokio::test]
+async fn a_road_rider_near_the_cafe_sees_a_studio_rider() {
+    let addr = valley_server().await;
+    let mut studio = connect(addr).await;
+    hello(&mut studio).await;
+    send(
+        &mut studio,
+        r#"{"type":"join","name":"Spinner","weight_kg":70,"route_id":"spin-studio"}"#,
+    )
+    .await;
+    let spinner = expect_type(&mut studio, "joined").await["rider_id"].clone();
+
+    let mut road = connect(addr).await;
+    hello(&mut road).await;
+    send(
+        &mut road,
+        r#"{"type":"join","name":"Roady","weight_kg":70,"route_id":"riverside-flats","features":["studio_riders"]}"#,
+    )
+    .await;
+    expect_type(&mut road, "joined").await;
+    let seen = find_message(&mut road, "state", 200, |state| {
+        state["riders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == spinner && r["studio"].is_object())
+    })
+    .await;
+    assert!(seen.is_some(), "the studio rider never showed up on the road");
+}
+
+#[tokio::test]
+async fn a_studio_rider_sees_a_road_rider() {
+    let addr = valley_server().await;
+    let mut road = connect(addr).await;
+    hello(&mut road).await;
+    send(
+        &mut road,
+        r#"{"type":"join","name":"Roady","weight_kg":70,"route_id":"riverside-flats"}"#,
+    )
+    .await;
+    let roady = expect_type(&mut road, "joined").await["rider_id"].clone();
+
+    let mut studio = connect(addr).await;
+    hello(&mut studio).await;
+    send(
+        &mut studio,
+        r#"{"type":"join","name":"Spinner","weight_kg":70,"route_id":"spin-studio"}"#,
+    )
+    .await;
+    expect_type(&mut studio, "joined").await;
+    let seen = find_message(&mut studio, "studio_state", 200, |state| {
+        state["road_riders"]
+            .as_array()
+            .is_some_and(|riders| riders.iter().any(|r| r["id"] == roady))
+    })
+    .await;
+    assert!(seen.is_some(), "the road rider never showed up in the studio");
+}
+
+#[tokio::test]
 async fn servers_can_close_the_studio() {
     let addr = start_server_with(Config {
         studio: false,
