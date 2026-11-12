@@ -14,7 +14,7 @@ import { INSTRUCTOR, seatPosition } from "./studioLayout.js";
 const MIN_FLOORS = 2;
 const CLOSED_TINT = Object.freeze([0.3, 0.32, 0.36]);
 const CLOSED_GLASS = Object.freeze({ alpha: 0.75, tint: [0.25, 0.3, 0.36] });
-const OPEN_GLASS = Object.freeze({ alpha: 0.22, tint: [1, 1, 1] });
+const OPEN_GLASS = Object.freeze({ alpha: 0.12, tint: [1, 1, 1] });
 
 /** Storeys drawn for `rooms` studio rooms. */
 export function floorCount(rooms) {

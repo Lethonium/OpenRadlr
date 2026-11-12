@@ -43,8 +43,8 @@ export const MENU_CAMERA = Object.freeze({
   gymDistance: 38,
   gymHeight: 17,
   /** Circling the spin studio (a two-floor glass box at least): distance and height (metres). */
-  studioDistance: 25,
-  studioHeight: 12,
+  studioDistance: 40,
+  studioHeight: 15,
   /** Close on one gym statue: metres in front of the plinth and above its top, the sideways swing (rad) and its rate (rad/s). */
   statueDistance: 4.5,
   statueHeight: 2,

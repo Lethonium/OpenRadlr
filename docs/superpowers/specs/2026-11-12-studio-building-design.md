@@ -98,7 +98,7 @@ Props stay outside the aisles and the camera paths of all four modes.
   map has the `valley-cafe` node). Picking the card builds that world if
   another is on screen, as a workout card does for its venue.
 - New `showStudio(building)` and pure `studioPose(building, overview, angle)`:
-  an orbit at about 25 m around the building, slow, keeping the café and gym
+  an orbit at about 40 m around the building, slow, keeping the café and gym
   in frame behind it; above the ground like `gymPose`. Flights blend as today;
   with reduced motion the camera cuts.
 - The building shows `info.studio.rooms` floors (at least 2), without riders.

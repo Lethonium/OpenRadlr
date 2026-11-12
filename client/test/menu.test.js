@@ -185,8 +185,8 @@ test("the studio orbit keeps its distance above the ground, looks at the buildin
     assert.ok(flatDistance(target, STUDIO.position) < 1e-6, "looking at it");
     assert.ok(target[1] > STUDIO.position[1], "at its middle, not its foot");
   }
-  assert.equal(MENU_CAMERA.studioDistance, 25);
-  assert.equal(MENU_CAMERA.studioHeight, 12);
+  assert.equal(MENU_CAMERA.studioDistance, 40);
+  assert.equal(MENU_CAMERA.studioHeight, 15);
   assert.ok(Math.abs(a.eye[0] + b.eye[0] - 2 * STUDIO.position[0]) < 1e-6, "opposite sides");
 });
 

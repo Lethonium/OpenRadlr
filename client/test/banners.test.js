@@ -4,6 +4,7 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BANNERS, ARCH_TEXT, bannerSpots, buildBanners } from "../public/js/view3d/banners.js";
 import { GLYPHS, pixelText, textWidth } from "../public/js/view3d/pixelFont.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
+import { SIGN_TEXT } from "../public/js/view3d/studioBuilding.js";
 import { buildArches, roadFrame } from "../public/js/view3d/world.js";
 
 // --- pixel font -------------------------------------------------------------------
@@ -15,8 +16,8 @@ test("every glyph is 5 pixels wide and 7 high", () => {
   }
 });
 
-test("every banner and arch text can be written", () => {
-  const texts = [...Object.values(ARCH_TEXT), ...Object.values(BANNERS.text)];
+test("every banner, arch and sign text can be written", () => {
+  const texts = [...Object.values(ARCH_TEXT), ...Object.values(BANNERS.text), SIGN_TEXT];
   for (const text of texts) for (const char of text) assert.ok(GLYPHS[char], `no glyph for "${char}" in "${text}"`);
 });
 
