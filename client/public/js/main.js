@@ -109,6 +109,8 @@ import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
+import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
@@ -685,6 +687,7 @@ function initSetup() {
     app.drawerByController = false;
   });
   initDiagnostics();
+  initScreens();
   initStartVehicle();
   initStartMenu();
   initRecovery();
@@ -1522,6 +1525,57 @@ function notify(text, kind = "event") {
   setTimeout(() => item.remove(), TICKER_SECONDS * 1000);
 }
 
+// ------------------------------------------------------- second screens ---
+
+const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
+const COCKPIT_KEY = "openradlr.cockpit";
+
+/** The screen key to host with: only once a phone has been paired. */
+function pairedScreenKey() {
+  const storage = browserStorage();
+  return storage && isPaired(storage) ? screenKey(storage, randomBytes) : undefined;
+}
+
+/** Pairing from the start menu, and turning this device into a cockpit. */
+function initScreens() {
+  const storage = browserStorage();
+  const els = {
+    dialog: $("screens-dialog"),
+    code: $("screens-code"),
+    countdown: $("screens-countdown"),
+    renew: $("screens-renew"),
+    unpair: $("screens-unpair"),
+    status: $("screens-status"),
+  };
+  const dialog = createScreensDialog({
+    els,
+    createSession: () => new PairingSession({ url: defaultServerUrl(), key: screenKey(storage, randomBytes), name: app.profile.name, storage }),
+    now: () => Date.now(),
+    setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+    clearInterval: (id) => globalThis.clearInterval(id),
+    confirm: (message) => confirm(message),
+    onUnpair: () => renewScreenKey(storage, randomBytes),
+    t: (key) => t(key),
+  });
+  $("screens-pair").addEventListener("click", () => dialog.open());
+  $("screens-close").addEventListener("click", () => dialog.close());
+  els.dialog.addEventListener("close", () => dialog.close());
+  $("screens-cockpit").addEventListener("click", async () => {
+    if (!readSetting(COCKPIT_KEY)) {
+      const code = (prompt(t("screens.codePrompt")) ?? "").trim().toUpperCase();
+      if (!code) return;
+      try {
+        const paired = await claimCode({ url: defaultServerUrl(), code });
+        writeSetting(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
+      } catch (error) {
+        notify(error.code === "pair_code_invalid" ? t("screens.codeInvalid") : t("screens.cannotConnect"), "error");
+        return;
+      }
+    }
+    location.href = "cockpit.html";
+  });
+}
+
 // ---------------------------------------------------------- diagnostics ---
 
 function initDiagnostics() {
@@ -1689,6 +1743,7 @@ async function joinRide(restored = null) {
     routeId: route?.id,
     level: levelOf(app.profile),
     device: deviceKind(app.trainer),
+    screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
     resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
@@ -2956,6 +3011,7 @@ async function rejoin(lost) {
       level: levelOf(app.profile),
       // A workout rider is flagged again by its join, also when the server forgot it.
       device: app.workout ? "workout" : deviceKind(app.trainer),
+      screenKey: pairedScreenKey(),
       resumeToken: lost.resumeToken,
       resume: app.studio || app.workout ? null : app.lastOnRoute,
     });

@@ -9,7 +9,7 @@ export const CLIENT_VERSION = "web-0.1.0";
 
 export const ClientMessages = Object.freeze({
   hello: () => ({ type: "hello", protocol_version: PROTOCOL_VERSION, client_version: CLIENT_VERSION }),
-  join: ({ name, weightKg, publicKey, routeId, ftp, level, device, vehicleCode, resumeToken, resume }) => ({
+  join: ({ name, weightKg, publicKey, routeId, ftp, level, device, vehicleCode, resumeToken, resume, screenKey }) => ({
     type: "join",
     name,
     weight_kg: weightKg,
@@ -27,6 +27,8 @@ export const ClientMessages = Object.freeze({
     ...(resumeToken ? { resume_token: resumeToken } : {}),
     // Otherwise start where the ride left off.
     ...(resume ? { resume: { route_id: resume.routeId, distance_m: resume.distanceM } } : {}),
+    // This tablet is the host of a paired second screen (docs/protocol.md, Second screens).
+    ...(screenKey ? { screen_key: screenKey } : {}),
   }),
   telemetry: ({ power, cadence }) => ({
     type: "telemetry",
@@ -55,9 +57,17 @@ export const ClientMessages = Object.freeze({
   chat: (text) => ({ type: "chat", text }),
   /** Leaving on purpose: the server removes the rider at once. */
   leave: () => ({ type: "leave" }),
+  /** A tablet offers a pairing code for its screen key. */
+  pairOffer: ({ key, name }) => ({ type: "pair_offer", key, name }),
+  /** A phone claims a pairing code. */
+  pairClaim: (code) => ({ type: "pair_claim", code }),
+  /** A phone watches a screen key; `view` is "data" or "world". */
+  watch: (key, view = "data") => ({ type: "watch", key, view }),
+  /** Opaque data for the paired screens (at most 2048 bytes, 2 per second). */
+  display: (data) => ({ type: "display", data }),
 });
 
-const SERVER_TYPES = new Set(["welcome", "joined", "state", "studio_state", "resistance", "event", "chat", "error", "afk_warning"]);
+const SERVER_TYPES = new Set(["welcome", "joined", "state", "studio_state", "resistance", "event", "chat", "error", "afk_warning", "pair_code", "paired", "pair_claimed", "watch_status", "display"]);
 
 /**
  * Parses a server frame. Returns null for anything that is not a known message.
