@@ -945,6 +945,7 @@ export default {
   "cockpit.tile.avgHeartRate": "Ø Herzfrequenz",
   "cockpit.tile.powerGraph": "Leistung im Verlauf",
   "cockpit.tile.hrGraph": "Herzfrequenz im Verlauf",
+  "cockpit.tile.speedGraph": "Tempo im Verlauf",
   "cockpit.tile.laps": "Runde",
   "cockpit.tile.raceGaps": "Rennergebnis",
 };

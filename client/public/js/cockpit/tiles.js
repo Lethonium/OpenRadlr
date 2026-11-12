@@ -16,6 +16,7 @@ const MUTED = "#8a94a3";
 const GRID = "#2a313b";
 const TEXT = "#e8ecf1";
 const HR_COLOR = "#ff5d5d";
+const SPEED_COLOR = "#4fc3f7";
 
 const FORMAT = { speed: formatSpeed, distance: formatDistance, duration: formatDuration, grade: formatGrade, number: formatNumber, elevation: formatElevation };
 
@@ -81,6 +82,12 @@ function drawHrGraph(ctx, model, w, h) {
   const shown = series.filter((v) => v > 0);
   const low = shown.length ? Math.min(...shown) - 10 : 0;
   drawSeries(ctx, series.map((v) => (v > 0 ? v - low : 0)), w, h, { color: HR_COLOR, max: Math.max(1, (shown.length ? Math.max(...shown) : 0) - low + 10) });
+}
+
+/** Speed over time, standing still at the bottom; scaled to the fastest moment, at least 10 m/s. */
+function drawSpeedGraph(ctx, model, w, h) {
+  const series = model.history.speed;
+  drawSeries(ctx, series, w, h, { color: SPEED_COLOR, max: Math.max(10, ...series), floor: -1 });
 }
 
 /** Time in each power zone as six bars, tallest = most time. */
@@ -167,6 +174,7 @@ export const TILES = Object.freeze([
   number("avgHeartRate", ["half", "wide"], (m) => whole(stat(m, "avgHeartRate")), { unit: () => "bpm" }),
   graph("powerGraph", ["wide", "big"], drawPowerGraph),
   graph("hrGraph", ["wide", "big"], drawHrGraph),
+  graph("speedGraph", ["wide", "big"], drawSpeedGraph),
   number("laps", ["half", "wide"], (m) => (inRace(m) ? `${m.lap} / ${m.race.laps}` : NONE), { hidden: (m) => !inRace(m) }),
   graph("raceGaps", ["wide", "big"], drawRaceGaps, (m) => !(m.race?.results?.length > 0)),
 ]);

@@ -63,6 +63,13 @@ test("history keeps 20 minutes", () => {
   assert.equal(model.history.power.at(-1), 1299);
   assert.equal(model.history.hr.length, 1200);
   assert.equal(model.history.cadence.length, 1200);
+  assert.equal(model.history.speed.length, 1200);
+});
+
+test("history keeps the rider's speed", () => {
+  const { model } = setup();
+  model.onState(state(200, { speed: 9.5 }));
+  assert.deepEqual(model.history.speed, [9.5]);
 });
 
 test("history takes one sample per second however fast states arrive", () => {

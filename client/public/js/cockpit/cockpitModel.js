@@ -1,7 +1,8 @@
 /**
  * What the cockpit knows about the tablet's ride: the latest figures of the
  * host's rider (from the relayed state), the latest display frame, the
- * workout plan and a 20-minute history. Pure: time is injected.
+ * workout plan and a 20-minute history of power, heart rate, cadence and
+ * speed. Pure: time is injected.
  */
 const STALE_AFTER_MS = 3000;
 const POWER_WINDOW_MS = 3000;
@@ -19,7 +20,7 @@ export class CockpitModel {
   #plan = null;
   #recent = [];
   #lastHistoryAt = null;
-  #history = { power: [], hr: [], cadence: [] };
+  #history = { power: [], hr: [], cadence: [], speed: [] };
 
   constructor({ now }) {
     this.#now = now;
@@ -51,6 +52,7 @@ export class CockpitModel {
       this.#push("power", rider.power ?? 0);
       this.#push("hr", this.hr ?? 0);
       this.#push("cadence", this.cadence ?? 0);
+      this.#push("speed", rider.speed ?? 0);
     }
   }
 

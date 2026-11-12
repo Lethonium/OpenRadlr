@@ -39,7 +39,7 @@ test("every tile has a label key, sizes and a value or a draw", () => {
 test("the catalogue has the tiles of the spec", () => {
   assert.deepEqual(
     TILES.map((t) => t.id).sort(),
-    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "laps", "raceGaps"].sort(),
+    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "speedGraph", "laps", "raceGaps"].sort(),
   );
 });
 
