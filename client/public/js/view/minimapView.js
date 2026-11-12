@@ -27,8 +27,13 @@ export function minimapDots(riders, myId) {
   return [...solo, ...vehicles].sort((a, b) => a.mine - b.mine);
 }
 
-export function drawMinimap(canvas, { route, riders, myId, colors }) {
+export function drawMinimap(canvas, view) {
   const { ctx, width, height } = prepareCanvas(canvas);
+  paintMinimap(ctx, width, height, view);
+}
+
+/** The minimap on a prepared 2D context of `width` × `height` CSS pixels. */
+export function paintMinimap(ctx, width, height, { route, riders, myId, colors }) {
   const project = minimapTransform(route.bounds, width, height);
 
   ctx.beginPath();

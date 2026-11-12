@@ -24,8 +24,13 @@ export function tickEvery(lengthUnits, pxPerUnit) {
   return [1, 2, 5, 10, 20, 25, 50, 100].find((n) => n >= wanted) ?? Math.ceil(lengthUnits);
 }
 
-export function drawProfile(canvas, { route, riders, myId, colors }) {
+export function drawProfile(canvas, view) {
   const { ctx, width, height } = prepareCanvas(canvas);
+  paintProfile(ctx, width, height, view);
+}
+
+/** The elevation profile on a prepared 2D context of `width` × `height` CSS pixels. */
+export function paintProfile(ctx, width, height, { route, riders, myId, colors }) {
   const scale = profileScale(route, width, height);
   const samples = Math.max(2, Math.floor(width / 2));
 
