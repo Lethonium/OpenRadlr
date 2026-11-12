@@ -101,6 +101,7 @@ import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
@@ -1952,7 +1953,7 @@ function wireConnection(connection) {
     // Riders of the map's other routes only show in 3D; panels and 2D views follow my route.
     app.smoother.update(riders, now());
     // Humans on other routes still go in the Riders drawer, under their route's name.
-    const elsewhere = riders.filter((rider) => !rider.is_bot && !onMyRoute(rider));
+    const elsewhere = riders.filter((rider) => ridesElsewhere(rider, app.route.id));
     app.state = { ...message, riders: riders.filter(onMyRoute), elsewhere };
     // The workout screen has none of the ride panels.
     if (!app.workout) updatePanels();
@@ -4337,7 +4338,7 @@ function chooseTurn(option) {
 
 /** Riders on my route (all of them from a server that doesn't say). */
 function onMyRoute(rider) {
-  return !rider.route || rider.route === app.route.id;
+  return onRoute(rider, app.route.id);
 }
 
 function updatePanels() {
