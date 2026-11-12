@@ -15,6 +15,7 @@
 //! * [`game`] — synchronous game core: clients, broadcasts, resistance
 //! * [`studio`] — the spin studio's game core: rooms, class state
 //! * [`vehicle_codes`] — registry of boarding codes across worlds
+//! * [`pair_codes`] — registry of pairing codes that pair a second screen to a tablet
 //! * [`protocol`] — JSON message types and mapping from the simulation
 //!
 //! [`app::build`] composes everything; it is the composition root used by
@@ -33,6 +34,7 @@ pub mod healthcheck;
 pub mod http;
 pub mod map_file;
 pub mod obn;
+pub mod pair_codes;
 pub mod players;
 pub mod protocol;
 pub mod resume;

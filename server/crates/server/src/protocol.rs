@@ -298,6 +298,27 @@ pub enum ServerMessage {
         code: String,
         message: String,
     },
+    /// A second screen's pairing code, and how long it stays valid.
+    PairCode {
+        code: String,
+        expires_in_s: f64,
+    },
+    /// The screen this connection is paired with (its key and name).
+    Paired {
+        key: String,
+        name: String,
+    },
+    /// The offering connection's code was claimed by a second screen.
+    PairClaimed,
+    /// Whether a watched screen's tablet is riding, and its name.
+    WatchStatus {
+        live: bool,
+        name: String,
+    },
+    /// Opaque display data the tablet sends for paired screens.
+    Display {
+        data: serde_json::Value,
+    },
 }
 
 impl ServerMessage {
