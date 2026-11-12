@@ -2430,7 +2430,8 @@ function buildStudioWorld() {
 function studioRoomOnly() {
   $("view-note").textContent = "";
   try {
-    app.studioView = new StudioView3D($("world3d"), $("labels3d"));
+    const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
   } catch (error) {
     console.error(error);
