@@ -13,11 +13,8 @@ const valley = () => {
   return net;
 };
 const deps = (over = {}) => ({
-  routes: [
-    { id: "elsewhere", map: { id: "other" } },
-    { id: "tiny-loop", map: { id: "tiny" } },
-    { id: "studio", kind: "studio" },
-  ],
+  // As /api/info lists them: no map; that is in each route's file.
+  routes: [{ id: "elsewhere" }, { id: "tiny-loop" }, { id: "studio", kind: "studio" }],
   biome: "temperate",
   fetchRouteFile: async (id) => (id === "tiny-loop" ? tinyLoopFile() : { ...tinyLoopFile(), id, map: { id: "other" } }),
   fetchNetwork: async (id) => (id === "tiny" ? valley() : { ...tinyNetworkFile(), id }),

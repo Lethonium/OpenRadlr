@@ -12,27 +12,35 @@ import { studioRouteId } from "./menuStage.js";
  * server has no valley (or its scene has no studio site): the caller then
  * rides in the room alone.
  * @param {object} deps
- * @param {{id: string, kind?: string, map?: {id: string}}[]} deps.routes routes from /api/info
+ * @param {{id: string, kind?: string}[]} deps.routes routes from /api/info (their maps are in their files)
  */
 export async function studioWorld({ routes, biome, fetchRouteFile, fetchNetwork, buildScene }) {
-  const real = routes.filter((r) => r.kind === undefined && r.map);
-  const onePerMap = [...new Map(real.map((r) => [r.map.id, r])).values()];
-  const cafesByMap = new Map();
-  await Promise.all(
-    onePerMap.map(async (route) => {
-      const file = await fetchMapNetwork(route, fetchNetwork);
-      if (file) cafesByMap.set(route.map.id, (file.nodes ?? []).filter((node) => node.kind === "cafe"));
-    }),
-  );
-  const id = studioRouteId(real, cafesByMap);
-  if (!id) return null;
-
-  const file = await fetchRouteFile(id);
+  const found = await valleyRoute(routes, fetchRouteFile, fetchNetwork);
+  if (!found) return null;
+  const { file, network } = found;
   const route = new RouteGeometry(file);
-  const [others, network] = await Promise.all([fetchMapNeighbours(route, routes, fetchRouteFile), fetchMapNetwork(route, fetchNetwork)]);
+  const others = await fetchMapNeighbours(route, routes, fetchRouteFile);
   const scene = await buildScene(file, others, { network, biome });
   if (!scene?.studio) return null;
   const known = new Map([[route.id, route]]);
   for (const other of others) known.set(other.id, new RouteGeometry(other));
   return { scene, route, routes: known, network: network ? roadNetworkOf(network) : null };
+}
+
+/**
+ * The first offered route on a map with the Valley Café, with its file and its
+ * map's network; each map's network is checked once. Null if there is none.
+ */
+async function valleyRoute(routes, fetchRouteFile, fetchNetwork) {
+  const checked = new Set();
+  for (const listed of routes.filter((r) => r.kind === undefined)) {
+    const file = await fetchRouteFile(listed.id).catch(() => null);
+    const mapId = file?.map?.id;
+    if (!mapId || checked.has(mapId)) continue;
+    checked.add(mapId);
+    const network = await fetchMapNetwork(file, fetchNetwork);
+    const cafes = new Map([[mapId, (network?.nodes ?? []).filter((node) => node.kind === "cafe")]]);
+    if (studioRouteId([file], cafes)) return { file, network };
+  }
+  return null;
 }
