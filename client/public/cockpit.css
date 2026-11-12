@@ -50,6 +50,7 @@ body {
   font-weight: 700;
 }
 
+.cockpit-edit,
 .cockpit-forget {
   background: transparent;
   color: var(--muted);
@@ -134,4 +135,145 @@ body {
 
 .tile-big .tile-canvas {
   height: 140px;
+}
+
+/* Edit mode: big touch targets, a sticky bar at the bottom, a sheet for the hidden tiles. */
+.cockpit-tiles.editing {
+  padding-bottom: 96px;
+}
+
+.cockpit-tiles.editing .tile {
+  position: relative;
+  min-height: 96px;
+  padding-top: 56px;
+  border-style: dashed;
+}
+
+.tile-tools {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  gap: 4px;
+}
+
+.tile-tools button {
+  min-width: 48px;
+  height: 48px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 22px;
+}
+
+.tile-handle {
+  margin-right: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tile-remove {
+  color: var(--danger);
+}
+
+.tile-dragging {
+  z-index: 2;
+  opacity: 0.85;
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+
+.tile-drop {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.cockpit-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 3;
+}
+
+.toolbar-button {
+  flex: 1;
+  min-height: 52px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 16px;
+}
+
+.toolbar-done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.cockpit-sheet {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(0 0 0 / 60%);
+  z-index: 4;
+}
+
+.sheet-panel {
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.sheet-close {
+  min-height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.sheet-list {
+  display: grid;
+  gap: 6px;
+}
+
+.sheet-item {
+  min-height: 52px;
+  text-align: left;
+  padding: 0 14px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 16px;
 }

@@ -18,6 +18,7 @@
     <header class="cockpit-head">
       <a class="cockpit-link" href="index.html" data-i18n="cockpit.back">Back to the app</a>
       <span class="cockpit-badge" id="cockpit-badge" data-i18n="cockpit.notLive" hidden>Not live</span>
+      <button type="button" class="cockpit-edit" id="cockpit-edit" data-i18n="cockpit.edit">Edit</button>
       <button type="button" class="cockpit-forget" id="cockpit-forget" data-i18n="cockpit.forget" hidden>Forget this tablet</button>
     </header>
     <main>
@@ -28,5 +29,19 @@
       <p class="cockpit-message" id="cockpit-waiting" hidden></p>
       <section class="cockpit-tiles" id="cockpit-tiles" hidden></section>
     </main>
+    <div class="cockpit-toolbar" id="cockpit-toolbar" hidden>
+      <button type="button" class="toolbar-button" id="cockpit-add" data-i18n="cockpit.add">Add a tile</button>
+      <button type="button" class="toolbar-button" id="cockpit-reset" data-i18n="cockpit.reset">Reset</button>
+      <button type="button" class="toolbar-button toolbar-done" id="cockpit-done" data-i18n="cockpit.done">Done</button>
+    </div>
+    <div class="cockpit-sheet" id="cockpit-sheet" hidden>
+      <div class="sheet-panel">
+        <div class="sheet-head">
+          <span data-i18n="cockpit.add">Add a tile</span>
+          <button type="button" class="sheet-close" id="cockpit-sheet-close" data-i18n="cockpit.close">Close</button>
+        </div>
+        <div class="sheet-list" id="cockpit-sheet-list"></div>
+      </div>
+    </div>
   </body>
 </html>

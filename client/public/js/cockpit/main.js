@@ -13,7 +13,9 @@ import { setUnits } from "../util/format.js";
 import { ScreenWakeLock } from "../util/wakeLock.js";
 import { CockpitConnection } from "./cockpitConnection.js";
 import { CockpitModel } from "./cockpitModel.js";
-import { DEFAULT_LAYOUT, tileById } from "./tiles.js";
+import { EditMode } from "./editMode.js";
+import { loadLayout } from "./layout.js";
+import { tileById } from "./tiles.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
 const RENDER_MS = 250;
@@ -31,7 +33,7 @@ function pairing(storage) {
 }
 
 /** One tile's element, built once; `update` refreshes it from the model. */
-function buildTile({ id, size }) {
+function buildTile({ id, size }, editing) {
   const tile = tileById(id);
   const root = document.createElement("div");
   root.className = `tile tile-${size}`;
@@ -44,7 +46,7 @@ function buildTile({ id, size }) {
     canvas.className = "tile-canvas";
     root.append(canvas);
     return { root, update: (model, withGraph) => {
-      root.hidden = Boolean(tile.hidden?.(model));
+      root.hidden = !editing && Boolean(tile.hidden?.(model));
       if (root.hidden || !withGraph) return;
       const { ctx, width, height } = prepareCanvas(canvas);
       ctx.font = "12px system-ui, sans-serif";
@@ -59,7 +61,7 @@ function buildTile({ id, size }) {
   value.append(text, unit);
   root.append(value);
   return { root, update: (model) => {
-    root.hidden = Boolean(tile.hidden?.(model));
+    root.hidden = !editing && Boolean(tile.hidden?.(model));
     text.textContent = tile.value(model);
     unit.textContent = tile.unit?.() ?? "";
     const zone = tile.zone?.(model) ?? 0;
@@ -86,8 +88,8 @@ function start() {
   const model = new CockpitModel({ now: () => Date.now() });
   const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key });
   const wakeLock = new ScreenWakeLock();
-  const tiles = DEFAULT_LAYOUT.map(buildTile);
-  $("cockpit-tiles").append(...tiles.map((tile) => tile.root));
+  let tiles = [];
+  let editing = false;
   let name = paired.name;
   let frames = 0;
 
@@ -106,9 +108,9 @@ function start() {
     const status = model.status;
     $("cockpit-waiting").textContent = t("cockpit.waiting", { name: name ?? "" });
     $("cockpit-waiting").hidden = status !== "waiting" || !$("cockpit-invalid").hidden;
-    $("cockpit-tiles").hidden = status === "waiting";
+    $("cockpit-tiles").hidden = status === "waiting" && !editing;
     $("cockpit-badge").hidden = status !== "stale";
-    if (status !== "waiting") {
+    if (status !== "waiting" || editing) {
       const withGraph = frames % GRAPH_EVERY === 0;
       for (const tile of tiles) tile.update(model, withGraph);
     }
@@ -121,8 +123,19 @@ function start() {
     }
   };
 
+  // Rebuilt whole on every layout change: at most a few dozen small elements.
+  const show = (layout, isEditing) => {
+    editing = isEditing;
+    tiles = layout.map((entry) => buildTile(entry, editing));
+    tiles.forEach((tile, index) => {
+      if (editing) editMode.decorate(tile.root, index);
+    });
+    $("cockpit-tiles").replaceChildren(...tiles.map((tile) => tile.root));
+    render();
+  };
+  const editMode = new EditMode({ root: document.body, layout: loadLayout(localStorage), storage: localStorage, onChange: show });
+
   connection.start();
-  render();
   setInterval(render, RENDER_MS);
 }
 
