@@ -252,6 +252,7 @@ AFK warnings added `afk_warning`, `stay` and `afk_timeout` within version 2.
 Reconnecting (#73) added `leave`, `resume_token` and `resume` in `join`,
 `resume_token` in `joined` and `grace_s` in `welcome` within version 2. An
 older client that never sends `leave` is kept for `grace_s` after it leaves.
+The spin studio's road view (`join.features` with `studio_riders`, `riders[].studio`, `studio_state.road_riders` and `studio.rooms` in `/api/info`) was added within version 2.
 Scheduled events (#46) added `join_event`, `leave_event`, `state.event`, the
 `event_*` game events, `level_w` in `join` and `now_s` and `events` in
 `/api/info` within version 2. Turning (#15) added the `turn` message, `road.next` and `route: null`
