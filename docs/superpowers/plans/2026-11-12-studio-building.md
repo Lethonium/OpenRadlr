@@ -212,7 +212,7 @@ fn studio_ids_start_far_from_route_ids() {
 
 **Interfaces:**
 - Consumes: `View3D.studioSite`, `View3D.setStudioRooms` (Task 6).
-- Produces: `export function studioPose(site, overview, angle, settings = MENU_CAMERA) -> {eye, target}` — orbit radius `settings.studioDistance = 25`, height `settings.studioHeight = 12`, target the building at half its 2-floor height; above ground like `gymPose`. `MenuCamera.showStudio(site)`. Pure `studioRouteId(routes, maps) -> string | null`: first route whose map has node `valley-cafe`.
+- Produces: `export function studioPose(site, overview, angle, settings = MENU_CAMERA) -> {eye, target}` — orbit radius `settings.studioDistance = 40`, height `settings.studioHeight = 15`, target the building at half its 2-floor height; above ground like `gymPose`. `MenuCamera.showStudio(site)`. Pure `studioRouteId(routes, maps) -> string | null`: first route whose map has node `valley-cafe`.
 - [ ] **Step 1: Write failing tests**
   - `studioPose`: eye 25 m from the site horizontally, above ground, looking at it; two angles a half turn apart are on opposite sides.
   - Menu stage: picking the studio card builds the valley route's world and calls `showStudio(site)`; with no valley route, `showIsland()` as today; `setStudioRooms` gets `info.studio.rooms`.

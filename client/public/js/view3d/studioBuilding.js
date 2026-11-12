@@ -21,7 +21,7 @@ const COLORS = Object.freeze({
   slab: hexToRgb("#b9b8b2"),
   render: hexToRgb("#f4f2ed"),
   frame: hexToRgb("#3b4249"),
-  glass: [0.55, 0.72, 0.82, 0],
+  glass: [0.78, 0.88, 0.92, 0],
   plinth: hexToRgb("#8d8c87"),
   door: hexToRgb("#2c4a5c"),
   signBoard: hexToRgb("#23272b"),
@@ -31,6 +31,9 @@ const COLORS = Object.freeze({
 const { halfWidth, front, back } = STUDIO_FOOTPRINT;
 const depth = back - front;
 const middle = (front + back) / 2;
+
+/** The roof sign's words (a brand name, not translated). */
+export const SIGN_TEXT = "SPIN STUDIO"; // i18n-ok (brand name)
 
 /** One storey: slab, solid side and back walls in white render, mullions in front of the glass. */
 function buildFloor() {
@@ -65,7 +68,7 @@ function buildRoof() {
   for (const side of [-1, 1]) m.box([side * (halfWidth - 0.15), y, middle], [0.3, parapet, depth - 0.6], COLORS.render);
   const board = [0, SLAB + parapet + 0.9, front + 0.45];
   m.box(board, [13.4, 1.8, 0.2], COLORS.signBoard);
-  pixelText(m, "SPIN STUDIO", { // i18n-ok (brand name)
+  pixelText(m, SIGN_TEXT, {
     origin: [board[0], board[1], board[2] - 0.11],
     right: [-1, 0, 0],
     up: [0, 1, 0],
