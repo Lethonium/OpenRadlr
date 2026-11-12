@@ -24,8 +24,20 @@ const mapOf = (route) => route.map?.id ?? `route:${route.id}`;
 /** The distinct exercises of a plan in order: what its figure chips count. */
 const planFigures = (plan) => [...new Set(plan.blocks.filter((b) => b.kind === "exercise").map((b) => b.exercise))];
 
+/** The café the spin studio stands across the road from. */
+const STUDIO_CAFE = "valley-cafe";
+
 /** What a built world is for: one route in one biome. */
 const buildKey = (routeId, biome) => `${routeId}\0${biome}`;
+
+/**
+ * The route whose world holds the spin studio: the first of `routes` (`{id, map}`) on a
+ * map whose café nodes (`cafesByMap`, map id to nodes) include the Valley Café; else null.
+ */
+export function studioRouteId(routes, cafesByMap) {
+  const route = routes.find((r) => r.map && (cafesByMap.get(r.map.id) ?? []).some((cafe) => cafe.id === STUDIO_CAFE));
+  return route?.id ?? null;
+}
 
 export class MenuStage {
   #routes = [];
@@ -67,7 +79,7 @@ export class MenuStage {
    * @param {(file: object, others: object[], options: {network: object | null, biome?: string}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
    * @param {() => string} [deps.biome] the rider's biome, when the world is built
    * @param {(route: RouteGeometry, scene: object) => object} [deps.createView] a View3D on the menu canvas
-   * @param {(viewKind: "island" | "route" | "gym", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
+   * @param {(viewKind: "island" | "route" | "gym" | "studio", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
    * @param {(overview: object) => object} [deps.createCamera] a MenuCamera
    * @param {(route: RouteGeometry, others: RouteGeometry[]) => object[]} [deps.highlights] bands for `setHighlights`
    * @param {(stage: {route: RouteGeometry | null, routes: RouteGeometry[], network?: object | null}) => void} deps.onRoute map and profile of the pick
@@ -135,6 +147,10 @@ export class MenuStage {
         await this.#openWorkout(first.id, token, force);
         return;
       }
+      if (picked?.kind === "studio" && first) {
+        await this.#openStudio(first.id, token, force);
+        return;
+      }
       this.#camera?.showIsland();
       // Changing the season rebuilds the world on screen; without one, build the first.
       if (!this.#view && first) await this.#prepare(first.id, token, { highlight: false });
@@ -162,6 +178,35 @@ export class MenuStage {
     // Changing the season rebuilds the world even when the gym is already on screen.
     if (this.#showWorkoutShot() && !force) return;
     await this.#prepare(this.#workoutRouteId(), token, { highlight: false });
+  }
+
+  /** The studio tab is open: circle the studio in the valley world, or the island where there is none. */
+  async #openStudio(firstId, token, force) {
+    try {
+      await this.#loadMap(firstId);
+    } catch (error) {
+      console.warn("Route preview unavailable:", error);
+      return;
+    }
+    if (token !== this.#token || this.#stopped) return;
+    if (this.#showStudioShot() && !force) return;
+    await this.#prepare(this.#studioWorldId(), token, { highlight: false });
+  }
+
+  /** The route whose world the studio tab shows: the one at the Valley Café, else the first. */
+  #studioWorldId() {
+    const offered = this.#routes.filter((r) => r.kind === undefined).map((r) => this.#geometries.get(r.id)).filter(Boolean);
+    return studioRouteId(offered, this.#cafes) ?? this.#firstRouteId();
+  }
+
+  /** Flies to the studio of the world on screen. Returns whether it has one. */
+  #showStudioShot() {
+    if (!this.#view || !this.#camera) return false;
+    const site = this.#view.studioSite ?? null;
+    this.#view.setStudioRooms?.(this.#routes.find((r) => r.kind === "studio")?.rooms ?? 2);
+    if (site) this.#camera.showStudio(site);
+    else this.#camera.showIsland();
+    return Boolean(site);
   }
 
   /** Loads the route's file, the routes beside it and its map's network: where the workout venues are. */
@@ -296,7 +341,8 @@ export class MenuStage {
     this.#applyStatues(picked?.kind === "workout" ? this.#workoutPlace().override : null);
     if (picked && picked.kind === undefined) this.#show(route, others.map((f) => this.#geometry(f)));
     else if (picked?.kind === "workout") this.#showWorkoutShot();
-    // The studio (or nothing picked): the island orbit, also out of the camera's opening shot.
+    else if (picked?.kind === "studio") this.#showStudioShot();
+    // Nothing picked: the island orbit, also out of the camera's opening shot.
     else this.#camera.showIsland();
     this.#applyLens();
     this.deps.onWorld(true);
@@ -307,6 +353,7 @@ export class MenuStage {
     const picked = this.#routes.find((r) => r.id === this.#selectedId);
     if (picked && picked.kind === undefined) return picked.id;
     if (picked?.kind === "workout") return this.#workoutRouteId();
+    if (picked?.kind === "studio") return this.#studioWorldId();
     return this.#viewRouteId ?? this.#routes.find((r) => r.kind === undefined)?.id ?? null;
   }
 
