@@ -43,12 +43,11 @@ trigger a release unless they declare a breaking change.
 
 1. Merge changes into `main`. The workflow opens or updates the release PR when
    there are releasable Conventional Commits. It can also be run manually on `main`.
-2. Review the proposed version, generated notes and passing CI. Keep adding
-   user-visible notes with issue references under `[Unreleased]` during development.
-   During release review, fold those notes into the generated version section,
-   remove duplicates and leave `[Unreleased]` empty. Release Please inserts its
-   generated version section above `[Unreleased]` and does not consume manual notes.
-   Recheck any manual edits if subsequent commits regenerate the PR.
+2. Review the proposed version, the generated notes and passing CI. Release
+   Please writes `CHANGELOG.md` and the GitHub Release from the merged PR titles,
+   so nobody edits the changelog by hand: a change whose title isn't a
+   Conventional Commit is missing from the notes, which is why reviewers check
+   the title before merging.
 3. Merge the release PR. The next workflow run creates the tag and GitHub Release.
    Deploy using the existing deployment process when ready.
 

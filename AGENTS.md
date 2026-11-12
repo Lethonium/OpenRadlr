@@ -46,7 +46,7 @@ repeat it. Here is the operational knowledge on top of that.
 
 ## Issues and pull requests (via `gh`)
 - Repo: `github.com:Lethonium/OpenRadlr` (local dir may be named Open-Ride).
-- Issues are referenced by number in code comments and CHANGELOG entries (`#73`).
+- Issues are referenced by number in code comments and PR descriptions (`#73`).
   Look them up with `gh issue view <n>` when a change mentions one.
 - PRs: short description of *why*, focused (refactorings split from behaviour
   changes), Conventional Commit messages with imperative descriptions (see
@@ -60,8 +60,9 @@ repeat it. Here is the operational knowledge on top of that.
 - **Feature design:** significant features go through the superpowers workflow —
   a design spec and an implementation plan in `docs/superpowers/{specs,plans}/`
   (see the 2026-10-19 examples). Follow that pattern for new features.
-- **CHANGELOG.md:** Keep a Changelog format; add user-visible changes under
-  `[Unreleased]` with the issue number.
+- **CHANGELOG.md:** written by Release Please from the PR titles; don't edit
+  it. The Conventional Commit PR title is the release note, so make it say
+  what changes for the user (see `docs/releases.md`).
 
 ## Key layout
 - `client/public/` — browser app (`js/` modules, `index.html`, `styles.css`;
