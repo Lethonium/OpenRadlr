@@ -6,8 +6,9 @@ use crate::protocol::RiderState;
 use openradlr_sim::RiderId;
 use std::sync::{Arc, Mutex};
 
-/// Seats older than this many seconds are not shown any more: the studio
-/// stopped publishing (closed or restarted).
+/// How long, on the reader's clock, seats stay shown without the studio publishing again:
+/// after that it stopped (closed or restarted). The cores' clocks are not comparable, so
+/// readers count this themselves from when the generation last changed.
 pub const SEAT_TTL_S: f64 = 1.0;
 
 /// One rider on one studio bike.
@@ -25,7 +26,7 @@ pub struct StudioSeat {
 #[derive(Default)]
 struct Shared {
     seats: Vec<StudioSeat>,
-    published_s: f64,
+    generation: u64,
     road: Vec<RiderState>,
 }
 
@@ -40,20 +41,17 @@ impl StudioMirror {
         self.shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Replaces the studio's seats; `now_s` is the publisher's game time.
-    pub fn publish_seats(&self, seats: Vec<StudioSeat>, now_s: f64) {
+    /// Replaces the studio's seats and bumps the generation.
+    pub fn publish_seats(&self, seats: Vec<StudioSeat>) {
         let mut shared = self.lock();
         shared.seats = seats;
-        shared.published_s = now_s;
+        shared.generation += 1;
     }
 
-    /// The seats published last, or none if that was more than [`SEAT_TTL_S`] before `now_s`.
-    pub fn seats(&self, now_s: f64) -> Vec<StudioSeat> {
+    /// The generation of the seats published last, and the seats.
+    pub fn seats_snapshot(&self) -> (u64, Vec<StudioSeat>) {
         let shared = self.lock();
-        if now_s - shared.published_s > SEAT_TTL_S {
-            return Vec::new();
-        }
-        shared.seats.clone()
+        (shared.generation, shared.seats.clone())
     }
 
     /// Replaces the road riders near the studio building.
@@ -80,14 +78,6 @@ mod tests {
             room: 0,
             seat: 3,
         }
-    }
-
-    #[test]
-    fn seats_expire_after_a_second() {
-        let mirror = StudioMirror::default();
-        mirror.publish_seats(vec![seat(1)], 0.0);
-        assert_eq!(mirror.seats(0.5).len(), 1);
-        assert!(mirror.seats(1.5).is_empty());
     }
 
     #[test]

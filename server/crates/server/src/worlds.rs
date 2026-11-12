@@ -8,6 +8,7 @@ use crate::runtime::GameHandle;
 use crate::studio::STUDIO_ID;
 use crate::vehicle_codes::VehicleCodes;
 use openradlr_sim::studio::Timetable;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 pub struct WorldEntry {
@@ -31,6 +32,8 @@ pub struct StudioEntry {
     /// (the game loop keeps its own copy).
     pub timetable: Arc<Timetable>,
     pub game: GameHandle,
+    /// How many rooms are open, kept up to date by the studio's game.
+    pub rooms: Arc<AtomicUsize>,
 }
 
 pub struct Worlds {

@@ -108,6 +108,8 @@ pub struct Network {
     by_id: HashMap<String, u32>,
     /// Per place, the roads leaving it (in riding direction).
     leaving: Vec<Vec<RoadKey>>,
+    /// Where each place stands, by id.
+    places: HashMap<String, (f64, f64)>,
 }
 
 impl Network {
@@ -152,7 +154,13 @@ impl Network {
             edges: built,
             by_id,
             leaving,
+            places: nodes.iter().map(|n| (n.id.clone(), (n.x, n.y))).collect(),
         })
+    }
+
+    /// Where the place called `id` stands.
+    pub fn place_xy(&self, id: &str) -> Option<(f64, f64)> {
+        self.places.get(id).copied()
     }
 
     pub fn len(&self) -> usize {
@@ -277,6 +285,13 @@ pub(crate) mod tests {
             ],
         )
         .unwrap()
+    }
+
+    #[test]
+    fn places_are_found_by_id() {
+        let net = crossroads();
+        assert_eq!(net.place_xy("s"), Some((1700.0, -700.0)));
+        assert_eq!(net.place_xy("nowhere"), None);
     }
 
     #[test]

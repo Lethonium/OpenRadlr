@@ -287,6 +287,9 @@ pub enum ServerMessage {
         rooms: usize,
         class: ClassState,
         riders: Vec<SeatState>,
+        /// What the room's windows show: riders on the road outside and in the other rooms.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        road_riders: Vec<RiderState>,
     },
     Resistance {
         grade_percent: f64,
@@ -1036,7 +1039,7 @@ fn vehicle_state(world: &World, v: &Vehicle) -> VehicleState {
 }
 
 /// State of one studio room.
-pub fn studio_state_message(studio: &Studio, room: usize, tick: u64) -> ServerMessage {
+pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[RiderState]) -> ServerMessage {
     let clock = studio.clock();
     let class = studio.timetable().class(&clock);
     let riders = studio.rooms()[room]
@@ -1065,6 +1068,7 @@ pub fn studio_state_message(studio: &Studio, room: usize, tick: u64) -> ServerMe
             elapsed_s: round2(clock.elapsed_s),
         },
         riders,
+        road_riders: road.to_vec(),
     }
 }
 
