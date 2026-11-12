@@ -93,6 +93,8 @@ pub trait Game: Send + 'static {
     fn turn(&mut self, _rider_id: RiderId, _edge: Option<&str>) {}
     /// What the rider's power comes from (shown to others where it matters).
     fn set_device(&mut self, _rider_id: RiderId, _device: DeviceKind) {}
+    /// Shows the spin studio's riders to this rider (the studio itself ignores it).
+    fn set_studio_riders(&mut self, _rider_id: RiderId) {}
     /// Starts a shared vehicle with the rider as captain.
     fn create_vehicle(&mut self, _rider_id: RiderId, _kind: &str, _seats: u8, _bots: bool) {}
     fn board_vehicle(&mut self, _rider_id: RiderId, _code: &str) {}
@@ -137,6 +139,9 @@ pub enum Command {
     SetDevice {
         rider_id: RiderId,
         device: DeviceKind,
+    },
+    SetStudioRiders {
+        rider_id: RiderId,
     },
     Telemetry {
         rider_id: RiderId,
@@ -404,6 +409,7 @@ pub(crate) fn apply<G: Game>(core: &mut G, command: Command) {
             let _ = reply.send(joined);
         }
         Command::SetDevice { rider_id, device } => core.set_device(rider_id, device),
+        Command::SetStudioRiders { rider_id } => core.set_studio_riders(rider_id),
         Command::Telemetry {
             rider_id,
             power,

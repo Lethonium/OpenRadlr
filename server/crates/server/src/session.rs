@@ -44,6 +44,8 @@ pub enum Action {
         resume_token: Option<String>,
         /// Place the rider where the ride left off; ignored with a vehicle code.
         resume: Option<ResumePoint>,
+        /// Optional extras the client asked for (see `ClientMessage::Join`).
+        features: Vec<String>,
     },
     /// The rider answered an AFK warning with Stay.
     Stayed,
@@ -213,6 +215,7 @@ impl Session {
                     vehicle_code,
                     resume_token,
                     resume,
+                    features,
                     ..
                 },
             ) => match device {
@@ -239,6 +242,7 @@ impl Session {
                     vehicle_code: None,
                     resume_token,
                     resume: None,
+                    features,
                 },
                 _ => Action::Join {
                     name,
@@ -250,6 +254,7 @@ impl Session {
                     vehicle_code,
                     resume_token,
                     resume,
+                    features,
                 },
             },
             (Phase::AwaitingJoin, _) => Action::Reply(ServerMessage::error("join_required", "send join first")),
@@ -375,6 +380,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                features: vec![],
             }
         );
         s.joined(5, DeviceKind::Trainer, 0.0);
@@ -449,6 +455,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                features: vec![],
             }
         );
     }

@@ -9,19 +9,20 @@
 use crate::obn::outbox::LocalRider;
 use crate::obn::remote::{RemoteEvent, RemoteRider, Remotes};
 use crate::protocol::{
-    event_info, event_message, event_notice_message, event_state, state_message, DeviceKind, EventInfoWire, EventState,
-    Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage, Side,
+    event_info, event_message, event_notice_message, event_state, nearest_riders, state_message, DeviceKind,
+    EventInfoWire, EventState, Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage, Side,
 };
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
 use crate::stats::DistanceStats;
+use crate::studio_mirror::StudioMirror;
 use crate::vehicle_codes::VehicleCodes;
 use openradlr_sim::bot::human_level_wkg;
 use openradlr_sim::events::Events;
 use openradlr_sim::vehicle::VehicleKind;
 use openradlr_sim::world::{VehicleChange, WorldError};
 use openradlr_sim::{RiderId, RouteIndex, World, WorldEvent};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use tokio::sync::mpsc;
 
@@ -209,6 +210,16 @@ pub struct GameCore {
     attachments: Attachments,
     /// The shared OpenBikeNet route, if this world has one.
     obn: Option<Obn>,
+    /// The link to the spin studio building, if this world has one.
+    studio: Option<StudioLink>,
+}
+
+/// What a world with the spin studio building needs: the shared registry, where
+/// the building stands and which clients asked to see its riders.
+struct StudioLink {
+    mirror: StudioMirror,
+    anchor: (f64, f64),
+    viewers: HashSet<RiderId>,
 }
 
 /// What a world with an OpenBikeNet route needs: where it is, the way out and the riders in.
@@ -257,6 +268,7 @@ impl GameCore {
             world_id,
             departed: HashMap::new(),
             obn: None,
+            studio: None,
         }
     }
 
@@ -264,6 +276,17 @@ impl GameCore {
     /// (set it with [`GameCore::with_vehicle_codes`] first).
     pub fn with_resume_tokens(mut self, tokens: ResumeTokens) -> Self {
         self.attachments.set_registry(tokens, self.world_id.clone());
+        self
+    }
+
+    /// Shows the studio's riders to clients who ask (see [`GameCore::set_studio_riders`]) and
+    /// offers the riders nearest the building at `anchor` to the studio, through `mirror`.
+    pub fn with_studio_mirror(mut self, mirror: StudioMirror, anchor: (f64, f64)) -> Self {
+        self.studio = Some(StudioLink {
+            mirror,
+            anchor,
+            viewers: HashSet::new(),
+        });
         self
     }
 
@@ -343,6 +366,42 @@ impl GameCore {
             .collect();
         // A full or closed channel loses the frame; the next one supersedes it.
         let _ = obn.frames.try_send(frame);
+    }
+
+    /// `state` with the studio's riders added, if `viewer` asked for them.
+    fn with_studio(&self, viewer: RiderId, state: ServerMessage) -> ServerMessage {
+        let Some(studio) = self.studio.as_ref().filter(|s| s.viewers.contains(&viewer)) else {
+            return state;
+        };
+        let ServerMessage::State {
+            tick,
+            mut riders,
+            race,
+            route_riders,
+            event,
+            vehicle,
+        } = state
+        else {
+            return state;
+        };
+        // Humans first; all seats share one place, so there is no distance to sort by.
+        let mut seats = studio.mirror.seats(self.clock_s());
+        seats.sort_by_key(|s| s.is_bot);
+        let room = self.settings.max_visible_riders.saturating_sub(riders.len());
+        riders.extend(seats.iter().take(room).map(RiderState::studio_seat));
+        ServerMessage::State {
+            tick,
+            riders,
+            race,
+            route_riders,
+            event,
+            vehicle,
+        }
+    }
+
+    /// `state` as `viewer` gets it: with riders of other apps and of the studio.
+    fn decorate(&self, viewer: RiderId, state: ServerMessage) -> ServerMessage {
+        self.with_studio(viewer, self.with_remotes(viewer, state))
     }
 
     /// `state` with the riders of other apps added, if it is for a rider on the shared route.
@@ -521,7 +580,7 @@ impl GameCore {
             event,
             &|id| self.tags_of(id),
         ) {
-            let _ = sink.deliver(self.with_remotes(rider_id, state));
+            let _ = sink.deliver(self.decorate(rider_id, state));
         }
         self.clients.insert(
             rider_id,
@@ -614,6 +673,15 @@ impl GameCore {
             })
     }
 
+    /// Shows the spin studio's riders to the client from now on (no-op without a studio link).
+    pub fn set_studio_riders(&mut self, rider_id: RiderId) {
+        if let Some(studio) = &mut self.studio {
+            if self.clients.contains_key(&rider_id) {
+                studio.viewers.insert(rider_id);
+            }
+        }
+    }
+
     pub fn set_device(&mut self, rider_id: RiderId, device: DeviceKind) {
         if let Some(client) = self.clients.get_mut(&rider_id) {
             client.device = device;
@@ -655,6 +723,9 @@ impl GameCore {
 
     pub fn leave(&mut self, rider_id: RiderId) {
         if self.clients.remove(&rider_id).is_some() {
+            if let Some(studio) = &mut self.studio {
+                studio.viewers.remove(&rider_id);
+            }
             self.attachments.forget(rider_id);
             if let Some(rider) = self.world.rider(rider_id) {
                 self.departed.insert(rider_id, rider.name.clone());
@@ -780,7 +851,7 @@ impl GameCore {
             event,
             &|id| self.tags_of(id),
         ) {
-            let _ = client.sink.deliver(self.with_remotes(rider_id, state));
+            let _ = client.sink.deliver(self.decorate(rider_id, state));
         }
     }
 
@@ -921,6 +992,14 @@ impl GameCore {
 
         let mut closed = Vec::new();
         if self.tick.is_multiple_of(self.settings.broadcast_every()) {
+            if let Some(studio) = &self.studio {
+                studio.mirror.publish_road(nearest_riders(
+                    &self.world,
+                    studio.anchor,
+                    self.settings.max_visible_riders,
+                    &|id| self.tags_of(id),
+                ));
+            }
             // Everyone gets their own view: the riders around them.
             for (&rider_id, client) in &self.clients {
                 let event = self.event_state_for(rider_id);
@@ -934,7 +1013,7 @@ impl GameCore {
                 ) else {
                     continue;
                 };
-                if client.sink.deliver(self.with_remotes(rider_id, state)).is_err() {
+                if client.sink.deliver(self.decorate(rider_id, state)).is_err() {
                     closed.push(rider_id);
                 }
             }
@@ -1073,6 +1152,10 @@ impl Game for GameCore {
 
     fn set_device(&mut self, rider_id: RiderId, device: DeviceKind) {
         GameCore::set_device(self, rider_id, device);
+    }
+
+    fn set_studio_riders(&mut self, rider_id: RiderId) {
+        GameCore::set_studio_riders(self, rider_id);
     }
 
     fn telemetry(&mut self, rider_id: RiderId, power: f64, cadence: Option<f64>) {
@@ -2579,6 +2662,126 @@ mod tests {
         assert!(rider.workout && rider.parked);
         assert_eq!(game.device_of(anna), DeviceKind::Workout);
         assert!(exercise_json(&fresh).contains(r#""exercise":"plank""#));
+    }
+
+    // --- Spin studio on the road --------------------------------------------
+
+    fn studio_seat(id: RiderId, is_bot: bool) -> crate::studio_mirror::StudioSeat {
+        crate::studio_mirror::StudioSeat {
+            id,
+            name: format!("Seat {id}"),
+            is_bot,
+            power: 150.0,
+            cadence: Some(90.0),
+            room: 0,
+            seat: id as usize % 16,
+        }
+    }
+
+    fn studio_game(target_riders: usize, max_visible_riders: usize) -> (GameCore, StudioMirror) {
+        let world = World::new(
+            hilly_route(),
+            SimConfig {
+                target_riders,
+                ..SimConfig::default()
+            },
+            Box::new(SplitMix64::new(1)),
+        );
+        let mirror = StudioMirror::default();
+        let game = GameCore::new(
+            world,
+            GameSettings {
+                max_visible_riders,
+                ..GameSettings::default()
+            },
+        )
+        .with_studio_mirror(mirror.clone(), (0.0, 0.0));
+        (game, mirror)
+    }
+
+    fn tick_to_broadcast(game: &mut GameCore) {
+        for _ in 0..game.settings().broadcast_every() {
+            game.tick();
+        }
+    }
+
+    fn last_riders(sink: &RecordingSink) -> Vec<RiderState> {
+        sink.take()
+            .into_iter()
+            .rev()
+            .find_map(|m| match m {
+                ServerMessage::State { riders, .. } => Some(riders),
+                _ => None,
+            })
+            .expect("a state message")
+    }
+
+    #[test]
+    fn studio_riders_reach_only_clients_that_asked() {
+        let (mut game, mirror) = studio_game(0, 50);
+        let (asker, asker_sink) = join(&mut game, "Asker");
+        let (_, other_sink) = join(&mut game, "Other");
+        game.set_studio_riders(asker);
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)], game.clock_s());
+        asker_sink.take();
+        other_sink.take();
+        tick_to_broadcast(&mut game);
+        assert!(last_riders(&asker_sink).iter().any(|r| r.studio.is_some()));
+        assert!(last_riders(&other_sink).iter().all(|r| r.studio.is_none()));
+    }
+
+    #[test]
+    fn studio_riders_are_not_counted_as_route_riders() {
+        let (mut game, mirror) = studio_game(0, 50);
+        let (asker, sink) = join(&mut game, "Asker");
+        game.set_studio_riders(asker);
+        mirror.publish_seats(vec![studio_seat(0xE000_0001, false)], game.clock_s());
+        let players = game.player_count();
+        sink.take();
+        tick_to_broadcast(&mut game);
+        let route_riders = sink
+            .take()
+            .into_iter()
+            .rev()
+            .find_map(|m| match m {
+                ServerMessage::State { route_riders, .. } => Some(route_riders),
+                _ => None,
+            })
+            .expect("a state message");
+        assert_eq!((route_riders.humans, route_riders.bots, route_riders.remote), (1, 0, 0));
+        assert_eq!(game.player_count(), players);
+    }
+
+    #[test]
+    fn studio_riders_respect_max_visible_riders() {
+        let (mut game, mirror) = studio_game(0, 3);
+        let (asker, sink) = join(&mut game, "Asker");
+        join(&mut game, "Other");
+        game.set_studio_riders(asker);
+        mirror.publish_seats(
+            (1..=5).map(|i| studio_seat(0xE000_0000 + i, false)).collect(),
+            game.clock_s(),
+        );
+        sink.take();
+        tick_to_broadcast(&mut game);
+        assert_eq!(last_riders(&sink).len(), 3);
+    }
+
+    #[test]
+    fn the_game_publishes_road_riders_near_the_anchor() {
+        let (mut game, mirror) = studio_game(8, 3);
+        join(&mut game, "Anna");
+        tick_to_broadcast(&mut game);
+        let road = mirror.road();
+        assert_eq!(road.len(), 3);
+        let distance = |r: &RiderState| {
+            let rider = game.world().rider(r.id).unwrap();
+            let (x, y) = game.world().rider_xy(rider);
+            x.hypot(y)
+        };
+        let key = |r: &RiderState| (r.is_bot, distance(r));
+        let humans_then_bots_nearest_first = road.windows(2).all(|w| key(&w[0]) <= key(&w[1]));
+        assert!(humans_then_bots_nearest_first, "{road:?}");
     }
 
     // --- OpenBikeNet -----------------------------------------------------
