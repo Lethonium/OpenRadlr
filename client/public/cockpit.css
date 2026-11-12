@@ -1,0 +1,130 @@
+/* The cockpit page (a phone held upright). Colours and fonts as in styles.css. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1216;
+  --surface: #171b21;
+  --border: #2a313b;
+  --text: #e8ecf1;
+  --muted: #8a94a3;
+  --accent: #ff7a1a;
+  --danger: #ff5d5d;
+  --radius: 10px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.cockpit-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.cockpit-link {
+  color: var(--muted);
+  font-size: 14px;
+  margin-right: auto;
+}
+
+.cockpit-badge {
+  background: var(--danger);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cockpit-forget {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.cockpit-message {
+  margin: 24px 16px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.cockpit-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 16px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.tile-big,
+.tile-wide {
+  grid-column: span 2;
+}
+
+.tile-half {
+  grid-column: span 1;
+}
+
+.tile-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tile-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--zone, var(--text));
+}
+
+.tile-big .tile-value {
+  font-size: 88px;
+  line-height: 1.05;
+}
+
+.tile-unit {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.tile-canvas {
+  display: block;
+  width: 100%;
+  height: 80px;
+}
+
+.tile-big .tile-canvas {
+  height: 140px;
+}
