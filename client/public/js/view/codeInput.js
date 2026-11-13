@@ -40,7 +40,7 @@ export function mountCodeInput(root, { onSubmit, t, doc = root.ownerDocument }) 
   status.setAttribute("role", "status");
   const boxes = Array.from({ length: CODE_LENGTH }, (_, i) => {
     const box = doc.createElement("input");
-    box.className = "code-input";
+    box.className = "code-box";
     box.setAttribute("type", "text");
     box.setAttribute("autocomplete", "off");
     box.setAttribute("autocapitalize", "characters");

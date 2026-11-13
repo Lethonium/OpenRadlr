@@ -35,9 +35,7 @@ body {
   padding: 10px 12px;
 }
 
-.cockpit-link {
-  color: var(--muted);
-  font-size: 14px;
+.cockpit-head .cockpit-link {
   margin-right: auto;
 }
 
@@ -50,6 +48,7 @@ body {
   font-weight: 700;
 }
 
+.cockpit-link,
 .cockpit-edit,
 .cockpit-forget {
   background: transparent;
@@ -59,6 +58,7 @@ body {
   padding: 6px 10px;
   font: inherit;
   font-size: 13px;
+  text-decoration: none;
 }
 
 .cockpit-message {
@@ -66,6 +66,7 @@ body {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.4;
+  text-align: center;
 }
 
 /* "Pair now": a button and the inline code entry (the same look as in the app). */
@@ -108,21 +109,20 @@ body {
   gap: 8px;
 }
 
-.code-input {
+.code-box {
   width: 44px;
   padding: 10px 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--text);
-  font: inherit;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 20px;
   text-align: center;
   text-transform: uppercase;
 }
 
-.code-input:focus {
+.code-box:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

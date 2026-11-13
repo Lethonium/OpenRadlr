@@ -6684,11 +6684,22 @@ body.working-out #paddles {
   gap: 8px;
 }
 
-.code-boxes .code-input {
+.code-box {
   width: 44px;
   padding: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 20px;
-  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.code-box:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .code-status {
@@ -6711,6 +6722,16 @@ body.working-out #paddles {
   align-items: center;
   gap: 12px;
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+}
+
+/* The link back to the app looks like the buttons next to it. */
+.vr-back {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
 }
 
 .vr-badge {
