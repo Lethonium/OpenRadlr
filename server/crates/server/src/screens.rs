@@ -210,12 +210,18 @@ impl Drop for WatchGuard {
 }
 
 /// What the `data` view shows of `message` for the host `rider_id`: only the
-/// host's own rider or seat; everything else unchanged.
+/// host's own rider or seat, without the studio's view of the road; everything
+/// else unchanged.
 pub fn data_view(message: &ServerMessage, rider_id: RiderId) -> ServerMessage {
     let mut copy = message.clone();
     match &mut copy {
         ServerMessage::State { riders, .. } => riders.retain(|r| r.id == rider_id),
-        ServerMessage::StudioState { riders, .. } => riders.retain(|r| r.id == rider_id),
+        ServerMessage::StudioState {
+            riders, road_riders, ..
+        } => {
+            riders.retain(|r| r.id == rider_id);
+            road_riders.clear();
+        }
         _ => {}
     }
     copy
@@ -253,6 +259,7 @@ mod tests {
             team: None,
             style: None,
             bot_move: None,
+            studio: None,
         }
     }
 
@@ -298,6 +305,7 @@ mod tests {
                 elapsed_s: 0.0,
             },
             riders: ids.iter().map(|&i| seat(i)).collect(),
+            road_riders: vec![],
         }
     }
 
@@ -397,6 +405,20 @@ mod tests {
         let (_g, mut rx) = watcher(&screens, WatchView::Data);
         rx.try_recv().unwrap();
         host.publish(&studio(&[1, 2, 3]));
+        assert_eq!(rx.try_recv().unwrap(), studio(&[2]));
+    }
+
+    #[test]
+    fn the_data_view_leaves_out_the_riders_outside_the_studio() {
+        let screens = Screens::new();
+        let host = screens.host("k", 2, "Ana".into());
+        let (_g, mut rx) = watcher(&screens, WatchView::Data);
+        rx.try_recv().unwrap();
+        let mut with_road = studio(&[2]);
+        if let ServerMessage::StudioState { road_riders, .. } = &mut with_road {
+            *road_riders = vec![rider(8), rider(9)];
+        }
+        host.publish(&with_road);
         assert_eq!(rx.try_recv().unwrap(), studio(&[2]));
     }
 

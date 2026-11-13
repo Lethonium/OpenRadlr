@@ -1,11 +1,13 @@
 /**
- * 3D spin studio: a dark room with neon strips, bikes on smart trainers in
+ * 3D spin studio: a light training room, bikes on smart trainers in
  * two rows and the instructor pedalling on a stage in front. Reuses the rider
  * model (pedalling legs, spinning rear wheel) and the renderer of the road
  * view. Local axes as there: riders face −Z, up is +Y.
  */
 import { invert, lookAt, multiply, perspective, placement, rotationXAbout, scaling } from "./math.js";
-import { MeshBuilder } from "./meshBuilder.js";
+import { buildStudioRoom } from "./studioRoom.js";
+import { INSTRUCTOR, ROOM, STAGE, seatPosition } from "./studioLayout.js";
+import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "./studioCamera.js";
 import { Renderer, createContext } from "./renderer.js";
 import {
   RIDER_GEOMETRY,
@@ -27,125 +29,37 @@ import {
 import { hexToRgb, projectToScreen, visibleLabels } from "./view3d.js";
 import { sunShadowMatrix } from "./lighting.js";
 
-export const ROOM = Object.freeze({ halfWidth: 7.5, front: -9.5, back: 6.5, height: 4.6 });
-const ROW_GAP = 2.6;
-const SEAT_GAP = 1.4;
-const RISER = 0.35;
-const STAGE = Object.freeze({ z: -5.4, height: 0.55, halfWidth: 2.4, depth: 2.6 });
+export { INSTRUCTOR, ROOM, STAGE, seatPosition };
 
-/** The instructor: id 0 (riders start at 1), on the stage, facing the room. */
-export const INSTRUCTOR = Object.freeze({ id: 0, name: "Coach Lemon", position: [0, STAGE.height, STAGE.z], yaw: Math.PI }); // i18n-ok (English id label; the UI translates by mode)
+export { STUDIO_CAMERAS, cameraModeOf, studioCamera };
+export const STUDIO_CAMERA_LABELS = Object.freeze({ seat: "Behind me", pov: "My view", wide: "Whole room", coach: "Coach's view" }); // i18n-ok (English id label; the UI translates by mode)
 
-export const STUDIO_CAMERAS = Object.freeze(["seat", "wide", "coach"]);
-export const STUDIO_CAMERA_LABELS = Object.freeze({ seat: "Behind me", wide: "Whole room", coach: "Coach's view" }); // i18n-ok (English id label; the UI translates by mode)
-
-/** Seat 0–7: front row from left to right, 8–15: back row on a riser. */
-export function seatPosition(seat) {
-  const row = seat < 8 ? 0 : 1;
-  const column = seat % 8;
-  return [(column - 3.5) * SEAT_GAP, row * RISER, row * ROW_GAP];
-}
-
-/** Camera eye and target for a mode, from my seat. */
-export function studioCamera(mode, mySeat) {
-  const coachHead = [INSTRUCTOR.position[0], INSTRUCTOR.position[1] + 1.2, INSTRUCTOR.position[2]];
-  if (mode === "wide") return { eye: [0, 3.9, ROOM.back - 0.6], target: [0, 0.6, -3.5] };
-  // Just in front of the coach, over the stage edge (the coach is hidden: too close).
-  if (mode === "coach") return { eye: [0, 2.5, STAGE.z + 1.1], target: [0, 0.8, ROW_GAP] };
-  // Over my shoulder, in front of the row behind me.
-  const seat = seatPosition(mySeat ?? 3);
-  return { eye: [seat[0] * 0.9, seat[1] + 2.25, seat[2] + 1.9], target: [coachHead[0], coachHead[1] - 0.4, coachHead[2]] };
-}
-
-// Colours: dark walls, a warm wooden floor, neon in the brand's lemon and accent orange.
-const WALL = [0.12, 0.11, 0.16];
-const FLOOR = [0.36, 0.27, 0.2];
-const CEILING = [0.06, 0.06, 0.08];
-const STAGE_TOP = [0.18, 0.18, 0.22];
-const RISER_TOP = [0.3, 0.23, 0.18];
-const SCREEN = [0.04, 0.05, 0.08];
-const TRAINER = [0.1, 0.1, 0.12];
-const TRAINER_FOOT = [0.3, 0.31, 0.34];
-const SPEAKER = [0.08, 0.08, 0.09];
-const LEMON = [1.0, 0.86, 0.2];
-const ORANGE = [1.0, 0.48, 0.1];
-const NEON_BLUE = [0.3, 0.6, 1.0];
-
-/** Quad whose front face points along `direction`. */
-function panel(mesh, a, b, c, d, color, direction) {
-  mesh.triangleFacing(a, b, c, color, direction);
-  mesh.triangleFacing(a, c, d, color, direction);
-}
-
-/** A smart trainer under the rear wheel and a block under the front wheel, at the origin. */
-function addTrainer(mesh, at) {
-  const [x, y, z] = at;
-  const rear = WHEEL_HUBS[0][2];
-  const front = WHEEL_HUBS[1][2];
-  mesh.box([x, y + 0.2, z + rear], [0.3, 0.4, 0.42], TRAINER);
-  mesh.box([x, y + 0.03, z + rear], [0.9, 0.06, 0.16], TRAINER_FOOT);
-  mesh.box([x, y + 0.02, z + rear + 0.25], [0.6, 0.04, 0.1], TRAINER_FOOT);
-  mesh.box([x, y + 0.05, z + front], [0.24, 0.1, 0.36], TRAINER);
-}
-
-/**
- * The room as two meshes: `room` (lit normally) and `neon` (drawn
- * self-illuminated). The first six quads are the shell: floor, ceiling, walls.
- */
-export function buildStudioRoom() {
-  const room = new MeshBuilder();
-  const { halfWidth: w, front: f, back: b, height: h } = ROOM;
-  panel(room, [-w, 0, f], [w, 0, f], [w, 0, b], [-w, 0, b], FLOOR, [0, 1, 0]);
-  panel(room, [-w, h, f], [w, h, f], [w, h, b], [-w, h, b], CEILING, [0, -1, 0]);
-  panel(room, [-w, 0, f], [w, 0, f], [w, h, f], [-w, h, f], WALL, [0, 0, 1]);
-  panel(room, [-w, 0, b], [w, 0, b], [w, h, b], [-w, h, b], WALL, [0, 0, -1]);
-  panel(room, [-w, 0, f], [-w, 0, b], [-w, h, b], [-w, h, f], WALL, [1, 0, 0]);
-  panel(room, [w, 0, f], [w, 0, b], [w, h, b], [w, h, f], WALL, [-1, 0, 0]);
-
-  // Stage with steps, the riser under the back row, and a trainer at every seat.
-  room.box([0, STAGE.height / 2, STAGE.z], [STAGE.halfWidth * 2, STAGE.height, STAGE.depth], STAGE_TOP);
-  room.box([0, STAGE.height / 4, STAGE.z + STAGE.depth / 2 + 0.25], [1.4, STAGE.height / 2, 0.5], STAGE_TOP);
-  room.box([0, RISER / 2, ROW_GAP], [SEAT_GAP * 8 + 0.6, RISER, 2.2], RISER_TOP);
-  for (let seat = 0; seat < 16; seat += 1) addTrainer(room, seatPosition(seat));
-  addTrainer(room, INSTRUCTOR.position);
-
-  // Big screen on the front wall, speakers in the corners.
-  room.box([0, 2.5, f + 0.06], [7.2, 2.6, 0.1], SCREEN);
-  for (const side of [-1, 1]) {
-    room.box([side * (w - 0.6), 3.4, f + 0.5], [0.6, 0.9, 0.5], SPEAKER);
-    room.box([side * (w - 0.6), 3.4, b - 0.5], [0.6, 0.9, 0.5], SPEAKER);
-  }
-
-  const neon = new MeshBuilder();
-  // Frame around the screen, strips along the walls and the stage edge.
-  neon.box([0, 3.85, f + 0.1], [7.6, 0.06, 0.04], LEMON);
-  neon.box([0, 1.15, f + 0.1], [7.6, 0.06, 0.04], LEMON);
-  for (const side of [-1, 1]) {
-    neon.box([side * 3.8, 2.5, f + 0.1], [0.06, 2.76, 0.04], LEMON);
-    neon.box([side * (w - 0.05), 3.9, (f + b) / 2], [0.04, 0.07, b - f - 0.4], ORANGE);
-    neon.box([side * (w - 0.05), 0.15, (f + b) / 2], [0.04, 0.05, b - f - 0.4], NEON_BLUE);
-  }
-  neon.box([0, STAGE.height + 0.02, STAGE.z + STAGE.depth / 2], [STAGE.halfWidth * 2, 0.04, 0.05], ORANGE);
-  neon.box([0, 3.9, b - 0.05], [w * 2 - 0.4, 0.07, 0.04], ORANGE);
-  return { room: room.build(), neon: neon.build() };
-}
-
-/** Indoor light: a key light from above the stage, dim purple ambience, no fog. */
+/** Standalone daylight: a key light from above the stage and a bright sky, no fog. */
 const STUDIO_LIGHT = Object.freeze({
   sun: (() => {
     const v = [0.25, 0.9, 0.45];
     const n = Math.hypot(...v);
     return v.map((x) => x / n);
   })(),
-  sunColor: [1.0, 0.9, 0.78],
-  zenith: [0.5, 0.45, 0.62],
-  horizon: [0.05, 0.05, 0.08],
-  ground: [0.32, 0.24, 0.3],
+  sunColor: [1.0, 0.95, 0.85],
+  zenith: [0.62, 0.74, 0.9],
+  horizon: [0.85, 0.88, 0.9],
+  ground: [0.6, 0.56, 0.5],
   fog: [400, 900],
   shadowStrength: 0.55,
 });
 
 const FOV_Y = (60 * Math.PI) / 180;
+/**
+ * The riders the room-only view draws: none too close to the camera, except
+ * me, and not me in my own point of view (the camera sits in my head).
+ */
+export function shownInRoom(placed, myId, eye, mode) {
+  return placed.filter(({ rider, position }) =>
+    rider.id === myId ? mode !== "pov" : Math.hypot(position[0] - eye[0], position[2] - eye[2]) > NEAR_CAMERA_HIDE,
+  );
+}
+
 /** Riders this close to the camera (horizontally) would fill the screen; they're not drawn. */
 const NEAR_CAMERA_HIDE = 1.2;
 
@@ -154,23 +68,24 @@ export class StudioView3D {
   #pedalPhase = new Map();
   #wheelPhase = new Map();
   #lastTime = null;
+  #reducedMotion;
   cameraMode = "seat";
   quality = "high";
 
   /**
    * @param {HTMLCanvasElement} canvas
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
+   * @param {{renderer?: object, reducedMotion?: boolean}} [options] a renderer instead of WebGL (tests); no camera bob with reduced motion
    */
-  constructor(canvas, labelLayer) {
-    const gl = createContext(canvas);
-    if (!gl) throw new Error("WebGL 2 is not available");
+  constructor(canvas, labelLayer, { renderer = null, reducedMotion = false } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
-    this.renderer = new Renderer(gl);
+    this.#reducedMotion = reducedMotion;
+    this.renderer = renderer ?? StudioView3D.#webGlRenderer(canvas);
     this.shadowsEnabled = this.renderer.createShadowMap(1024);
-    const { room, neon } = buildStudioRoom();
+    const { room, accents } = buildStudioRoom();
     this.room = this.renderer.upload(room);
-    this.neon = this.renderer.upload(neon);
+    this.accents = this.renderer.upload(accents);
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -187,6 +102,17 @@ export class StudioView3D {
     this.wheel = this.renderer.upload(buildWheel());
     this.shadow = this.renderer.upload(buildRiderShadow());
     this.identity = placement([0, 0, 0]);
+  }
+
+  static #webGlRenderer(canvas) {
+    const gl = createContext(canvas);
+    if (!gl) throw new Error("WebGL 2 is not available");
+    return new Renderer(gl);
+  }
+
+  /** The camera for my seat; My view bobs with my cadence unless motion is reduced. */
+  cameraPose(mySeat, cadence, timeS) {
+    return studioCamera(this.cameraMode, mySeat, { cadence, timeS, reducedMotion: this.#reducedMotion });
   }
 
   setQuality(quality) {
@@ -242,14 +168,14 @@ export class StudioView3D {
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     const me = riders.find((r) => r.id === myId);
-    const { eye, target } = studioCamera(this.cameraMode, me?.seat);
+    const { eye, target } = this.cameraPose(me?.seat, myCadence ?? 0, timeS);
     const viewProjection = multiply(perspective(FOV_Y, width / height, 0.1, 60), lookAt(eye, target));
     const inverseViewProjection = invert(viewProjection);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), coach: hexToRgb(colors.accent) };
     const placed = riders.map((rider) => ({ rider, position: seatPosition(rider.seat), yaw: 0 }));
     placed.push({ rider: { id: INSTRUCTOR.id, name: INSTRUCTOR.name, is_bot: false, coach: true }, position: INSTRUCTOR.position, yaw: INSTRUCTOR.yaw });
-    const visible = placed.filter(({ rider, position }) => rider.id === myId || Math.hypot(position[0] - eye[0], position[2] - eye[2]) > NEAR_CAMERA_HIDE);
+    const visible = shownInRoom(placed, myId, eye, this.cameraMode);
     const drawn = visible.map(({ rider, position, yaw }) => {
       const cadence = rider.coach ? coachCadence : rider.id === myId ? (myCadence ?? 0) : (rider.cadence ?? 0);
       const speed = rider.coach ? (coachCadence > 0 ? 9 : 0) : (rider.speed ?? 0);
@@ -269,7 +195,7 @@ export class StudioView3D {
 
     this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...STUDIO_LIGHT, shadowStrength: high ? STUDIO_LIGHT.shadowStrength : 0 });
     this.renderer.draw(this.room, this.identity);
-    this.renderer.drawBright(this.neon, this.identity, 1);
+    this.renderer.drawBright(this.accents, this.identity, 1);
     for (const part of drawn) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -329,7 +255,7 @@ export class StudioView3D {
   }
 
   dispose() {
-    for (const handle of [this.room, this.neon, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.crankset, this.wheel, this.shadow]) {
+    for (const handle of [this.room, this.accents, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.crankset, this.wheel, this.shadow]) {
       this.renderer.dispose(handle);
     }
     this.#labels.forEach((element) => element.remove());

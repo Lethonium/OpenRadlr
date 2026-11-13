@@ -19,6 +19,9 @@ pub const LOBBY_S: u32 = 300;
 /// The longest a class may be: the rest of the slot.
 pub const CLASS_S: u32 = SLOT_S - LOBBY_S;
 pub const SEATS_PER_ROOM: usize = 16;
+/// The first studio rider id. Studio ids start far above the route ids so
+/// the two never collide in the valley's rider list.
+pub const STUDIO_FIRST_ID: RiderId = 0xE000_0000;
 /// Power within this share of the target counts as "on target".
 pub const ON_TARGET_TOLERANCE: f64 = 0.10;
 /// Target (fraction of FTP) for bots outside a class.
@@ -383,7 +386,7 @@ impl Studio {
             rooms: vec![Room::new()],
             now_s,
             slot,
-            next_id: 1,
+            next_id: STUDIO_FIRST_ID,
             events: Vec::new(),
         };
         studio.balance_bots();
@@ -604,12 +607,9 @@ impl Studio {
     /// Closes extra rooms without humans and tops every room up with bots to
     /// the target (or thins them out as humans arrive).
     fn balance_bots(&mut self) {
-        let mut index = self.rooms.len();
-        while index > 1 {
-            index -= 1;
-            if self.rooms[index].human_count() == 0 {
-                self.rooms.remove(index);
-            }
+        // Only trailing rooms close, so the room index of a seated rider never changes.
+        while self.rooms.len() > 1 && self.rooms.last().is_some_and(|room| room.human_count() == 0) {
+            self.rooms.pop();
         }
         let target = self.config.target_riders.min(SEATS_PER_ROOM);
         for room_index in 0..self.rooms.len() {
@@ -768,6 +768,28 @@ mod tests {
         assert_eq!(studio.rooms()[1].riders().count(), 12, "bots keep the new room company");
         studio.leave(ids[16]);
         assert_eq!(studio.rooms().len(), 1);
+    }
+
+    #[test]
+    fn an_empty_middle_room_stays_open_while_a_room_above_is_busy() {
+        let mut studio = studio(12, SLOT_START);
+        let ids: Vec<RiderId> = (0..33)
+            .map(|i| studio.join_human(&format!("R{i}"), 70.0, 250.0))
+            .collect();
+        assert_eq!(studio.rooms().len(), 3);
+        for id in &ids[16..32] {
+            studio.leave(*id);
+        }
+        assert_eq!(studio.rooms().len(), 3, "room 1 waits for room 2");
+        assert_eq!(studio.seat_of(ids[32]).map(|(room, _)| room), Some(2));
+        studio.leave(ids[32]);
+        assert_eq!(studio.rooms().len(), 1, "then both close from the top");
+    }
+
+    #[test]
+    fn studio_ids_start_far_from_route_ids() {
+        let mut studio = studio(0, SLOT_START);
+        assert_eq!(studio.join_human("A", 70.0, 250.0), STUDIO_FIRST_ID);
     }
 
     #[test]

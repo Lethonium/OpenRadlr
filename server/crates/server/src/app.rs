@@ -14,6 +14,7 @@ use crate::route_file::{load_routes, RouteFile};
 use crate::runtime::spawn_game;
 use crate::stats::DistanceStats;
 use crate::studio::StudioCore;
+use crate::studio_mirror::StudioMirror;
 use crate::vehicle_codes::VehicleCodes;
 use crate::worlds::{StudioEntry, WorldEntry, Worlds};
 use crate::ServerInfo;
@@ -24,10 +25,14 @@ use openradlr_sim::studio::{builtin_classes, Studio, StudioConfig, Timetable};
 use openradlr_sim::{SimConfig, World};
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Frames the OpenBikeNet link may lag behind before the game drops one.
+/// The place by the road where the spin studio building stands (across from it).
+const VALLEY_CAFE: &str = "valley-cafe";
+
 const OBN_FRAME_BACKLOG: usize = 8;
 
 /// How often the community totals are written to disk.
@@ -142,6 +147,9 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
     let vehicle_codes = VehicleCodes::new();
     // One registry for every game: a resume token finds its rider's world (#73).
     let resume_tokens = ResumeTokens::new();
+    // The spin studio building stands across the road from the Valley Café, in the world with that place.
+    let studio_mirror = StudioMirror::default();
+    let mut studio_in_valley = false;
     let mut entries = Vec::new();
     for (index, (map, group)) in groups.into_iter().enumerate() {
         let routes = group.iter().map(RouteFile::to_route).collect::<Result<Vec<_>, _>>()?;
@@ -150,6 +158,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         // With the map's road network riders can turn at its junctions (#15).
         let network = map.as_deref().and_then(|id| maps.network(id)).map(|n| (*n).clone());
         let turns = network.is_some();
+        let studio_anchor = network.as_ref().and_then(|n| n.place_xy(VALLEY_CAFE));
         let mut world = World::with_network(
             routes.clone(),
             network,
@@ -177,6 +186,10 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
             core = core.with_openbikenet(index, obn_route, frames);
             link_frames = Some(receiver);
+        }
+        if let (Some(anchor), true) = (studio_anchor, config.studio && !studio_in_valley) {
+            core = core.with_studio_mirror(studio_mirror.clone(), anchor);
+            studio_in_valley = true;
         }
         let game = spawn_game(core);
         if let (Some(index), Some(obn_route), Some(receiver), Some(url)) =
@@ -222,26 +235,31 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             Box::new(SplitMix64::new(seed ^ 0x5157_1D10)),
             unix_now_s(),
         );
-        let game = spawn_game(
-            StudioCore::new(
-                studio,
-                GameSettings {
-                    tick_hz: config.tick_hz,
-                    broadcast_hz: config.broadcast_hz,
-                    max_players: config.max_players + config.max_paddle_players,
-                    max_visible_riders: config.max_visible_riders,
-                    grace_s: config.grace_s,
-                    ..GameSettings::default()
-                },
-            )
-            .with_wall_clock(unix_now_s)
-            .with_stats(stats.clone())
-            .with_resume_tokens(resume_tokens.clone()),
-        );
+        let rooms = Arc::new(AtomicUsize::new(1));
+        let mut core = StudioCore::new(
+            studio,
+            GameSettings {
+                tick_hz: config.tick_hz,
+                broadcast_hz: config.broadcast_hz,
+                max_players: config.max_players + config.max_paddle_players,
+                max_visible_riders: config.max_visible_riders,
+                grace_s: config.grace_s,
+                ..GameSettings::default()
+            },
+        )
+        .with_wall_clock(unix_now_s)
+        .with_stats(stats.clone())
+        .with_resume_tokens(resume_tokens.clone())
+        .with_room_count(Arc::clone(&rooms));
+        if studio_in_valley {
+            core = core.with_mirror(studio_mirror.clone());
+        }
+        let game = spawn_game(core);
         tracing::info!("spin studio opened");
         StudioEntry {
             timetable: Arc::new(Timetable::new(builtin_classes())),
             game,
+            rooms,
         }
     });
     let worlds = Worlds::new(entries, studio)

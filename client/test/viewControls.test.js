@@ -16,7 +16,7 @@ test("the studio offers its own cameras and no layouts", () => {
   const controls = viewControls({ studio: true });
   assert.deepEqual(
     { cameras: ids(controls.cameras), layouts: controls.layouts, modes: ids(controls.modes), showTime: controls.showTime },
-    { cameras: ["seat", "wide", "coach"], layouts: null, modes: [], showTime: false },
+    { cameras: ["seat", "pov", "wide", "coach"], layouts: null, modes: [], showTime: false },
   );
 });
 

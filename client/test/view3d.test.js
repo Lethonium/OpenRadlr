@@ -26,6 +26,7 @@ import { riderLook } from "../public/js/view3d/riderModel.js";
 import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
+import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
@@ -372,7 +373,7 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer()) {
+function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined) {
   const route = squareRoute();
   const world = {
     biome,
@@ -385,6 +386,7 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
     rotors: [],
     spectators: [],
     gyms,
+    studio,
   };
   const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
   return { view, renderer };
@@ -956,4 +958,55 @@ test("a bot rides in its team's kit; one without a known team in the bot colour"
   };
   assert.deepEqual(tintAt(teamed), [0x4f, 0x8f, 0x3a]);
   assert.deepEqual(tintAt(plain), [0, 0, 255]);
+});
+
+test("a world without a studio site has no studio and ignores studio riders", () => {
+  const { view, renderer } = gymView([]);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }], myId: null, timeS: 1, colors });
+  assert.equal(view.studioSite, null);
+  assert.equal(renderer.draws.length > 0, true);
+});
+
+test("a world with a studio site draws the building and its riders", () => {
+  const studio = { position: [100, 100, 80], yaw: 0 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
+  assert.deepEqual(view.studioSite, studio);
+  view.camera.update(100, 1, 0);
+  const frame = (riders) => {
+    renderer.draws.length = 0;
+    view.render({ riders, myId: null, timeS: 1, colors });
+    return renderer.draws.length;
+  };
+  const empty = frame([]);
+  const seated = frame([{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }]);
+  assert.ok(empty > 0, "the building is drawn");
+  assert.ok(seated > empty, "the seated rider adds meshes");
+});
+
+test("my own body is hidden in the point of view, the bike stays", () => {
+  const studio = { position: [100, 100, 80], yaw: 0 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
+  const me = { id: 9, route: null, studio: { room: 0, seat: 3 }, power: 100, cadence: 80 };
+  const drawn = (mode) => {
+    view.camera = new StudioCamera(studio, 0, 3, mode);
+    renderer.draws.length = 0;
+    view.render({ riders: [me], myId: 9, myCadence: 80, timeS: 1, colors });
+    return renderer.draws.filter((d) => d.model[12] > 99 && d.model[12] < 101 && d.model[14] > 79 && d.model[14] < 82);
+  };
+  const seat = drawn("seat");
+  const pov = drawn("pov");
+  assert.ok(pov.length > 0, "the bike and its front wheel are drawn");
+  assert.ok(pov.length < seat.length, "no torso or legs in the point of view");
+});
+
+test("a studio camera follows my seat in the studio, without a road rider of mine", () => {
+  const studio = { position: [100, 100, 80], yaw: 0 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
+  view.camera = new StudioCamera(studio, 0, 0, "seat");
+  const before = [...view.camera.eye];
+  renderer.draws.length = 0;
+  view.render({ riders: [{ id: 9, route: null, studio: { room: 1, seat: 7 }, power: 100 }], myId: 9, timeS: 1, colors });
+  assert.ok(view.camera.eye[1] > before[1] + 4, "moved up a floor");
+  assert.ok(renderer.draws.length > 0);
 });

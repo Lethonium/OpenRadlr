@@ -65,6 +65,8 @@ pub enum Action {
         resume: Option<ResumePoint>,
         /// The tablet's second-screen key: its ride is relayed to the paired screens.
         screen_key: Option<String>,
+        /// Optional extras the client asked for (see `ClientMessage::Join`).
+        features: Vec<String>,
     },
     /// Offer a pairing code for the screen `key`.
     PairOffer {
@@ -260,6 +262,7 @@ impl Session {
                     resume_token,
                     resume,
                     screen_key,
+                    features,
                     ..
                 },
             ) => match device {
@@ -288,6 +291,7 @@ impl Session {
                     resume_token,
                     resume: None,
                     screen_key,
+                    features,
                 },
                 _ => Action::Join {
                     name,
@@ -300,6 +304,7 @@ impl Session {
                     resume_token,
                     resume,
                     screen_key,
+                    features,
                 },
             },
             (Phase::AwaitingJoin, ClientMessage::PairOffer { key, name }) => {
@@ -456,6 +461,7 @@ mod tests {
                 resume_token: None,
                 resume: None,
                 screen_key: None,
+                features: vec![],
             }
         );
         s.joined(5, DeviceKind::Trainer, 0.0);
@@ -531,6 +537,7 @@ mod tests {
                 resume_token: None,
                 resume: None,
                 screen_key: None,
+                features: vec![],
             }
         );
     }

@@ -3,13 +3,16 @@
 //! message goes to the riders of one room only.
 
 use crate::game::{sanitise_chat, sanitise_name, valid_weight, GameSettings, JoinError, MessageSink, NullSink};
-use crate::protocol::{studio_event_message, studio_state_message, DeviceKind, PhysicsWire, ServerMessage};
+use crate::protocol::{studio_event_message, studio_state_message, DeviceKind, PhysicsWire, RiderState, ServerMessage};
 use crate::resume::{Attachments, JoinedRider, ResumeTokens};
 use crate::runtime::Game;
 use crate::stats::DistanceStats;
+use crate::studio_mirror::{StudioMirror, StudioSeat};
 use openradlr_sim::studio::Studio;
 use openradlr_sim::RiderId;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// World id of the studio in `join` and `/api/info`.
 pub const STUDIO_ID: &str = "spin-studio";
@@ -37,6 +40,10 @@ pub struct StudioCore {
     ridden: HashMap<RiderId, Ridden>,
     /// Resume tokens and who is detached (#73).
     attachments: Attachments,
+    /// The registry shared with the valley's game, if the server has one.
+    mirror: Option<StudioMirror>,
+    /// How many rooms are open, for `/api/info`.
+    rooms: Arc<AtomicUsize>,
 }
 
 impl StudioCore {
@@ -50,7 +57,51 @@ impl StudioCore {
             stats: DistanceStats::default(),
             ridden: HashMap::new(),
             attachments: Attachments::new(settings.grace_s, ResumeTokens::new(), STUDIO_ID.into()),
+            mirror: None,
+            rooms: Arc::new(AtomicUsize::new(1)),
         }
+    }
+
+    /// Shows the studio's seats to the road riders through `mirror` and the road's riders
+    /// to the studio.
+    pub fn with_mirror(mut self, mirror: StudioMirror) -> Self {
+        self.mirror = Some(mirror);
+        self
+    }
+
+    /// Keeps `rooms` at the number of open rooms.
+    pub fn with_room_count(mut self, rooms: Arc<AtomicUsize>) -> Self {
+        self.rooms = rooms;
+        self
+    }
+
+    /// Every rider of every room on their bike.
+    fn seats(&self) -> Vec<StudioSeat> {
+        self.studio
+            .rooms()
+            .iter()
+            .enumerate()
+            .flat_map(|(room, r)| {
+                r.riders().map(move |(seat, rider)| StudioSeat {
+                    id: rider.id,
+                    name: rider.name.clone(),
+                    is_bot: rider.is_bot(),
+                    power: rider.power,
+                    cadence: rider.cadence,
+                    room,
+                    seat,
+                })
+            })
+            .collect()
+    }
+
+    /// The state of `room`, with what its windows show: the road's riders and the other rooms.
+    fn state_of(&self, room: usize, seats: &[StudioSeat]) -> ServerMessage {
+        let road: Vec<RiderState> = self.mirror.as_ref().map_or_else(Vec::new, |mirror| {
+            let others = seats.iter().filter(|s| s.room != room).map(RiderState::studio_seat);
+            mirror.road().into_iter().chain(others).collect()
+        });
+        studio_state_message(&self.studio, room, self.tick, &road)
     }
 
     /// Shares the resume `tokens` with the route games.
@@ -150,7 +201,7 @@ impl Game for StudioCore {
             resume_token,
             physics: self.physics_of(rider_id),
         });
-        let _ = sink.deliver(studio_state_message(&self.studio, room, self.tick));
+        let _ = sink.deliver(self.state_of(room, &self.seats()));
         self.clients.insert(rider_id, sink);
         self.ridden.insert(
             rider_id,
@@ -194,13 +245,14 @@ impl Game for StudioCore {
         let rider_id = joined.rider_id;
         let room = self.room_of(rider_id)?;
         let physics = self.physics_of(rider_id);
+        let state = self.state_of(room, &self.seats());
         let client = self.clients.get_mut(&rider_id)?;
         let _ = sink.deliver(ServerMessage::Joined {
             rider_id,
             resume_token: token.to_owned(),
             physics,
         });
-        let _ = sink.deliver(studio_state_message(&self.studio, room, self.tick));
+        let _ = sink.deliver(state);
         *client = sink;
         Some(joined)
     }
@@ -241,6 +293,7 @@ impl Game for StudioCore {
         }
         self.studio.tick(self.settings.tick_seconds());
         self.tick += 1;
+        self.rooms.store(self.studio.rooms().len(), Ordering::Relaxed);
         for rider_id in self.attachments.expired(self.clock_s()) {
             Game::leave(self, rider_id);
         }
@@ -258,8 +311,13 @@ impl Game for StudioCore {
         }
 
         if self.tick.is_multiple_of(self.settings.broadcast_every()) {
+            let seats = self.seats();
+            if let Some(mirror) = &self.mirror {
+                // Also when empty, so the seats leave the road at once.
+                mirror.publish_seats(seats.clone());
+            }
             for room in 0..self.studio.rooms().len() {
-                let message = studio_state_message(&self.studio, room, self.tick);
+                let message = self.state_of(room, &seats);
                 self.send_to_room(room, &message);
             }
         }
@@ -272,6 +330,7 @@ mod tests {
     use crate::game::SinkClosed;
     use openradlr_sim::rng::SplitMix64;
     use openradlr_sim::studio::{builtin_classes, StudioConfig, Timetable, SLOT_S};
+    use std::sync::atomic::Ordering;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
@@ -406,6 +465,84 @@ mod tests {
         };
         assert_eq!((*room, *rooms), (1, 2));
         assert_eq!(riders.len(), 1, "room 2 holds only the 17th rider");
+    }
+
+    fn studio_seat_of(id: RiderId, room: usize, seat: usize) -> crate::studio_mirror::StudioSeat {
+        crate::studio_mirror::StudioSeat {
+            id,
+            name: "Road".into(),
+            is_bot: false,
+            power: 100.0,
+            cadence: None,
+            room,
+            seat,
+        }
+    }
+
+    #[test]
+    fn seats_of_every_room_are_published_each_broadcast() {
+        let mirror = StudioMirror::default();
+        let mut core = core(0, 50).with_mirror(mirror.clone());
+        for i in 0..17 {
+            join(&mut core, &format!("R{i}"));
+        }
+        for _ in 0..5 {
+            core.tick();
+        }
+        let (generation, seats) = mirror.seats_snapshot();
+        assert!(generation > 0);
+        assert_eq!(seats.iter().filter(|s| s.room == 0).count(), 16);
+        assert_eq!(seats.iter().filter(|s| s.room == 1).count(), 1);
+    }
+
+    #[test]
+    fn an_empty_studio_publishes_no_seats_so_they_leave_promptly() {
+        let mirror = StudioMirror::default();
+        let mut core = core(0, 50).with_mirror(mirror.clone());
+        let (anna, _) = join(&mut core, "Anna");
+        for _ in 0..5 {
+            core.tick();
+        }
+        assert_eq!(mirror.seats_snapshot().1.len(), 1);
+        Game::leave(&mut core, anna);
+        for _ in 0..5 {
+            core.tick();
+        }
+        assert!(mirror.seats_snapshot().1.is_empty());
+    }
+
+    #[test]
+    fn studio_state_carries_road_riders_and_other_rooms_not_my_own() {
+        let mirror = StudioMirror::default();
+        mirror.publish_road(vec![RiderState::studio_seat(&studio_seat_of(7, 0, 0))]);
+        let mut core = core(0, 50).with_mirror(mirror);
+        let sinks: Vec<(RiderId, RecordingSink)> = (0..17).map(|i| join(&mut core, &format!("R{i}"))).collect();
+        for (_, sink) in &sinks {
+            sink.take();
+        }
+        for _ in 0..5 {
+            core.tick();
+        }
+        let messages = sinks[0].1.take();
+        let ServerMessage::StudioState { road_riders, .. } = studio_states(&messages)[0] else {
+            unreachable!()
+        };
+        let ids: Vec<RiderId> = road_riders.iter().map(|r| r.id).collect();
+        assert!(ids.contains(&7), "the road rider is there");
+        let other_room = sinks[16].0;
+        assert!(ids.contains(&other_room), "room 1's rider is outside room 0's windows");
+        assert_eq!(ids.len(), 2, "none of room 0's own riders: {ids:?}");
+    }
+
+    #[test]
+    fn the_open_rooms_are_counted_for_info() {
+        let rooms = Arc::new(AtomicUsize::new(0));
+        let mut core = core(0, 50).with_room_count(Arc::clone(&rooms));
+        for i in 0..17 {
+            join(&mut core, &format!("R{i}"));
+        }
+        core.tick();
+        assert_eq!(rooms.load(Ordering::Relaxed), 2);
     }
 
     #[test]

@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { coastOutline, islandOf, mapFrame } from "../public/js/view/mapPreview.js";
-import { MenuStage } from "../public/js/view/menuStage.js";
+import { MenuStage, studioRouteId } from "../public/js/view/menuStage.js";
 import { HIGHLIGHT, HIGHLIGHT_LIFT, buildHighlight, highlightColor } from "../public/js/view3d/highlight.js";
 import { DRONE_LENS, depthStep } from "../public/js/view3d/view3d.js";
-import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose, statuePose } from "../public/js/view3d/menuCamera.js";
+import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose, statuePose, studioPose } from "../public/js/view3d/menuCamera.js";
 import { roadFrame } from "../public/js/view3d/world.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
@@ -171,6 +171,36 @@ test("the gym orbit circles the gym close up and comes round to where it began",
   }
   const loop = gymPose(GYM, o, 2 * Math.PI);
   for (let k = 0; k < 3; k += 1) assert.ok(Math.abs(loop.eye[k] - poses[0].eye[k]) < 1e-6, "loops seamlessly");
+});
+
+const STUDIO = { position: [400, 30, -200], yaw: 0.4 };
+
+test("the studio orbit keeps its distance above the ground, looks at the building and swings round", () => {
+  const o = overview();
+  const a = studioPose(STUDIO, o, 0.5);
+  const b = studioPose(STUDIO, o, 0.5 + Math.PI);
+  for (const { eye, target } of [a, b]) {
+    assert.ok(Math.abs(flatDistance(eye, STUDIO.position) - MENU_CAMERA.studioDistance) < 1e-6, "on the orbit");
+    assert.ok(eye[1] >= groundAt(o, eye[0], eye[2]) + MENU_CAMERA.studioHeight * 0.6 - 1e-6, "above ground");
+    assert.ok(flatDistance(target, STUDIO.position) < 1e-6, "looking at it");
+    assert.ok(target[1] > STUDIO.position[1], "at its middle, not its foot");
+  }
+  assert.equal(MENU_CAMERA.studioDistance, 40);
+  assert.equal(MENU_CAMERA.studioHeight, 15);
+  assert.ok(Math.abs(a.eye[0] + b.eye[0] - 2 * STUDIO.position[0]) < 1e-6, "opposite sides");
+});
+
+test("picking the studio glides to it and circles it", () => {
+  const camera = new MenuCamera(overview());
+  camera.update(0.016);
+  camera.showStudio(STUDIO);
+  assert.equal(camera.view, "studio");
+  for (let i = 0; i < 120; i += 1) camera.update(0.05);
+  assert.ok(!camera.flying);
+  assert.ok(Math.abs(flatDistance(camera.eye, STUDIO.position) - MENU_CAMERA.studioDistance) < 1e-6);
+  const before = camera.eye.slice();
+  for (let i = 0; i < 20; i += 1) camera.update(0.1);
+  assert.ok(flatDistance(camera.eye, before) > 1, "keeps circling");
 });
 
 test("picking the workout glides down to the gym and circles it", () => {
@@ -905,4 +935,62 @@ test("the stage fetches the map's network once and builds the world on it", asyn
   assert.equal(builds[0].network, networkFile, "the world is built on the network");
   assert.equal(routes.at(-1).network, networkFile, "the map shows the network too");
   assert.deepEqual(fetched, ["valley"], "once per map");
+});
+
+// --- the spin studio's building ---------------------------------------------------------
+
+test("studioRouteId is the first route on a map with the Valley Café", () => {
+  const routes = [{ id: "a", map: { id: "alps" } }, { id: "b", map: { id: "valley" } }, { id: "c", map: { id: "valley" } }, { id: "d" }];
+  const maps = new Map([["alps", [{ id: "alp-cafe" }]], ["valley", [{ id: "valley-cafe" }]]]);
+  assert.equal(studioRouteId(routes, maps), "b");
+  assert.equal(studioRouteId(routes, new Map([["alps", []]])), null);
+  assert.equal(studioRouteId([], maps), null);
+});
+
+/** A stage on the valley map whose worlds have a studio site and a rooms-aware view. */
+function studioStage({ site = { position: [10, 0, 20], yaw: 0 }, rooms = 3 } = {}) {
+  const { stage, log } = fakeStage();
+  const created = stage.deps.createView;
+  stage.deps.createView = (route, scene) => {
+    const view = created(route, scene);
+    view.studioSite = scene.studio;
+    view.roomCalls = [];
+    view.setStudioRooms = (n) => view.roomCalls.push(n);
+    return view;
+  };
+  stage.deps.fetchNetwork = async () => ({ id: "valley", edges: [], nodes: CAFES });
+  stage.deps.buildScene = (routeFile) => new Promise((resolve) => log.builds.push({ id: routeFile.id, resolve: () => resolve({ overview: overview(), studio: site }) }));
+  stage.deps.createCamera = (o) => {
+    const camera = new MenuCamera(o);
+    camera.shots = [];
+    for (const name of ["showStudio", "showIsland"]) {
+      const original = camera[name].bind(camera);
+      camera[name] = (arg) => {
+        camera.shots.push([name, arg]);
+        original(arg);
+      };
+    }
+    return camera;
+  };
+  const routes = [...ALL, { id: "spin-studio", name: "Spin Studio", kind: "studio", rooms }];
+  return { stage, log, routes, site };
+}
+
+test("the studio card builds the valley route's world, flies to the studio and sets its rooms", async () => {
+  const { stage, log, routes, site } = studioStage();
+  await stage.select(routes, "spin-studio");
+  assert.equal(log.builds[0].id, "riverside-flats", "the route starting at the Valley Café");
+  log.builds[0].resolve();
+  await settle();
+  assert.deepEqual(log.views[0].camera.shots.at(-1), ["showStudio", site]);
+  assert.deepEqual(log.views[0].roomCalls, [3]);
+});
+
+test("the studio card circles the island when the world has no studio site", async () => {
+  const { stage, log, routes } = studioStage({ site: null });
+  await stage.select(routes, "spin-studio");
+  log.builds[0].resolve();
+  await settle();
+  assert.equal(log.views[0].camera.shots.some(([name]) => name === "showStudio"), false);
+  assert.equal(log.views[0].camera.view, "island");
 });

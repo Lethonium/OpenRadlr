@@ -34,6 +34,7 @@ use openradlr_sim::studio::{ClassPlan, Timetable, LOBBY_S, SEATS_PER_ROOM, SLOT_
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
@@ -207,6 +208,8 @@ pub struct StudioSummary {
     pub id: &'static str,
     pub name: &'static str,
     pub players: usize,
+    /// Open rooms, at least one.
+    pub rooms: usize,
     /// The class of the current slot (in its lobby while `starts_at_s` lies ahead).
     pub class: SlotSummary,
     pub next: SlotSummary,
@@ -218,6 +221,7 @@ impl StudioSummary {
             id: STUDIO_ID,
             name: STUDIO_NAME,
             players: entry.game.player_count(),
+            rooms: entry.rooms.load(Ordering::Relaxed),
             class: SlotSummary::at(&entry.timetable, now_s, 0),
             next: SlotSummary::at(&entry.timetable, now_s, 1),
         }

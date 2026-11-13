@@ -53,6 +53,16 @@ to 0 and removes them through the usual `leave` only after `grace_s`. Every
 attach has an epoch, and `Leave`/`Detach` commands carry it, so a connection
 that died after its rider was taken over by a new one can't touch the rider.
 
+The spin studio and the valley world share a `StudioMirror` (`studio_mirror.rs`),
+a small registry like `DistanceStats`, so the two game cores never call each other.
+The studio publishes its seats on every broadcast with a generation counter; the
+valley core shows them to road clients that asked for `studio_riders`, and treats
+them as gone when the generation stops changing for one second on its own clock.
+In the other direction the valley core publishes the riders near the café node,
+and the studio hands them, with the other rooms' seats, to its clients as
+`studio_state.road_riders`. Only the valley world (the map with the `valley-cafe`
+node) takes part.
+
 ## One tick (20 Hz)
 
 1. The race advances its countdown or clock. Races are opt-in: the rider who
