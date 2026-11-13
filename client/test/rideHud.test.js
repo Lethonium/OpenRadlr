@@ -148,7 +148,7 @@ test("renderRace shows the position and laps", () => {
   setUnits("metric");
   const { root, elements, metric } = textRoot(RACE_IDS);
   const hud = new RideHud(root, noDraw);
-  hud.renderRace({ race: { phase: "running", laps: 3, elapsed_s: 60 }, standing: standing(), status: "Lap 1/3" });
+  hud.renderRace({ race: { phase: "running", laps: 3, elapsed_s: 60 }, standing: standing(), status: "Lap 1/3", layout: "race" });
   assert.equal(metric("lap-info"), "Lap 1/3");
   assert.equal(metric("position"), "2/5");
   assert.equal(metric("lap"), "1/3");
@@ -159,10 +159,23 @@ test("renderRace shows the position and laps", () => {
   assert.equal(elements.get("race-around").children.length, 1);
 });
 
+test("renderRace leaves the lists alone outside the race layout", () => {
+  const { root, elements } = textRoot(RACE_IDS);
+  const hud = new RideHud(root, noDraw);
+  const rebuilt = [];
+  for (const id of ["race-groups", "race-around"]) {
+    const list = elements.get(id);
+    const replace = list.replaceChildren.bind(list);
+    list.replaceChildren = (...kids) => (rebuilt.push(id), replace(...kids));
+  }
+  hud.renderRace({ race: { phase: "running", laps: 3 }, standing: standing(), status: "Lap 1/3", layout: "default" });
+  assert.deepEqual(rebuilt, []);
+});
+
 test("renderRace hides the timeline without a standing", () => {
   const { root, elements, metric } = textRoot(RACE_IDS);
   const hud = new RideHud(root, noDraw);
-  hud.renderRace({ race: { phase: "running", laps: 3 }, standing: null, status: "Race running" });
+  hud.renderRace({ race: { phase: "running", laps: 3 }, standing: null, status: "Race running", layout: "race" });
   assert.equal(metric("position"), "–");
   assert.equal(metric("race-caption"), "Race running");
   assert.equal(elements.get("race-timeline").hidden, true);

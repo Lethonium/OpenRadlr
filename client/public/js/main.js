@@ -4426,7 +4426,7 @@ function updatePanels() {
 
   app.standing = raceStanding(race, app.state.riders, app.riderId, app.route.length);
   updateLayout();
-  app.rideHud.renderRace({ race, standing: app.standing, status });
+  app.rideHud.renderRace({ race, standing: app.standing, status, layout: app.layout });
 }
 
 /**

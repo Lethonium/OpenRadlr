@@ -113,9 +113,9 @@ export class RideHud {
 
   /**
    * The race layout's text and lists: lap line, position, lap, distance to go, caption, the progress bar's visibility and the groups.
-   * @param {{race: ?object, standing: ?object, status: string}} input `standing` is mine, if I race; `status` is `raceStatus()`
+   * @param {{race: ?object, standing: ?object, status: string, layout: string}} input `standing` is mine, if I race; `status` is `raceStatus()`; the groups are only built in the race `layout`
    */
-  renderRace({ race, standing, status }) {
+  renderRace({ race, standing, status, layout }) {
     const toGo = standing ? formatLength(standing.toGoM) : "–";
     this.metrics.set("lap-info", status);
     this.metrics.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
@@ -125,7 +125,7 @@ export class RideHud {
     // The progress bar only while I race; otherwise the caption alone, centred in its box.
     this.#el("race-timeline").hidden = !standing;
     this.#el("race-groups-panel").hidden = !standing;
-    this.#renderRaceLists(standing);
+    if (layout === "race") this.#renderRaceLists(standing);
   }
 
   #renderRaceLists(standing) {

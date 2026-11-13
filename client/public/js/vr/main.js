@@ -379,13 +379,18 @@ function start() {
     return { timeS, riders, me: onMyRoute.find((rider) => rider.id === riderId) ?? null, onMyRoute };
   }
 
+  let hudAtS = -Infinity;
   const frame = () => {
     requestAnimationFrame(frame);
     if (source) return;
     const now = sample();
     if (!now) return;
     view.render({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() });
-    renderRideHud(now.me, now.onMyRoute);
+    // The ride HUD is HTML: refresh it at the HUD rate, not at every frame.
+    if (now.timeS - hudAtS >= HUD_MS / 1000) {
+      hudAtS = now.timeS;
+      renderRideHud(now.me, now.onMyRoute);
+    }
   };
 
   function onXrFrame(xrFrame) {
