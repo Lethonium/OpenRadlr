@@ -110,7 +110,11 @@ function start() {
     model.onState(message, name);
     routes.follow(model.routeId);
   });
-  connection.on("display", (data) => model.onDisplay(data));
+  connection.on("display", (data) => {
+    // The tablet's units, not this device's own profile.
+    if (data.units) setUnits(data.units);
+    model.onDisplay(data);
+  });
   connection.on("invalid", () => {
     $("cockpit-invalid").hidden = false;
   });

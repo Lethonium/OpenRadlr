@@ -121,6 +121,15 @@ test("renderWorkout names the next block and shows a dash without an average", (
   assert.equal(elements.get("workout-avg").textContent, "– W");
 });
 
+test("renderWorkout leaves out the label of blocks that have none", () => {
+  const { root, elements } = textRoot(WORKOUT_IDS);
+  const hud = new RideHud(root, noDraw);
+  const workout = { name: "Plan", segments: [{ durationS: 40, from: 0.5, to: 0.5, label: "" }, { durationS: 40, from: 1, to: 1, label: "" }] };
+  hud.renderWorkout({ workout, state: { index: 0, segment: workout.segments[0], elapsedS: 0, remainingS: 80, segmentRemainingS: 40 }, ftp: 200, intensity: 1, avgW: null, paused: false, layout: "cockpit" });
+  assert.equal(elements.get("workout-block").textContent, "Block 1 of 2");
+  assert.equal(elements.get("workout-next").textContent, "Next: 0:40 · 200 W");
+});
+
 test("renderWorkout draws the chart only in the training layout", () => {
   const { root } = textRoot(WORKOUT_IDS);
   const drawn = [];

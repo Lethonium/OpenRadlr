@@ -1566,6 +1566,7 @@ function startDisplayFeed() {
         grade: app.session.serverGrade,
         ftp: app.profile.ftp,
         cadence: app.session.latest.cadence,
+        units: app.profile.units,
         recording: overviewRecording(),
         workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
       }),

@@ -99,8 +99,11 @@ export class RideHud {
     const total = state.elapsedS + state.remainingS;
     const next = workout.segments[state.index + 1];
     const nextWatts = next ? Math.round(((next.from + next.to) / 2) * ftp * intensity) : 0;
-    this.#el("workout-block").textContent = t("training.block", { n: state.index + 1, total: workout.segments.length, label: segmentLabel(state.segment.label) }) + (paused ? t("training.paused") : "");
-    this.#el("workout-next").textContent = next ? t("training.next", { label: segmentLabel(next.label), time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
+    // A plan relayed to a screen has no block labels.
+    const label = segmentLabel(state.segment.label);
+    const nextLabel = next ? segmentLabel(next.label) : "";
+    this.#el("workout-block").textContent = t(label ? "training.block" : "training.blockPlain", { n: state.index + 1, total: workout.segments.length, label }) + (paused ? t("training.paused") : "");
+    this.#el("workout-next").textContent = next ? t(nextLabel ? "training.next" : "training.nextPlain", { label: nextLabel, time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
     this.#el("workout-block-time").textContent = formatDuration(state.segmentRemainingS);
     this.#el("workout-elapsed").textContent = formatDuration(state.elapsedS);
     this.#el("workout-remaining").textContent = formatDuration(state.remainingS);

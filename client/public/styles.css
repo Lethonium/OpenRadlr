@@ -6592,14 +6592,6 @@ body.working-out #paddles {
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
 }
 
-.vr-link {
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: rgba(15, 18, 22, 0.72);
-  color: var(--muted);
-  font-size: 14px;
-}
-
 .vr-badge {
   padding: 4px 10px;
   border-radius: 6px;

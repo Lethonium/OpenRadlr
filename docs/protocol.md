@@ -249,6 +249,14 @@ Heart rate reaches the server only this way, in the tablet's `display` data
 (see [ADR 26](adr/0026-second-screens-through-a-server-relay.md)). It is sent
 to that rider's paired screens only, and it is not stored or logged.
 
+The tablet's `display` data (opaque to the server, agreed with the cockpit and
+VR pages) has these fields: `ride` (the ride's start, epoch ms), `hr`,
+`cadence`, `grade`, `ftp`, `units` (`"metric"` or `"imperial"`, the tablet's
+profile, so paired screens show the same units), `stats`, `zones_s` and, while
+a workout runs, `workout { id, step, step_elapsed_s, target_w }`. A separate
+frame `workout_plan { id, name, steps: [{ s, from_w, to_w }] }` carries the
+steps of the workout once. Paired screens ignore fields they do not know.
+
 ## Limits
 
 Messages beyond the per-connection rate (`OPENRADLR_MESSAGES_PER_SECOND`,

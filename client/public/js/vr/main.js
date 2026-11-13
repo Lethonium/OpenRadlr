@@ -15,13 +15,14 @@ import { RiderSmoother } from "../ride/smoothing.js";
 import { RiderStamps } from "../ride/riderStamps.js";
 import { RouteGeometry } from "../route/geometry.js";
 import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "../route/worldMap.js";
-import { distanceUnit, setUnits, speedUnit } from "../util/format.js";
+import { distanceUnit, getUnits, setUnits, speedUnit } from "../util/format.js";
 import { onRoute } from "../ride/roadRiders.js";
+import { workoutName } from "../ride/workout.js";
 import { ScreenWakeLock } from "../util/wakeLock.js";
 import { themeColors } from "../view/canvas.js";
 import { chooseLayout, raceStanding } from "../view/hud.js";
 import { drawMinimap } from "../view/minimapView.js";
-import { inRace } from "../view/panels.js";
+import { inRace, raceStatus } from "../view/panels.js";
 import { drawProfile, drawUpcoming } from "../view/profileView.js";
 import { drawWorkout } from "../view/workoutView.js";
 import { drawRaceTimeline } from "../view/raceTimelineView.js";
@@ -37,6 +38,7 @@ import { buildScene } from "../view3d/worldScene.js";
 import { PreviewSource, parseHead } from "./previewSource.js";
 import { VrWorld, pickHost, worldWanted } from "./vrWorld.js";
 import { WebXrSource } from "./webXrSource.js";
+import { workoutFromPlan, workoutState } from "./workoutFromPlan.js";
 import { switchToXr } from "./xrLoop.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
@@ -132,8 +134,12 @@ function start() {
   initLocale({ storage: localStorage, languages: navigator.languages });
   applyTranslations();
   const profile = new ProfileStore().load();
-  setUnits(profile.units);
-  for (const element of document.querySelectorAll("[data-unit]")) element.textContent = { speed: speedUnit(), distance: distanceUnit() }[element.dataset.unit] ?? element.textContent;
+  /** The tablet's units once its display frames say them; until then, this device's own profile. */
+  const applyUnits = (units) => {
+    setUnits(units);
+    for (const element of document.querySelectorAll("[data-unit]")) element.textContent = { speed: speedUnit(), distance: distanceUnit() }[element.dataset.unit] ?? element.textContent;
+  };
+  applyUnits(profile.units);
   const paired = pairing(localStorage);
   if (!paired) {
     $("vr-unpaired").hidden = false;
@@ -163,6 +169,9 @@ function start() {
   let xrSupported = false;
   let autoPreview = new URLSearchParams(location.search).get("preview") === "1";
   let source = null;
+  /** The running workout's power so far, for its average: `{ key, sum, n }` (the HUD shows the average of the frames it saw). */
+  let workoutPower = null;
+  let planned = null;
 
   const note = (text) => {
     $("vr-note").textContent = text ?? "";
@@ -187,7 +196,11 @@ function start() {
     }
     latest = message;
   });
-  connection.on("display", (data) => model.onDisplay(data));
+  connection.on("display", (data) => {
+    if (data.units && data.units !== getUnits()) applyUnits(data.units);
+    model.onDisplay(data);
+    trackAverage(data);
+  });
   connection.on("invalid", () => {
     $("vr-invalid").hidden = false;
   });
@@ -234,7 +247,8 @@ function start() {
 
   const cameraLabel = (mode) => viewControls({ studio: world?.kind === "studio" }).cameras.find((camera) => camera.id === mode)?.label ?? mode;
   function renderCameraButton() {
-    $("vr-camera").hidden = !view;
+    // In the preview and in VR the camera is the head.
+    $("vr-camera").hidden = !view || Boolean(source);
     if (view) $("vr-camera").textContent = t("camera.label", { mode: cameraLabel(view.camera.mode) });
   }
   function cycleCamera() {
@@ -257,6 +271,31 @@ function start() {
     if (event.key.toLowerCase() === "c" && !event.ctrlKey && !event.metaKey && !event.altKey) cycleCamera();
   });
 
+  /** Adds the host's power to the running workout's average; a new workout or ride starts over. */
+  function trackAverage(data) {
+    if (data.workout_plan) return;
+    if (!data.workout) {
+      workoutPower = null;
+      return;
+    }
+    const key = `${data.ride}/${data.workout.id}`;
+    if (workoutPower?.key !== key) workoutPower = { key, sum: 0, n: 0 };
+    if (Number.isFinite(host?.power)) {
+      workoutPower.sum += host.power;
+      workoutPower.n += 1;
+    }
+  }
+
+  /** The workout the tablet runs, built from its plan; null until the plan arrives or if it does not fit the position. */
+  function workoutOnTablet(ftp) {
+    const plan = model.plan;
+    const position = model.workout;
+    if (!plan || !position || plan.id !== position.id) return null;
+    if (planned?.plan !== plan || planned.ftp !== ftp) planned = { plan, ftp, workout: workoutFromPlan(plan, ftp) };
+    const state = workoutState(planned.workout, position);
+    return state ? { workout: planned.workout, state, name: workoutName({ name: plan.id }) } : null;
+  }
+
   /** The ride screen's HUD for the host: moving figures from the state, the rest from the display frames. */
   function renderRideHud(me, riders) {
     const rider = me ?? host;
@@ -266,6 +305,8 @@ function start() {
     const route = world.route;
     const standing = me ? raceStanding(race, riders, riderId, route.length) : null;
     const stats = model.stats;
+    const ftp = model.ftp ?? profile.ftp ?? DEFAULT_FTP;
+    const colors = themeColors();
     rideHud.render(
       {
         power: rider.power,
@@ -279,10 +320,17 @@ function start() {
         // The tablet's intensity setting is not in the display frames; its target already includes it.
         intensity: 1,
         weightKg: profile.weightKg ?? DEFAULT_WEIGHT_KG,
-        ftp: model.ftp ?? profile.ftp ?? DEFAULT_FTP,
+        ftp,
       },
-      { layout, riders, myId: riderId, standing, colors: themeColors() },
+      { layout, riders, myId: riderId, standing, colors },
     );
+    const running = workoutOnTablet(ftp);
+    if (running) {
+      $("workout-name").textContent = running.name;
+      // The target already carries the intensity; the average is over the frames seen here.
+      rideHud.renderWorkout({ workout: running.workout, state: running.state, ftp, intensity: 1, avgW: workoutPower?.n ? workoutPower.sum / workoutPower.n : null, paused: false, layout, colors });
+    }
+    rideHud.renderRace({ race, standing, status: raceStatus(race, rider.lap) });
   }
 
   /** The riders to draw now, or null until the world, the host and a state of the right kind are there. */
@@ -322,6 +370,7 @@ function start() {
     window.openradlrVr.source = next;
     updatePreviewButton();
     updateEnterButton();
+    renderCameraButton();
     return switchToXr(next, {
       stop2d() {
         $("labels3d").hidden = true;
@@ -340,6 +389,7 @@ function start() {
     renderHud();
     updatePreviewButton();
     updateEnterButton();
+    renderCameraButton();
   }
   function leave() {
     const current = source;
