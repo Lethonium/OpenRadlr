@@ -442,46 +442,119 @@ Added after the window check: the training and race layouts were missing their w
 - [ ] **Step 5: Commit** `feat(client): Ride in VR on your own saddle with a Quest headset`.
   - Tell the user it is ready for the Quest test (road, studio, recenter, comfort, frame rate).
 
-### Task 7: The bike computer on the handlebars in VR
+### Task 7: The hologram HUD on the handlebars
+
+Redesigned with the user after Task 6. A bike computer is too small to read, and a HUD floating in front of you feels wrong. Instead, a see-through hologram rises from the stem, and you read the road through it.
 
 **Files:**
-- Create: `client/public/js/vr/hudPanel.js`
+- Create: `client/public/js/vr/hologram.js`
 - Modify:
-  - `client/public/js/view3d/pixelFont.js` (add the glyphs the panel needs: `W`, `B`, `P`, `M`, `H`, `R`, `/`, `.`, `:` and the digits that are missing)
-  - `view3d.js` (`renderXr` draws the panel's glyph models with `drawBright`)
+  - `client/public/js/view3d/pixelFont.js` (the glyphs the hologram needs)
+  - `view3d.js` (`renderXr` draws the hologram)
+  - `vr/main.js` (passes the values in preview and VR)
 - Test:
-  - `client/test/vr/hudPanel.test.js`
+  - `client/test/vr/hologram.test.js`
   - `client/test/pixelFont.test.js` (create it if absent)
 
 **Interfaces:**
-- Consumes: `hudValues` (Task 3), `powerZone` (`view/hud.js`), `GLYPHS` (`view3d/pixelFont.js`), `ZONE_COLORS` (`view/workoutView.js`).
+- Consumes:
+  - `rideHudValues` (Task 3b, the same strings the window shows);
+  - `powerZone` (`view/hud.js`) and `ZONE_COLORS`;
+  - `pixelText` and `textWidth` (`view3d/pixelFont.js`);
+  - `RIDER_GEOMETRY` and `BODY_JOINTS` (`view3d/riderModel.js`: the bars are at `handL`/`handR`, bike frame, −Z forward);
+  - the seat anchor (Task 5).
 - Produces:
-  - `hudLines(values): [{ text: string, color: [r,g,b] }]`. The lines are:
-    - `"250 W"`, coloured by zone;
-    - `"92 RPM"`;
-    - `"31.2 KM/H"` (or the mph text per the units setting);
-    - `"HR 142"` when heart rate is known;
-    - `"→ 260 W 2:15"` when a workout runs (target and step time left; `→` is a new glyph).
-  - `hudPanelModels(lines, anchor): [{ model: Float32Array, color }]`. It gives one quad model per lit pixel, so the existing glyph mesh is reused.
-    - The panel sits 0.6 m ahead of and 0.35 m below the anchor origin, tilted 35° towards the eye.
-    - Pixels are 4 mm, lines 40 mm apart, and the panel is centred.
-    - It moves with the anchor, not the head.
+  - `hologramLayout(values, { workout }): { cells: [{ text, at: [u, v], size: "big"|"small", color }] }`.
+    - It is pure. `u` and `v` are in metres on the panel, with the centre at 0,0.
+    - The arrangement mirrors the window's cockpit layout:
+      - power big in the centre, coloured by zone, with `W · Z<n>` under it;
+      - speed and cadence on the left;
+      - grade and heart rate on the right.
+    - In a workout, a bottom row shows the target in watts, the block and the time left in it.
+    - Unknown values are shown as `-`.
+    - All text is upper case, in the font's characters.
+  - `class Hologram { constructor(renderer); update(values, { workout }): void; draw(seatFromBike: Float32Array, anchor: Float32Array): void; dispose(): void }`.
+    - `update` rebuilds one text mesh when the text changes. It runs at most 4 times a second, and only when the text differs. It uses `pixelText`, with no per-pixel draw calls.
+    - `draw` draws the glass panel with `drawTransparent(panel, model, { alpha: 0.18, unlit: 1, tint: CYAN })`, a 3 mm edge frame with `drawBright`, and the text with `drawBright(…, 1)`.
+    - Panel geometry:
+      - 0.30 m × 0.15 m;
+      - its bottom edge 0.04 m above the bar centre (the midpoint of `handL` and `handR`), centred on the stem;
+      - leaning back 20° from vertical, towards the rider.
+    - Text sizes: big digits 0.006 m per pixel (42 mm tall), small 0.0028 m per pixel.
+    - `CYAN = [0.55, 0.95, 1.0]`. The text is white-cyan, and power uses its zone colour.
+  - In `renderXr` the hologram is drawn last, after the world, in each view. Depth testing stays on, so the hands (Task 7b) can occlude it.
 
 - [ ] **Step 1: Write the failing tests.**
-  - `hudLines`:
-    - `shows power in its zone colour`;
-    - `leaves heart rate out until it is known`;
-    - `adds the workout target`.
-  - `hudPanelModels`:
-    - `centres the panel ahead of the anchor` (the mean position of the models is within 1 mm of the expected point);
-    - `turns with the anchor, not the head` (rotate the anchor 90°, and the centre rotates with it);
-    - `one model per lit pixel` (`"1"` gives its glyph's `#` count).
-  - `pixelFont`: `has every character the HUD uses`.
+  - `hologramLayout`:
+    - `power is big and in the centre`;
+    - `power takes its zone colour`;
+    - `heart rate shows a dash until known`;
+    - `a workout adds the target row`;
+    - `every character is in the font` (iterate all cells against `GLYPHS`).
+  - `Hologram` with a stub renderer:
+    - `update with the same text uploads nothing`;
+    - `update with new text replaces the mesh and disposes the old one`;
+    - `draw places the panel above the bars` (the panel model's translation in bike space is within 1 mm of `[0, 0.99 + 0.04 + 0.075, -0.46]` — the bars' height plus the gap plus half the panel height, with the lean ignored in this check);
+    - `draw uses one transparent and two bright calls`.
+  - `pixelFont`: the glyphs added (`B`, `C`, `G`, `H`, `W`, `Z`, `/`, `.`, `:`, `-`, `·`, `%`, and all digits) are 5×7.
 - [ ] **Step 2: Run them.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the full client checks, and screenshot** `vr.html?preview=1&head=0,-40`.
-  - Expected: a readable panel on the bars, numbers changing between shots.
-- [ ] **Step 5: Commit** `feat(client): Show power, cadence and heart rate on the handlebars in VR`.
+- [ ] **Step 4: Run the full client checks.** Expected: all pass. The orchestrator screenshots `vr.html?preview=1&head=0,-30`.
+- [ ] **Step 5: Commit** `feat(client): Show your ride as a hologram on the handlebars in VR`.
+
+### Task 7b: Your hands in VR (Quest hand tracking)
+
+**Files:**
+- Create:
+  - `client/public/js/vr/hands.js`
+  - `client/public/js/view3d/handModel.js`
+- Modify:
+  - `vr/xrFrame.js` (the `hands` field)
+  - `vr/webXrSource.js` (`hand-tracking` optional feature, joint poses)
+  - `vr/previewSource.js` (resting hands)
+  - `view3d.js` (`renderXr` draws hands)
+- Test:
+  - `client/test/vr/hands.test.js`
+  - `client/test/vr/webXrSource.test.js`
+  - `client/test/vr/previewSource.test.js`
+
+**Interfaces:**
+- `XrFrame` gains `hands: [{ handedness: "left"|"right", joints: Float32Array[] /* 25 4×4 matrices, seated space, WebXR joint order */, radii: number[] }]`. It is empty when no hand is tracked.
+- `WebXrSource`:
+  - It asks for `optionalFeatures: ["local-floor", "hand-tracking"]`.
+  - Each frame, for every `session.inputSources` entry with `hand`, it reads `frame.getJointPose(joint, space)` for all 25 joints. A hand with any missing joint pose is left out.
+  - It applies the same recentre yaw as the head.
+- `previewFrame` adds two hands resting on the grips, with `restingHand(handedness, grip)`. This makes them visible in screenshots.
+- `hands.js` (pure):
+  - `HAND_BONES`: the 24 parent→child joint pairs, in WebXR order.
+  - `gripPoints(): { left: [x,y,z], right: [x,y,z] }` in seat space, from `BODY_JOINTS.handL` and `handR` relative to the seat anchor's origin.
+  - `snapHand(hand, grip, { reach = 0.10, full = 0.04 }): hand`.
+    - It measures the distance `d` from the palm (the middle-finger metacarpal joint) to the grip.
+    - It moves every joint by `s · (grip − palm)`, where `s = 1` for `d ≤ full`, `s = 0` for `d ≥ reach`, and in between it is a smoothstep. It never rotates the hand.
+  - `restingHand(handedness, grip): hand`: a curled grip pose, palm at the grip.
+- `handModel.js`: `buildHandBone()`, a unit box mesh. `renderXr` draws one box per bone, scaled to the bone's length × 2·radius, in the rider's glove colour (`riderLook(myId)`).
+  - Each hand is snapped to its own side's grip before drawing.
+  - The hands only draw. They never move the camera or the bike.
+- Open for later (not v1): a "line up the bars with my hands" step on recentre, which shifts the anchor so the bike meets the real bars.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `snapHand`:
+    - `leaves a far hand alone` (0.2 m away);
+    - `puts a near hand on the grip` (0.03 m away, palm lands on the grip within 1 mm);
+    - `blends in between` (0.07 m: moved partway, by less than the full gap);
+    - `never rotates the hand`.
+  - `HAND_BONES`: `has 24 bones over 25 joints`.
+  - `webXrSource`:
+    - `asks for hand tracking`;
+    - `a tracked hand gives 25 joints`;
+    - `a hand missing a joint is left out`;
+    - `hands turn with the recentre`.
+  - `previewSource`: `the preview rests both hands on the grips`.
+  - `view3d`: `renderXr draws 24 bones per hand`, and `no hands, no bones`.
+- [ ] **Step 2: Run them.** Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run the full client checks.** Expected: all pass.
+- [ ] **Step 5: Commit** `feat(client): Show your own hands on the handlebars in VR`.
 
 ### Task 8: Pairing UI in the app's style
 

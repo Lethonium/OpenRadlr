@@ -176,16 +176,35 @@ for a person wearing it.
 - **Quality in VR.** The low-quality path, with no shadows, by default. Exact
   budgets are measured on the Quest (see Open).
 
-### The HUD in VR
+### The HUD in VR (redesigned with the user after the first build)
 
-- **`vr/hudPanel.js`** (pure). It builds model matrices for glyph quads from
-  the numbers: power (zone-coloured), heart rate, cadence and speed, plus the
-  workout's target and step time when a workout runs.
-- **Where it sits.** On a panel just above the handlebars, about 0.6 m in front
-  of the anchor and tilted towards the eye, so you see it by looking down. It
-  moves with the bike, not the head.
-- **How it's drawn.** With the existing pixel-font glyph meshes; it adds the
-  `W`, `b`, `p`, `m` and `/` glyphs and the units it needs.
+- **A hologram on the handlebars.** A bike computer would be too small to read,
+  and a HUD floating in your view feels wrong. Instead, a see-through cyan
+  panel (30 × 15 cm) rises from the stem just above the bars and leans
+  towards you. Its digits glow, and you read the road through it.
+- **Content.** It mirrors the window's cockpit layout:
+  - power big in the centre, in its zone colour;
+  - speed and cadence on the left, grade and heart rate on the right;
+  - a target and block row in a workout.
+- **How it's drawn.** With the pixel font. The text mesh is rebuilt only when
+  the text changes (at most 4 times a second). The panel uses the renderer's
+  transparent unlit draw and the glyphs its bright draw. It moves with the
+  bike, never with the head.
+
+### Hands in VR
+
+- **Your real hands.** With Quest hand tracking (the WebXR `hand-tracking`
+  feature), each of the 25 joints per hand is drawn as low-poly glove boxes in
+  the rider's kit colour.
+- **When nothing is tracked.** With controllers, or when tracking drops out,
+  no hands are drawn.
+- **Snap to the grips.** A hand within 10 cm of a virtual grip is drawn on
+  it, with a smooth blend from 10 cm to 4 cm. This covers real bars that sit
+  a few centimetres off the virtual ones. Only the hands are drawn moved; the
+  camera and the bike stay put.
+- **In the preview.** It shows a pair of hands resting on the grips.
+- **Later, if the snap isn't enough** (not v1): a "line up with my hands"
+  step on recentre, which shifts the bike under the real hands.
 
 ### Pairing UI: polish and a device list
 
