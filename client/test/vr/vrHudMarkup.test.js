@@ -6,7 +6,7 @@ const page = (name) => readFileSync(new URL(`../../public/${name}`, import.meta.
 const ride = page("index.html");
 const vr = page("vr.html");
 
-const normalise = (html) => html.replace(/<!--[\s\S]*?-->/g, "").replace(/\s+/g, " ").replace(/> </g, "><").trim();
+const normalise = (html) => html.replace(/\s+/g, " ").replace(/> </g, "><").trim();
 
 /** The `<div class="…">` block with this class, up to its balanced closing tag. */
 function block(html, className) {
