@@ -1044,4 +1044,12 @@ export default {
   "profilePage.data.deleteAll": "Delete everything on this device",
   "profilePage.data.exportFailed": "Couldn't export: this browser didn't let OpenRadlr read its storage.",
   "profilePage.data.note": "What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.",
+  "profilePage.ftp.title": "FTP over time",
+  "profilePage.ftp.legendSet": "Set FTP",
+  "profilePage.ftp.legendEstimate": "Estimated from your rides",
+  "profilePage.ftp.legendTest": "FTP test",
+  "profilePage.ftp.notEnough": "Ride with a power meter or smart trainer for a few weeks to see your FTP move.",
+  "profilePage.ftp.chart": "FTP over time: {parts}.",
+  "profilePage.ftp.chartSet": "set from {from} W to {to} W",
+  "profilePage.ftp.chartEstimate": "estimated from your rides {last} W last",
 };

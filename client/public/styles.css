@@ -2998,6 +2998,54 @@ body.riding {
   font-weight: 600;
 }
 
+/* The FTP chart's two lines: checked for colour-blind separation against the card. */
+.profile-dialog {
+  --ftp-set: #e8650f;
+  --ftp-estimate: #2596cf;
+}
+
+.profile-ftp-chart {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+
+.profile-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-legend li::before {
+  content: "";
+  width: 16px;
+  border-top: 2px solid var(--ftp-set);
+}
+
+.profile-legend .legend-estimate::before {
+  border-top-style: dashed;
+  border-top-color: var(--ftp-estimate);
+}
+
+.profile-legend .legend-test::before {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ftp-set);
+}
+
 .profile-dialog .menu-backdrop {
   position: fixed;
   z-index: 30;

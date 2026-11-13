@@ -13,9 +13,9 @@ import { ControllerInput, MergedControllers, alternatives, controllerNavigates }
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, overviewLines, rideRows } from "./view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
-import { periodTotals } from "./profile/stats.js";
+import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -59,7 +59,7 @@ import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
 import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
-import { themeColors } from "./view/canvas.js";
+import { prepareCanvas, themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
   LAYOUT_LABELS,
@@ -2774,6 +2774,8 @@ function initProfile() {
     focusables: () => focusableIn(app.deleteConfirm?.isOpen ? $("delete-confirm") : root),
     onPage: (page) => {
       for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
+      // A canvas on a hidden page has no size: draw the chart when its page shows.
+      if (page === "overview") renderProfileFtp();
     },
     onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
   });
@@ -2816,6 +2818,7 @@ async function loadProfile(keep) {
 function renderProfile() {
   if (!app.profileData) return;
   renderProfileOverview();
+  renderProfileFtp();
   renderProfileRides();
   renderProfileData();
 }
@@ -2831,6 +2834,25 @@ function renderProfileOverview() {
   $("profile-totals").replaceChildren(...lines.totals.flatMap(({ label, value }) => [textElement("dt", label), textElement("dd", value)]));
   $("profile-bests").replaceChildren(...lines.bests.map((line) => textElement("li", line)));
   $("profile-bests-none").hidden = lines.bests.length > 0;
+}
+
+/** FTP over time: set and estimated, or a sentence while there is too little to chart. */
+function renderProfileFtp() {
+  if (!app.profileData) return;
+  const series = ftpSeries(app.profileData.records, Date.now());
+  const chart = hasFtpChart(series);
+  $("profile-ftp-panel").hidden = app.profileData.records.length === 0;
+  $("profile-ftp-chart").hidden = !chart;
+  $("profile-ftp-legend").hidden = !chart;
+  $("profile-ftp-note").hidden = chart;
+  if (!chart) return;
+  const canvas = $("profile-ftp-chart");
+  canvas.setAttribute("aria-label", ftpChartLabel(series));
+  if (!canvas.clientWidth) return;
+  const { ctx, width, height } = prepareCanvas(canvas);
+  const css = getComputedStyle($("profile-dialog"));
+  const read = (name) => css.getPropertyValue(name).trim();
+  paintFtpChart(ctx, ftpChartModel(series, width, height, { locale: getLocale() }), { ...themeColors(), set: read("--ftp-set"), estimate: read("--ftp-estimate"), surface: read("--surface") });
 }
 
 /** The Rides page: the newest rides, each opening its splits and power curve. */

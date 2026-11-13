@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
 
 const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
@@ -130,4 +130,48 @@ test("dataRows: the profile is reset, the others deleted", () => {
   assert.equal(by.profile.action, "Reset");
   assert.equal(by.rides.action, "Delete");
   assert.equal(by.rides.actionLabel, "Delete Rides");
+});
+
+const WEEK = 7 * 864e5;
+
+test("ftpChartModel: the y range pads 10 W and rounds out to 10 W", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 243 }, { t: WEEK, ftp: 251 }], estimated: [] }, 300, 120);
+  assert.equal(m.yTicks.at(0).label, "230 W");
+  assert.equal(m.yTicks.at(-1).label, "270 W");
+});
+
+test("ftpChartModel: a higher FTP is drawn higher, a later one further right", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200 }, { t: 10 * WEEK, ftp: 260 }], estimated: [] }, 300, 120);
+  assert.ok(m.set[1].y < m.set[0].y);
+  assert.ok(m.set[1].x > m.set[0].x);
+});
+
+test("ftpChartModel: FTP tests are marked", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200, test: false }, { t: WEEK, ftp: 230, test: true }], estimated: [] }, 300, 120);
+  assert.deepEqual(m.set.map((p) => p.test), [false, true]);
+});
+
+test("ftpChartModel: a week without an estimate is a gap", () => {
+  const m = ftpChartModel({ set: [], estimated: [{ t: 0, ftp: 240 }, { t: WEEK, ftp: null }, { t: 2 * WEEK, ftp: 248 }] }, 300, 120);
+  assert.equal(m.estimated[1], null);
+  assert.ok(m.estimated[2].x > m.estimated[0].x);
+});
+
+test("ftpChartModel: every point stays inside the canvas", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200 }, { t: WEEK, ftp: 400 }], estimated: [{ t: WEEK, ftp: 300 }] }, 300, 120);
+  for (const p of [...m.set, ...m.estimated]) {
+    assert.ok(p.x >= 0 && p.x <= 300 && p.y >= 0 && p.y <= 120);
+  }
+});
+
+test("ftpChartModel: the first and last date label the time axis", () => {
+  const m = ftpChartModel({ set: [{ t: Date.UTC(2026, 8, 1, 12), ftp: 200 }, { t: Date.UTC(2026, 10, 10, 12), ftp: 210 }], estimated: [] }, 300, 120, { locale: "en" });
+  assert.equal(m.xLabels.length, 2);
+  assert.match(m.xLabels[0].label, /Sep/);
+  assert.match(m.xLabels[1].label, /Nov/);
+});
+
+test("ftpChartLabel: says in words how the FTP moved", () => {
+  const label = ftpChartLabel({ set: [{ t: 0, ftp: 235 }, { t: WEEK, ftp: 245 }], estimated: [{ t: WEEK, ftp: 251 }] });
+  assert.equal(label, "FTP over time: set from 235 W to 245 W, estimated from your rides 251 W last.");
 });
