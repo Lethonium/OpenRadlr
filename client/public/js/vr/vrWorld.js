@@ -51,7 +51,10 @@ export class VrWorld extends Emitter {
         if (build === this.#build) this.emit("world", world);
       },
       (error) => {
-        if (build === this.#build) this.emit("failed", error);
+        if (build !== this.#build) return;
+        // Forget the want, so the next state message asks again.
+        this.#current = null;
+        this.emit("failed", error);
       },
     );
   }

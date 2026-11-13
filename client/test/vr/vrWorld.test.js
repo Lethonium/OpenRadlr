@@ -68,3 +68,34 @@ test("a newer want drops the older build's result", async () => {
   await flush();
   assert.deepEqual(built, [{ name: "studio" }]);
 });
+
+test("a failed build is tried again by the next want", async () => {
+  const failures = [];
+  const builds = [];
+  const world = new VrWorld({
+    buildRouteWorld: () => new Promise((resolve, reject) => builds.push({ resolve, reject })),
+    buildStudioWorld: () => new Promise(() => {}),
+  });
+  world.on("failed", (error) => failures.push(error));
+  world.want({ kind: "route", routeId: "a" });
+  builds[0].reject(new Error("offline"));
+  await flush();
+  world.want({ kind: "route", routeId: "a" });
+  assert.equal(failures.length, 1);
+  assert.equal(builds.length, 2);
+});
+
+test("a stale build's failure does not forget the newer want", async () => {
+  const builds = [];
+  const world = new VrWorld({
+    buildRouteWorld: () => new Promise((resolve, reject) => builds.push({ resolve, reject })),
+    buildStudioWorld: () => new Promise(() => {}),
+  });
+  world.on("failed", () => {});
+  world.want({ kind: "route", routeId: "a" });
+  world.want({ kind: "route", routeId: "b" });
+  builds[0].reject(new Error("offline"));
+  await flush();
+  world.want({ kind: "route", routeId: "b" });
+  assert.equal(builds.length, 2);
+});
