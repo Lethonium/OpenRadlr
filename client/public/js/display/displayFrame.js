@@ -12,6 +12,9 @@ export const DISPLAY_LIMIT_BYTES = 2048;
 const ZONES = 6;
 const NAME_MAX_CHARS = 60;
 
+/** The ride's name for the cockpit: when it began, epoch ms. A reconnect or a restored ride keeps it. */
+export const rideId = (recording) => recording.samples[0]?.t;
+
 /** Seconds in power zones 1–6, one second per sample; samples without a known zone count nowhere. */
 function zoneSeconds(samples, ftp) {
   const zones = Array(ZONES).fill(0);
@@ -34,6 +37,8 @@ function zoneSeconds(samples, ftp) {
  */
 export function displayFrame({ heartRate, grade, ftp, cadence, recording, workout }) {
   const frame = {};
+  const ride = rideId(recording);
+  if (ride !== undefined) frame.ride = ride;
   if (Number.isFinite(heartRate)) frame.hr = heartRate;
   if (Number.isFinite(grade)) frame.grade = grade;
   if (Number.isFinite(cadence)) frame.cadence = cadence;
@@ -49,11 +54,11 @@ export function displayFrame({ heartRate, grade, ftp, cadence, recording, workou
 
 /**
  * The step list of a workout, sent once per workout. Steps that would not fit
- * the frame limit are left off the end.
+ * the frame limit are left off the end. `ride` is the ride's id (see `rideId`).
  */
-export function workoutPlanFrame(workout, ftp) {
+export function workoutPlanFrame(workout, ftp, ride) {
   const plan = { id: workout.name, name: workout.name.slice(0, NAME_MAX_CHARS), steps: [] };
-  const frame = { workout_plan: plan };
+  const frame = { ...(ride !== undefined ? { ride } : {}), workout_plan: plan };
   let bytes = JSON.stringify(frame).length;
   for (const segment of workout.segments) {
     const step = { s: segment.durationS, from_w: Math.round(segment.from * ftp), to_w: Math.round(segment.to * ftp) };

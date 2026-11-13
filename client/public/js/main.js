@@ -112,7 +112,7 @@ import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
-import { displayFrame, workoutPlanFrame } from "./display/displayFrame.js";
+import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
 import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
 import { createScreensDialog } from "./view/screensDialog.js";
 
@@ -1561,7 +1561,7 @@ function startDisplayFeed() {
     const workout = training?.workout ?? null;
     planSent.ticks++;
     if (workout && (planSent.connection !== connection || planSent.workout !== workout || planSent.ticks >= PLAN_RESEND_TICKS)) {
-      connection.sendDisplay(workoutPlanFrame(workout, app.profile.ftp));
+      connection.sendDisplay(workoutPlanFrame(workout, app.profile.ftp, rideId(app.recorder)));
       planSent = { connection, workout, ticks: 0 };
     }
     const state = workout ? training.workoutState() : null;

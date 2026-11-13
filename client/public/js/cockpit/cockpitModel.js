@@ -3,6 +3,10 @@
  * host's rider (from the relayed state), the latest display frame, the
  * workout plan and a 20-minute history of power, heart rate, cadence and
  * speed. Pure: time is injected.
+ *
+ * The cockpit follows the tablet from ride to ride. Display frames name their
+ * ride (`ride`); a new name clears what belonged to the last ride, while a
+ * reconnect to the same ride keeps it.
  */
 const STALE_AFTER_MS = 3000;
 const POWER_WINDOW_MS = 3000;
@@ -22,6 +26,7 @@ export class CockpitModel {
   #recent = [];
   #lastHistoryAt = null;
   #history = { power: [], hr: [], cadence: [], speed: [] };
+  #ride = null;
 
   constructor({ now }) {
     this.#now = now;
@@ -60,6 +65,10 @@ export class CockpitModel {
   /** The data of a `display` frame: a workout plan, or the live figures. */
   onDisplay(data) {
     this.#lastMessageAt = this.#now();
+    if (data.ride !== undefined && data.ride !== this.#ride) {
+      if (this.#ride !== null) this.#newRide();
+      this.#ride = data.ride;
+    }
     if (data.workout_plan) {
       this.#plan = data.workout_plan;
       return;
@@ -71,6 +80,17 @@ export class CockpitModel {
   /** The geometry of the route the rider is on, once loaded (see RouteFollower). */
   setRoute(route) {
     this.#route = route;
+  }
+
+  /** Forgets the last ride's figures, workout, race and history. The route stays: it follows the rider. */
+  #newRide() {
+    this.#rider = null;
+    this.#race = null;
+    this.#frame = {};
+    this.#plan = null;
+    this.#recent = [];
+    this.#lastHistoryAt = null;
+    this.#history = { power: [], hr: [], cadence: [], speed: [] };
   }
 
   #push(series, value) {

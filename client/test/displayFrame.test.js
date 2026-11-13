@@ -85,7 +85,16 @@ test("the plan of a very long workout is cut to fit the limit", () => {
 
 test("the plan lists each step's duration and watts", () => {
   const workout = createWorkout({ name: "Ramp", segments: [steady(60, 0.5), { durationS: 120, from: 0.5, to: 1, label: "Ramp", kind: "ramp" }] });
-  assert.deepEqual(workoutPlanFrame(workout, 200), {
+  assert.deepEqual(workoutPlanFrame(workout, 200, T0), {
+    ride: T0,
     workout_plan: { id: "Ramp", name: "Ramp", steps: [{ s: 60, from_w: 100, to_w: 100 }, { s: 120, from_w: 100, to_w: 200 }] },
   });
+});
+
+test("frames name the ride by its first sample, so a cockpit can tell rides apart", () => {
+  const rec = recording([100, 100]);
+  assert.equal(displayFrame({ ftp: 200, recording: rec }).ride, T0);
+  const workout = createWorkout({ name: "Test", segments: [steady(60, 0.5)] });
+  assert.equal(workoutPlanFrame(workout, 200, T0).ride, T0);
+  assert.equal("ride" in displayFrame({ ftp: 200, recording: recording([]) }), false);
 });

@@ -117,3 +117,42 @@ test("the route follows the host's rider", () => {
   model.setRoute(route);
   assert.equal(model.route, route);
 });
+
+test("a new ride starts the cockpit afresh", () => {
+  const { model, at } = setup();
+  model.onStatus({ live: true, name: "Anna" });
+  model.onDisplay({ ride: 1000, workout_plan: { id: "w", name: "W", steps: [] } });
+  model.onDisplay({ ride: 1000, hr: 150, stats: { elapsedS: 600 }, workout: { id: "w", step: 3 } });
+  model.onState({ ...state(250), race: { phase: "running" } });
+  model.onStatus({ live: false, name: "Anna" });
+  at(60_000);
+  model.onStatus({ live: true, name: "Anna" });
+  model.onDisplay({ ride: 61_000, stats: { elapsedS: 1 } });
+  assert.equal(model.hr, null);
+  assert.equal(model.stats.elapsedS, 1);
+  assert.equal(model.workout, null);
+  assert.equal(model.plan, null);
+  assert.equal(model.race, null);
+  assert.equal(model.power3s, null);
+  assert.deepEqual(model.history.power, []);
+});
+
+test("the plan of the new ride survives the reset it causes", () => {
+  const { model } = setup();
+  model.onDisplay({ ride: 1000, workout_plan: { id: "a", name: "A", steps: [] } });
+  model.onDisplay({ ride: 2000, workout_plan: { id: "b", name: "B", steps: [] } });
+  assert.equal(model.plan.name, "B");
+});
+
+test("a reconnect to the same ride keeps its history", () => {
+  const { model, at } = setup();
+  model.onStatus({ live: true, name: "Anna" });
+  model.onDisplay({ ride: 1000, hr: 150 });
+  model.onState(state(250));
+  model.onStatus({ live: false, name: "Anna" });
+  at(5000);
+  model.onStatus({ live: true, name: "Anna" });
+  model.onDisplay({ ride: 1000, hr: 152 });
+  assert.deepEqual(model.history.power, [250]);
+  assert.equal(model.hr, 152);
+});
