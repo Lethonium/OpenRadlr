@@ -5,12 +5,13 @@ import { FakeSocket } from "../helpers.js";
 
 const KEY = "0123456789abcdef0123456789abcdef";
 
-function setup() {
+function setup(options = {}) {
   const sockets = [];
   const timers = [];
   const connection = new CockpitConnection({
     url: "ws://host/ws",
     key: KEY,
+    ...options,
     createSocket: (url) => {
       const socket = new FakeSocket(url);
       sockets.push(socket);
@@ -28,6 +29,14 @@ test("watching starts with hello and watch", () => {
   assert.deepEqual(sockets[0].sent.map((m) => m.type), ["hello"]);
   sockets[0].receive({ type: "welcome" });
   assert.deepEqual(sockets[0].sent.at(-1), { type: "watch", key: KEY, view: "data" });
+});
+
+test("watches with the given view", () => {
+  const { connection, sockets } = setup({ view: "world" });
+  connection.start();
+  sockets[0].open();
+  sockets[0].receive({ type: "welcome" });
+  assert.deepEqual(sockets[0].sent.at(-1), { type: "watch", key: KEY, view: "world" });
 });
 
 test("status, state and display are emitted", () => {
@@ -87,6 +96,18 @@ test("a welcome resets the retry delay", () => {
 
 test("a bad key stops retrying", () => {
   const { connection, sockets, timers } = setup();
+  let invalid = 0;
+  connection.on("invalid", () => invalid++);
+  connection.start();
+  sockets[0].open();
+  sockets[0].receive({ type: "error", code: "bad_screen_key" });
+  sockets[0].dispatch("close");
+  assert.equal(invalid, 1);
+  assert.equal(timers.length, 0);
+});
+
+test("invalid is emitted for a world watcher too", () => {
+  const { connection, sockets, timers } = setup({ view: "world" });
   let invalid = 0;
   connection.on("invalid", () => invalid++);
   connection.start();

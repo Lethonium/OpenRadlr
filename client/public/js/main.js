@@ -1601,7 +1601,8 @@ function initScreens() {
   $("screens-pair").addEventListener("click", () => dialog.open());
   $("screens-close").addEventListener("click", () => dialog.close());
   els.dialog.addEventListener("close", () => dialog.close());
-  $("screens-cockpit").addEventListener("click", async () => {
+  // The same pairing serves both: the device then opens the page it was asked for.
+  const useAs = (page) => async () => {
     if (!readSetting(COCKPIT_KEY)) {
       const code = (prompt(t("screens.codePrompt")) ?? "").trim().toUpperCase();
       if (!code) return;
@@ -1613,8 +1614,10 @@ function initScreens() {
         return;
       }
     }
-    location.href = "cockpit.html";
-  });
+    location.href = page;
+  };
+  $("screens-cockpit").addEventListener("click", useAs("cockpit.html"));
+  $("screens-vr").addEventListener("click", useAs("vr.html"));
 }
 
 // ---------------------------------------------------------- diagnostics ---

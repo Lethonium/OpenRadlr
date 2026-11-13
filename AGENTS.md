@@ -67,7 +67,7 @@ repeat it. Here is the operational knowledge on top of that.
 ## Key layout
 - `client/public/` — browser app (`js/` modules, `index.html`, `styles.css`;
   UI text lives in `js/i18n/en.js` + `de.js`, see ADR 0017);
-  `client/test/` — node tests; one composition root per page (`main.js`, `gallery.js`, `cockpit/main.js`)
+  `client/test/` — node tests; one composition root per page (`main.js`, `gallery.js`, `cockpit/main.js`, `vr/main.js`)
 - `server/crates/sim/` — pure simulation (no I/O, async or third-party deps);
   `server/crates/server/` — game core + WebSocket server; `tests/` — e2e
 - `routes/` — bundled route JSON (regenerate with `make routes`)
