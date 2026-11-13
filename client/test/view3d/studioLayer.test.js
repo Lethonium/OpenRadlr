@@ -100,3 +100,11 @@ test("the glass is drawn blended, darker on closed floors", () => {
   assert.equal(fake.transparent.length, 2);
   assert.ok(fake.transparent[1].look.alpha > fake.transparent[0].look.alpha);
 });
+
+test("a seat on a higher room grows the building, without being told the room count", () => {
+  const layer = new StudioLayer(new FakeRenderer(), site);
+  const [placed] = layer.riders([{ id: 9, studio: { room: 2, seat: 0 } }]);
+  assert.equal(layer.floors, 3);
+  assert.equal(layer.coaches().length, 3);
+  assert.ok(placed.position[1] < floorTransform(site, layer.floors)[13], "the rider sits below the roof");
+});

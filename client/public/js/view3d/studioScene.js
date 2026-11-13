@@ -68,19 +68,20 @@ export class StudioView3D {
   #pedalPhase = new Map();
   #wheelPhase = new Map();
   #lastTime = null;
+  #reducedMotion;
   cameraMode = "seat";
   quality = "high";
 
   /**
    * @param {HTMLCanvasElement} canvas
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
+   * @param {{renderer?: object, reducedMotion?: boolean}} [options] a renderer instead of WebGL (tests); no camera bob with reduced motion
    */
-  constructor(canvas, labelLayer) {
-    const gl = createContext(canvas);
-    if (!gl) throw new Error("WebGL 2 is not available");
+  constructor(canvas, labelLayer, { renderer = null, reducedMotion = false } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
-    this.renderer = new Renderer(gl);
+    this.#reducedMotion = reducedMotion;
+    this.renderer = renderer ?? StudioView3D.#webGlRenderer(canvas);
     this.shadowsEnabled = this.renderer.createShadowMap(1024);
     const { room, accents } = buildStudioRoom();
     this.room = this.renderer.upload(room);
@@ -101,6 +102,17 @@ export class StudioView3D {
     this.wheel = this.renderer.upload(buildWheel());
     this.shadow = this.renderer.upload(buildRiderShadow());
     this.identity = placement([0, 0, 0]);
+  }
+
+  static #webGlRenderer(canvas) {
+    const gl = createContext(canvas);
+    if (!gl) throw new Error("WebGL 2 is not available");
+    return new Renderer(gl);
+  }
+
+  /** The camera for my seat; My view bobs with my cadence unless motion is reduced. */
+  cameraPose(mySeat, cadence, timeS) {
+    return studioCamera(this.cameraMode, mySeat, { cadence, timeS, reducedMotion: this.#reducedMotion });
   }
 
   setQuality(quality) {
@@ -156,7 +168,7 @@ export class StudioView3D {
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     const me = riders.find((r) => r.id === myId);
-    const { eye, target } = studioCamera(this.cameraMode, me?.seat, { cadence: myCadence ?? 0, timeS });
+    const { eye, target } = this.cameraPose(me?.seat, myCadence ?? 0, timeS);
     const viewProjection = multiply(perspective(FOV_Y, width / height, 0.1, 60), lookAt(eye, target));
     const inverseViewProjection = invert(viewProjection);
 

@@ -271,6 +271,7 @@ export default {
   "ftp.prompt.test": "Measured by the ramp test.",
   "ftp.prompt.twenty": "From your best 20 minutes.",
   "ftp.prompt.recent": "From your best efforts of the last 90 days.",
+  "panels.spinStudio": "Spin studio",
   "panels.lap.one": "{n} lap",
   "panels.lap.other": "{n} laps",
   "panels.race.starts": "Race starts in {s} s · {laps}",

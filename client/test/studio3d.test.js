@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
+import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
 import { buildStudioRoom } from "../public/js/view3d/studioRoom.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
@@ -48,4 +48,25 @@ test("the room-only view leaves me out in my own point of view", () => {
   const eye = studioCamera("pov", 3).eye;
   assert.deepEqual(shownInRoom(placed, 7, eye, "seat").map(({ rider }) => rider.id), [7, 8]);
   assert.deepEqual(shownInRoom(placed, 7, eye, "pov").map(({ rider }) => rider.id), [8]);
+});
+
+class UploadOnlyRenderer {
+  createShadowMap() {
+    return false;
+  }
+  upload(mesh) {
+    return mesh;
+  }
+}
+
+test("the room-only view keeps My view still with reduced motion", () => {
+  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer(), reducedMotion: true });
+  view.cameraMode = "pov";
+  assert.deepEqual(view.cameraPose(3, 90, 0.17), view.cameraPose(3, 90, 0));
+});
+
+test("the room-only view bobs My view with cadence otherwise", () => {
+  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer() });
+  view.cameraMode = "pov";
+  assert.notDeepEqual(view.cameraPose(3, 90, 0.17), view.cameraPose(3, 90, 0));
 });

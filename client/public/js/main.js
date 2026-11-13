@@ -103,6 +103,8 @@ import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
+
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
@@ -1956,7 +1958,7 @@ function wireConnection(connection) {
     // Riders of the map's other routes only show in 3D; panels and 2D views follow my route.
     app.smoother.update(riders, now());
     // Humans on other routes still go in the Riders drawer, under their route's name.
-    const elsewhere = riders.filter((rider) => !rider.is_bot && !onMyRoute(rider));
+    const elsewhere = riders.filter((rider) => ridesElsewhere(rider, app.route.id));
     app.state = { ...message, riders: riders.filter(onMyRoute), elsewhere };
     // The workout screen has none of the ride panels.
     if (!app.workout) updatePanels();
@@ -2439,7 +2441,8 @@ function buildStudioWorld() {
 function studioRoomOnly() {
   $("view-note").textContent = "";
   try {
-    app.studioView = new StudioView3D($("world3d"), $("labels3d"));
+    const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
   } catch (error) {
     console.error(error);
@@ -4349,7 +4352,7 @@ function chooseTurn(option) {
 
 /** Riders on my route (all of them from a server that doesn't say). */
 function onMyRoute(rider) {
-  return !rider.route || rider.route === app.route.id;
+  return onRoute(rider, app.route.id);
 }
 
 function updatePanels() {
@@ -4357,8 +4360,7 @@ function updatePanels() {
   if (!me) return;
   if (app.menuDialog?.isOpen) renderMenuStatus();
   const routes = routesOf(app.info);
-  const routeName = (id) => routes.find((route) => route.id === id)?.name ?? id;
-  const elsewhere = (app.state.elsewhere ?? []).map((rider) => ({ rider, routeName: routeName(rider.route) }));
+  const elsewhere = (app.state.elsewhere ?? []).map((rider) => ({ rider, routeName: elsewhereName(rider, routes) }));
   const sections = riderSections(me, app.state.riders, app.route, elsewhere);
   renderRiderList($("rider-list"), sections.humans, app.riderId);
   renderRiderList($("bot-list"), sections.bots, app.riderId);
