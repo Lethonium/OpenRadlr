@@ -39,6 +39,7 @@
     <link rel="modulepreload" href="js/net/strava.js" />
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
+    <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
     <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
@@ -495,6 +496,14 @@
                 <div class="menu-page" data-menu-page="data" role="region" aria-labelledby="profile-nav-data" hidden>
                   <div class="panel">
                     <h2 data-i18n="profilePage.data">Your data</h2>
+                    <p class="field-hint" data-i18n="profilePage.data.lede">What OpenRadlr keeps in this browser. It stays on this device.</p>
+                    <ul id="profile-data" class="profile-data"></ul>
+                    <p id="profile-data-error" class="error" role="alert" hidden></p>
+                    <div class="profile-data-actions">
+                      <button type="button" id="profile-export" class="secondary" data-i18n="profilePage.data.export">Export as a file</button>
+                      <button type="button" id="profile-delete-all" class="secondary profile-ride-delete" data-i18n="profilePage.data.deleteAll">Delete everything on this device</button>
+                    </div>
+                    <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
                   </div>
                 </div>
               </div>

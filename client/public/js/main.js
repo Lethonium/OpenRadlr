@@ -13,7 +13,8 @@ import { ControllerInput, MergedControllers, alternatives, controllerNavigates }
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, overviewLines, rideRows } from "./view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, overviewLines, rideRows } from "./view/profilePage.js";
+import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
@@ -2784,6 +2785,8 @@ function initProfile() {
     stack: panels,
   });
   $("open-profile").addEventListener("click", () => openProfile());
+  $("profile-export").addEventListener("click", exportProfileData);
+  $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-rides-more").addEventListener("click", () => {
     app.profileRidesShown += RIDES_PAGE_SIZE;
     renderProfileRides();
@@ -2801,8 +2804,8 @@ function openProfile(page) {
 
 /** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
 async function loadProfile(keep) {
-  const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
-  app.profileData = { records, bests };
+  const [records, bests, items] = await Promise.all([app.history.list(), app.ghosts.all(), inventory(dataSources())]);
+  app.profileData = { records, bests, items };
   if (keep !== "rides") app.profileRidesShown = RIDES_PAGE_SIZE;
   app.profileOpenRide = null;
   renderProfile();
@@ -2814,6 +2817,7 @@ function renderProfile() {
   if (!app.profileData) return;
   renderProfileOverview();
   renderProfileRides();
+  renderProfileData();
 }
 
 function renderProfileOverview() {
@@ -2901,6 +2905,79 @@ async function deleteRide(record) {
   const date = rideRows([record], [], { locale: getLocale() })[0].date;
   const deleted = await app.deleteConfirm.ask({ texts: deleteTexts("ride", { date }), onConfirm: () => app.history.delete(record.id) });
   if (deleted) await loadProfile("rides");
+}
+
+/** localStorage and the raw IndexedDB stores, for profile/localData.js. */
+function dataSources() {
+  return { storage: browserStorage(), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+}
+
+/** The "Your data" page: each item with its count, export and delete. */
+function renderProfileData() {
+  const { items } = app.profileData;
+  const rows = dataRows(items);
+  $("profile-data").replaceChildren(...rows.map((row) => {
+    const item = document.createElement("li");
+    item.className = "profile-data-row";
+    const name = textElement("span", row.name);
+    name.className = "profile-data-name";
+    const count = textElement("span", row.count);
+    count.className = "profile-data-count";
+    const label = document.createElement("div");
+    label.className = "profile-data-label";
+    label.append(name, count);
+    item.append(label);
+    if (row.canDelete) {
+      const remove = textElement("button", row.action);
+      remove.type = "button";
+      remove.className = "secondary small profile-ride-delete";
+      remove.setAttribute("aria-label", row.actionLabel);
+      remove.addEventListener("click", () => deleteProfileData(row.id));
+      item.append(remove);
+    }
+    const detail = textElement("span", row.detail);
+    detail.className = "profile-data-detail";
+    item.append(detail);
+    return item;
+  }));
+  const anyReadable = items.some((entry) => entry.readable);
+  $("profile-export").disabled = !anyReadable;
+  $("profile-delete-all").disabled = !items.every((entry) => entry.readable);
+}
+
+async function exportProfileData() {
+  const now = Date.now();
+  $("profile-data-error").hidden = true;
+  try {
+    const data = await exportData({ ...dataSources(), now });
+    await saveFiles([{ blob: new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), name: exportFileName(now) }]);
+  } catch {
+    $("profile-data-error").textContent = t("profilePage.data.exportFailed");
+    $("profile-data-error").hidden = false;
+  }
+}
+
+/** The facts a delete's confirmation names: counts and, for rides, the first and last date. */
+function deleteFacts(id) {
+  const { records, items } = app.profileData;
+  const count = (key) => items.find((entry) => entry.id === key)?.count;
+  const dates = rideRows([records.at(-1), records[0]].filter(Boolean), [], { locale: getLocale() }).map((row) => row.date);
+  if (id === "progress") return count("progress") ?? {};
+  if (id === "bestLaps") return { count: count("bestLaps") ?? 0 };
+  return { count: records.length, from: dates[0], to: dates[1] };
+}
+
+async function deleteProfileData(id) {
+  const deleted = await app.deleteConfirm.ask({
+    texts: deleteTexts(id, deleteFacts(id)),
+    onConfirm: () => deleteItem(id, dataSources()),
+    onExport: exportProfileData,
+  });
+  if (!deleted) return;
+  // The profile and settings in memory would be written back: start fresh instead.
+  if (needsReload(id)) return location.reload();
+  await loadProfile();
+  $("profile-export").focus();
 }
 
 function textElement(tag, text) {
