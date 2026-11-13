@@ -75,3 +75,11 @@ test("a bone's box spans its two joints", () => {
   close(Math.hypot(m[8], m[9], m[10]), distance(a, b), 1e-5);
   close(Math.hypot(m[0], m[1], m[2]), 2 * hand.radii[to], 1e-6);
 });
+
+test("a resting hand's fingers reach forward over the bars, the wrist behind them", () => {
+  const hand = restingHand("right", [0.2, -0.56, -0.46]);
+  const wrist = positionOf(hand.joints[0]);
+  const middleTip = positionOf(hand.joints[14]);
+  assert.ok(wrist[2] > -0.46, "the wrist is on the rider's side of the grip");
+  assert.ok(middleTip[2] < wrist[2] - 0.1, "the fingertip is well ahead of the wrist (−Z is forward)");
+});

@@ -47,7 +47,7 @@ export function snapHand(hand, grip, { reach = 0.1, full = 0.04 } = {}) {
 /** A hand curled round the grip, the middle finger's knuckle on it. Seat space, fingers pointing forward (−Z). */
 export function restingHand(handedness, grip) {
   const side = handedness === "right" ? 1 : -1;
-  // Offsets from the palm: [right, up, forward], metres.
+  // Offsets from the palm: [right, up, back], metres. Back is +Z, towards the rider: the wrist is behind the bars, the fingers reach forward over them.
   const finger = (x, reach) => [
     [x, 0, 0.0],
     [x, 0.005, -0.04 * reach],
@@ -66,7 +66,7 @@ export function restingHand(handedness, grip) {
     ...finger(0.022 * side, 0.95), // ring
     ...finger(0.042 * side, 0.8), // little
   ];
-  const joints = offsets.map(([x, y, forward]) => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, grip[0] + x, grip[1] + y, grip[2] - forward, 1]));
+  const joints = offsets.map(([x, y, back]) => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, grip[0] + x, grip[1] + y, grip[2] + back, 1]));
   return { handedness, joints, radii: offsets.map(() => 0.011) };
 }
 
