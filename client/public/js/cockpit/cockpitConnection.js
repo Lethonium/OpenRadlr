@@ -56,7 +56,7 @@ export class CockpitConnection extends Emitter {
         this.#send(socket, ClientMessages.watch(this.key, "data"));
         break;
       case "watch_status":
-        this.emit("status", { live: Boolean(message.live), name: message.name });
+        this.emit("status", { live: Boolean(message.live), name: message.name, riderId: message.rider_id ?? null });
         break;
       case "state":
       case "studio_state":

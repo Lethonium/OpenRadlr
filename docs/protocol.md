@@ -83,7 +83,7 @@ Workout riders are exempt.
 | `pair_code` | `code` (6 characters), `expires_in_s` (300): the code for the screen the connection offered; a new `pair_offer` replaces it |
 | `paired` | `key`, `name` (the name the tablet offered): the screen the phone is now paired with |
 | `pair_claimed` | – : sent to the offering connection when its code is claimed |
-| `watch_status` | `live` (the screen's tablet is riding), `name`: sent when the watch starts and whenever the host arrives or leaves |
+| `watch_status` | `live` (the screen's tablet is riding), `name`, `rider_id`? (the tablet's rider id while it rides): sent when the watch starts and whenever the host arrives or leaves |
 | `display` | `data`: the host's opaque display data, as sent |
 
 `riders[]` holds the riders on the server, whatever their route or distance, up
@@ -233,7 +233,7 @@ key and meet again on the next ride.
 - The host's `display` messages go to the watchers too. The server does not
   read them.
 - A phone sends `watch { key, view? }` instead of `join`. Its `view` is `data`
-  (the default) or `world`. It gets `watch_status { live, name }` at once and
+  (the default) or `world`. It gets `watch_status { live, name, rider_id? }` at once and
   again whenever a host starts or stops, then the copies above.
 - `data` cuts `state.riders` and `studio_state.riders` to the host's own rider
   or seat and leaves out `studio_state.road_riders`. `world` passes everything
@@ -302,6 +302,7 @@ Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` wi
 Second screens (#87) added `pair_offer`, `pair_code`, `pair_claim`, `paired`, `pair_claimed`, `watch`, `watch_status`, `display`, `join.screen_key`, `screens` in `/api/info` and the `bad_screen_key`, `pair_code_invalid`, `pair_code_expired` and `too_many_screens` errors within version 2.
 Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
+VR headset display added `watch_status.rider_id` and `xr_preview` in `/api/info` within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.
 Community distance counters (#65) added `distance_m` to `/api/info` within version 2.

@@ -809,6 +809,21 @@ async fn info_lists_scheduled_events() {
 }
 
 #[tokio::test]
+async fn info_advertises_the_xr_preview_and_servers_can_turn_it_off() {
+    let addr = start_server(0).await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["xr_preview"], true);
+
+    let addr = start_server_with(Config {
+        xr_preview: false,
+        ..test_config(0)
+    })
+    .await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["xr_preview"], false);
+}
+
+#[tokio::test]
 async fn servers_can_turn_phone_paddles_off() {
     let addr = start_server_with(Config {
         allow_paddle_mode: false,
@@ -1209,7 +1224,9 @@ async fn a_paired_phone_follows_the_tablets_rides() {
     assert_eq!(expect_type(&mut phone, "watch_status").await["live"], false);
 
     let (mut tablet, id) = tablet_rides(addr).await;
-    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], true);
+    let live = expect_type(&mut phone, "watch_status").await;
+    assert_eq!(live["live"], true);
+    assert_eq!(live["rider_id"].as_u64(), Some(id));
     let state = expect_type(&mut phone, "state").await;
     let riders = state["riders"].as_array().unwrap();
     assert_eq!(riders.len(), 1);
@@ -1219,7 +1236,9 @@ async fn a_paired_phone_follows_the_tablets_rides() {
     assert_eq!(expect_type(&mut phone, "display").await["data"]["hr"], 120);
 
     tablet.close(None).await.unwrap();
-    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], false);
+    let gone = expect_type(&mut phone, "watch_status").await;
+    assert_eq!(gone["live"], false);
+    assert!(gone.get("rider_id").is_none());
 
     let (_tablet, new_id) = tablet_rides(addr).await;
     assert_ne!(new_id, id);

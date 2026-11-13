@@ -44,11 +44,23 @@ test("status, state and display are emitted", () => {
   sockets[0].receive({ type: "studio_state", riders: [] });
   sockets[0].receive({ type: "display", data: { hr: 140 } });
   assert.deepEqual(seen, [
-    ["status", { live: true, name: "Anna" }],
+    ["status", { live: true, name: "Anna", riderId: null }],
     ["state", "state"],
     ["state", "studio_state"],
     ["display", { hr: 140 }],
   ]);
+});
+
+test("status carries riderId", () => {
+  const { connection, sockets } = setup();
+  const seen = [];
+  connection.on("status", (s) => seen.push(s.riderId));
+  connection.start();
+  sockets[0].open();
+  sockets[0].receive({ type: "welcome" });
+  sockets[0].receive({ type: "watch_status", live: true, name: "Anna", rider_id: 12 });
+  sockets[0].receive({ type: "watch_status", live: false, name: "Anna" });
+  assert.deepEqual(seen, [12, null]);
 });
 
 test("a dropped connection retries with growing delays up to 10 s", () => {

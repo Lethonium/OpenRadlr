@@ -51,6 +51,7 @@ impl Watcher {
 struct Host {
     id: u64,
     name: String,
+    rider_id: RiderId,
 }
 
 #[derive(Default)]
@@ -99,8 +100,19 @@ impl Screens {
         reg.next_id += 1;
         let id = reg.next_id;
         let entry = reg.entries.entry(key.to_owned()).or_default();
-        entry.host = Some(Host { id, name: name.clone() });
-        tell_all(&mut entry.watchers, &ServerMessage::WatchStatus { live: true, name });
+        entry.host = Some(Host {
+            id,
+            name: name.clone(),
+            rider_id,
+        });
+        tell_all(
+            &mut entry.watchers,
+            &ServerMessage::WatchStatus {
+                live: true,
+                name,
+                rider_id: Some(rider_id),
+            },
+        );
         HostGuard {
             screens: self.clone(),
             key: key.to_owned(),
@@ -124,9 +136,9 @@ impl Screens {
             reg.prune(key);
             return Err(TooManyScreens);
         }
-        let (live, name) = match &entry.host {
-            Some(host) => (true, host.name.clone()),
-            None => (false, String::new()),
+        let (live, name, rider_id) = match &entry.host {
+            Some(host) => (true, host.name.clone(), Some(host.rider_id)),
+            None => (false, String::new(), None),
         };
         let mut watcher = Watcher {
             id,
@@ -134,7 +146,7 @@ impl Screens {
             outbox,
             pending_status: None,
         };
-        watcher.tell(ServerMessage::WatchStatus { live, name });
+        watcher.tell(ServerMessage::WatchStatus { live, name, rider_id });
         entry.watchers.push(watcher);
         Ok(WatchGuard {
             screens: self.clone(),
@@ -202,7 +214,12 @@ impl Drop for HostGuard {
             if let Some(host) = entry.host.as_ref().filter(|h| h.id == self.id) {
                 let name = host.name.clone();
                 entry.host = None;
-                tell_all(&mut entry.watchers, &ServerMessage::WatchStatus { live: false, name });
+                let status = ServerMessage::WatchStatus {
+                    live: false,
+                    name,
+                    rider_id: None,
+                };
+                tell_all(&mut entry.watchers, &status);
             }
         }
         reg.prune(&self.key);
@@ -349,6 +366,7 @@ mod tests {
         ServerMessage::WatchStatus {
             live,
             name: name.into(),
+            rider_id: live.then_some(7),
         }
     }
 
@@ -494,10 +512,46 @@ mod tests {
         let old = screens.host("k", 1, "Old".into());
         let (_g, mut rx) = watcher(&screens, WatchView::Data);
         rx.try_recv().unwrap();
-        let _new = screens.host("k", 2, "New".into());
+        let _new = screens.host("k", 7, "New".into());
         assert_eq!(rx.try_recv().unwrap(), status(true, "New"));
         drop(old);
         assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_watcher_that_arrives_during_a_ride_is_told_the_hosts_rider_id() {
+        let screens = Screens::new();
+        let _host = screens.host("k", 12, "Ana".into());
+        let (_g, mut rx) = watcher(&screens, WatchView::Data);
+        let ServerMessage::WatchStatus { rider_id, .. } = rx.try_recv().unwrap() else {
+            panic!("expected a watch_status");
+        };
+        assert_eq!(rider_id, Some(12));
+    }
+
+    #[test]
+    fn watchers_are_told_the_rider_id_when_the_host_arrives() {
+        let screens = Screens::new();
+        let (_g, mut rx) = watcher(&screens, WatchView::Data);
+        rx.try_recv().unwrap();
+        let _host = screens.host("k", 12, "Ana".into());
+        let ServerMessage::WatchStatus { rider_id, .. } = rx.try_recv().unwrap() else {
+            panic!("expected a watch_status");
+        };
+        assert_eq!(rider_id, Some(12));
+    }
+
+    #[test]
+    fn the_rider_id_is_absent_when_the_host_leaves() {
+        let screens = Screens::new();
+        let host = screens.host("k", 12, "Ana".into());
+        let (_g, mut rx) = watcher(&screens, WatchView::Data);
+        rx.try_recv().unwrap();
+        drop(host);
+        let ServerMessage::WatchStatus { rider_id, .. } = rx.try_recv().unwrap() else {
+            panic!("expected a watch_status");
+        };
+        assert_eq!(rider_id, None);
     }
 
     #[test]

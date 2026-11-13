@@ -342,10 +342,13 @@ pub enum ServerMessage {
     },
     /// The offering connection's code was claimed by a second screen.
     PairClaimed,
-    /// Whether a watched screen's tablet is riding, and its name.
+    /// Whether a watched screen's tablet is riding, its name and, while it
+    /// rides, the tablet's rider id.
     WatchStatus {
         live: bool,
         name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        rider_id: Option<RiderId>,
     },
     /// Opaque display data the tablet sends for paired screens.
     Display {
