@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ClientMessages } from "../public/js/net/protocol.js";
-import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "../public/js/net/screenPairing.js";
+import { COCKPIT_KEY, PairingSession, claimCode, isPaired, pairDevice, renewScreenKey, screenKey } from "../public/js/net/screenPairing.js";
 import { FakeSocket } from "./helpers.js";
 
 const KEY = "0123456789abcdef0123456789abcdef";
@@ -145,4 +145,19 @@ test("claiming rejects when the connection closes first", async () => {
   const { promise, socket } = startClaim();
   socket.close();
   await assert.rejects(promise, (error) => error.code === undefined);
+});
+
+test("pairing a device remembers the tablet it was paired with", async () => {
+  const stored = {};
+  const storage = { setItem: (k, v) => (stored[k] = v) };
+  const paired = await pairDevice({ code: "ABC234", storage, claim: async (code) => ({ key: KEY, name: `for ${code}` }) });
+  assert.deepEqual(paired, { key: KEY, name: "for ABC234" });
+  assert.deepEqual(JSON.parse(stored[COCKPIT_KEY]), { key: KEY, name: "for ABC234" });
+});
+
+test("a refused code stores nothing", async () => {
+  const stored = {};
+  const storage = { setItem: (k, v) => (stored[k] = v) };
+  await assert.rejects(pairDevice({ code: "ABC234", storage, claim: async () => { throw new Error("no"); } }));
+  assert.deepEqual(stored, {});
 });

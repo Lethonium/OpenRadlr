@@ -1,5 +1,5 @@
 import { Emitter } from "../util/emitter.js";
-import { ClientMessages, parseServerMessage } from "./protocol.js";
+import { ClientMessages, defaultServerUrl, parseServerMessage } from "./protocol.js";
 
 const KEY_STORAGE = "openradlr.screenKey";
 const PAIRED_STORAGE = "openradlr.screenPaired";
@@ -104,4 +104,14 @@ export function claimCode({ url, createSocket = (u) => new WebSocket(u), code })
     socket.addEventListener("close", () => finish(reject, new Error("closed before the code was claimed")));
     socket.addEventListener("error", () => finish(reject, new Error("cannot connect")));
   });
+}
+
+/** Where a paired cockpit or VR display keeps the tablet's screen key. */
+export const COCKPIT_KEY = "openradlr.cockpit";
+
+/** Claims `code` and remembers the tablet it pairs this device with. Rejects like claimCode. */
+export async function pairDevice({ code, storage, claim = (c) => claimCode({ url: defaultServerUrl(), code: c }) }) {
+  const paired = await claim(code);
+  storage.setItem(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
+  return paired;
 }

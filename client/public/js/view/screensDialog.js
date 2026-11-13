@@ -1,12 +1,16 @@
+import { countdownShare, groupCode } from "./codeInput.js";
+
 /**
- * The "Pair a second screen" dialog: shows the pairing code with a countdown,
- * offers a new code when it runs out, and unpairs all screens. DOM elements,
- * the session, the clock and timers are injected; UI text comes from `t`.
+ * The tablet's side of the second-screen panel: shows the pairing code (grouped) with a countdown
+ * bar, offers a new code when it runs out, and unpairs all screens. Which view of the panel is
+ * showing is the caller's business. DOM elements, the session, the clock and timers are injected;
+ * UI text comes from `t`.
  */
 export function createScreensDialog({ els, createSession, now, setInterval, clearInterval, confirm, onUnpair, t }) {
   let session = null;
   let timer = null;
   let expiresAt = 0;
+  let ttlMs = 300_000;
 
   const stopTimer = () => {
     if (timer !== null) clearInterval(timer);
@@ -19,8 +23,10 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
       stopTimer();
       els.countdown.textContent = t("screens.expired");
       els.renew.hidden = false;
+      els.bar.style.setProperty("--share", "0");
       return;
     }
+    els.bar.style.setProperty("--share", String(countdownShare(expiresAt / 1000, now() / 1000, ttlMs / 1000)));
     els.countdown.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   }
 
@@ -32,7 +38,7 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
 
   els.renew.addEventListener("click", () => {
     els.renew.hidden = true;
-    els.status.textContent = "";
+    els.status.textContent = t("screens.waiting");
     if (session) session.renew();
     else api.open();
   });
@@ -40,10 +46,7 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
     if (!confirm(t("screens.unpairConfirm"))) return;
     end();
     onUnpair();
-    els.status.textContent = t("screens.unpaired");
-    els.code.textContent = "";
-    els.countdown.textContent = "";
-    els.renew.hidden = false;
+    els.note.textContent = t("screens.unpaired");
   });
 
   const api = {
@@ -51,14 +54,17 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
       end();
       els.code.textContent = "";
       els.countdown.textContent = "";
-      els.status.textContent = "";
+      els.status.textContent = t("screens.waiting");
       els.renew.hidden = true;
+      els.bar.style.setProperty("--share", "1");
+      els.note.textContent = "";
       session = createSession();
       session.on("code", ({ code, expiresInS }) => {
-        els.code.textContent = code;
-        els.status.textContent = "";
+        els.code.textContent = groupCode(code);
+        els.status.textContent = t("screens.waiting");
         els.renew.hidden = true;
-        expiresAt = now() + expiresInS * 1000;
+        ttlMs = expiresInS * 1000;
+        expiresAt = now() + ttlMs;
         stopTimer();
         timer = setInterval(tick, 1000);
         tick();
@@ -71,11 +77,9 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
         els.status.textContent = t("screens.error");
       });
       session.start();
-      els.dialog.showModal?.();
     },
     close() {
       end();
-      els.dialog.close?.();
     },
   };
   return api;

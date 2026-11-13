@@ -12,6 +12,7 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { mountCodeInput } from "./view/codeInput.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -110,7 +111,7 @@ import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
 import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
-import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { COCKPIT_KEY, PairingSession, isPaired, pairDevice, renewScreenKey, screenKey } from "./net/screenPairing.js";
 import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
@@ -1530,7 +1531,6 @@ function notify(text, kind = "event") {
 // ------------------------------------------------------- second screens ---
 
 const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
-const COCKPIT_KEY = "openradlr.cockpit";
 const DISPLAY_INTERVAL_MS = 1000;
 // The plan goes out again now and then, for a screen that opens or reconnects mid-workout.
 const PLAN_RESEND_TICKS = 10;
@@ -1574,16 +1574,19 @@ function startDisplayFeed() {
   }, DISPLAY_INTERVAL_MS);
 }
 
-/** Pairing from the start menu, and turning this device into a cockpit. */
+/** Pairing from the start menu, and turning this device into a cockpit or a VR display. */
 function initScreens() {
   const storage = browserStorage();
+  const panel = $("screens-panel");
+  const views = [...panel.querySelectorAll("[data-screens-view]")];
   const els = {
-    dialog: $("screens-dialog"),
     code: $("screens-code"),
     countdown: $("screens-countdown"),
+    bar: $("screens-bar"),
     renew: $("screens-renew"),
     unpair: $("screens-unpair"),
     status: $("screens-status"),
+    note: $("screens-note"),
   };
   const dialog = createScreensDialog({
     els,
@@ -1595,23 +1598,54 @@ function initScreens() {
     onUnpair: () => renewScreenKey(storage, randomBytes),
     t: (key) => t(key),
   });
-  $("screens-pair").addEventListener("click", () => dialog.open());
-  $("screens-close").addEventListener("click", () => dialog.close());
-  els.dialog.addEventListener("close", () => dialog.close());
+  let claimPage = null;
+  let opener = null;
+  const entry = mountCodeInput($("screens-entry"), {
+    t: (key, params) => t(key, params),
+    onSubmit: async (code) => {
+      await pairDevice({ code, storage });
+      location.href = claimPage;
+    },
+  });
+  const show = (view) => {
+    for (const el of views) el.hidden = el.dataset.screensView !== view;
+    $("screens-back").hidden = view === "menu";
+    if (view !== "code") dialog.close();
+  };
+  const open = () => {
+    opener = document.activeElement;
+    panel.hidden = false;
+    show("menu");
+    $("screens-pair").focus();
+  };
+  const close = () => {
+    dialog.close();
+    panel.hidden = true;
+    opener?.focus?.();
+  };
+  $("screens-open").addEventListener("click", open);
+  $("screens-close").addEventListener("click", close);
+  $("screens-back").addEventListener("click", () => show("menu"));
+  $("screens-backdrop").addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  panel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */) close();
+  });
+  $("screens-pair").addEventListener("click", () => {
+    show("code");
+    dialog.open();
+  });
   // The same pairing serves both: the device then opens the page it was asked for.
-  const useAs = (page) => async () => {
-    if (!readSetting(COCKPIT_KEY)) {
-      const code = (prompt(t("screens.codePrompt")) ?? "").trim().toUpperCase();
-      if (!code) return;
-      try {
-        const paired = await claimCode({ url: defaultServerUrl(), code });
-        writeSetting(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
-      } catch (error) {
-        notify(error.code === "pair_code_invalid" ? t("screens.codeInvalid") : t("screens.cannotConnect"), "error");
-        return;
-      }
+  const useAs = (page) => () => {
+    if (readSetting(COCKPIT_KEY)) {
+      location.href = page;
+      return;
     }
-    location.href = page;
+    claimPage = page;
+    entry.reset();
+    show("claim");
+    entry.focus();
   };
   $("screens-cockpit").addEventListener("click", useAs("cockpit.html"));
   $("screens-vr").addEventListener("click", useAs("vr.html"));

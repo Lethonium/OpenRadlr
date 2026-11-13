@@ -68,6 +68,65 @@ body {
   line-height: 1.4;
 }
 
+/* "Pair now": a button and the inline code entry (the same look as in the app). */
+.cockpit-pair {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  margin: 0 16px 24px;
+  text-align: center;
+}
+
+.pair-button {
+  padding: 10px 28px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #1a0d02;
+  font: inherit;
+  font-weight: 600;
+}
+
+.pair-entry {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.pair-hint,
+.code-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 1.5em;
+}
+
+.code-boxes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.code-input {
+  width: 44px;
+  padding: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 20px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.code-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .cockpit-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

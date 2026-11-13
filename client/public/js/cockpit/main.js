@@ -6,6 +6,8 @@
 import { applyTranslations } from "../i18n/apply.js";
 import { initLocale, t } from "../i18n/i18n.js";
 import { defaultServerUrl } from "../net/protocol.js";
+import { pairDevice } from "../net/screenPairing.js";
+import { mountPairNow } from "../view/codeInput.js";
 import { ProfileStore } from "../profile/profileStore.js";
 import { prepareCanvas } from "../view/canvas.js";
 import { ZONE_COLORS } from "../view/workoutView.js";
@@ -78,6 +80,13 @@ function buildTile({ id, size }, editing) {
   } };
 }
 
+/** "Pair now" with an inline code entry, for a screen that is not (or no longer) paired. */
+function offerPairing() {
+  if (!$("cockpit-pair-now").hidden) return;
+  $("cockpit-pair-now").hidden = false;
+  mountPairNow({ button: $("cockpit-pair"), entry: $("cockpit-entry"), pair: (code) => pairDevice({ code, storage: localStorage }), onPaired: () => location.reload(), t: (key, params) => t(key, params), doc: document });
+}
+
 function start() {
   initLocale({ storage: localStorage, languages: navigator.languages });
   applyTranslations();
@@ -85,6 +94,7 @@ function start() {
   const paired = pairing(localStorage);
   if (!paired) {
     $("cockpit-unpaired").hidden = false;
+    offerPairing();
     return;
   }
   $("cockpit-forget").hidden = false;
@@ -117,6 +127,7 @@ function start() {
   });
   connection.on("invalid", () => {
     $("cockpit-invalid").hidden = false;
+    offerPairing();
   });
 
   let wasLive = false;

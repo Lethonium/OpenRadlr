@@ -74,6 +74,7 @@
     <link rel="modulepreload" href="js/util/format.js" />
     <link rel="modulepreload" href="js/util/wakeLock.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
+    <link rel="modulepreload" href="js/view/codeInput.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
     <link rel="modulepreload" href="js/view/events.js" />
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
@@ -424,23 +425,10 @@
               <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
               <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
             </details>
-            <details id="screens" class="diagnostics" hidden>
-              <summary data-i18n="screens.title">Second screen</summary>
-              <p class="diagnostics-hint" data-i18n="screens.hint">Show your ride on a phone, or use this device as a cockpit for another tablet.</p>
-              <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a second screen</button>
-              <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>
-              <button type="button" id="screens-vr" class="secondary" data-i18n="screens.useAsVr">Use this device as a VR display</button>
-              <dialog id="screens-dialog" aria-labelledby="screens-dialog-title">
-                <h2 id="screens-dialog-title" data-i18n="screens.dialogTitle">Pair a second screen</h2>
-                <p data-i18n="screens.dialogHint">On the phone, choose “Use this device as a cockpit” in the settings and enter this code.</p>
-                <p id="screens-code" class="screens-code" aria-live="polite"></p>
-                <p id="screens-countdown" class="hint"></p>
-                <p id="screens-status" class="hint" role="status"></p>
-                <button type="button" id="screens-renew" class="secondary" data-i18n="screens.renew" hidden>New code</button>
-                <button type="button" id="screens-unpair" class="secondary" data-i18n="screens.unpair">Unpair all</button>
-                <button type="button" id="screens-close" data-i18n="screens.close">Close</button>
-              </dialog>
-            </details>
+            <div id="screens" class="strava-row screens-row" hidden>
+              <span data-i18n="screens.title">Second screen</span>
+              <button type="button" id="screens-open" class="secondary" data-i18n="screens.open">Set up</button>
+            </div>
             </details>
           </form>
         </div>
@@ -1070,5 +1058,42 @@
         </div>
       </section>
     </main>
+
+    <!-- Second screens: a panel in the menu dialog's style (shown with a server that relays them, ADR 0026) -->
+    <div id="screens-panel" class="menu-dialog screens-dialog" role="dialog" aria-modal="true" aria-labelledby="screens-title" hidden>
+      <div class="menu-backdrop" id="screens-backdrop">
+        <div class="screens-card">
+          <div class="menu-head">
+            <button type="button" class="icon-button" id="screens-back" aria-label="Back" data-i18n-attr="aria-label:screens.back" hidden>‹</button>
+            <h2 id="screens-title" data-i18n="screens.title">Second screen</h2>
+            <button type="button" class="icon-button" id="screens-close" aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
+          </div>
+          <div class="menu-pages">
+            <div class="menu-page" data-screens-view="menu">
+              <p class="hint" data-i18n="screens.hint">Show your ride on a phone or a VR headset, or use this device as a second screen for another tablet.</p>
+              <div class="screens-actions">
+                <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a new screen</button>
+                <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>
+                <button type="button" id="screens-vr" class="secondary" data-i18n="screens.useAsVr">Use this device as a VR display</button>
+                <button type="button" id="screens-unpair" class="secondary" data-i18n="screens.unpair">Unpair all</button>
+              </div>
+              <p id="screens-note" class="hint" role="status"></p>
+            </div>
+            <div class="menu-page screens-centered" data-screens-view="code" hidden>
+              <p class="hint" data-i18n="screens.dialogHint">On the phone or the headset, open OpenRadlr, choose “Use this device as a cockpit” or “Use this device as a VR display” in the second-screen settings and enter this code.</p>
+              <p id="screens-code" class="screens-code" aria-live="polite"></p>
+              <div id="screens-bar" class="screens-bar" aria-hidden="true"></div>
+              <p id="screens-countdown" class="hint"></p>
+              <p id="screens-status" class="hint" role="status"></p>
+              <button type="button" id="screens-renew" class="secondary" data-i18n="screens.renew" hidden>New code</button>
+            </div>
+            <div class="menu-page screens-centered" data-screens-view="claim" hidden>
+              <p class="hint" data-i18n="screens.codePrompt">Enter the code shown on the tablet</p>
+              <div id="screens-entry"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

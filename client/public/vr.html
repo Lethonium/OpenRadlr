@@ -148,10 +148,14 @@
       <button type="button" id="vr-preview" class="secondary" data-i18n="vr.preview" hidden>Preview VR</button>
       <button type="button" id="vr-forget" class="secondary" data-i18n="vr.forget" hidden>Forget this tablet</button>
     </header>
-    <p class="vr-message" id="vr-unpaired" data-i18n="vr.notPaired" hidden>
-      This screen is not paired with a tablet. In OpenRadlr on the tablet, pair a second screen, then use this device as a VR display.
-    </p>
-    <p class="vr-message" id="vr-invalid" data-i18n="vr.invalid" hidden>The tablet no longer accepts this screen. Pair it again.</p>
+    <div class="vr-message vr-pairing" id="vr-pairing" hidden>
+      <p id="vr-unpaired" data-i18n="vr.notPaired" hidden>This screen is not paired with a tablet.</p>
+      <p id="vr-invalid" data-i18n="vr.invalid" hidden>The tablet no longer accepts this screen. Pair it again.</p>
+      <button type="button" class="primary" id="vr-pair" data-i18n="screens.pairNow">Pair now</button>
+      <div class="vr-pair-entry" id="vr-entry" hidden>
+        <p class="hint" data-i18n="screens.pairNowHint">On the tablet, open Settings, Second screen, Pair a new screen. Then enter its code here.</p>
+      </div>
+    </div>
     <p class="vr-message" id="vr-waiting" hidden></p>
     <p class="vr-message" id="vr-note" hidden></p>
   </body>
