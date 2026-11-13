@@ -87,3 +87,57 @@ export function curveRows(curve) {
   if (known.length) shown.add(known.at(-1));
   return [...shown].sort((a, b) => a - b).map((seconds) => ({ label: curveLabel(seconds), watts: `${Math.round(curve[seconds])} W` }));
 }
+
+const DATA_NAMES = {
+  profile: "profilePage.data.profile",
+  rides: "profilePage.data.rides",
+  bestLaps: "profilePage.data.bestLaps",
+  progress: "profilePage.data.progress",
+  unfinished: "profilePage.data.unfinished",
+  settings: "profilePage.data.settings",
+};
+
+const DATA_DETAILS = {
+  profile: "profilePage.data.profile.detail",
+  rides: "profilePage.data.rides.detail",
+  bestLaps: "profilePage.data.bestLaps.detail",
+  progress: "profilePage.data.progress.detail",
+  unfinished: "profilePage.data.unfinished.detail",
+  settings: "profilePage.data.settings.detail",
+};
+
+function dataCount({ id, count }) {
+  switch (id) {
+    case "profile":
+      return count ? t("profilePage.data.saved") : t("profilePage.data.none");
+    case "rides":
+      return tn("profilePage.rideCount", count);
+    case "bestLaps":
+      return tn("profilePage.data.bestLapCount", count);
+    case "progress":
+      return t("profilePage.data.progressCount", count);
+    case "unfinished":
+      return count ? t("profilePage.data.unfinishedOne") : t("profilePage.data.none");
+    default:
+      return tn("profilePage.data.entries", count);
+  }
+}
+
+const hasAny = (count) => (typeof count === "object" && count !== null ? count.summits + count.lemons > 0 : count > 0);
+
+/** The "Your data" rows from `inventory` (profile/localData.js). */
+export function dataRows(items) {
+  return items.map((item) => {
+    const name = t(DATA_NAMES[item.id]);
+    const action = item.id === "profile" ? t("profilePage.data.reset") : t("profilePage.data.delete");
+    return {
+      id: item.id,
+      name,
+      detail: t(DATA_DETAILS[item.id]),
+      count: item.readable ? dataCount(item) : t("profilePage.data.unreadable"),
+      canDelete: item.readable && hasAny(item.count),
+      action,
+      actionLabel: `${action} ${name}`,
+    };
+  });
+}

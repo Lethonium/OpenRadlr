@@ -3092,6 +3092,49 @@ body.riding {
   white-space: nowrap;
 }
 
+.profile-data {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-data-label {
+  display: grid;
+  gap: 2px;
+}
+
+.profile-data-name {
+  font-weight: 600;
+}
+
+.profile-data-count {
+  color: var(--muted);
+  font-family: var(--num);
+  font-size: 13px;
+}
+
+.profile-data-detail {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.profile-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .profile-list {
   display: grid;
   gap: 6px;

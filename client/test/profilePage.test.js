@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
 
 const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
@@ -95,4 +95,39 @@ test("curveRows: a short ride lists only what it has", () => {
 
 test("curveRows: no curve gives no rows", () => {
   assert.deepEqual(curveRows(undefined), []);
+});
+
+const items = [
+  { id: "profile", count: 1, readable: true },
+  { id: "rides", count: 42, readable: true },
+  { id: "bestLaps", count: 0, readable: true },
+  { id: "progress", count: { summits: 7, lemons: 12 }, readable: true },
+  { id: "unfinished", count: 0, readable: true },
+  { id: "settings", count: null, readable: false },
+];
+
+test("dataRows: one row per item with its count in words", () => {
+  const rows = dataRows(items);
+  assert.deepEqual(rows.map((row) => row.id), ["profile", "rides", "bestLaps", "progress", "unfinished", "settings"]);
+  const by = Object.fromEntries(rows.map((row) => [row.id, row]));
+  assert.equal(by.rides.name, "Rides");
+  assert.equal(by.rides.count, "42 rides");
+  assert.equal(by.progress.count, "7 summits · 12 golden lemons");
+  assert.equal(by.unfinished.count, "None");
+  assert.ok(by.rides.detail.length > 0);
+});
+
+test("dataRows: only what is there and readable can be deleted", () => {
+  const by = Object.fromEntries(dataRows(items).map((row) => [row.id, row]));
+  assert.equal(by.rides.canDelete, true);
+  assert.equal(by.bestLaps.canDelete, false);
+  assert.equal(by.settings.canDelete, false);
+  assert.equal(by.settings.count, "Can't be read in this browser");
+});
+
+test("dataRows: the profile is reset, the others deleted", () => {
+  const by = Object.fromEntries(dataRows(items).map((row) => [row.id, row]));
+  assert.equal(by.profile.action, "Reset");
+  assert.equal(by.rides.action, "Delete");
+  assert.equal(by.rides.actionLabel, "Delete Rides");
 });
