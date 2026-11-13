@@ -89,11 +89,12 @@ for a person wearing it.
   - The host's rider is the one with `watch_status.rider_id`. Its `route`
     tells the page when to switch world. In the studio, its entry in
     `studio_state.riders[]` gives the room and seat.
-  - The parked and exercise stamps and the studio rider mapping in `main.js`
-    move into shared modules that both pages import (a refactor commit before
-    the page). `followMyRoad` and `onMyOwnRoad` stay in `main.js`: they serve
-    the tablet's own steering, and `View3D` already places riders that are
-    off every route.
+  - Only the parked and exercise stamps and the studio rider mapping move out
+    of `main.js`, into `ride/riderStamps.js` (`RiderStamps`) and
+    `view/studioWorld.js` (`studioSceneRiders`), which both pages import (a
+    refactor commit before the page). `followMyRoad` and `onMyOwnRoad` stay in
+    `main.js`: they serve the tablet's own steering, and `View3D` already
+    places riders that are off every route.
 - **HUD in the 2D window.** Power, cadence, speed and grade come from `state`
   (4 Hz) and `resistance`; only heart rate and the workout come from `display`
   frames (1 Hz). The same split holds for the VR HUD. It's a small DOM overlay, reusing the cockpit model for the derived

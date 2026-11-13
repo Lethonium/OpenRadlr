@@ -36,6 +36,7 @@ import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescript
 import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
 import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
+import { RiderStamps } from "./ride/riderStamps.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -103,7 +104,7 @@ import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
-import { studioWorld } from "./view/studioWorld.js";
+import { studioSceneRiders, studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { installNativeApp } from "./native/app.js";
 import { PaddleView } from "./view/paddleView.js";
@@ -337,10 +338,8 @@ const app = {
   /** The pause of this ride (#89), and when (the `now()` clock) its timer stopped. Null in the studio. */
   pause: null,
   pausedFrom: null,
-  /** Per rider id: when it was first seen parked, for the animation system to come (#89). */
-  parkedSince: new Map(),
-  /** Per workout rider id: the exercise last seen and since when (the `now()` clock), for its clip (#77). */
-  exerciseSince: new Map(),
+  /** The rider stamps (#89, #77): when each rider was first seen parked, and since when its exercise. */
+  stamps: new RiderStamps({ now }),
   /** Splits (#83): the resolved mode and unit of this ride, the live result, how many closed splits were shown. */
   splitMode: "off",
   splitUnitM: 1000,
@@ -1959,8 +1958,7 @@ function endRide() {
     rideStartedAt: 0,
     pause: null,
     pausedFrom: null,
-    parkedSince: new Map(),
-    exerciseSince: new Map(),
+    stamps: new RiderStamps({ now }),
     rideDistance: 0,
     splits: [],
     shownSplits: 0,
@@ -2043,9 +2041,8 @@ function wireConnection(connection) {
     const mine = message.riders.find((rider) => rider.id === app.riderId);
     if (mine?.route) app.lastOnRoute = { routeId: mine.route, distanceM: mine.distance };
     const me = mine && followMyRoad(mine);
-    const riders = message.riders.map((rider) => stampExercise(stampParked(rider === mine ? me : onMyOwnRoad(rider))));
-    for (const id of app.parkedSince.keys()) if (!message.riders.some((rider) => rider.id === id && rider.parked)) app.parkedSince.delete(id);
-    for (const id of app.exerciseSince.keys()) if (!message.riders.some((rider) => rider.id === id)) app.exerciseSince.delete(id);
+    const riders = message.riders.map((rider) => app.stamps.stamp(rider === mine ? me : onMyOwnRoad(rider)));
+    app.stamps.keep(message.riders);
     // Riders of the map's other routes only show in 3D; panels and 2D views follow my route.
     app.smoother.update(riders, now());
     // Humans on other routes still go in the Riders drawer, under their route's name.
@@ -2097,21 +2094,6 @@ function wireConnection(connection) {
   on("close", () => connectionLost(connection));
 }
 
-/** Notes when a rider was first seen parked and hands it to the view as `parkedSince` (null when not parked). */
-function stampParked(rider) {
-  if (!rider.parked) return { ...rider, parkedSince: null };
-  if (!app.parkedSince.has(rider.id)) app.parkedSince.set(rider.id, now());
-  return { ...rider, parkedSince: app.parkedSince.get(rider.id) };
-}
-
-/** Notes when a rider's `exercise` last changed and hands it to the view as `exerciseSince`: the clip starts there. */
-function stampExercise(rider) {
-  const exercise = rider.exercise ?? null;
-  const seen = app.exerciseSince.get(rider.id);
-  if (!seen || seen.exercise !== exercise) app.exerciseSince.set(rider.id, { exercise, since: now() });
-  return { ...rider, exerciseSince: app.exerciseSince.get(rider.id).since };
-}
-
 function startRide() {
   const info = app.connection.serverInfo;
   $("server-label").textContent = app.studio ? `${info.server_name} · ${app.route.name}` : `${info.server_name} · ${app.route.name} · ${formatDistanceWithUnit(app.route.length, 1)}`;
@@ -2127,8 +2109,7 @@ function startRide() {
   $("hud-route").textContent = app.route.name;
   app.rideStartedAt = now();
   app.pause = app.studio || app.workout ? null : new RidePause({ autoPause: Boolean(app.profile.autoPause) });
-  app.parkedSince = new Map();
-  app.exerciseSince = new Map();
+  app.stamps = new RiderStamps({ now });
 
   if (app.workout) return startWorkout();
 
@@ -2534,11 +2515,6 @@ function studioRoomOnly() {
     console.error(error);
     notify(t("studio.unavailable3d"), "error");
   }
-}
-
-/** The riders of the studio scene: my room's in their seats, then the other floors and the road. */
-function studioSceneRiders(state) {
-  return [...state.riders.map((rider) => ({ ...rider, route: null, studio: { room: state.room, seat: rider.seat } })), ...(state.road_riders ?? [])];
 }
 
 /** The coach reads a cue out loud, if the rider wants that. */
