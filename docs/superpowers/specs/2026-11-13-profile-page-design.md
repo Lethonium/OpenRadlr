@@ -108,7 +108,8 @@ Best laps       Rolling Hills 21:58 · Coast Loop 48:12
 ### Rides
 
 - Newest first (`RideHistory.list()`), 20 at a time with "Show more".
-- A row: date, route name (Studio for `routeId: null`; records keep no workout name), distance, moving time, average power, climbing; phone-paddle and simulator rides marked with the
+- A row: date, route name (Studio for `routeId: null`), distance, moving time, average power, climbing. Yoga and bodyweight
+  workouts share the history (`kind: "workout"`): their row shows the plan name and time only, and totals count rides only; phone-paddle and simulator rides marked with the
   same icons as the ride mode cards (`measured: false` alone is not enough to tell them apart; if the
   record has no mode the row just shows no icon).
 - Tapping a row opens it inline: splits (`view/splitsView.js` renders the table already) and the power
