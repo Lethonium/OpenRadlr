@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROFILE_PAGES, overviewLines, routeName } from "../public/js/view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
 
 const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
@@ -42,4 +42,57 @@ test("overviewLines: a new rider gets the empty text, no NaN", () => {
 test("overviewLines: best laps by route name with lap time", () => {
   const lines = overviewLines({ profile, totals: noRides, bests: [{ routeId: "rolling-hills", durationS: 1318 }], routes: [{ id: "rolling-hills", name: "Rolling Hills" }] });
   assert.deepEqual(lines.bests, ["Rolling Hills · 21:58"]);
+});
+
+const rec = (extra = {}) => ({ id: "1", startedAt: Date.UTC(2026, 10, 10, 18), routeId: "rolling-hills", distanceM: 21400, durationS: 2700, avgPower: 198.4, elevationGainM: 210, device: "trainer", curve: { 5: 610, 15: 500, 60: 380, 300: 290, 1200: 241, 1800: 230, 3600: null }, ...extra });
+
+test("rides come 20 at a time", () => {
+  assert.equal(RIDES_PAGE_SIZE, 20);
+});
+
+test("rideRows: one row per ride with units and route name", () => {
+  const [row] = rideRows([rec()], [{ id: "rolling-hills", name: "Rolling Hills" }], { locale: "en" });
+  assert.equal(row.id, "1");
+  assert.equal(row.route, "Rolling Hills");
+  assert.equal(row.distance, "21.4 km");
+  assert.equal(row.time, "45:00");
+  assert.equal(row.power, "198 W");
+  assert.equal(row.climbing, "210 m");
+  assert.match(row.date, /10/);
+  assert.equal(row.device, null);
+});
+
+test("rideRows: paddle and simulator rides are marked", () => {
+  assert.equal(rideRows([rec({ device: "paddle" })], [], {})[0].device, "paddle");
+  assert.equal(rideRows([rec({ device: "sim" })], [], {})[0].device, "sim");
+});
+
+test("rideRows: an old record without power, route or device still renders", () => {
+  const [old] = rideRows([{ id: "2", startedAt: 1, distanceM: 1000, durationS: 60 }], [], {});
+  assert.equal(old.power, "–");
+  assert.equal(old.route, "Studio");
+  assert.equal(old.climbing, "0 m");
+  assert.equal(old.device, null);
+});
+
+test("rideRows: empty history gives no rows", () => {
+  assert.deepEqual(rideRows([], [], {}), []);
+});
+
+test("curveRows: key durations and the longest one", () => {
+  assert.deepEqual(curveRows(rec().curve), [
+    { label: "5 s", watts: "610 W" },
+    { label: "1 min", watts: "380 W" },
+    { label: "5 min", watts: "290 W" },
+    { label: "20 min", watts: "241 W" },
+    { label: "30 min", watts: "230 W" },
+  ]);
+});
+
+test("curveRows: a short ride lists only what it has", () => {
+  assert.deepEqual(curveRows({ 5: 400, 15: 380, 60: null }).map((row) => row.label), ["5 s", "15 s"]);
+});
+
+test("curveRows: no curve gives no rows", () => {
+  assert.deepEqual(curveRows(undefined), []);
 });

@@ -969,4 +969,7 @@ export default {
   "profilePage.bestLaps": "Best laps",
   "profilePage.bestLaps.none": "No best laps yet. Ride a full lap of a loop route to set one.",
   "profilePage.overview.empty": "No rides yet. Your totals, FTP and best laps show up here after your first ride.",
+  "profilePage.rides.empty": "No rides yet. Every ride you finish shows up here.",
+  "profilePage.rides.more": "Show more",
+  "profilePage.rides.curve": "Best power",
 };

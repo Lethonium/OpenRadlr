@@ -10,6 +10,9 @@ import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
 export const PROFILE_PAGES = ["overview", "rides", "data"];
+export const RIDES_PAGE_SIZE = 20;
+
+const CURVE_KEYS = [5, 60, 300, 1200];
 
 /** The server's name of a route, Studio for studio rides, else the id (a route this server doesn't offer). */
 export function routeName(routeId, routes) {
@@ -44,4 +47,43 @@ export function overviewLines({ profile, totals, bests, routes, locale }) {
     bests: bests.map((best) => `${routeName(best.routeId, routes)} · ${formatDuration(best.durationS)}`),
     empty: totals.all.rides === 0 ? t("profilePage.overview.empty") : null,
   };
+}
+
+/** "Tue 10 Nov" in the rider's language. */
+function rideDate(ms, locale) {
+  const format = { weekday: "short", day: "numeric", month: "short" };
+  const when = new Date(ms);
+  try {
+    return when.toLocaleDateString(locale, format);
+  } catch {
+    // A malformed browser locale (e.g. "en-US@posix") throws a RangeError
+    return when.toLocaleDateString(undefined, format);
+  }
+}
+
+/** One row per ride (records come newest first); `device` only marks phone paddles and the simulator. */
+export function rideRows(records, routes, { locale } = {}) {
+  return records.map((record) => ({
+    id: record.id,
+    date: rideDate(record.startedAt, locale),
+    route: routeName(record.routeId, routes),
+    distance: distance(Number.isFinite(record.distanceM) ? record.distanceM : 0),
+    time: formatDuration(Number.isFinite(record.durationS) ? record.durationS : 0),
+    power: Number.isFinite(record.avgPower) ? `${Math.round(record.avgPower)} W` : "–",
+    climbing: formatElevation(Number.isFinite(record.elevationGainM) ? record.elevationGainM : 0),
+    device: record.device === "paddle" || record.device === "sim" ? record.device : null,
+  }));
+}
+
+function curveLabel(seconds) {
+  return seconds < 60 ? `${seconds} s` : `${seconds / 60} min`;
+}
+
+/** The power curve's key points (5 s, 1, 5 and 20 min) and the longest effort the ride has. */
+export function curveRows(curve) {
+  if (!curve) return [];
+  const known = Object.keys(curve).map(Number).filter((seconds) => Number.isFinite(curve[seconds])).sort((a, b) => a - b);
+  const shown = new Set(CURVE_KEYS.filter((seconds) => known.includes(seconds)));
+  if (known.length) shown.add(known.at(-1));
+  return [...shown].sort((a, b) => a - b).map((seconds) => ({ label: curveLabel(seconds), watts: `${Math.round(curve[seconds])} W` }));
 }
