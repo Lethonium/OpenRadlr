@@ -2927,6 +2927,7 @@ function saveFinishedRide() {
     measured: hasRealPowerSource(app.trainer),
     profile: app.profile,
     test: app.ftpTest?.testFlag ?? null,
+    device: deviceKind(app.trainer),
   });
   return app.history
     .save(record)
