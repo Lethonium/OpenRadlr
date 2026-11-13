@@ -22,3 +22,12 @@ test("flags are parsed alongside the url", () => {
 test("a negative or non-numeric flag value is rejected", () => {
   assert.throws(() => parseArgs(["--height", "abc"]), /Invalid --height/);
 });
+
+test("--ride takes the page to open on the paired second screen", () => {
+  assert.equal(parseArgs(["--ride", "vr.html?preview=1"]).ride, "vr.html?preview=1");
+});
+
+test("--ride is off by default and needs a page", () => {
+  assert.equal(parseArgs([]).ride, null);
+  assert.throws(() => parseArgs(["--ride"]), /Invalid --ride/);
+});

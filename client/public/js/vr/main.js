@@ -465,6 +465,7 @@ function start() {
     $("vr-badge").hidden = status !== "stale";
     $("hud").hidden = status === "waiting" || Boolean(source);
     const live = status === "live";
+    document.body.toggleAttribute("data-live", live);
     if (live !== wasLive) {
       wasLive = live;
       if (live) wakeLock.acquire();
