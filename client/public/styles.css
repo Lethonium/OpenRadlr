@@ -3029,6 +3029,69 @@ body.riding {
   font-family: var(--num);
 }
 
+.profile-rides {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-ride {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.profile-ride-summary {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.profile-ride-when {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.profile-ride-when svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  opacity: 0.7;
+}
+
+.profile-ride-figures {
+  color: var(--muted);
+  font-family: var(--num);
+  font-size: 13px;
+}
+
+.profile-ride-detail {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+/* A phone scrolls the splits sideways instead of widening the page. */
+.profile-splits {
+  overflow-x: auto;
+}
+
+.profile-splits th,
+.profile-splits td {
+  white-space: nowrap;
+}
+
 .profile-list {
   display: grid;
   gap: 6px;

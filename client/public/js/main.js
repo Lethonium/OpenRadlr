@@ -12,7 +12,7 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
-import { PROFILE_PAGES, overviewLines } from "./view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, overviewLines, rideRows } from "./view/profilePage.js";
 import { periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
@@ -2775,6 +2775,10 @@ function initProfile() {
     onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
   });
   $("open-profile").addEventListener("click", () => openProfile());
+  $("profile-rides-more").addEventListener("click", () => {
+    app.profileRidesShown += RIDES_PAGE_SIZE;
+    renderProfileRides();
+  });
   relocaliseHooks.push(() => {
     if (app.profileDialog.isOpen) renderProfile();
   });
@@ -2789,12 +2793,15 @@ function openProfile(page) {
 async function loadProfile() {
   const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
   app.profileData = { records, bests };
+  app.profileRidesShown = RIDES_PAGE_SIZE;
+  app.profileOpenRide = null;
   renderProfile();
 }
 
 function renderProfile() {
   if (!app.profileData) return;
   renderProfileOverview();
+  renderProfileRides();
 }
 
 function renderProfileOverview() {
@@ -2808,6 +2815,69 @@ function renderProfileOverview() {
   $("profile-totals").replaceChildren(...lines.totals.flatMap(({ label, value }) => [textElement("dt", label), textElement("dd", value)]));
   $("profile-bests").replaceChildren(...lines.bests.map((line) => textElement("li", line)));
   $("profile-bests-none").hidden = lines.bests.length > 0;
+}
+
+/** The Rides page: the newest rides, each opening its splits and power curve. */
+function renderProfileRides() {
+  const { records } = app.profileData;
+  const shown = records.slice(0, app.profileRidesShown);
+  const rows = rideRows(shown, routesOf(app.info), { locale: getLocale() });
+  $("profile-rides-empty").hidden = records.length > 0;
+  $("profile-rides-more").hidden = records.length <= shown.length;
+  $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i])));
+}
+
+function profileRideItem(row, record) {
+  const open = app.profileOpenRide === row.id;
+  const item = document.createElement("li");
+  item.className = "profile-ride";
+  const summary = document.createElement("button");
+  summary.type = "button";
+  summary.className = "profile-ride-summary";
+  summary.setAttribute("aria-expanded", String(open));
+  const when = textElement("span", `${row.date} · ${row.route}`);
+  when.className = "profile-ride-when";
+  if (row.device) {
+    const icon = document.querySelector(`.mode-card[data-mode="${row.device === "paddle" ? "paddles" : "sim"}"] svg`)?.cloneNode(true);
+    if (icon) {
+      icon.setAttribute("role", "img");
+      icon.setAttribute("aria-label", row.device === "paddle" ? t("devices.paddlesLabel") : t("start.simulator"));
+      icon.removeAttribute("aria-hidden");
+      when.append(" ", icon);
+    }
+  }
+  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].join(" · "));
+  figures.className = "profile-ride-figures";
+  summary.append(when, figures);
+  summary.addEventListener("click", () => {
+    app.profileOpenRide = open ? null : row.id;
+    renderProfileRides();
+    $("profile-rides").querySelector(`[data-ride="${CSS.escape(row.id)}"] .profile-ride-summary`)?.focus();
+  });
+  item.dataset.ride = row.id;
+  item.append(summary);
+  if (open) item.append(profileRideDetail(record));
+  return item;
+}
+
+function profileRideDetail(record) {
+  const detail = document.createElement("div");
+  detail.className = "profile-ride-detail";
+  const splits = document.createElement("table");
+  splits.className = "splits";
+  renderSplits(splits, record.splits ?? [], unitMetres());
+  const curve = curveRows(record.curve);
+  if (curve.length) {
+    const list = document.createElement("dl");
+    list.className = "profile-totals";
+    list.append(...curve.flatMap(({ label, watts }) => [textElement("dt", label), textElement("dd", watts)]));
+    detail.append(textElement("h3", t("profilePage.rides.curve")), list);
+  }
+  const scroller = document.createElement("div");
+  scroller.className = "profile-splits";
+  scroller.append(splits);
+  detail.prepend(scroller);
+  return detail;
 }
 
 function textElement(tag, text) {

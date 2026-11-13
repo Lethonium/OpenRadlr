@@ -969,4 +969,7 @@ export default {
   "profilePage.bestLaps": "Beste Runden",
   "profilePage.bestLaps.none": "Noch keine beste Runde. Fahr eine ganze Runde auf einer Rundstrecke, um eine zu setzen.",
   "profilePage.overview.empty": "Noch keine Fahrten. Deine Summen, deine FTP und deine besten Runden erscheinen hier nach deiner ersten Fahrt.",
+  "profilePage.rides.empty": "Noch keine Fahrten. Jede Fahrt, die du beendest, erscheint hier.",
+  "profilePage.rides.more": "Mehr zeigen",
+  "profilePage.rides.curve": "Beste Leistung",
 };
