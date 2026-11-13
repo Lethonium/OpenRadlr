@@ -1052,4 +1052,6 @@ export default {
   "profilePage.ftp.chart": "FTP over time: {parts}.",
   "profilePage.ftp.chartSet": "set from {from} W to {to} W",
   "profilePage.ftp.chartEstimate": "estimated from your rides {last} W last",
+  "profilePage.unreadable": "Your rides can't be read in this browser right now. Nothing was deleted.",
+  "profilePage.workout": "Workout",
 };

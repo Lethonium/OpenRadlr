@@ -44,7 +44,7 @@ test("overviewLines: best laps by route name with lap time", () => {
   assert.deepEqual(lines.bests, ["Rolling Hills · 21:58"]);
 });
 
-const rec = (extra = {}) => ({ id: "1", startedAt: Date.UTC(2026, 10, 10, 18), routeId: "rolling-hills", distanceM: 21400, durationS: 2700, avgPower: 198.4, elevationGainM: 210, device: "trainer", curve: { 5: 610, 15: 500, 60: 380, 300: 290, 1200: 241, 1800: 230, 3600: null }, ...extra });
+const rec = (extra = {}) => ({ id: "1", startedAt: new Date(2026, 10, 10, 18).getTime(), routeId: "rolling-hills", distanceM: 21400, durationS: 2700, avgPower: 198.4, elevationGainM: 210, device: "trainer", curve: { 5: 610, 15: 500, 60: 380, 300: 290, 1200: 241, 1800: 230, 3600: null }, ...extra });
 
 test("rides come 20 at a time", () => {
   assert.equal(RIDES_PAGE_SIZE, 20);
@@ -174,4 +174,23 @@ test("ftpChartModel: the first and last date label the time axis", () => {
 test("ftpChartLabel: says in words how the FTP moved", () => {
   const label = ftpChartLabel({ set: [{ t: 0, ftp: 235 }, { t: WEEK, ftp: 245 }], estimated: [{ t: WEEK, ftp: 251 }] });
   assert.equal(label, "FTP over time: set from 235 W to 245 W, estimated from your rides 251 W last.");
+});
+
+test("rideRows: a workout shows its plan and time, no ride figures", () => {
+  const [row] = rideRows([{ version: 2, kind: "workout", id: "9", planName: "Mobility", startedAt: 1, durationS: 1500, measured: false }], [], {});
+  assert.equal(row.route, "Mobility");
+  assert.equal(row.time, "25:00");
+  assert.equal(row.workout, true);
+  assert.equal(row.distance, null);
+  assert.equal(row.power, null);
+  assert.equal(row.climbing, null);
+});
+
+test("rideRows: a ride is no workout", () => {
+  assert.equal(rideRows([rec()], [], {})[0].workout, false);
+});
+
+test("overviewLines: unreadable rides say so instead of the new-rider text", () => {
+  const lines = overviewLines({ profile, totals: noRides, bests: [], routes: [], unreadable: true });
+  assert.equal(lines.empty, "Your rides can't be read in this browser right now. Nothing was deleted.");
 });

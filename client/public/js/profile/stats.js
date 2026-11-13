@@ -34,14 +34,16 @@ function totals(records) {
   return sum;
 }
 
-/** Totals of this week, this month and all rides. */
+/** Totals of this week, this month and all rides (workouts left out). */
 export function periodTotals(records, nowMs) {
+  // Yoga and bodyweight workouts share the history; they are no rides.
+  const rides = records.filter((record) => record.kind !== "workout");
   const week = weekStart(nowMs);
   const month = monthStart(nowMs);
   return {
-    week: totals(records.filter((record) => record.startedAt >= week)),
-    month: totals(records.filter((record) => record.startedAt >= month)),
-    all: totals(records),
+    week: totals(rides.filter((record) => record.startedAt >= week)),
+    month: totals(rides.filter((record) => record.startedAt >= month)),
+    all: totals(rides),
   };
 }
 

@@ -31,9 +31,9 @@ function totalsValue(sum) {
 
 /**
  * The Overview page's lines.
- * @param {{profile: object, totals: ReturnType<import("../profile/stats.js").periodTotals>, bests: {routeId: string, durationS: number}[], routes: {id: string, name: string}[], locale?: string}} input
+ * @param {{profile: object, totals: ReturnType<import("../profile/stats.js").periodTotals>, bests: {routeId: string, durationS: number}[], routes: {id: string, name: string}[], locale?: string, unreadable?: boolean}} input `unreadable`: the history couldn't be read
  */
-export function overviewLines({ profile, totals, bests, routes, locale }) {
+export function overviewLines({ profile, totals, bests, routes, locale, unreadable = false }) {
   const name = profile.name || t("profilePage.noName");
   const level = Number.isFinite(profile.levelW) && profile.weightKg > 0 ? levelLabel(profile.levelW, profile.weightKg) : null;
   return {
@@ -45,7 +45,7 @@ export function overviewLines({ profile, totals, bests, routes, locale }) {
       { label: t("profilePage.all"), value: totalsValue(totals.all) },
     ],
     bests: bests.map((best) => `${routeName(best.routeId, routes)} · ${formatDuration(best.durationS)}`),
-    empty: totals.all.rides === 0 ? t("profilePage.overview.empty") : null,
+    empty: unreadable ? t("profilePage.unreadable") : totals.all.rides === 0 ? t("profilePage.overview.empty") : null,
   };
 }
 
@@ -61,10 +61,15 @@ function rideDate(ms, locale) {
   }
 }
 
-/** One row per ride (records come newest first); `device` only marks phone paddles and the simulator. */
+/**
+ * One row per ride (records come newest first); `device` only marks phone
+ * paddles and the simulator. Workouts (yoga, bodyweight) share the history:
+ * they show their plan and time, no ride figures (those are null).
+ */
 export function rideRows(records, routes, { locale } = {}) {
-  return records.map((record) => ({
+  return records.map((record) => (record.kind === "workout" ? workoutRow(record, locale) : {
     id: record.id,
+    workout: false,
     date: rideDate(record.startedAt, locale),
     route: routeName(record.routeId, routes),
     distance: distance(Number.isFinite(record.distanceM) ? record.distanceM : 0),
@@ -73,6 +78,20 @@ export function rideRows(records, routes, { locale } = {}) {
     climbing: formatElevation(Number.isFinite(record.elevationGainM) ? record.elevationGainM : 0),
     device: record.device === "paddle" || record.device === "sim" ? record.device : null,
   }));
+}
+
+function workoutRow(record, locale) {
+  return {
+    id: record.id,
+    workout: true,
+    date: rideDate(record.startedAt, locale),
+    route: record.planName || t("profilePage.workout"),
+    distance: null,
+    time: formatDuration(Number.isFinite(record.durationS) ? record.durationS : 0),
+    power: null,
+    climbing: null,
+    device: null,
+  };
 }
 
 function curveLabel(seconds) {
