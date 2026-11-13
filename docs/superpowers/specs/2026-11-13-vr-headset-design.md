@@ -30,7 +30,7 @@ for a person wearing it.
 - **Not in scope:** Bluetooth on the Quest, the sideloaded APK, a native
   OpenXR app, VR controllers as game input (steering, menus), workouts in the
   gym (yoga, bodyweight) in VR, rider name labels in VR, protocol changes
-  beyond `watch_status.rider_id`.
+  beyond `watch_status.rider_id` and the paired-screens additions.
 - **Anti-goals (failures even if the code works):**
   - The camera moves on its own while in VR: a scripted move, a cut, the
     pedalling bob, or a chase-camera lag. The headset decides where the eyes
@@ -185,12 +185,77 @@ for a person wearing it.
 - **How it's drawn.** With the existing pixel-font glyph meshes; it adds the
   `W`, `b`, `p`, `m` and `/` glyphs and the units it needs.
 
-### Pairing UI
+### Pairing UI: polish and a device list
 
-- The start menu gets "Use as VR display". It opens `vr.html`, pairing first if
-  needed (the same code dialog as the cockpit).
-- `vr.html` has "Forget this tablet" and a link back, like the cockpit.
-- All text goes in `i18n/en.js` + `de.js`.
+Today the pairing flow doesn't look like the rest of the app. "Second screen"
+is a collapsed section at the bottom of the start settings, with the buttons
+stacked in it. The code dialog is the only native `<dialog>` in the app; every
+other dialog uses `.menu-dialog`. And the phone enters the code in the
+browser's `prompt()` box. The rider wants it to stay out of the way (it is a
+niche feature) but, once opened, to look and work like the rest of OpenRadlr.
+They also want to see which devices are paired.
+
+- **The entry point.** "Second screen" becomes one row in the start screen's
+  settings, which opens its own panel in the app's dialog style
+  (`.menu-dialog` and the existing card, button and spacing rules). It is
+  still shown only with `info.screens`. The panel has:
+  - "Pair a new screen" (tablet side);
+  - the list of paired screens;
+  - "Unpair all";
+  - "Use this device as a cockpit" and "Use this device as a VR display".
+- **The tablet's code view.** It follows the same style:
+  - the code in large letters, grouped `ABC DEF`;
+  - a countdown bar;
+  - "Waiting for a screen…", which turns into "Paired: <device>" when the
+    code is claimed;
+  - "New code" once the code expires.
+
+  The hint text covers both the phone and the headset.
+- **Code entry (phone, Quest, cockpit and VR pages).** A shared component,
+  `view/codeInput.js`, replaces `prompt()`:
+  - six boxes, styled like the app's inputs, large enough for the Quest's
+    pointer;
+  - only the code alphabet is accepted, and input is upper-cased. The
+    alphabet has no look-alikes (`0`, `O`, `1`, `I`, `L`), so the boxes simply
+    don't take them;
+  - pasting a whole code fills all boxes, and the code submits once all six
+    are entered;
+  - errors appear in place, with no alert, through states: "Connecting…",
+    "Code unknown or expired: get a new one on the tablet", and "No
+    connection to the server".
+
+  Its logic (filtering and state) is pure and unit-tested; the DOM part is
+  thin.
+- **Not paired.** The cockpit and VR pages show "Pair now", which opens the
+  code entry right there, instead of a paragraph pointing to the menu.
+- **The paired-screens list (option 1: a list; removing stays "Unpair all").**
+  - **Names.** `pair_claim` gains an optional `device`: a short name the
+    screen derives from its user agent (for example "Quest 3",
+    "Android phone", "iPhone"; otherwise "Browser"), at most 40 characters.
+    The server passes it on in `pair_claimed { device }` without storing it.
+  - **The list.** The tablet stores the list locally
+    (`openradlr.pairedScreens`: `{ device, pairedAt }`). It shows the name
+    and the date. "Unpair all" clears the list along with the key.
+  - **The "live" dot.** It shows which screens are connected right now.
+    - `watch` gains the same optional `device`.
+    - A key holder can ask `screens_query { key }` on a short connection like
+      the pairing one, and gets `screens_watching { devices: [...] }`. A hub
+      exists while watchers are connected, even with no ride.
+    - While riding, the host gets `screens_watching` pushed whenever a
+      watcher arrives or leaves.
+    - The tablet marks list entries with a matching name as live. Two devices
+      with the same name both show live; this is accepted.
+  - **What it can't do.** Per-device removal is out of scope. All screens
+    share one key; per-device keys would change the relay from #87.
+  - **Protocol.** These additions are documented in `docs/protocol.md`; there
+    is no version bump.
+- **VR entry.** "Use this device as a VR display" opens `vr.html`, pairing
+  first if needed. `vr.html` has "Forget this tablet" and a link back, like
+  the cockpit.
+- **Text.** All of it goes in `i18n/en.js` + `de.js`.
+- **Checks.** Screenshots of the panel, the code view and the code entry,
+  phone-sized and tablet-sized, are compared with the app's other dialogs
+  before the PR.
 
 ## Testing
 
@@ -238,7 +303,11 @@ for a person wearing it.
    `renderXr`. The preview works here.
 6. `webXrSource` and "Enter VR".
 7. The VR HUD panel.
-8. Screenshot two-page mode and the docs.
+8. Pairing UI: the styled second-screen panel, the code view and `codeInput`
+   (styling and behaviour, no protocol change).
+9. Paired-screens list: `device` in `pair_claim` and `watch`, `pair_claimed { device }`,
+   `screens_query` / `screens_watching`, and the list with the live dot.
+10. Screenshot two-page mode and the docs.
 
 The branch builds on `feat/cockpit` (PR #88). It is rebased onto `main` once
 that merges.
