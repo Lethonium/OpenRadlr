@@ -55,25 +55,23 @@ import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "./route/worl
 import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
-import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
+import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
 import { themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
   LAYOUT_LABELS,
-  MetricBinder,
   chooseLayout,
   formatPosition,
   formatTimeGap,
-  gaugeFraction,
   nextLayoutChoice,
   nextMarker,
-  powerZone,
   raceStanding,
   splitLabel,
   splitLine,
 } from "./view/hud.js";
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
+import { RideHud, averageSpeed } from "./view/rideHud.js";
 import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -3136,9 +3134,6 @@ function rideSplits(final) {
   });
 }
 
-/** Whole-ride average speed for the top-left HUD ("–" in the first seconds); time excludes pauses (rideStartedAt follows rejoins). */
-const averageSpeed = (metres, seconds) => (seconds >= 5 ? formatSpeed(metres / seconds) : "–");
-
 /** The "Last split" fields: the full line, and label and time only for the narrow training column. */
 function showLastSplit(split) {
   app.hud.set("last-split", split ? splitLine(split, app.splitUnitM) : "–");
@@ -3506,7 +3501,8 @@ function renderGear() {
 
 /** HUD parts shared by roads and the studio. */
 function initHudCommon() {
-  app.hud = new MetricBinder($("hud"));
+  app.rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline });
+  app.hud = app.rideHud.metrics;
   renderUnits();
   initMenu();
   $("open-menu").addEventListener("click", () => toggleMenu());
@@ -3834,28 +3830,6 @@ function renderRaceCall(race, me) {
   const field = entered ? tn("race.call.othersEntered", others) : tn("race.call.ridersEntered", others);
   $("race-call-text").textContent = t("race.call.startsIn", { s: Math.ceil(race.remaining_s), field });
   $("race-call-button").textContent = entered ? t("race.call.leave") : t("race.call.join");
-}
-
-function markerText(marker) {
-  if (!marker) return t("ride.roadAhead");
-  return marker.inside ? t("ride.markerToGo", { label: marker.label, distance: formatLength(marker.inM) }) : t("ride.markerIn", { label: marker.label, distance: formatLength(marker.inM) });
-}
-
-/** Gauge arc and target tick for the cockpit. */
-function renderGauge(power, target) {
-  const ftp = app.profile.ftp;
-  $("gauge-fill").style.strokeDashoffset = String(100 - gaugeFraction(power, ftp) * 100);
-  const tick = $("gauge-target");
-  tick.hidden = target === null;
-  if (target === null) return;
-  const angle = Math.PI * (1 - gaugeFraction(target, ftp));
-  const point = (r) => [150 + r * Math.cos(angle), 160 - r * Math.sin(angle)];
-  const [x1, y1] = point(104);
-  const [x2, y2] = point(136);
-  tick.setAttribute("x1", x1.toFixed(1));
-  tick.setAttribute("y1", y1.toFixed(1));
-  tick.setAttribute("x2", x2.toFixed(1));
-  tick.setAttribute("y2", y2.toFixed(1));
 }
 
 function renderRaceLists(standing) {
@@ -4560,46 +4534,20 @@ function frame() {
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
-  // Only the canvases of the visible layout are drawn.
-  const layout = app.layout;
-  if (layout === "broadcast") {
-    drawProfile($("profile"), { route: app.route, riders, myId: app.riderId, colors });
-    drawMinimap($("minimap"), { route: app.route, riders, myId: app.riderId, colors });
-  } else if (layout === "cockpit" && me) {
-    drawUpcoming($("upcoming"), { route: app.route, distance: me.distance, ahead: 2000, colors });
-  } else if (layout === "race" && app.standing) {
-    drawRaceTimeline($("race-timeline"), { standing: app.standing, myId: app.riderId, colors });
-  }
-
   // A finished ride's workout stands still: its end would send the trainer a new target.
   if (!app.finished) renderWorkoutProgress(time);
   const target = app.training.targetWatts();
   const { power, cadence, heartRate } = app.session.latest;
-  const watts = Math.round(power || 0);
-  const hud = app.hud;
-  hud.set("power", watts);
-  hud.set("wkg", formatWkg(power || 0, app.profile.weightKg));
-  hud.set("zone", `Z${Math.max(1, powerZone(power || 0, app.profile.ftp))}`);
-  hud.set("target", target === null ? "–" : target);
-  hud.set("target-suffix", target === null ? "" : t("hud.target", { watts: target }));
-  hud.set("cadence", Number.isFinite(cadence) ? Math.round(cadence) : "–");
-  hud.set("hr", Number.isFinite(heartRate) ? Math.round(heartRate) : "–");
-  hud.set("speed", formatSpeed(me?.speed ?? 0));
-  hud.set("grade", `${me ? formatGrade(app.route.gradeAt(me.distance)) : formatGrade(0)} %`);
-  hud.set("distance", formatDistance(app.rideDistance));
+  const layout = app.layout;
   // The ride time stands still while paused.
   const clock = app.pausedFrom ?? time;
-  hud.set("avg-speed", averageSpeed(app.rideDistance, clock - app.rideStartedAt));
-  hud.set("time", formatDuration(clock - app.rideStartedAt));
-  hud.set("intensity", `${Math.round(app.training.intensity * 100)} %`);
-  if (layout === "cockpit") renderGauge(power || 0, target);
-  const trainingPower = $("training-power");
-  const onTarget = target !== null && Math.abs(watts - target) <= Math.max(10, target * 0.05);
-  trainingPower.classList.toggle("on-target", onTarget);
-  trainingPower.classList.toggle("off-target", target !== null && !onTarget);
+  app.rideHud.render(
+    { power, cadence, heartRate, me, route: app.route, rideDistanceM: app.rideDistance, elapsedS: clock - app.rideStartedAt, target, intensity: app.training.intensity, weightKg: app.profile.weightKg, ftp: app.profile.ftp },
+    { layout, riders, myId: app.riderId, standing: app.standing, colors },
+  );
+  const hud = app.hud;
 
   const marker = me ? nextMarker(app.route, me.distance, 3000) : null;
-  hud.set("next-marker", markerText(marker));
   const banner = $("marker-banner");
   const showBanner = layout === "race" && marker !== null && (marker.inside || marker.inM <= 1000);
   banner.hidden = !showBanner;
