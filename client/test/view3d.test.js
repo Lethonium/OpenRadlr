@@ -1010,3 +1010,127 @@ test("a studio camera follows my seat in the studio, without a road rider of min
   assert.ok(view.camera.eye[1] > before[1] + 4, "moved up a floor");
   assert.ok(renderer.draws.length > 0);
 });
+
+// --- one frame's calls (the split into frame and views must not change them) -----
+
+/** A renderer that logs the name of every call (and the rect of a viewport) on top of the recording one. */
+function callLog() {
+  const log = [];
+  const inner = new RecordingRenderer();
+  inner.queryOcclusion = () => {};
+  const renderer = new Proxy(inner, {
+    get(target, name) {
+      const value = target[name];
+      if (typeof value !== "function") return value;
+      return (...args) => {
+        log.push(
+          name === "viewport"
+            ? `viewport ${args[0] ? Object.values(args[0]).join(",") : "null"}`
+            : name,
+        );
+        return value.apply(target, args);
+      };
+    },
+  });
+  return { renderer, log };
+}
+/** A bare stand-in for the DOM the name labels are made of. */
+function stubLabels(t) {
+  const element = () => ({
+    style: {},
+    classList: { toggle() {} },
+    append() {},
+    querySelector: () => null,
+    getBoundingClientRect: () => ({ width: 40, height: 16 }),
+  });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+}
+const collapse = (log) =>
+  log.map((name, i) => (name === log[i - 1] ? null : name)).filter(Boolean);
+
+test("a ride frame makes the same renderer calls as before", (t) => {
+  stubLabels(t);
+  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
+  const { renderer, log } = callLog();
+  const { view } = gymView([], "winter", weather, renderer);
+  view.labelLayer = { append() {} };
+  view.camera.update(100, 1, 0);
+  const rider = {
+    id: 7,
+    name: "Ana",
+    distance: 100,
+    lane: 1,
+    speed: 8,
+    power: 150,
+  };
+  const other = {
+    id: 8,
+    name: "Bo",
+    distance: 110,
+    lane: 0,
+    speed: 8,
+    power: 150,
+  };
+  view.render({ riders: [rider, other], myId: 7, timeS: 12, colors });
+  assert.deepEqual(collapse(log), EXPECTED_RIDE_CALLS);
+});
+
+test("a workout frame with a side view makes the same renderer calls as before", (t) => {
+  stubLabels(t);
+  const gym = testGym();
+  const { renderer, log } = callLog();
+  const { view } = gymView([gym], "temperate", null, renderer);
+  view.labelLayer = { append() {} };
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  view.render({
+    riders: [workoutRider, { ...workoutRider, id: 9 }],
+    myId: 7,
+    timeS: 12,
+    colors,
+  });
+  assert.deepEqual(collapse(log), EXPECTED_WORKOUT_CALLS);
+});
+const EXPECTED_RIDE_CALLS = [
+  "upload",
+  "createShadowMap",
+  "upload",
+  "uploadWeather",
+  "upload",
+  "resize",
+  "beginShadows",
+  "drawShadowCaster",
+  "endShadows",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "queryOcclusion",
+  "drawWeather",
+];
+const EXPECTED_WORKOUT_CALLS = [
+  "createShadowMap",
+  "upload",
+  "resize",
+  "beginShadows",
+  "drawShadowCaster",
+  "endShadows",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "queryOcclusion",
+  "viewport 220,10,90,70",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "viewport null",
+];

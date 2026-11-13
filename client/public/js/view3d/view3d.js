@@ -704,17 +704,57 @@ export class View3D {
 
   /**
    * Draws one frame.
-   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: {me: string, human: string, bot: string}}} frame
+   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: {me: string, human: string, bot: string}}} input
    */
-  render({ riders, myId, myCadence, timeS, colors }) {
+  render(input) {
+    const ratio = Math.min(globalThis.devicePixelRatio || 1, this.quality === "high" ? 2 : 1);
+    const width = Math.max(1, Math.round(this.canvas.clientWidth));
+    const height = Math.max(1, Math.round(this.canvas.clientHeight));
+    this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
+
+    const frame = this.#prepareFrame(input);
+    if (!frame) return;
+    const { myId, timeS, dt, lens, me, placed, visible, seatHeads, probes, scene, eye, forward } = frame;
+
+    const [ox, oy] = this.viewOffset;
+    const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
+    const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
+    const viewProjection = multiply(projection, lookAt(this.camera.eye, this.camera.target));
+    this.#drawView(frame, { viewProjection, eye, forward, rect: null });
+
+    // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
+    if (me?.gym && this.sideView && this.renderer.viewport) {
+      const box = this.sideView.getBoundingClientRect();
+      const canvasBox = this.canvas.getBoundingClientRect?.() ?? { left: 0, top: 0, width, height };
+      const rect = insetViewport(box, canvasBox, ratio);
+      if (rect) {
+        const mine = visible.filter((part) => part.rider.id === myId);
+        // Ease towards where the body is, so a flow glides instead of jerking the picture.
+        const ahead = bodyAhead(mine.flatMap((part) => part.torso.map((piece) => piece.model)), me.gym.spot);
+        this.#sideAhead = this.#sideAhead === null ? ahead : this.#sideAhead + (ahead - this.#sideAhead) * Math.min(1, dt / SIDE_CAMERA.followS);
+        const side = sideCameraPose(me.gym.spot, this.#sideAhead);
+        const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
+        this.renderer.viewport(rect);
+        this.#drawWorld(
+          { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
+          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
+        );
+        this.renderer.viewport(null);
+      }
+    }
+
+    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
+  }
+
+  /**
+   * What one frame shares between its views: the camera moved, the riders placed
+   * and posed, what is near enough to draw, and the shadow map. Null without a camera.
+   */
+  #prepareFrame({ riders, myId, myCadence, timeS, colors }) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
     const high = this.quality === "high";
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, high ? 2 : 1);
-    const width = Math.max(1, Math.round(this.canvas.clientWidth));
-    const height = Math.max(1, Math.round(this.canvas.clientHeight));
-    this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
     const onRoads = riders.filter((rider) => !rider.studio).map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
@@ -736,16 +776,11 @@ export class View3D {
       this.camera.cadence = myCadence ?? 0;
       this.camera.update(0, 0, dt);
     } else if (me) this.camera.update(me.rider.distance, me.rider.lane, dt, myVehicle);
-    if (!this.camera.eye) return;
+    if (!this.camera.eye) return null;
 
     const lens = this.lens;
     const preset = resolvePreset(this.timeMode);
     const light = resolvedLight(preset, this.biome, lens.haze);
-    const [ox, oy] = this.viewOffset;
-    const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
-    const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
-    const viewProjection = multiply(projection, lookAt(this.camera.eye, this.camera.target));
-    const inverseViewProjection = invert(viewProjection);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
     const visible = [];
@@ -852,12 +887,31 @@ export class View3D {
       this.renderer.endShadows();
     }
 
-    // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
-    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
-    this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
-
     // Which riders that could get a label are in sight, for the next frames' labels.
     const probes = this.#labelProbes(placed, myId, seatHeads);
+
+    const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
+    for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
+    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
+      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
+    }
+
+    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
+    return { riders, myId, timeS, dt, lens, me, placed, visible, gymSpots, seatHeads, probes, scene, eye, forward };
+  }
+
+  /**
+   * Draws the frame as seen from `eye` looking along `forward` through
+   * `viewProjection`: into `rect` of the target (device pixels, from the bottom
+   * left), or all of it when null. Reads the camera and the canvas size from nowhere.
+   */
+  #drawView(frame, { viewProjection, eye, forward, rect }) {
+    const { scene, probes, timeS } = frame;
+    if (rect) this.renderer.viewport(rect);
+    // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
+    this.#drawWorld(scene, { viewProjection, inverseViewProjection: invert(viewProjection), eye, forward });
+
+    // Which riders that could get a label are in sight, for the next frames' labels.
     if (this.renderer.queryOcclusion) {
       for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
     }
@@ -869,34 +923,7 @@ export class View3D {
       const up = normalize(cross(right, forward));
       this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
     }
-
-    // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
-    if (me?.gym && this.sideView && this.renderer.viewport) {
-      const box = this.sideView.getBoundingClientRect();
-      const canvasBox = this.canvas.getBoundingClientRect?.() ?? { left: 0, top: 0, width, height };
-      const rect = insetViewport(box, canvasBox, ratio);
-      if (rect) {
-        const mine = visible.filter((part) => part.rider.id === myId);
-        // Ease towards where the body is, so a flow glides instead of jerking the picture.
-        const ahead = bodyAhead(mine.flatMap((part) => part.torso.map((piece) => piece.model)), me.gym.spot);
-        this.#sideAhead = this.#sideAhead === null ? ahead : this.#sideAhead + (ahead - this.#sideAhead) * Math.min(1, dt / SIDE_CAMERA.followS);
-        const side = sideCameraPose(me.gym.spot, this.#sideAhead);
-        const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
-        this.renderer.viewport(rect);
-        this.#drawWorld(
-          { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
-          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
-        );
-        this.renderer.viewport(null);
-      }
-    }
-
-    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
-    const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
-    for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
-    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
-      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
-    }
+    if (rect) this.renderer.viewport(null);
   }
 
   /**
