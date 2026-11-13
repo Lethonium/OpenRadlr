@@ -9,7 +9,8 @@ ending the ride automatically.
 
 ## Decisions
 
-- One optional goal per ride, set or replaced in Menu → Overview. Targets count
+- One optional goal per ride, chosen on the start screen with quick presets and a custom target. It can be
+  replaced in Menu → Overview through a collapsed Change goal editor. Targets count
   from the start of the recording, including when set midway through a ride.
 - Time is active recorded time (pauses excluded); distance and climbing use
   the recorder's summary, matching the ride file and Overview.

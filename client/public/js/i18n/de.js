@@ -1,7 +1,9 @@
 // German dictionary (informal "du"). Missing keys fall back to English.
 export default {
+  "goal.startHint": "Gib dieser Fahrt ein Ziel.",
+  "goal.none": "Einfach fahren",
+  "goal.edit": "Ziel ändern",
   "goal.title": "Fahrziel",
-  "goal.hint": "Zählt ab Beginn dieser Fahrt. Nach Erreichen deines Ziels kannst du weiterfahren.",
   "goal.type": "Zieltyp",
   "goal.time": "Zeit",
   "goal.distance": "Distanz",

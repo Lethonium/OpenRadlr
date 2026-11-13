@@ -1,7 +1,9 @@
 // English source dictionary and fallback. Flat dotted keys; {name} interpolation.
 export default {
+  "goal.startHint": "Give this ride a finish line.",
+  "goal.none": "Just ride",
+  "goal.edit": "Change goal",
   "goal.title": "Ride goal",
-  "goal.hint": "Counts from the start of this ride. Keep riding after reaching your goal.",
   "goal.type": "Goal type",
   "goal.time": "Time",
   "goal.distance": "Distance",

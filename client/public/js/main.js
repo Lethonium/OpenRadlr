@@ -3,7 +3,7 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
-import { RideGoal } from "./ride/rideGoal.js";
+import { goalTarget, goalUnit, RideGoal } from "./ride/rideGoal.js";
 import { createRideGoalView } from "./view/rideGoalView.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
@@ -554,6 +554,8 @@ function renderUnits() {
   for (const button of document.querySelectorAll("[data-units]")) {
     button.setAttribute("aria-pressed", String(button.dataset.units === app.profile.units));
   }
+  const selectedGoal = document.querySelector('[name="ride-goal-kind"]:checked')?.value;
+  if (selectedGoal && selectedGoal !== "none") $("start-goal-unit").textContent = goalUnit(selectedGoal, app.profile.units);
   const weight = $("weight");
   weight.min = kgToDisplay(30);
   weight.max = kgToDisplay(200);
@@ -625,6 +627,23 @@ async function offerFtp() {
 }
 
 function initSetup() {
+  for (const radio of document.querySelectorAll('[name="ride-goal-kind"]')) radio.addEventListener("change", () => {
+    const kind = radio.value;
+    const active = kind !== "none";
+    $("start-goal-value").hidden = !active;
+    $("start-goal-target").disabled = !active;
+    if (!active) return;
+    const presets = kind === "time" ? [30, 45, 60, 90] : kind === "distance" ? [10, 20, 40, 60] : [250, 500, 1000, 1500];
+    $("start-goal-target").value = presets[0];
+    $("start-goal-unit").textContent = goalUnit(kind, app.profile.units);
+    $("start-goal-presets").replaceChildren(...presets.map((value) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = formatNumber(value, 0);
+      button.addEventListener("click", () => { $("start-goal-target").value = value; });
+      return button;
+    }));
+  });
   relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
   $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   setUnits(app.profile.units);
@@ -2078,6 +2097,10 @@ function startRide() {
   else startRoad({ simulated, setSimPower });
 
   app.rideGoal = new RideGoal();
+  const goalKind = document.querySelector('[name="ride-goal-kind"]:checked')?.value;
+  if (!app.studio && !app.workout && goalKind && goalKind !== "none") {
+    app.rideGoal.set(goalKind, goalTarget(goalKind, $("start-goal-target").valueAsNumber, app.profile.units));
+  }
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
   startSplits();
