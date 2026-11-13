@@ -12,6 +12,8 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { PROFILE_PAGES, overviewLines } from "./view/profilePage.js";
+import { periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -706,6 +708,7 @@ function initSetup() {
     if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
     joinRide().catch(joinFailed);
   });
+  initProfile();
 }
 
 /** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
@@ -2753,6 +2756,64 @@ function startMilestones() {
   app.history.list().then((records) => {
     if (app.milestones === watch && app.ride === ride) watch.totals = lifetimeTotals(records);
   });
+}
+
+// -------------------------------------------------------------- profile ---
+
+/** The profile dialog over the start menu: the in-game menu's dialog with its own pages. */
+function initProfile() {
+  const root = $("profile-dialog");
+  app.profileDialog = createMenuDialog({
+    root,
+    stack: panels,
+    matchNarrow: matchMedia(MENU_NARROW_QUERY),
+    pages: PROFILE_PAGES,
+    focusables: () => focusableIn(root),
+    onPage: (page) => {
+      for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
+    },
+    onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
+  });
+  $("open-profile").addEventListener("click", () => openProfile());
+  relocaliseHooks.push(() => {
+    if (app.profileDialog.isOpen) renderProfile();
+  });
+}
+
+/** Opens the profile on `page` and fills it from fresh reads of the stores. */
+function openProfile(page) {
+  app.profileDialog.open(page);
+  return loadProfile();
+}
+
+async function loadProfile() {
+  const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
+  app.profileData = { records, bests };
+  renderProfile();
+}
+
+function renderProfile() {
+  if (!app.profileData) return;
+  renderProfileOverview();
+}
+
+function renderProfileOverview() {
+  const { records, bests } = app.profileData;
+  const lines = overviewLines({ profile: app.profile, totals: periodTotals(records, Date.now()), bests, routes: routesOf(app.info), locale: getLocale() });
+  $("profile-rider").textContent = lines.rider;
+  $("profile-ftp").textContent = lines.ftp;
+  $("profile-empty").hidden = !lines.empty;
+  $("profile-empty").textContent = lines.empty ?? "";
+  $("profile-totals-panel").hidden = Boolean(lines.empty);
+  $("profile-totals").replaceChildren(...lines.totals.flatMap(({ label, value }) => [textElement("dt", label), textElement("dd", value)]));
+  $("profile-bests").replaceChildren(...lines.bests.map((line) => textElement("li", line)));
+  $("profile-bests-none").hidden = lines.bests.length > 0;
+}
+
+function textElement(tag, text) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  return node;
 }
 
 function checkMilestones(me, time) {

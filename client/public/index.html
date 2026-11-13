@@ -40,6 +40,7 @@
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
     <link rel="modulepreload" href="js/ride/botCalls.js" />
     <link rel="modulepreload" href="js/ride/climbFeel.js" />
@@ -88,6 +89,7 @@
     <link rel="modulepreload" href="js/view/paddleView.js" />
     <link rel="modulepreload" href="js/view/panels.js" />
     <link rel="modulepreload" href="js/view/photos.js" />
+    <link rel="modulepreload" href="js/view/profilePage.js" />
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
@@ -261,6 +263,7 @@
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset>
               <legend data-i18n="rider.title">Rider</legend>
+              <button type="button" id="open-profile" class="secondary small open-profile" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
@@ -446,6 +449,53 @@
           <span data-i18n="menu.build.updateText">A new version is available.</span>
           <button type="button" id="build-reload" class="update-reload" data-nav-skip data-i18n="menu.build.reload">Reload</button>
           <button type="button" id="update-later" class="update-later" data-nav-skip data-i18n="menu.build.later">Later</button>
+        </div>
+
+        <!-- Profile: the in-game menu's dialog over the start menu (pages left, page right; a phone shows the list first) -->
+        <div id="profile-dialog" class="menu-dialog profile-dialog" role="dialog" aria-label="Profile" hidden data-i18n-attr="aria-label:profilePage.title">
+          <div class="menu-backdrop" data-menu-backdrop>
+            <div class="menu-card">
+              <div class="menu-head">
+                <button type="button" class="icon-button menu-back" data-menu-back aria-label="Back to the menu pages" data-i18n-attr="aria-label:menuDialog.back">‹</button>
+                <h2 data-i18n="profilePage.title">Profile</h2>
+                <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
+              </div>
+              <nav class="menu-nav" aria-label="Profile pages" data-i18n-attr="aria-label:profilePage.pages">
+                <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
+                <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
+                <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
+              </nav>
+              <div class="menu-pages">
+                <div class="menu-page" data-menu-page="overview" role="region" aria-labelledby="profile-nav-overview" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.overview">Overview</h2>
+                    <p id="profile-rider" class="profile-rider"></p>
+                    <p id="profile-ftp" class="muted"></p>
+                    <p id="profile-empty" class="field-hint" hidden></p>
+                  </div>
+                  <div id="profile-totals-panel" class="panel">
+                    <h3 data-i18n="profilePage.totals">Totals</h3>
+                    <dl id="profile-totals" class="profile-totals"></dl>
+                  </div>
+                  <div class="panel">
+                    <h3 data-i18n="profilePage.bestLaps">Best laps</h3>
+                    <ul id="profile-bests" class="profile-list"></ul>
+                    <p id="profile-bests-none" class="field-hint" hidden data-i18n="profilePage.bestLaps.none">No best laps yet. Ride a full lap of a loop route to set one.</p>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="rides" role="region" aria-labelledby="profile-nav-rides" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.rides.title">Rides</h2>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="data" role="region" aria-labelledby="profile-nav-data" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.data">Your data</h2>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
