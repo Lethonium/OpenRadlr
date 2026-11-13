@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PreviewSource, parseHead, previewFrame } from "../../public/js/vr/previewSource.js";
+import { PALM_JOINT, gripPoints } from "../../public/js/vr/hands.js";
 import { forwardOf } from "../../public/js/vr/xrFrame.js";
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -109,4 +110,14 @@ test("the source sizes the canvas and hands a frame per scheduled tick until sto
   preview.stop();
   ticks.shift()();
   assert.equal(frames.length, 1);
+});
+
+test("the preview rests both hands on the grips", () => {
+  const { hands } = previewFrame({ width: 800, height: 400, timeS: 0, pose: { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] } });
+  const grips = gripPoints();
+  assert.deepEqual(hands.map((hand) => hand.handedness), ["left", "right"]);
+  for (const hand of hands) {
+    const palm = hand.joints[PALM_JOINT];
+    [0, 1, 2].forEach((k) => close(palm[12 + k], grips[hand.handedness][k], 1e-5));
+  }
 });

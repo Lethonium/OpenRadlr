@@ -47,6 +47,8 @@ import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { isRemote } from "../view/remoteRiders.js";
 import { Hologram } from "../vr/hologram.js";
+import { boneModels, gripPoints, snapHand } from "../vr/hands.js";
+import { buildHandBone } from "./handModel.js";
 import { seatAnchor } from "../vr/seatAnchor.js";
 import { forwardOf, positionOf } from "../vr/xrFrame.js";
 
@@ -344,6 +346,7 @@ export class View3D {
   #clips = new Map();
   #lastTime = null;
   #hologram = null;
+  #handBone = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -766,23 +769,33 @@ export class View3D {
     try {
       const inStudio = input.riders.some((r) => r.id === input.myId && r.studio);
       let headInWorld = null;
+      let anchor = null;
       let bike = null;
       const frame = this.#prepareFrame(input, {
         pose: (me) => {
           if (me) bike = placement(me.position, yawFor([me.forward[0], 0, me.forward[2]]));
           const studioPov = inStudio && this.camera instanceof StudioCamera ? this.camera.povPose() : null;
           if (!studioPov && !me) return null;
-          headInWorld = multiply(seatAnchor(me, { studioPov }), xrFrame.head);
+          anchor = seatAnchor(me, { studioPov });
+          headInWorld = multiply(anchor, xrFrame.head);
           return { eye: positionOf(headInWorld), forward: forwardOf(headInWorld) };
         },
       });
       if (!frame || !headInWorld) return;
       // The labels aren't updated in VR, so no occlusion queries either.
-      const drawn = { ...frame, probes: new Map(), hologram: null };
+      const drawn = { ...frame, probes: new Map(), hologram: null, hands: null };
       if (hud && bike && !inStudio) {
         this.#hologram ??= new Hologram(this.renderer);
         this.#hologram.update(hud.values, { workout: hud.workout }, input.timeS);
         drawn.hologram = { hologram: this.#hologram, bike };
+      }
+      if (xrFrame.hands?.length) {
+        // My tracked hands as glove boxes, snapped onto the grips of the bike I'm on; they only draw.
+        this.#handBone ??= this.renderer.upload(buildHandBone());
+        const grips = gripPoints();
+        const glove = variantLook(riderLook(input.myId).variant).helmet;
+        const models = xrFrame.hands.flatMap((hand) => boneModels(bike ? snapHand(hand, grips[hand.handedness]) : hand).map((m) => multiply(anchor, m)));
+        drawn.hands = { mesh: this.#handBone, models, tint: glove };
       }
       for (const view of xrFrame.views) {
         const pose = multiply(headInWorld, view.headFromEye);
@@ -965,6 +978,7 @@ export class View3D {
     this.#drawWorld(scene, { viewProjection, inverseViewProjection: invert(viewProjection), eye, forward });
     // The hologram on the handlebars, in front of the finished world (the weather is the camera's, not the bike's).
     frame.hologram?.hologram.draw(frame.hologram.bike);
+    if (frame.hands) for (const model of frame.hands.models) this.renderer.draw(frame.hands.mesh, model, frame.hands.tint);
 
     // Which riders that could get a label are in sight, for the next frames' labels.
     if (this.renderer.queryOcclusion) {
@@ -1133,6 +1147,7 @@ export class View3D {
 
   dispose() {
     this.#hologram?.dispose();
+    if (this.#handBone) this.renderer.dispose(this.#handBone);
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];

@@ -4,8 +4,9 @@
  *
  * @typedef {{x: number, y: number, width: number, height: number}} ViewRect device pixels, from the bottom left
  * @typedef {{rect: ViewRect, projection: Float32Array, headFromEye: Float32Array}} XrView
- * @typedef {{timeS: number, framebuffer: WebGLFramebuffer | null, size: {width: number, height: number}, head: Float32Array, views: XrView[]}} XrFrame
- *   `head` is the head's pose in seated space; `size` is the framebuffer's.
+ * @typedef {{timeS: number, framebuffer: WebGLFramebuffer | null, size: {width: number, height: number}, head: Float32Array, views: XrView[], hands: XrHand[]}} XrFrame
+ *   `head` is the head's pose in seated space; `size` is the framebuffer's; `hands` are the tracked ones (none with controllers).
+ * @typedef {{handedness: "left" | "right", joints: Float32Array[], radii: number[]}} XrHand 25 joint poses (4×4, seated space, WebXR joint order) and their radii
  * @typedef {{start(onFrame: (frame: XrFrame) => void): Promise<void>, stop(): void, onEnd?: () => void}} XrFrameSource
  */
 import { multiply, perspective } from "../view3d/math.js";

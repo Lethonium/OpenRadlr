@@ -5,6 +5,7 @@
  * session's `reset` event (the rider recentres) captures the facing again.
  */
 import { invert, multiply, yawFor } from "../view3d/math.js";
+import { JOINT_COUNT } from "./hands.js";
 import { forwardOf } from "./xrFrame.js";
 
 /** A rotation about +Y by `angle` radians (counter-clockwise seen from above, like `placement`'s yaw). */
@@ -12,6 +13,18 @@ function rotationY(angle) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]);
+}
+
+/** Every tracked hand with all 25 joint poses (a hand missing one is left out), in `space`. */
+function hands(session, xrFrame, space) {
+  const found = [];
+  for (const source of session.inputSources ?? []) {
+    if (!source.hand || !["left", "right"].includes(source.handedness)) continue;
+    const poses = [...source.hand.values()].map((joint) => xrFrame.getJointPose?.(joint, space));
+    if (poses.length !== JOINT_COUNT || poses.some((pose) => !pose)) continue;
+    found.push({ handedness: source.handedness, joints: poses.map((pose) => new Float32Array(pose.transform.matrix)), radii: poses.map((pose) => pose.radius) });
+  }
+  return found;
 }
 
 /** @implements {import("./xrFrame.js").XrFrameSource} */
@@ -39,7 +52,7 @@ export class WebXrSource {
   async start(onFrame) {
     this.#ended = false;
     this.#yaw = null;
-    const session = await this.#xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor"] });
+    const session = await this.#xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "hand-tracking"] });
     this.#session = session;
     session.addEventListener("end", () => {
       this.#session = null;
@@ -56,20 +69,22 @@ export class WebXrSource {
       session.requestAnimationFrame(tick);
       const pose = xrFrame.getViewerPose(space);
       if (!pose) return;
-      onFrame(this.#frame(layer, pose));
+      onFrame(this.#frame(layer, pose, hands(session, xrFrame, space)));
     };
     session.requestAnimationFrame(tick);
   }
 
-  #frame(layer, pose) {
+  #frame(layer, pose, tracked) {
     const matrix = pose.transform.matrix;
     this.#yaw ??= yawFor(forwardOf(matrix));
     const inverse = invert(matrix);
+    const turn = rotationY(-this.#yaw);
     return {
       timeS: this.#now(),
       framebuffer: layer.framebuffer,
       size: { width: layer.framebufferWidth, height: layer.framebufferHeight },
-      head: multiply(rotationY(-this.#yaw), matrix),
+      head: multiply(turn, matrix),
+      hands: tracked.map((hand) => ({ ...hand, joints: hand.joints.map((joint) => multiply(turn, joint)) })),
       views: pose.views.map((view) => ({
         rect: layer.getViewport(view),
         projection: view.projectionMatrix,

@@ -26,7 +26,7 @@ class FakeLayer {
 function fakeXr() {
   const listeners = {};
   const spaceListeners = {};
-  const state = { yawDeg: 0, pose: true, requests: [], frameCallback: null, ended: 0 };
+  const state = { yawDeg: 0, pose: true, inputSources: [], missingJoint: false, requests: [], frameCallback: null, ended: 0 };
   const space = { addEventListener: (type, fn) => (spaceListeners[type] = fn) };
   const eye = (x) => ({
     viewport: { x: x < 0 ? 0 : 1000, y: 0, width: 1000, height: 1000 },
@@ -40,6 +40,9 @@ function fakeXr() {
       state.spaceType = type;
       return space;
     },
+    get inputSources() {
+      return state.inputSources;
+    },
     requestAnimationFrame: (fn) => (state.frameCallback = fn),
     end: () => {
       state.ended += 1;
@@ -47,6 +50,10 @@ function fakeXr() {
     },
   };
   const xrFrame = {
+    getJointPose: (joint, given) => {
+      assert.equal(given, space);
+      return joint.missing ? null : { transform: { matrix: translation(joint.x, 1, -0.5) }, radius: 0.01 };
+    },
     getViewerPose: (given) => {
       assert.equal(given, space);
       return state.pose ? { transform: { matrix: placement([0, 1.6, 0], state.yawDeg * DEG, 0) }, views: [eye(-0.032), eye(0.032)] } : null;
@@ -75,9 +82,9 @@ async function started(onEnd = () => {}) {
   return { ...fake, source, frames, gl };
 }
 
-test("asks for an immersive seated session", async () => {
+test("asks for an immersive seated session, with hand tracking", async () => {
   const { state, gl } = await started();
-  assert.deepEqual(state.requests, [{ mode: "immersive-vr", options: { optionalFeatures: ["local-floor"] } }]);
+  assert.deepEqual(state.requests, [{ mode: "immersive-vr", options: { optionalFeatures: ["local-floor", "hand-tracking"] } }]);
   assert.equal(state.spaceType, "local");
   assert.equal(state.renderState.baseLayer.gl, gl);
 });
@@ -201,4 +208,50 @@ test("the source's own onEnd still runs", async () => {
   await switchToXr(source, { stop2d() {}, start2d: () => seen.push("2d"), onFrame() {} });
   source.onEnd();
   assert.deepEqual(seen, ["source", "2d"]);
+});
+
+/** A tracked hand: a Map of 25 joint spaces, joint `i` at x = i / 100. */
+const trackedHand = (handedness, { missing = -1 } = {}) => ({
+  handedness,
+  hand: new Map(Array.from({ length: 25 }, (_, i) => [`joint-${i}`, { x: i / 100, missing: i === missing }])),
+});
+
+test("a tracked hand gives 25 joints", async () => {
+  const { runFrame, frames, state } = await started();
+  state.inputSources = [trackedHand("left"), { handedness: "right" }];
+  runFrame();
+  const [hand, ...others] = frames[0].hands;
+  assert.equal(others.length, 0, "a controller is no hand");
+  assert.equal(hand.handedness, "left");
+  assert.equal(hand.joints.length, 25);
+  assert.equal(hand.radii.length, 25);
+  close(hand.joints[7][12], 0.07);
+});
+
+test("no hands without tracking", async () => {
+  const { runFrame, frames } = await started();
+  runFrame();
+  assert.deepEqual(frames[0].hands, []);
+});
+
+test("a hand missing a joint is left out", async () => {
+  const { runFrame, frames, state } = await started();
+  state.inputSources = [trackedHand("left", { missing: 12 }), trackedHand("right")];
+  runFrame();
+  assert.deepEqual(
+    frames[0].hands.map((hand) => hand.handedness),
+    ["right"],
+  );
+});
+
+test("hands turn with the recentre", async () => {
+  const { runFrame, frames, state } = await started();
+  state.inputSources = [trackedHand("left")];
+  state.yawDeg = 30;
+  runFrame();
+  // Joint 10 sits at x = 0.1, z = -0.5; the facing captured at 30 degrees turns everything by -30 about the vertical.
+  const joint = frames[0].hands[0].joints[10];
+  const turned = -30 * DEG;
+  close(joint[12], 0.1 * Math.cos(turned) - 0.5 * Math.sin(turned));
+  close(joint[14], -0.1 * Math.sin(turned) - 0.5 * Math.cos(turned));
 });

@@ -1206,6 +1206,26 @@ test("renderXr looks from the seat along the road, turned by the head", () => {
   close(Math.hypot(right[0] - left[0], right[1] - left[1], right[2] - left[2]), 0.064);
 });
 
+/** The mesh handle `renderXr` uploads for the hand bones: the last thing uploaded in a first frame. */
+function renderXrWithHands(frame) {
+  const { view, renderer } = gymView([]);
+  const uploaded = [];
+  const upload = renderer.upload;
+  renderer.upload = (mesh) => uploaded.push(upload.call(renderer, mesh)) && uploaded.at(-1);
+  view.renderXr(xrInput(), frame);
+  return { view, renderer, bone: uploaded.at(-1) };
+}
+
+test("renderXr draws 24 bones per hand, in each eye", () => {
+  const { view, renderer, bone } = renderXrWithHands(xrFrameOf());
+  assert.equal(xrDraws(view, renderer, bone).length, 2 * 2 * 24, "two hands, two eyes");
+});
+
+test("renderXr draws no bones without hands", () => {
+  const { view, renderer, bone } = renderXrWithHands({ ...xrFrameOf(), hands: [] });
+  assert.equal(xrDraws(view, renderer, bone).length, 0);
+});
+
 test("renderXr draws the hologram in each eye when given the ride's numbers, and the 2D render never does", () => {
   const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
   const glass = () => renderer.transparent.filter((d) => d.options.alpha === 0.18).length;

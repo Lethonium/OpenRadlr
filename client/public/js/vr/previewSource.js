@@ -5,6 +5,7 @@
  * code a Quest runs.
  */
 import { placement } from "../view3d/math.js";
+import { gripPoints, restingHand } from "./hands.js";
 import { XR_DEPTH, fieldOfView, translation } from "./xrFrame.js";
 
 const RAD = Math.PI / 180;
@@ -43,11 +44,13 @@ function letterbox(x, width, height) {
 export function previewFrame({ width, height, timeS, pose }) {
   const half = Math.floor(width / 2);
   const projection = fieldOfView(EYE_FOV.horizontalDeg * RAD, EYE_FOV.verticalDeg * RAD, XR_DEPTH);
+  const grips = gripPoints();
   return {
     timeS,
     framebuffer: null,
     size: { width, height },
     head: placement(pose.position, -pose.yawDeg * RAD, pose.pitchDeg * RAD),
+    hands: [restingHand("left", grips.left), restingHand("right", grips.right)],
     views: [
       { rect: letterbox(0, half, height), projection, headFromEye: translation(-EYE_SEPARATION_M / 2, 0, 0) },
       { rect: letterbox(half, half, height), projection, headFromEye: translation(EYE_SEPARATION_M / 2, 0, 0) },
