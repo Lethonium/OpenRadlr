@@ -5,6 +5,20 @@ Conventional Commit titles of the pull requests merged since the last one
 (see [docs/releases.md](docs/releases.md)). Don't edit it by hand; a clear PR
 title is the release note.
 
+## [0.2.0](https://github.com/Lethonium/OpenRadlr/compare/v0.1.0...v0.2.0) (2026-11-13)
+
+
+### Features
+
+* **client:** Add the top-down 2D ride map ([3893e4a](https://github.com/Lethonium/OpenRadlr/commit/3893e4afbed60ed305f3cf69b7c77c9ecb36315d))
+* Show your ride live on a phone as a cockpit you arrange yourself ([#88](https://github.com/Lethonium/OpenRadlr/issues/88)) ([0ec4ffe](https://github.com/Lethonium/OpenRadlr/commit/0ec4ffe55739d820555f7c1cdb67386db0fb35d5))
+* Turn the spin studio into a glass building across from the Valley Café ([#85](https://github.com/Lethonium/OpenRadlr/issues/85)) ([89b453d](https://github.com/Lethonium/OpenRadlr/commit/89b453dded6572aaff15f2793a515fe5a26f6d29))
+
+
+### Bug Fixes
+
+* Lay out the phone ride screen without overlaps in portrait and landscape ([#79](https://github.com/Lethonium/OpenRadlr/issues/79)) ([2b09a79](https://github.com/Lethonium/OpenRadlr/commit/2b09a79b34b8fb0d2f7c81d3a7acb150b8e23190))
+
 ## 0.1.0 (2026-11-11)
 
 The first release.
