@@ -317,6 +317,8 @@ export class Renderer {
    */
   target(framebuffer, size = null) {
     this.#target = { framebuffer, size };
+    // Bound now: a frame without a shadow pass (XR) never goes through endShadows.
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, framebuffer);
   }
 
   #fullViewport() {

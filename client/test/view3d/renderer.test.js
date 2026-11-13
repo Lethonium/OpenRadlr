@@ -31,6 +31,18 @@ test("endShadows returns to the target framebuffer", () => {
   assert.deepEqual(calls, [["bindFramebuffer", gl.FRAMEBUFFER, framebuffer], ["viewport", 0, 0, 100, 50]]);
 });
 
+test("target binds the framebuffer at once, so XR draws into it without a shadow pass", () => {
+  const { gl, calls } = fakeGl();
+  const renderer = new Renderer(gl);
+  const framebuffer = {};
+  calls.length = 0;
+  renderer.target(framebuffer, { width: 100, height: 50 });
+  assert.deepEqual(calls, [["bindFramebuffer", gl.FRAMEBUFFER, framebuffer]]);
+  calls.length = 0;
+  renderer.target(null);
+  assert.deepEqual(calls, [["bindFramebuffer", gl.FRAMEBUFFER, null]]);
+});
+
 test("viewport(null) returns to the target size", () => {
   const { gl, calls } = fakeGl();
   const renderer = new Renderer(gl);
