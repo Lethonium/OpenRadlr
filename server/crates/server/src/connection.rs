@@ -200,7 +200,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         }
                     }
                     Action::PairOffer { key, name } => {
-                        let code = state.pair_codes.offer(key, name, outbox.clone(), last_code.as_deref(), now());
+                        let code = state.pair_codes.offer(key, name, outbox.clone(), last_code.as_deref());
                         last_code = Some(code.clone());
                         let reply = ServerMessage::PairCode { code, expires_in_s: PAIR_CODE_TTL_S };
                         if outbox.send(reply).await.is_err() {
@@ -208,7 +208,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         }
                     }
                     Action::PairClaim { code } => {
-                        let reply = match state.pair_codes.claim(&code, now()) {
+                        let reply = match state.pair_codes.claim(&code) {
                             Some((key, name)) => ServerMessage::Paired { key, name },
                             None => ServerMessage::error("pair_code_invalid", "this pairing code is unknown or has expired"),
                         };
