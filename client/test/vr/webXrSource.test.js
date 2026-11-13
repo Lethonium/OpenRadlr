@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { WebXrSource } from "../../public/js/vr/webXrSource.js";
 import { switchToXr } from "../../public/js/vr/xrLoop.js";
-import { forwardOf, translation } from "../../public/js/vr/xrFrame.js";
+import { XR_DEPTH, forwardOf, translation } from "../../public/js/vr/xrFrame.js";
 import { placement, yawFor } from "../../public/js/view3d/math.js";
 
 const DEG = Math.PI / 180;
@@ -87,6 +87,19 @@ test("asks for an immersive seated session, with hand tracking", async () => {
   assert.deepEqual(state.requests, [{ mode: "immersive-vr", options: { optionalFeatures: ["local-floor", "hand-tracking"] } }]);
   assert.equal(state.spaceType, "local");
   assert.equal(state.renderState.baseLayer.gl, gl);
+});
+
+test("the headset projects with the same near and far planes as the preview", async () => {
+  const { state } = await started();
+  assert.equal(state.renderState.depthNear, XR_DEPTH.near);
+  assert.equal(state.renderState.depthFar, XR_DEPTH.far);
+});
+
+test("a start that fails after the session opened ends the session and rethrows", async () => {
+  const fake = fakeXr();
+  const failing = new WebXrSource({ xr: fake.xr, gl: {}, Layer: class { constructor() { throw new Error("no layer"); } }, onEnd: () => assert.fail("the caller restores 2D itself") });
+  await assert.rejects(failing.start(() => {}), /no layer/);
+  assert.equal(fake.state.ended, 1);
 });
 
 test("one frame gives one view per XR view with its viewport", async () => {

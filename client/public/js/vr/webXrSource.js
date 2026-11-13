@@ -6,7 +6,7 @@
  */
 import { invert, multiply, yawFor } from "../view3d/math.js";
 import { JOINT_COUNT } from "./hands.js";
-import { forwardOf } from "./xrFrame.js";
+import { XR_DEPTH, forwardOf } from "./xrFrame.js";
 
 /** A rotation about +Y by `angle` radians (counter-clockwise seen from above, like `placement`'s yaw). */
 function rotationY(angle) {
@@ -60,18 +60,31 @@ export class WebXrSource {
       this.#ended = true;
       this.onEnd?.();
     });
-    const layer = new this.#Layer(session, this.#gl);
-    session.updateRenderState({ baseLayer: layer });
-    const space = await session.requestReferenceSpace("local");
-    space.addEventListener?.("reset", () => (this.#yaw = null));
-    const tick = (_time, xrFrame) => {
-      if (this.#session !== session) return;
+    try {
+      const layer = new this.#Layer(session, this.#gl);
+      // The same planes as the preview and the 2D ride lens, not the browser's 1000 m default.
+      session.updateRenderState({ baseLayer: layer, depthNear: XR_DEPTH.near, depthFar: XR_DEPTH.far });
+      const space = await session.requestReferenceSpace("local");
+      space.addEventListener?.("reset", () => (this.#yaw = null));
+      const tick = (_time, xrFrame) => {
+        if (this.#session !== session) return;
+        session.requestAnimationFrame(tick);
+        const pose = xrFrame.getViewerPose(space);
+        if (!pose) return;
+        onFrame(this.#frame(layer, pose, hands(session, xrFrame, space)));
+      };
       session.requestAnimationFrame(tick);
-      const pose = xrFrame.getViewerPose(space);
-      if (!pose) return;
-      onFrame(this.#frame(layer, pose, hands(session, xrFrame, space)));
-    };
-    session.requestAnimationFrame(tick);
+    } catch (error) {
+      // The caller sees the failure and restores the 2D page itself; don't leave a headset session running.
+      this.#ended = true;
+      this.#session = null;
+      try {
+        await session.end();
+      } catch {
+        // Already ending; the original error is the one to report.
+      }
+      throw error;
+    }
   }
 
   #frame(layer, pose, tracked) {
