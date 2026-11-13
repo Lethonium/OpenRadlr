@@ -3,6 +3,8 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
+import { goalTarget, goalUnit, RideGoal } from "./ride/rideGoal.js";
+import { createRideGoalView } from "./view/rideGoalView.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
@@ -102,6 +104,7 @@ import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
+
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
@@ -332,6 +335,8 @@ const app = {
   smoother: null,
   state: null,
   riderId: null,
+  rideGoal: null,
+  rideGoalView: null,
   rideStartedAt: 0,
   rideDistance: 0,
   /** The pause of this ride (#89), and when (the `now()` clock) its timer stopped. Null in the studio. */
@@ -553,6 +558,8 @@ function renderUnits() {
   for (const button of document.querySelectorAll("[data-units]")) {
     button.setAttribute("aria-pressed", String(button.dataset.units === app.profile.units));
   }
+  const selectedGoal = document.querySelector('[name="ride-goal-kind"]:checked')?.value;
+  if (selectedGoal && selectedGoal !== "none") $("start-goal-unit").textContent = goalUnit(selectedGoal, app.profile.units);
   const weight = $("weight");
   weight.min = kgToDisplay(30);
   weight.max = kgToDisplay(200);
@@ -624,6 +631,23 @@ async function offerFtp() {
 }
 
 function initSetup() {
+  for (const radio of document.querySelectorAll('[name="ride-goal-kind"]')) radio.addEventListener("change", () => {
+    const kind = radio.value;
+    const active = kind !== "none";
+    $("start-goal-value").hidden = !active;
+    $("start-goal-target").disabled = !active;
+    if (!active) return;
+    const presets = kind === "time" ? [30, 45, 60, 90] : kind === "distance" ? [10, 20, 40, 60] : [250, 500, 1000, 1500];
+    $("start-goal-target").value = presets[0];
+    $("start-goal-unit").textContent = goalUnit(kind, app.profile.units);
+    $("start-goal-presets").replaceChildren(...presets.map((value) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = formatNumber(value, 0);
+      button.addEventListener("click", () => { $("start-goal-target").value = value; });
+      return button;
+    }));
+  });
   relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
   $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   setUnits(app.profile.units);
@@ -2168,9 +2192,19 @@ function startRide() {
   if (app.studio) startStudio({ simulated, setSimPower });
   else startRoad({ simulated, setSimPower });
 
+  app.rideGoal = new RideGoal();
+  const goalKind = document.querySelector('[name="ride-goal-kind"]:checked')?.value;
+  if (!app.studio && !app.workout && goalKind && goalKind !== "none") {
+    app.rideGoal.set(goalKind, goalTarget(goalKind, $("start-goal-target").valueAsNumber, app.profile.units));
+  }
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
   startSplits();
+  app.rideGoalView = !app.studio && !app.workout ? createRideGoalView({
+    root: $("ride-goal"), pill: $("goal-pill"), goal: app.rideGoal,
+    read: () => app.recorder.summary(),
+    notify: (message) => notify(message), onChange: saveRide,
+  }) : null;
   initFinish();
   initAfkPrompt();
   initPhotos();
@@ -3194,6 +3228,7 @@ function updateSplits() {
 
 /** Continue: the autosaved recorder and photos, with the gap as a pause. */
 function restoreRide({ snapshot, photos }) {
+  app.rideGoal = new RideGoal(snapshot.goal);
   app.recorder = RideRecorder.from(snapshot.recorder);
   app.recorder.pause(snapshot.savedAt);
   app.recorder.resume(Date.now());
@@ -3241,6 +3276,7 @@ function rideSnapshot() {
     graceS: app.connection?.graceS ?? 0,
     resumePoint: app.studio ? null : app.lastOnRoute,
     recorder: app.recorder.toJSON(),
+    goal: app.rideGoal?.snapshot() ?? null,
   };
 }
 
@@ -4646,7 +4682,10 @@ function frame() {
     speed: app.offline ? 0 : (me?.speed ?? 0),
     elevation: me ? app.route.elevationAt(me.distance) : null,
   });
-  if (kept) updateSplits();
+  if (kept) {
+    updateSplits();
+    app.rideGoalView?.update();
+  }
   if (me && !app.finished) checkMilestones(me, time);
 
   const draftText = draft ? t("hud.drafting", { percent: draft.savingPercent }) : "";

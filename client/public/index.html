@@ -53,6 +53,7 @@
     <link rel="modulepreload" href="js/ride/lemons.js" />
     <link rel="modulepreload" href="js/ride/milestones.js" />
     <link rel="modulepreload" href="js/ride/rideAutosave.js" />
+    <link rel="modulepreload" href="js/ride/rideGoal.js" />
     <link rel="modulepreload" href="js/ride/rideHistory.js" />
     <link rel="modulepreload" href="js/ride/ridePause.js" />
     <link rel="modulepreload" href="js/ride/rideRecorder.js" />
@@ -90,6 +91,7 @@
     <link rel="modulepreload" href="js/view/photos.js" />
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
+    <link rel="modulepreload" href="js/view/rideGoalView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
     <link rel="modulepreload" href="js/view/screensDialog.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
@@ -372,6 +374,21 @@
               </div>
             </fieldset>
 
+            <fieldset class="start-goal trainer-only">
+              <legend data-i18n="goal.title">Ride goal</legend>
+              <p class="muted" data-i18n="goal.startHint">Give this ride a finish line.</p>
+              <div class="goal-choices">
+                <label><input type="radio" name="ride-goal-kind" value="none" checked /><span data-i18n="goal.none">Just ride</span></label>
+                <label><input type="radio" name="ride-goal-kind" value="time" /><span data-i18n="goal.time">Time</span></label>
+                <label><input type="radio" name="ride-goal-kind" value="distance" /><span data-i18n="goal.distance">Distance</span></label>
+                <label><input type="radio" name="ride-goal-kind" value="climbing" /><span data-i18n="goal.climbing">Climbing</span></label>
+              </div>
+              <div id="start-goal-value" hidden>
+                <label class="goal-input"><span data-i18n="goal.target">Target</span><input id="start-goal-target" type="number" min="0.01" step="any" value="30" disabled required /><span id="start-goal-unit"></span></label>
+                <div id="start-goal-presets" class="goal-presets"></div>
+              </div>
+            </fieldset>
+
             <!-- Always in reach: sticks to the bottom of the panel (or of the screen on phones). -->
             <div class="dock-actions">
               <p id="setup-error" class="error" role="alert"></p>
@@ -568,6 +585,7 @@
           <div class="hud-notices">
             <div class="hud-status route-only">
               <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
+              <span id="goal-pill" class="pill glass" hidden></span>
               <span id="draft-status" class="pill pill-draft" hidden></span>
               <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
               <span id="group-gap" class="pill glass" hidden></span>
@@ -815,6 +833,28 @@
                     <h3 data-i18n="overview.chart">Power, last 10 minutes</h3>
                     <canvas id="overview-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
                     <div id="overview-figures" class="overview"></div>
+                    <section id="ride-goal" class="ride-goal route-only" aria-labelledby="goal-title">
+                      <h3 id="goal-title" data-i18n="goal.title">Ride goal</h3>
+                      <p id="goal-status" hidden></p>
+                      <progress id="goal-progress" max="1" value="0" aria-label="Ride goal progress" data-i18n-attr="aria-label:goal.progressLabel" hidden></progress>
+                      <details class="goal-editor"><summary data-i18n="goal.edit">Change goal</summary>
+                      <form id="goal-form">
+                        <label><span data-i18n="goal.type">Goal type</span>
+                          <select id="goal-kind">
+                            <option value="time" data-i18n="goal.time">Time</option>
+                            <option value="distance" data-i18n="goal.distance">Distance</option>
+                            <option value="climbing" data-i18n="goal.climbing">Climbing</option>
+                          </select>
+                        </label>
+                        <label><span data-i18n="goal.target">Target</span> <span id="goal-unit"></span>
+                          <input id="goal-target" type="number" min="0.01" step="any" required />
+                        </label>
+                        <button type="submit" class="primary-small" data-i18n="goal.set">Set goal</button>
+                        <button type="button" id="goal-clear" data-i18n="goal.clear" hidden>Remove goal</button>
+                      </form>
+                      <p id="goal-error" role="alert" data-i18n="goal.invalid" hidden>Enter a target greater than zero.</p>
+                      </details>
+                    </section>
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view-title" hidden>
