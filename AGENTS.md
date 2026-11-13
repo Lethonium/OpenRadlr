@@ -39,6 +39,9 @@ repeat it. Here is the operational knowledge on top of that.
   the Playwright image matching the version in `client/package.json` (tag
   `v<version>-noble`), on the host network:
     make screenshot NPM="docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/root/.cache/openradlr -w /app mcr.microsoft.com/playwright:v1.65.0-noble npm" ARGS="--out shot.png"
+- VR page: `make screenshot ARGS='--ride "vr.html?preview=1&head=0,-35" --out vr.png'`
+  pairs a second screen through the UI, rides with the simulated trainer and shoots the
+  headset-free stereo preview (see `docs/vr.md`). Add `--width`/`--height` as usual.
 - A fresh headless browser has empty localStorage → the Rider panel shows default
   profile values (165.3 lb, FTP 200 W), not real data.
 - Client *tests* stay plain node (no browser); Playwright is for ad-hoc UI
@@ -56,7 +59,7 @@ repeat it. Here is the operational knowledge on top of that.
 - **Protocol changes:** update `docs/protocol.md`, both sides, bump
   `PROTOCOL_VERSION` for breaking changes.
 - **Structural decisions:** add an ADR to `docs/adr/` (NNNN-short-name.md;
-  context, decision, consequences). There are 27 so far.
+  context, decision, consequences). There are 28 so far.
 - **Feature design:** significant features go through the superpowers workflow —
   a design spec and an implementation plan in `docs/superpowers/{specs,plans}/`
   (see the 2026-10-19 examples). Follow that pattern for new features.
@@ -67,7 +70,7 @@ repeat it. Here is the operational knowledge on top of that.
 ## Key layout
 - `client/public/` — browser app (`js/` modules, `index.html`, `styles.css`;
   UI text lives in `js/i18n/en.js` + `de.js`, see ADR 0017);
-  `client/test/` — node tests; one composition root per page (`main.js`, `gallery.js`, `cockpit/main.js`)
+  `client/test/` — node tests; one composition root per page (`main.js`, `gallery.js`, `cockpit/main.js`, `vr/main.js`)
 - `server/crates/sim/` — pure simulation (no I/O, async or third-party deps);
   `server/crates/server/` — game core + WebSocket server; `tests/` — e2e
 - `routes/` — bundled route JSON (regenerate with `make routes`)

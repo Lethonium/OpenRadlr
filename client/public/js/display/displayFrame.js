@@ -33,12 +33,13 @@ function zoneSeconds(samples, ftp) {
  * @param {?number} [input.heartRate] bpm
  * @param {?number} [input.grade] percent
  * @param {number} input.ftp watts
+ * @param {"metric"|"imperial"} [input.units] the tablet's profile, so paired screens show the same units
  * @param {?number} [input.cadence] rpm
  * @param {{summary: object, samples: object[], pauses: object[]}} input.recording
  * @param {?{workout: {name: string, segments: object[]}, state: object}} [input.workout]
  *   the running workout and its position (`TrainingControl#workoutState`, target adjusted)
  */
-export function displayFrame({ heartRate, grade, ftp, cadence, recording, workout }) {
+export function displayFrame({ heartRate, grade, ftp, cadence, units, recording, workout }) {
   const frame = {};
   const ride = rideId(recording);
   if (ride !== undefined) frame.ride = ride;
@@ -46,6 +47,7 @@ export function displayFrame({ heartRate, grade, ftp, cadence, recording, workou
   if (Number.isFinite(grade)) frame.grade = grade;
   if (Number.isFinite(cadence)) frame.cadence = cadence;
   frame.ftp = ftp;
+  if (units) frame.units = units;
   frame.stats = liveStats({ ...recording, ftp });
   frame.zones_s = zoneSeconds(recording.samples, ftp);
   const state = workout?.state;

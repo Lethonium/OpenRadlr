@@ -22,10 +22,14 @@
       <button type="button" class="cockpit-forget" id="cockpit-forget" data-i18n="cockpit.forget" hidden>Forget this tablet</button>
     </header>
     <main>
-      <p class="cockpit-message" id="cockpit-unpaired" data-i18n="cockpit.notPaired" hidden>
-        This screen is not paired with a tablet. In OpenRadlr on the tablet, pair a second screen, then use this device as a cockpit.
-      </p>
+      <p class="cockpit-message" id="cockpit-unpaired" data-i18n="cockpit.notPaired" hidden>This screen is not paired with a tablet.</p>
       <p class="cockpit-message" id="cockpit-invalid" data-i18n="cockpit.invalid" hidden>The tablet no longer accepts this screen. Pair it again.</p>
+      <div class="cockpit-pair" id="cockpit-pair-now" hidden>
+        <button type="button" class="pair-button" id="cockpit-pair" data-i18n="screens.pairNow">Pair now</button>
+        <div class="pair-entry" id="cockpit-entry" hidden>
+          <p class="pair-hint" data-i18n="screens.pairNowHint">On the tablet, open Settings, Second screen, Pair a new screen. Then enter its code here.</p>
+        </div>
+      </div>
       <p class="cockpit-message" id="cockpit-waiting" hidden></p>
       <section class="cockpit-tiles" id="cockpit-tiles" hidden></section>
     </main>

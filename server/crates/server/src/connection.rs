@@ -9,7 +9,7 @@ use crate::pair_codes::PAIR_CODE_TTL_S;
 use crate::protocol::ServerMessage;
 use crate::resume::JoinedRider;
 use crate::runtime::{ChannelSink, Command, GameHandle};
-use crate::screens::{HostGuard, WatchGuard};
+use crate::screens::{HostGuard, Screens, WatchGuard};
 use crate::session::{Action, Phase, PlayerCommand, Session};
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -108,6 +108,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         let _ = outbox.send(message).await;
                         break;
                     }
+                    Action::Join { screen_key: Some(ref key), .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
+                    }
                     Action::Join {
                         name,
                         weight_kg,
@@ -134,7 +138,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                                 Ok(Some(joined)) => {
                                     session.joined(joined.rider_id, device, now());
                                     if let Some(key) = &screen_key {
-                                        *lock_host(&host) = Some(state.screens.host(key, joined.rider_id, name.clone()));
+                                        *lock_host(&host) = Some(become_host(&state.screens, key, joined.rider_id, name.clone(), &outbox));
                                     }
                                     epoch = joined.epoch;
                                     game = Some(world.clone());
@@ -187,7 +191,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                                 }
                                 session.joined(rider_id, device, now());
                                 if let (Some(key), Some(name)) = (&screen_key, host_name) {
-                                    *lock_host(&host) = Some(state.screens.host(key, rider_id, name));
+                                    *lock_host(&host) = Some(become_host(&state.screens, key, rider_id, name, &outbox));
                                 }
                                 epoch = joined_epoch;
                                 game = Some(world.clone());
@@ -199,6 +203,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             Err(_) => break,
                         }
                     }
+                    Action::PairOffer { ref key, .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
+                    }
                     Action::PairOffer { key, name } => {
                         let code = state.pair_codes.offer(key, name, outbox.clone(), last_code.as_deref());
                         last_code = Some(code.clone());
@@ -207,8 +215,21 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             break;
                         }
                     }
-                    Action::PairClaim { code } => {
-                        let reply = match state.pair_codes.claim(&code) {
+                    Action::ScreensQuery { key } => {
+                        let reply = ServerMessage::ScreensWatching { devices: state.screens.watching(&key) };
+                        if outbox.send(reply).await.is_err() {
+                            break;
+                        }
+                    }
+                    Action::ScreensRevoke { key } => {
+                        state.screens.revoke(&key);
+                        let reply = ServerMessage::ScreensWatching { devices: Vec::new() };
+                        if outbox.send(reply).await.is_err() {
+                            break;
+                        }
+                    }
+                    Action::PairClaim { code, device } => {
+                        let reply = match state.pair_codes.claim(&code, device) {
                             Some((key, name)) => ServerMessage::Paired { key, name },
                             None => ServerMessage::error("pair_code_invalid", "this pairing code is unknown or has expired"),
                         };
@@ -216,7 +237,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             break;
                         }
                     }
-                    Action::Watch { key, view } => match state.screens.watch(&key, view, outbox.clone()) {
+                    Action::Watch { ref key, .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
+                    }
+                    Action::Watch { key, view, device } => match state.screens.watch(&key, view, device, outbox.clone()) {
                         Ok(guard) => watching = Some(guard),
                         Err(_) => {
                             let _ = outbox
@@ -253,6 +278,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                     if outbox.send(status).await.is_err() {
                         break;
                     }
+                }
+                // The tablet unpaired this screen.
+                if watching.as_ref().is_some_and(WatchGuard::is_revoked) {
+                    let _ = outbox.send(revoked_key()).await;
+                    break;
                 }
                 if let Some(reason) = session.expired(now()) {
                     let _ = outbox.send(reason).await;
@@ -306,8 +336,25 @@ fn normalise_code(code: &str) -> String {
     code.trim().to_ascii_uppercase()
 }
 
+fn revoked_key() -> ServerMessage {
+    ServerMessage::error("bad_screen_key", "the tablet unpaired this screen")
+}
+
 fn join_error(error: JoinError) -> ServerMessage {
     ServerMessage::error(error.code(), error.to_string())
+}
+
+/// Registers this connection as the host of `key` and has the watcher list pushed to it.
+fn become_host(
+    screens: &Screens,
+    key: &str,
+    rider_id: RiderId,
+    name: String,
+    outbox: &mpsc::Sender<ServerMessage>,
+) -> HostGuard {
+    let guard = screens.host(key, rider_id, name);
+    guard.notify_to(outbox.clone());
+    guard
 }
 
 fn lock_host(host: &Mutex<Option<HostGuard>>) -> MutexGuard<'_, Option<HostGuard>> {

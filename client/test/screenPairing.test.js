@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ClientMessages } from "../public/js/net/protocol.js";
-import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "../public/js/net/screenPairing.js";
+import { COCKPIT_KEY, PairingSession, claimCode, isPaired, pairDevice, renewScreenKey, screenKey } from "../public/js/net/screenPairing.js";
 import { FakeSocket } from "./helpers.js";
 
 const KEY = "0123456789abcdef0123456789abcdef";
@@ -53,17 +53,21 @@ test("join carries screen_key only when given", () => {
 test("the pairing messages are built as the protocol says", () => {
   assert.deepEqual(ClientMessages.pairOffer({ key: KEY, name: "Anna" }), { type: "pair_offer", key: KEY, name: "Anna" });
   assert.deepEqual(ClientMessages.pairClaim("ABC234"), { type: "pair_claim", code: "ABC234" });
+  assert.deepEqual(ClientMessages.pairClaim("ABC234", "Pixel 8"), { type: "pair_claim", code: "ABC234", device: "Pixel 8" });
   assert.deepEqual(ClientMessages.watch(KEY), { type: "watch", key: KEY, view: "data" });
+  assert.deepEqual(ClientMessages.watch(KEY, "world", "Quest 3"), { type: "watch", key: KEY, view: "world", device: "Quest 3" });
+  assert.deepEqual(ClientMessages.screensQuery(KEY), { type: "screens_query", key: KEY });
+  assert.deepEqual(ClientMessages.screensRevoke(KEY), { type: "screens_revoke", key: KEY });
   assert.deepEqual(ClientMessages.watch(KEY, "world"), { type: "watch", key: KEY, view: "world" });
   assert.deepEqual(ClientMessages.display({ hr: 120 }), { type: "display", data: { hr: 120 } });
 });
 
-function startSession(storage = fakeStorage()) {
+function startSession(storage = fakeStorage(), start = undefined) {
   let socket;
   const session = new PairingSession({ url: "ws://x/ws", createSocket: (url) => (socket = new FakeSocket(url)), key: KEY, name: "Anna", storage });
   const events = [];
-  for (const type of ["code", "claimed", "error"]) session.on(type, (payload) => events.push({ type, payload }));
-  session.start();
+  for (const type of ["code", "claimed", "watching", "error"]) session.on(type, (payload) => events.push({ type, payload }));
+  session.start(start);
   socket.open();
   socket.receive({ type: "welcome" });
   return { session, socket, events, storage };
@@ -86,6 +90,33 @@ test("a pairing session shows the code and marks the tablet paired when claimed"
   socket.receive({ type: "pair_claimed" });
   assert.equal(events.at(-1).type, "claimed");
   assert.equal(isPaired(storage), true);
+});
+
+test("claimed carries the device", () => {
+  const { socket, events } = startSession();
+  socket.receive({ type: "pair_claimed", device: "Pixel 8" });
+  assert.deepEqual(events.at(-1), { type: "claimed", payload: { device: "Pixel 8" } });
+  socket.receive({ type: "pair_claimed" });
+  assert.deepEqual(events.at(-1), { type: "claimed", payload: { device: null } });
+});
+
+test("query asks with the key and emits watching", () => {
+  const { session, socket, events } = startSession();
+  session.query();
+  assert.deepEqual(socket.sent.at(-1), { type: "screens_query", key: KEY });
+  socket.receive({ type: "screens_watching", devices: ["Quest 3"] });
+  assert.deepEqual(events.at(-1), { type: "watching", payload: ["Quest 3"] });
+});
+
+test("a query before the welcome waits for it, and a query-only session offers no code", () => {
+  let socket;
+  const session = new PairingSession({ url: "ws://x/ws", createSocket: (url) => (socket = new FakeSocket(url)), key: KEY, name: "Anna", storage: fakeStorage() });
+  session.start({ offer: false });
+  session.query();
+  socket.open();
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello"]);
+  socket.receive({ type: "welcome" });
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello", "screens_query"]);
 });
 
 test("a pairing error is passed on with its code", () => {
@@ -135,6 +166,14 @@ test("claiming a code resolves with the paired screen", async () => {
   assert.deepEqual(await promise, { key: KEY, name: "Anna" });
 });
 
+test("claiming sends the device name along", () => {
+  let socket;
+  claimCode({ url: "ws://x/ws", createSocket: (url) => (socket = new FakeSocket(url)), code: "ABC234", device: "Pixel 8" }).catch(() => {});
+  socket.open();
+  socket.receive({ type: "welcome" });
+  assert.deepEqual(socket.sent.at(-1), { type: "pair_claim", code: "ABC234", device: "Pixel 8" });
+});
+
 test("claiming an unknown code rejects with pair_code_invalid", async () => {
   const { promise, socket } = startClaim("ZZZZZZ");
   socket.receive({ type: "error", code: "pair_code_invalid", message: "no" });
@@ -145,4 +184,35 @@ test("claiming rejects when the connection closes first", async () => {
   const { promise, socket } = startClaim();
   socket.close();
   await assert.rejects(promise, (error) => error.code === undefined);
+});
+
+test("pairing a device remembers the tablet it was paired with", async () => {
+  const stored = {};
+  const storage = { setItem: (k, v) => (stored[k] = v) };
+  const paired = await pairDevice({ code: "ABC234", storage, claim: async (code, device) => ({ key: KEY, name: `for ${code} ${device}` }), device: "Pixel 8" });
+  assert.deepEqual(paired, { key: KEY, name: "for ABC234 Pixel 8" });
+  assert.deepEqual(JSON.parse(stored[COCKPIT_KEY]), { key: KEY, name: "for ABC234 Pixel 8" });
+});
+
+test("a refused code stores nothing", async () => {
+  const stored = {};
+  const storage = { setItem: (k, v) => (stored[k] = v) };
+  await assert.rejects(pairDevice({ code: "ABC234", storage, claim: async () => { throw new Error("no"); } }));
+  assert.deepEqual(stored, {});
+});
+
+test("revoke sends the key to the server once it has welcomed us, then reports the answer", () => {
+  let socket;
+  const session = new PairingSession({ url: "ws://x/ws", createSocket: (url) => (socket = new FakeSocket(url)), key: KEY, name: "Anna", storage: fakeStorage() });
+  const answers = [];
+  session.on("watching", (devices) => answers.push(devices));
+  session.start({ offer: false });
+  socket.open();
+  session.revoke();
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello"]);
+  socket.receive({ type: "welcome" });
+  assert.deepEqual(socket.sent.at(-1), { type: "screens_revoke", key: KEY });
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello", "screens_revoke"]);
+  socket.receive({ type: "screens_watching", devices: [] });
+  assert.deepEqual(answers, [[]]);
 });

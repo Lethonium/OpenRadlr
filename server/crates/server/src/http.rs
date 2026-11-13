@@ -83,6 +83,8 @@ pub struct AppState {
     pub strava: Option<Arc<Strava>>,
     pub allow_simulated_trainer: bool,
     pub allow_paddle_mode: bool,
+    /// Whether the VR page offers its headset-free stereo preview.
+    pub xr_preview: bool,
     /// Community distance totals (#65).
     pub stats: DistanceStats,
     /// AFK warning counters, shared by all connections.
@@ -124,6 +126,8 @@ pub struct InfoResponse {
     pub simulated_trainer: bool,
     /// Whether riders may join with phone paddles (tapping for power).
     pub paddle_mode: bool,
+    /// Whether the VR page offers its headset-free stereo preview.
+    pub xr_preview: bool,
     /// Analytics script the client loads; absent unless the operator enabled it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub analytics: Option<crate::config::Analytics>,
@@ -445,6 +449,7 @@ async fn info(State(state): State<AppState>) -> Json<InfoResponse> {
         studio: state.worlds.studio().map(|entry| StudioSummary::of(entry, now_s)),
         simulated_trainer: state.allow_simulated_trainer,
         paddle_mode: state.allow_paddle_mode,
+        xr_preview: state.xr_preview,
         analytics: state.info.analytics.clone(),
         privacy_url: state.info.privacy_url.clone(),
         distance_m: {

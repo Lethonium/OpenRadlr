@@ -44,3 +44,8 @@ async function valleyRoute(routes, fetchRouteFile, fetchNetwork) {
   }
   return null;
 }
+
+/** The riders of the studio scene: my room's in their seats, then the other floors and the road. */
+export function studioSceneRiders(state) {
+  return [...state.riders.map((rider) => ({ ...rider, route: null, studio: { room: state.room, seat: rider.seat } })), ...(state.road_riders ?? [])];
+}

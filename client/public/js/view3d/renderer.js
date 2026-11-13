@@ -171,13 +171,15 @@ void main() {
   outColor = vec4(u_color.rgb, u_color.a * (1.0 - smoothstep(0.55, 1.0, d)));
 }`;
 
-export function createContext(canvas) {
-  return canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance" });
+export function createContext(canvas, { xrCompatible = false } = {}) {
+  return canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance", xrCompatible });
 }
 
 export class Renderer {
   /** Occlusion queries by key: `{query, pending, seen}`. */
   #queries = new Map();
+  /** Where passes return to after the shadow map: the canvas, or an XR framebuffer of `size`. */
+  #target = { framebuffer: null, size: null };
 
   /** @param {WebGL2RenderingContext} gl */
   constructor(gl) {
@@ -252,8 +254,9 @@ export class Renderer {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
+  /** Creates the sun's depth texture (once per size: a renderer shared by several views keeps one). Returns false if the device cannot render depth. */
   createShadowMap(size = 2048) {
+    if (this.shadow?.size === size) return true;
     const gl = this.gl;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -303,8 +306,26 @@ export class Renderer {
   endShadows() {
     const gl = this.gl;
     gl.disable(gl.POLYGON_OFFSET_FILL);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.#target.framebuffer);
+    this.#fullViewport();
+  }
+
+  /**
+   * Draws into `framebuffer` (null: the canvas) of `size` from now on: the
+   * framebuffer the passes return to, and the size `viewport(null)` covers.
+   * @param {WebGLFramebuffer | null} framebuffer
+   * @param {{width: number, height: number} | null} size null for the canvas's own
+   */
+  target(framebuffer, size = null) {
+    this.#target = { framebuffer, size };
+    // Bound now: a frame without a shadow pass (XR) never goes through endShadows.
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, framebuffer);
+  }
+
+  #fullViewport() {
+    const gl = this.gl;
+    const { width, height } = this.#target.size ?? gl.canvas;
+    gl.viewport(0, 0, width, height);
   }
 
   /** Uploads a mesh from MeshBuilder.build() and returns a handle. */
@@ -397,7 +418,7 @@ export class Renderer {
       gl.viewport(rect.x, rect.y, rect.width, rect.height);
     } else {
       gl.disable(gl.SCISSOR_TEST);
-      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      this.#fullViewport();
     }
   }
 
