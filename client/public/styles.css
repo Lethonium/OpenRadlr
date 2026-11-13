@@ -2104,8 +2104,13 @@ body.riding {
   position: absolute;
   left: var(--gap);
   top: 140px;
-  width: 300px;
+  width: 360px;
   padding: 12px 0 8px;
+}
+
+/* A narrower gap column ("+515 m", "−1.9 km"), so a bot's name keeps room beside its badge. */
+.nearby .rider {
+  grid-template-columns: minmax(0, 1fr) auto 64px;
 }
 
 .nearby h2,
@@ -6462,16 +6467,6 @@ body.working-out #paddles {
     justify-content: center;
     white-space: nowrap;
   }
-
-  /* Beside the live pills, one notice at a time, the most urgent: a junction to choose at,
-     a race or event to join, then a split, a milestone, the sprint/KOM countdown. */
-  .hud-notices:has(#junction:not([hidden])) :is(#race-call, #event-call, #split-toast, #milestone-banner, #marker-banner),
-  .hud-notices:has(#race-call:not([hidden])) :is(#event-call, #split-toast, #milestone-banner, #marker-banner),
-  .hud-notices:has(#event-call:not([hidden])) :is(#split-toast, #milestone-banner, #marker-banner),
-  .hud-notices:has(#split-toast:not([hidden])) :is(#milestone-banner, #marker-banner),
-  .hud-notices:has(#milestone-banner:not([hidden])) #marker-banner {
-    display: none;
-  }
 }
 
 @keyframes milestone-in-column {
@@ -6564,5 +6559,96 @@ body.working-out #paddles {
   .ride[data-layout="race"] .hud-notices {
     left: calc(var(--gap) + 320px);
   }
+}
+
+/* Every screen: beside the live pills, one notice at a time (see the phone notices above). */
+.hud-notices:has(#junction:not([hidden])) :is(#race-call, #event-call, #split-toast, #milestone-banner, #marker-banner),
+.hud-notices:has(#race-call:not([hidden])) :is(#event-call, #split-toast, #milestone-banner, #marker-banner),
+.hud-notices:has(#event-call:not([hidden])) :is(#split-toast, #milestone-banner, #marker-banner),
+.hud-notices:has(#split-toast:not([hidden])) :is(#milestone-banner, #marker-banner),
+.hud-notices:has(#milestone-banner:not([hidden])) #marker-banner {
+  display: none;
+}
+
+/* Tablets and desktops: the notices stack in one centred column too, under the lowest top
+   panel of each layout (--top-stack), between the ticker or Nearby list on the left and the
+   map on the right (360px each side; on narrower tablets up to the right edge). */
+@media (min-width: 761px) and (min-height: 501px) {
+  .ride {
+    --top-stack: 107px;
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 122px;
+  }
+
+  .ride[data-layout="training"] {
+    --top-stack: 120px;
+  }
+
+  .ride[data-layout="race"] {
+    --top-stack: 155px;
+  }
+
+  .hud-notices {
+    position: absolute;
+    top: calc(var(--top-stack) + 12px);
+    left: 360px;
+    right: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  .hud-notices > * {
+    position: static;
+    transform: none;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .hud-notices .milestone-banner.show {
+    animation-name: milestone-in-column;
+  }
+}
+
+/* Narrower tablets: the column reaches over to the right, short of the stepper and lane
+   buttons a touch screen shows at the right edge. */
+@media (min-width: 761px) and (max-width: 1099px) and (min-height: 501px) {
+  .hud-notices {
+    right: 96px;
+  }
+}
+
+/* Broadcast: the Nearby list on the left is 360px wide (names beside their bot badges). */
+@media (min-width: 1100px) and (min-height: 501px) {
+  .ride[data-layout="broadcast"] .hud-notices {
+    left: 400px;
+    right: 400px;
+  }
+}
+
+/* Below 1440px the broadcast bar doesn't fit between the info box and the buttons: it moves
+   under the info box, and the notices under it. */
+@media (min-width: 761px) and (max-width: 1439px) and (min-height: 501px) {
+  .ride[data-layout="broadcast"] .bar {
+    top: 115px;
+  }
+
+  .ride[data-layout="broadcast"] {
+    --top-stack: 217px;
+  }
+
+  .ride[data-layout="broadcast"] .nearby {
+    top: 229px;
+  }
+}
+
+/* Every screen: the status pills wrap within the notices column instead of running past it. */
+.hud-notices .hud-status {
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
