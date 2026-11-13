@@ -2825,7 +2825,7 @@ function renderProfile() {
 
 function renderProfileOverview() {
   const { records, bests } = app.profileData;
-  const lines = overviewLines({ profile: app.profile, totals: periodTotals(records, Date.now()), bests, routes: routesOf(app.info), locale: getLocale() });
+  const lines = overviewLines({ profile: app.profile, totals: periodTotals(records, Date.now()), bests, routes: routesOf(app.info), locale: getLocale(), unreadable: !historyReadable() });
   $("profile-rider").textContent = lines.rider;
   $("profile-ftp").textContent = lines.ftp;
   $("profile-empty").hidden = !lines.empty;
@@ -2855,12 +2855,18 @@ function renderProfileFtp() {
   paintFtpChart(ctx, ftpChartModel(series, width, height, { locale: getLocale() }), { ...themeColors(), set: read("--ftp-set"), estimate: read("--ftp-estimate"), surface: read("--surface") });
 }
 
+/** False when the ride history couldn't be read (the list then says so instead of "no rides yet"). */
+function historyReadable() {
+  return app.profileData.items.find((entry) => entry.id === "rides")?.readable !== false;
+}
+
 /** The Rides page: the newest rides, each opening its splits and power curve. */
 function renderProfileRides() {
   const { records } = app.profileData;
   const shown = records.slice(0, app.profileRidesShown);
   const rows = rideRows(shown, routesOf(app.info), { locale: getLocale() });
   $("profile-rides-empty").hidden = records.length > 0;
+  $("profile-rides-empty").textContent = historyReadable() ? t("profilePage.rides.empty") : t("profilePage.unreadable");
   $("profile-rides-more").hidden = records.length <= shown.length;
   $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i])));
 }
@@ -2884,7 +2890,7 @@ function profileRideItem(row, record) {
       when.append(" ", icon);
     }
   }
-  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].join(" · "));
+  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].filter((part) => part !== null).join(" · "));
   figures.className = "profile-ride-figures";
   summary.append(when, figures);
   summary.addEventListener("click", () => {
@@ -2925,8 +2931,15 @@ function profileRideDetail(record) {
 
 async function deleteRide(record) {
   const date = rideRows([record], [], { locale: getLocale() })[0].date;
-  const deleted = await app.deleteConfirm.ask({ texts: deleteTexts("ride", { date }), onConfirm: () => app.history.delete(record.id) });
-  if (deleted) await loadProfile("rides");
+  let tried = false;
+  await app.deleteConfirm.ask({
+    texts: deleteTexts("ride", { date }),
+    onConfirm: () => {
+      tried = true;
+      return app.history.delete(record.id);
+    },
+  });
+  if (tried) await loadProfile("rides");
 }
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
@@ -2967,15 +2980,18 @@ function renderProfileData() {
   $("profile-delete-all").disabled = !items.every((entry) => entry.readable);
 }
 
+/** Downloads everything as one file; false (with the error on the page) when the storage couldn't be read. */
 async function exportProfileData() {
   const now = Date.now();
   $("profile-data-error").hidden = true;
   try {
     const data = await exportData({ ...dataSources(), now });
     await saveFiles([{ blob: new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), name: exportFileName(now) }]);
+    return true;
   } catch {
     $("profile-data-error").textContent = t("profilePage.data.exportFailed");
     $("profile-data-error").hidden = false;
+    return false;
   }
 }
 
@@ -2990,12 +3006,17 @@ function deleteFacts(id) {
 }
 
 async function deleteProfileData(id) {
-  const deleted = await app.deleteConfirm.ask({
+  let tried = false;
+  await app.deleteConfirm.ask({
     texts: deleteTexts(id, deleteFacts(id)),
-    onConfirm: () => deleteItem(id, dataSources()),
+    onConfirm: () => {
+      tried = true;
+      return deleteItem(id, dataSources());
+    },
     onExport: exportProfileData,
   });
-  if (!deleted) return;
+  // Even a delete that failed part-way may have removed something: show what is left.
+  if (!tried) return;
   // The profile and settings in memory would be written back: start fresh instead.
   if (needsReload(id)) return location.reload();
   await loadProfile();

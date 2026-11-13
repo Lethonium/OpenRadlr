@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { ftpSeries, hasFtpChart, periodTotals, weekStart } from "../public/js/profile/stats.js";
 
 // Local dates; run with TZ=Europe/Zurich so the DST case is meaningful.
@@ -12,9 +13,13 @@ test("weekStart: Monday 00:00 local, Sunday night still belongs to the week", ()
 });
 
 test("weekStart: the week of the DST change still starts on Monday 00:00", () => {
-  // Clocks go forward on Sunday 28 March 2027 in Europe.
-  assert.equal(weekStart(at(2027, 3, 28, 12)), at(2027, 3, 22, 0));
-  assert.equal(weekStart(at(2027, 3, 31, 12)), at(2027, 3, 29, 0));
+  // Clocks go forward on Sunday 28 March 2027 in Europe; a child process gets that time zone whatever this one runs in.
+  const code = `
+    import { weekStart } from ${JSON.stringify(new URL("../public/js/profile/stats.js", import.meta.url).href)};
+    const at = (y, m, d, h) => new Date(y, m - 1, d, h).getTime();
+    console.log(JSON.stringify([weekStart(at(2027, 3, 28, 12)) === at(2027, 3, 22, 0), weekStart(at(2027, 3, 31, 12)) === at(2027, 3, 29, 0)]));`;
+  const out = execFileSync(process.execPath, ["--input-type=module", "-e", code], { env: { ...process.env, TZ: "Europe/Zurich" } });
+  assert.deepEqual(JSON.parse(String(out)), [true, true]);
 });
 
 test("periodTotals: week, month and all", () => {
@@ -66,4 +71,11 @@ test("ftpSeries: a week's estimate ignores later rides", () => {
   const strong = { 180: 360, 300: 330, 480: 315, 720: 305, 1200: 295 };
   const s = ftpSeries([ride(at(2026, 11, 10), { curve: strong }), ride(at(2026, 11, 3), { curve: weak })], at(2026, 11, 13));
   assert.ok(s.estimated[0].ftp < s.estimated[1].ftp);
+});
+
+test("periodTotals: workouts don't count as rides", () => {
+  const workout = { kind: "workout", startedAt: at(2026, 11, 12), durationS: 1500, planName: "Yoga" };
+  const r = periodTotals([ride(at(2026, 11, 10)), workout], at(2026, 11, 13));
+  assert.equal(r.week.rides, 1);
+  assert.equal(r.week.durationS, 3600);
 });

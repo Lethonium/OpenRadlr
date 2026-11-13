@@ -1052,4 +1052,6 @@ export default {
   "profilePage.ftp.chart": "FTP im Verlauf: {parts}.",
   "profilePage.ftp.chartSet": "eingestellt von {from} W auf {to} W",
   "profilePage.ftp.chartEstimate": "aus deinen Fahrten geschätzt zuletzt {last} W",
+  "profilePage.unreadable": "Deine Fahrten lassen sich in diesem Browser gerade nicht lesen. Es wurde nichts gelöscht.",
+  "profilePage.workout": "Workout",
 };

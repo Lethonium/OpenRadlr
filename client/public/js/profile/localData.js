@@ -11,8 +11,9 @@ const PROFILE_KEY = "openride.profile.v1";
 const SUMMITS_KEY = "openradlr.summits";
 const LEMONS_KEY = "openradlr.lemons";
 const PROGRESS_KEYS = [SUMMITS_KEY, LEMONS_KEY];
-// Pairs this device with second screens: a secret, it stays out of the export.
-const SCREEN_KEY = "openradlr.screenKey";
+// Pairing secrets stay out of the export: this device's key for its second
+// screens, and on a phone used as a cockpit, the tablet's key.
+const SECRET_KEYS = ["openradlr.screenKey", "openradlr.cockpit"];
 const STORE_OF = { rides: "history", bestLaps: "ghosts", unfinished: "autosave" };
 // The autosave keeps one ride ("current") and its photos.
 const UNFINISHED_KEY = "current";
@@ -78,7 +79,7 @@ async function values(store, keys) {
 export async function exportData({ storage, stores, now }) {
   const profile = { ...parseJson(storage.getItem(PROFILE_KEY), null) };
   delete profile.privateKeyJwk;
-  const settings = Object.fromEntries(settingsKeys(storage).filter((key) => key !== SCREEN_KEY).map((key) => [key, storage.getItem(key)]));
+  const settings = Object.fromEntries(settingsKeys(storage).filter((key) => !SECRET_KEYS.includes(key)).map((key) => [key, storage.getItem(key)]));
   const autosaveKeys = await stores.autosave.keys();
   return {
     version: 1,
@@ -110,17 +111,18 @@ const DELETES = {
   settings: ({ storage }) => settingsKeys(storage).forEach((key) => storage.removeItem(key)),
 };
 
-/** Deletes one item, or "everything"; false when the storage refused. */
+/** Deletes one item, or "everything" (going on past an item that fails); false when the storage refused any. */
 export async function deleteItem(id, { storage, stores }) {
-  try {
-    for (const item of id === "everything" ? DATA_ITEMS : [id]) {
+  let ok = true;
+  for (const item of id === "everything" ? DATA_ITEMS : [id]) {
+    try {
       if (STORE_OF[item]) await clearStore(stores[STORE_OF[item]]);
       else DELETES[item]({ storage });
+    } catch {
+      ok = false;
     }
-    return true;
-  } catch {
-    return false;
   }
+  return ok;
 }
 
 /**

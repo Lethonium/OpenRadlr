@@ -2,7 +2,8 @@
  * The confirmation every delete in the profile goes through: a card over the
  * profile that says what is deleted, what changes because of it, what stays
  * and that it cannot be undone. Cancel has the focus, so a stray Enter or a
- * second tap deletes nothing. The DOM elements, the panel stack (Esc) and the
+ * second tap deletes nothing. `onExport` may resolve false: its error then
+ * shows in the card. The DOM elements, the panel stack (Esc) and the
  * document are injected.
  */
 
@@ -35,8 +36,11 @@ export function deleteTexts(item, facts = {}) {
 export function createDeleteConfirm({ els, stack, doc = globalThis.document }) {
   let current = null;
 
+  // While the delete runs, backing out would hide whether it happened.
+  let busy = false;
+
   function finish(answer) {
-    if (!current) return;
+    if (!current || busy) return;
     const { resolve, remove } = current;
     current = null;
     remove();
@@ -53,12 +57,22 @@ export function createDeleteConfirm({ els, stack, doc = globalThis.document }) {
     if (event.target === els.root) finish(false);
   });
   els.tick.addEventListener("change", syncGo);
-  els.exportButton.addEventListener("click", () => current?.onExport?.());
+  els.exportButton.addEventListener("click", async () => {
+    const asked = current;
+    if (!asked?.onExport) return;
+    els.error.hidden = true;
+    const exported = await asked.onExport();
+    if (current !== asked || exported !== false) return;
+    els.error.textContent = t("profilePage.data.exportFailed");
+    els.error.hidden = false;
+  });
   els.go.addEventListener("click", async () => {
     if (!current || els.go.disabled) return;
     const asked = current;
     els.go.disabled = true;
-    const done = await asked.onConfirm();
+    busy = true;
+    const done = await asked.onConfirm().catch(() => false);
+    busy = false;
     if (current !== asked) return;
     if (done) return finish(true);
     els.error.textContent = t("profilePage.delete.failed");

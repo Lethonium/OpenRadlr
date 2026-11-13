@@ -145,3 +145,26 @@ test("ask: Export first runs the export and keeps the card open", () => {
   assert.equal(exported, 1);
   assert.equal(els.root.hidden, false);
 });
+
+test("ask: Cancel and Esc wait while a delete is running", async () => {
+  const { els, stack, confirm } = setup();
+  let finish;
+  const answer = confirm.ask({ texts: deleteTexts("ride", {}), onConfirm: () => new Promise((resolve) => (finish = resolve)) });
+  els.go.fire("click");
+  els.cancel.fire("click");
+  stack.closeTop();
+  els.root.fire("click", { target: els.root });
+  assert.equal(els.root.hidden, false);
+  finish(true);
+  assert.equal(await answer, true);
+});
+
+test("ask: a failed Export first shows its error in the card", async () => {
+  const { els, confirm } = setup();
+  confirm.ask({ texts: deleteTexts("rides", { count: 2, from: "a", to: "b" }), onConfirm: async () => true, onExport: async () => false });
+  els.exportButton.fire("click");
+  await tick();
+  assert.equal(els.error.hidden, false);
+  assert.equal(els.error.textContent, t("profilePage.data.exportFailed"));
+});
+

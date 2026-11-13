@@ -36,6 +36,7 @@ const storage = () => fakeStorage({
   "openradlr.lemons": "12",
   "openradlr.devices": "[]",
   "openradlr.screenKey": "s3cret",
+  "openradlr.cockpit": JSON.stringify({ key: "0123456789abcdef0123456789abcdef", url: "x" }),
   "other.app": "x",
 });
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
@@ -51,7 +52,7 @@ test("inventory counts each item", async () => {
   assert.equal(by.bestLaps.count, 1);
   assert.deepEqual(by.progress.count, { summits: 2, lemons: 12 });
   assert.equal(by.unfinished.count, 0);
-  assert.equal(by.settings.count, 2);
+  assert.equal(by.settings.count, 3);
   assert.ok(Object.values(by).every((item) => item.readable));
 });
 
@@ -90,6 +91,8 @@ test("export leaves out the private key and the screen key", async () => {
   assert.equal(data.profile.privateKeyJwk, undefined);
   assert.equal(data.profile.publicKey, "pk");
   assert.equal(data.settings["openradlr.screenKey"], undefined);
+  // A phone used as a cockpit keeps the tablet's pairing secret here.
+  assert.equal(data.settings["openradlr.cockpit"], undefined);
   assert.equal(data.settings["openradlr.devices"], "[]");
   assert.equal(data.settings["other.app"], undefined);
   assert.deepEqual(data.rides.map((r) => r.id), ["1", "2"]);
@@ -151,4 +154,12 @@ test("needsReload: when the profile, settings or the unfinished ride go", () => 
   // The start menu offers the unfinished ride; a reload drops that offer.
   assert.equal(needsReload("unfinished"), true);
   assert.equal(needsReload("progress"), false);
+});
+
+test("deleteItem: everything goes on past a broken store and reports the failure", async () => {
+  const s = storage();
+  const st = { ...stores(), history: { ...mapStore(), keys: async () => ["ride:1"], delete: async () => { throw new Error("quota"); } } };
+  assert.equal(await deleteItem("everything", { storage: s, stores: st }), false);
+  assert.deepEqual(await st.ghosts.keys(), []);
+  assert.equal(s.getItem("openradlr.summits"), null);
 });
