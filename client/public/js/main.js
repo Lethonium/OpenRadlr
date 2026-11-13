@@ -12,6 +12,7 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, overviewLines, rideRows } from "./view/profilePage.js";
 import { periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
@@ -2768,11 +2769,19 @@ function initProfile() {
     stack: panels,
     matchNarrow: matchMedia(MENU_NARROW_QUERY),
     pages: PROFILE_PAGES,
-    focusables: () => focusableIn(root),
+    // While a delete asks for confirmation, Tab stays in its card.
+    focusables: () => focusableIn(app.deleteConfirm?.isOpen ? $("delete-confirm") : root),
     onPage: (page) => {
       for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
     },
     onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
+  });
+  app.deleteConfirm = createDeleteConfirm({
+    els: {
+      root: $("delete-confirm"), title: $("delete-confirm-title"), lines: $("delete-confirm-lines"), tickRow: $("delete-confirm-tick-row"), tick: $("delete-confirm-tick"),
+      error: $("delete-confirm-error"), exportButton: $("delete-confirm-export"), cancel: $("delete-confirm-cancel"), go: $("delete-confirm-go"),
+    },
+    stack: panels,
   });
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-rides-more").addEventListener("click", () => {
@@ -2790,12 +2799,15 @@ function openProfile(page) {
   return loadProfile();
 }
 
-async function loadProfile() {
+/** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
+async function loadProfile(keep) {
   const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
   app.profileData = { records, bests };
-  app.profileRidesShown = RIDES_PAGE_SIZE;
+  if (keep !== "rides") app.profileRidesShown = RIDES_PAGE_SIZE;
   app.profileOpenRide = null;
   renderProfile();
+  // Focus stays on the Rides page: its first ride, or the close button when none is left.
+  if (keep === "rides") ($("profile-rides").querySelector(".profile-ride-summary") ?? $("profile-dialog").querySelector("[data-menu-close]")).focus();
 }
 
 function renderProfile() {
@@ -2877,7 +2889,18 @@ function profileRideDetail(record) {
   scroller.className = "profile-splits";
   scroller.append(splits);
   detail.prepend(scroller);
+  const remove = textElement("button", t("profilePage.delete.ride.action"));
+  remove.type = "button";
+  remove.className = "secondary small profile-ride-delete";
+  remove.addEventListener("click", () => deleteRide(record));
+  detail.append(remove);
   return detail;
+}
+
+async function deleteRide(record) {
+  const date = rideRows([record], [], { locale: getLocale() })[0].date;
+  const deleted = await app.deleteConfirm.ask({ texts: deleteTexts("ride", { date }), onConfirm: () => app.history.delete(record.id) });
+  if (deleted) await loadProfile("rides");
 }
 
 function textElement(tag, text) {
