@@ -4,6 +4,7 @@
 //! for the full description. Bump [`PROTOCOL_VERSION`] on breaking changes.
 
 use crate::obn::remote::RemoteRider;
+use crate::screens::WatchView;
 use crate::studio_mirror::StudioSeat;
 use openradlr_sim::events::{EventInfo, EventKind, EventLength, EventNotice, EventResult, EventView};
 use openradlr_sim::physics::RiderPhysics;
@@ -71,6 +72,10 @@ pub enum ClientMessage {
         /// Where the ride left off; the server places the rider there.
         #[serde(default)]
         resume: Option<ResumePoint>,
+        /// The second-screen key of this tablet: the ride is relayed to the
+        /// screens watching it.
+        #[serde(default)]
+        screen_key: Option<String>,
         /// Optional extras the client wants; `"studio_riders"` shows the spin studio's riders
         /// on the road. Unknown entries are ignored.
         #[serde(default)]
@@ -133,6 +138,25 @@ pub enum ClientMessage {
         /// Which side a sided pose is held on (`right` or `left`); the session checks it.
         #[serde(default)]
         side: Option<String>,
+    },
+    /// Offer a pairing code for the second screen `key`, named `name`.
+    PairOffer {
+        key: String,
+        name: String,
+    },
+    /// Claim a pairing code from a second screen.
+    PairClaim {
+        code: String,
+    },
+    /// Watch the screen `key` ride (no seat is taken).
+    Watch {
+        key: String,
+        #[serde(default)]
+        view: WatchView,
+    },
+    /// Opaque display data for the paired screens.
+    Display {
+        data: serde_json::Value,
     },
     /// Answer to an `afk_warning`: the rider is still there.
     Stay,
@@ -305,6 +329,27 @@ pub enum ServerMessage {
     Error {
         code: String,
         message: String,
+    },
+    /// A second screen's pairing code, and how long it stays valid.
+    PairCode {
+        code: String,
+        expires_in_s: f64,
+    },
+    /// The screen this connection is paired with (its key and name).
+    Paired {
+        key: String,
+        name: String,
+    },
+    /// The offering connection's code was claimed by a second screen.
+    PairClaimed,
+    /// Whether a watched screen's tablet is riding, and its name.
+    WatchStatus {
+        live: bool,
+        name: String,
+    },
+    /// Opaque display data the tablet sends for paired screens.
+    Display {
+        data: serde_json::Value,
     },
 }
 
@@ -1209,6 +1254,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
                 features: vec![],
             }
         );
@@ -1225,6 +1271,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
                 features: vec![],
             }
         );

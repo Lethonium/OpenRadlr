@@ -6584,3 +6584,10 @@ body.working-out #paddles {
 .goal-presets { display: flex; gap: 8px; margin-top: 10px; }
 .goal-presets button { flex: 1; min-height: 40px; }
 .goal-editor summary { cursor: pointer; padding: 12px 0; color: #ff9c54; }
+.screens-code {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+  margin: 12px 0;
+}

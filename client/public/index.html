@@ -22,6 +22,7 @@
     <link rel="modulepreload" href="js/ble/devices.js" />
     <link rel="modulepreload" href="js/ble/knownDevices.js" />
     <link rel="modulepreload" href="js/build.js" />
+    <link rel="modulepreload" href="js/display/displayFrame.js" />
     <link rel="modulepreload" href="js/i18n/apply.js" />
     <link rel="modulepreload" href="js/i18n/i18n.js" />
     <link rel="modulepreload" href="js/i18n/selector.js" />
@@ -34,6 +35,7 @@
     <link rel="modulepreload" href="js/net/connection.js" />
     <link rel="modulepreload" href="js/net/protocol.js" />
     <link rel="modulepreload" href="js/net/reconnector.js" />
+    <link rel="modulepreload" href="js/net/screenPairing.js" />
     <link rel="modulepreload" href="js/net/strava.js" />
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
@@ -91,6 +93,7 @@
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideGoalView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
+    <link rel="modulepreload" href="js/view/screensDialog.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
     <link rel="modulepreload" href="js/view/stravaUploadView.js" />
@@ -430,6 +433,22 @@
               <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
               <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
               <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
+            </details>
+            <details id="screens" class="diagnostics" hidden>
+              <summary data-i18n="screens.title">Second screen</summary>
+              <p class="diagnostics-hint" data-i18n="screens.hint">Show your ride on a phone, or use this device as a cockpit for another tablet.</p>
+              <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a second screen</button>
+              <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>
+              <dialog id="screens-dialog" aria-labelledby="screens-dialog-title">
+                <h2 id="screens-dialog-title" data-i18n="screens.dialogTitle">Pair a second screen</h2>
+                <p data-i18n="screens.dialogHint">On the phone, choose “Use this device as a cockpit” in the settings and enter this code.</p>
+                <p id="screens-code" class="screens-code" aria-live="polite"></p>
+                <p id="screens-countdown" class="hint"></p>
+                <p id="screens-status" class="hint" role="status"></p>
+                <button type="button" id="screens-renew" class="secondary" data-i18n="screens.renew" hidden>New code</button>
+                <button type="button" id="screens-unpair" class="secondary" data-i18n="screens.unpair">Unpair all</button>
+                <button type="button" id="screens-close" data-i18n="screens.close">Close</button>
+              </dialog>
             </details>
             </details>
           </form>

@@ -1165,3 +1165,83 @@ async fn afk_stay_then_leave_counts_each_outcome() {
         assert!(metrics.contains(&line), "{line} missing in {metrics}");
     }
 }
+
+const SCREEN_KEY: &str = "0123456789abcdef0123456789abcdef";
+
+/// A tablet that joins with the screen key and returns its socket and rider id.
+async fn tablet_rides(addr: SocketAddr) -> (Socket, u64) {
+    let mut tablet = connect(addr).await;
+    hello(&mut tablet).await;
+    send(
+        &mut tablet,
+        &format!(r#"{{"type":"join","name":"Tablet","weight_kg":70,"screen_key":"{SCREEN_KEY}"}}"#),
+    )
+    .await;
+    let joined = expect_type(&mut tablet, "joined").await;
+    let id = joined["rider_id"].as_u64().unwrap();
+    (tablet, id)
+}
+
+#[tokio::test]
+async fn a_paired_phone_follows_the_tablets_rides() {
+    let addr = start_server(0).await;
+
+    let mut offerer = connect(addr).await;
+    hello(&mut offerer).await;
+    send(
+        &mut offerer,
+        &format!(r#"{{"type":"pair_offer","key":"{SCREEN_KEY}","name":"Tablet"}}"#),
+    )
+    .await;
+    let code = expect_type(&mut offerer, "pair_code").await["code"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let mut phone = connect(addr).await;
+    hello(&mut phone).await;
+    send(&mut phone, &format!(r#"{{"type":"pair_claim","code":"{code}"}}"#)).await;
+    let paired = expect_type(&mut phone, "paired").await;
+    assert_eq!(paired["key"], SCREEN_KEY);
+    expect_type(&mut offerer, "pair_claimed").await;
+
+    send(&mut phone, &format!(r#"{{"type":"watch","key":"{SCREEN_KEY}"}}"#)).await;
+    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], false);
+
+    let (mut tablet, id) = tablet_rides(addr).await;
+    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], true);
+    let state = expect_type(&mut phone, "state").await;
+    let riders = state["riders"].as_array().unwrap();
+    assert_eq!(riders.len(), 1);
+    assert_eq!(riders[0]["id"].as_u64(), Some(id));
+
+    send(&mut tablet, r#"{"type":"display","data":{"hr":120}}"#).await;
+    assert_eq!(expect_type(&mut phone, "display").await["data"]["hr"], 120);
+
+    tablet.close(None).await.unwrap();
+    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], false);
+
+    let (_tablet, new_id) = tablet_rides(addr).await;
+    assert_ne!(new_id, id);
+    assert_eq!(expect_type(&mut phone, "watch_status").await["live"], true);
+    let state = expect_type(&mut phone, "state").await;
+    assert_eq!(state["riders"][0]["id"].as_u64(), Some(new_id));
+}
+
+#[tokio::test]
+async fn info_announces_screens() {
+    let addr = start_server(0).await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(info["screens"], true);
+}
+
+#[tokio::test]
+async fn an_unknown_pair_code_is_refused() {
+    let addr = start_server(0).await;
+    let mut phone = connect(addr).await;
+    hello(&mut phone).await;
+    send(&mut phone, r#"{"type":"pair_claim","code":"ZZZZZZ"}"#).await;
+    let error = expect_type(&mut phone, "error").await;
+    assert_eq!(error["code"], "pair_code_invalid");
+}

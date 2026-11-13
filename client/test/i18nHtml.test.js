@@ -7,10 +7,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import en from "../public/js/i18n/en.js";
 
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+const PAGES = ["index.html", "cockpit.html"];
+const htmls = PAGES.map((page) => readFileSync(new URL(`../public/${page}`, import.meta.url), "utf8"));
 
 // en keys neither HTML nor a JS string literal uses (keys built at run time, test seeds).
-const PENDING_KEY_PREFIXES = ["route."]; // looked up as route.<id>.description
+const PENDING_KEY_PREFIXES = ["route.", "cockpit.tile."]; // looked up as route.<id>.description, cockpit.tile.<id>
 const JS_ROOT = new URL("../public/js/", import.meta.url).pathname;
 function jsSource(dir) {
   return readdirSync(dir).map((name) => {
@@ -72,7 +73,7 @@ const ancestors = (el) => {
   return list;
 };
 
-const elements = walk(html).filter((el) => !["script", "style"].includes(el.tag));
+const elements = htmls.flatMap(walk).filter((el) => !["script", "style"].includes(el.tag));
 const problems = [];
 const used = new Set();
 
@@ -110,11 +111,11 @@ for (const el of elements) {
   }
 }
 
-test("index.html text and attributes are translatable and match en.js", () => {
+test("page text and attributes are translatable and match en.js", () => {
   assert.deepEqual(problems, []);
 });
 
-test("every en key is used by index.html or the JS", () => {
+test("every en key is used by a page or the JS", () => {
   const unused = Object.keys(en).filter(
     (k) => !used.has(k) && !usedInJs(k) && !PENDING_KEY_PREFIXES.some((p) => k.startsWith(p)),
   );

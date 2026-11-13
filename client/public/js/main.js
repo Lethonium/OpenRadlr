@@ -115,6 +115,9 @@ import { VehicleView } from "./view/vehicleView.js";
 import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
+import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
+import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
@@ -382,6 +385,7 @@ const app = {
   unfinished: null,
   reconnector: null,
   autosaveTimer: null,
+  displayTimer: null,
   lastTrainerDataAt: null,
   /** The trainer's last reading, for the start menu's live check. */
   lastReading: null,
@@ -712,6 +716,7 @@ function initSetup() {
     app.drawerByController = false;
   });
   initDiagnostics();
+  initScreens();
   initStartVehicle();
   initStartMenu();
   initRecovery();
@@ -838,6 +843,8 @@ function openStartMenu() {
       app.info = null;
     }
     app.infoLoaded = true;
+    // Second screens need a server that relays them (ADR 0026).
+    $("screens").hidden = !app.info?.screens;
     renderStartMenu();
   };
   initMenuStage();
@@ -1549,6 +1556,92 @@ function notify(text, kind = "event") {
   setTimeout(() => item.remove(), TICKER_SECONDS * 1000);
 }
 
+// ------------------------------------------------------- second screens ---
+
+const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
+const COCKPIT_KEY = "openradlr.cockpit";
+const DISPLAY_INTERVAL_MS = 1000;
+// The plan goes out again now and then, for a screen that opens or reconnects mid-workout.
+const PLAN_RESEND_TICKS = 10;
+
+/** The screen key to host with: only once a phone has been paired. */
+function pairedScreenKey() {
+  const storage = browserStorage();
+  return storage && isPaired(storage) ? screenKey(storage, randomBytes) : undefined;
+}
+
+/**
+ * Once a second, sends the paired screens what only this tablet knows (heart rate, grade,
+ * live figures, workout). The workout's plan goes once per workout and connection.
+ */
+function startDisplayFeed() {
+  clearInterval(app.displayTimer);
+  if (!pairedScreenKey()) return;
+  let planSent = { connection: null, workout: null, ticks: 0 };
+  app.displayTimer = setInterval(() => {
+    const connection = app.connection;
+    if (!connection || !app.recorder || !app.session) return;
+    const training = app.training;
+    const workout = training?.workout ?? null;
+    planSent.ticks++;
+    if (workout && (planSent.connection !== connection || planSent.workout !== workout || planSent.ticks >= PLAN_RESEND_TICKS)) {
+      connection.sendDisplay(workoutPlanFrame(workout, app.profile.ftp, rideId(app.recorder)));
+      planSent = { connection, workout, ticks: 0 };
+    }
+    const state = workout ? training.workoutState() : null;
+    connection.sendDisplay(
+      displayFrame({
+        heartRate: app.session.latest.heartRate,
+        grade: app.session.serverGrade,
+        ftp: app.profile.ftp,
+        cadence: app.session.latest.cadence,
+        recording: overviewRecording(),
+        workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
+      }),
+    );
+  }, DISPLAY_INTERVAL_MS);
+}
+
+/** Pairing from the start menu, and turning this device into a cockpit. */
+function initScreens() {
+  const storage = browserStorage();
+  const els = {
+    dialog: $("screens-dialog"),
+    code: $("screens-code"),
+    countdown: $("screens-countdown"),
+    renew: $("screens-renew"),
+    unpair: $("screens-unpair"),
+    status: $("screens-status"),
+  };
+  const dialog = createScreensDialog({
+    els,
+    createSession: () => new PairingSession({ url: defaultServerUrl(), key: screenKey(storage, randomBytes), name: app.profile.name, storage }),
+    now: () => Date.now(),
+    setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+    clearInterval: (id) => globalThis.clearInterval(id),
+    confirm: (message) => confirm(message),
+    onUnpair: () => renewScreenKey(storage, randomBytes),
+    t: (key) => t(key),
+  });
+  $("screens-pair").addEventListener("click", () => dialog.open());
+  $("screens-close").addEventListener("click", () => dialog.close());
+  els.dialog.addEventListener("close", () => dialog.close());
+  $("screens-cockpit").addEventListener("click", async () => {
+    if (!readSetting(COCKPIT_KEY)) {
+      const code = (prompt(t("screens.codePrompt")) ?? "").trim().toUpperCase();
+      if (!code) return;
+      try {
+        const paired = await claimCode({ url: defaultServerUrl(), code });
+        writeSetting(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
+      } catch (error) {
+        notify(error.code === "pair_code_invalid" ? t("screens.codeInvalid") : t("screens.cannotConnect"), "error");
+        return;
+      }
+    }
+    location.href = "cockpit.html";
+  });
+}
+
 // ---------------------------------------------------------- diagnostics ---
 
 function initDiagnostics() {
@@ -1716,6 +1809,7 @@ async function joinRide(restored = null) {
     routeId: route?.id,
     level: levelOf(app.profile),
     device: deviceKind(app.trainer),
+    screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
     resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
@@ -1848,6 +1942,7 @@ function endRide() {
   app.session?.stop();
   app.reconnector?.stop();
   clearInterval(app.autosaveTimer);
+  clearInterval(app.displayTimer);
   // Leaving on purpose: the server frees the rider at once instead of holding them (#73).
   app.connection?.leave();
   app.wakeLock.release();
@@ -1940,6 +2035,7 @@ function endRide() {
     paddleView: null,
     reconnector: null,
     autosaveTimer: null,
+    displayTimer: null,
   });
 
   // A fresh ride screen; the 3D canvases move over, keeping their WebGL contexts.
@@ -2113,6 +2209,7 @@ function startRide() {
   initAfkPrompt();
   initPhotos();
   startAutosave();
+  startDisplayFeed();
   notify(t("ride.welcome", { server: info.server_name }));
   // One loop per ride: it ends with the ride.
   const ride = app.ride;
@@ -3032,6 +3129,7 @@ async function rejoin(lost) {
       level: levelOf(app.profile),
       // A workout rider is flagged again by its join, also when the server forgot it.
       device: app.workout ? "workout" : deviceKind(app.trainer),
+      screenKey: pairedScreenKey(),
       resumeToken: lost.resumeToken,
       resume: app.studio || app.workout ? null : app.lastOnRoute,
     });
