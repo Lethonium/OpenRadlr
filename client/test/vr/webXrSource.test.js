@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { WebXrSource } from "../../public/js/vr/webXrSource.js";
-import { switchToXr } from "../../public/js/vr/xrLoop.js";
+import { switchToXr, xrLoop } from "../../public/js/vr/xrLoop.js";
 import { XR_DEPTH, forwardOf, translation } from "../../public/js/vr/xrFrame.js";
 import { placement, yawFor } from "../../public/js/view3d/math.js";
 
@@ -221,6 +221,30 @@ test("the source's own onEnd still runs", async () => {
   await switchToXr(source, { stop2d() {}, start2d: () => seen.push("2d"), onFrame() {} });
   source.onEnd();
   assert.deepEqual(seen, ["source", "2d"]);
+});
+
+test("leaving brings the 2D loop back once, however late the source's end comes", async () => {
+  let restarts = 0;
+  const source = fakeSource();
+  const loop = xrLoop({ stop2d() {}, start2d: () => (restarts += 1), onFrame() {} });
+  await loop.enter(source);
+  loop.leave();
+  source.onEnd();
+  assert.equal(restarts, 1);
+  assert.equal(loop.active, null);
+});
+
+test("a stale end of a left source does not bring back 2D under a newer source", async () => {
+  let restarts = 0;
+  const first = fakeSource();
+  const second = fakeSource();
+  const loop = xrLoop({ stop2d() {}, start2d: () => (restarts += 1), onFrame() {} });
+  await loop.enter(first);
+  loop.leave();
+  await loop.enter(second);
+  first.onEnd();
+  assert.equal(restarts, 1);
+  assert.equal(loop.active, second);
 });
 
 /** A tracked hand: a Map of 25 joint spaces, joint `i` at x = i / 100. */

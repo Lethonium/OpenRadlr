@@ -42,7 +42,7 @@ import { PreviewSource, parseHead } from "./previewSource.js";
 import { VrWorld, pickHost, worldWanted } from "./vrWorld.js";
 import { WebXrSource } from "./webXrSource.js";
 import { workoutFromPlan, workoutState } from "./workoutFromPlan.js";
-import { switchToXr } from "./xrLoop.js";
+import { xrLoop } from "./xrLoop.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
 const CAMERA_KEY = "openride.camera";
@@ -88,26 +88,37 @@ const info = () => (serverInfo ??= fetchJson("/api/info"));
 /** The routes the server offers (for the map's neighbours); empty if /api/info fails. */
 const listedRoutes = () => info().then(routesOf, () => []);
 
-/** The preview's head input from the page: dragging the canvas and the keyboard. */
+/**
+ * The preview's head input from the page: dragging the canvas and the keyboard.
+ * `dispose()` removes every listener again, for when the preview ends.
+ */
 function pageInput(canvas) {
+  const listeners = [];
+  const listen = (target, type, fn) => {
+    target.addEventListener(type, fn);
+    listeners.push(() => target.removeEventListener(type, fn));
+  };
   return {
     onDrag(fn) {
       let last = null;
-      canvas.addEventListener("pointerdown", (event) => {
+      listen(canvas, "pointerdown", (event) => {
         last = event;
         canvas.setPointerCapture?.(event.pointerId);
       });
-      canvas.addEventListener("pointermove", (event) => {
+      listen(canvas, "pointermove", (event) => {
         if (!last) return;
         fn(event.clientX - last.clientX, event.clientY - last.clientY);
         last = event;
       });
-      for (const end of ["pointerup", "pointercancel"]) canvas.addEventListener(end, () => (last = null));
+      for (const end of ["pointerup", "pointercancel"]) listen(canvas, end, () => (last = null));
     },
     onKey(fn) {
-      window.addEventListener("keydown", (event) => {
+      listen(window, "keydown", (event) => {
         if (!event.ctrlKey && !event.metaKey && !event.altKey) fn(event.key);
       });
+    },
+    dispose() {
+      for (const remove of listeners.splice(0)) remove();
     },
   };
 }
@@ -173,6 +184,7 @@ function start() {
   let latest = null;
   let host = null;
   let view = null;
+  let renderer = null;
   let world = null;
   let smoother = null;
   let wasLive = false;
@@ -232,7 +244,9 @@ function start() {
       // An XR-compatible context, so the headset can draw into it.
       const gl = createContext($("world3d"), { xrCompatible: true });
       if (!gl) throw new Error("WebGL 2 is not available");
-      view = new View3D($("world3d"), $("labels3d"), built.route, built.scene, { renderer: new Renderer(gl) });
+      // One renderer for the page: its programs and shadow map outlive the worlds drawn with it.
+      renderer ??= new Renderer(gl);
+      view = new View3D($("world3d"), $("labels3d"), built.route, built.scene, { renderer });
     } catch (error) {
       console.error(error);
       note(t("vr.unavailable"));
@@ -383,6 +397,15 @@ function start() {
     view.renderXr({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() }, xrFrame, { hud });
   }
 
+  const loop = xrLoop({
+    stop2d() {
+      $("labels3d").hidden = true;
+      $("hud").hidden = true;
+    },
+    start2d: restore2d,
+    onFrame: onXrFrame,
+  });
+
   /** Hands the page to an XR frame source (the preview or the headset) in place of the 2D window. */
   function enter(next) {
     if (source || !view) return Promise.resolve(false);
@@ -391,14 +414,7 @@ function start() {
     updatePreviewButton();
     updateEnterButton();
     renderCameraButton();
-    return switchToXr(next, {
-      stop2d() {
-        $("labels3d").hidden = true;
-        $("hud").hidden = true;
-      },
-      start2d: restore2d,
-      onFrame: onXrFrame,
-    });
+    return loop.enter(next);
   }
   /** Back to the 2D window and its frame loop; safe to call again once it is back. */
   function restore2d() {
@@ -411,12 +427,7 @@ function start() {
     updateEnterButton();
     renderCameraButton();
   }
-  function leave() {
-    const current = source;
-    if (!current) return;
-    current.stop();
-    restore2d();
-  }
+  const leave = () => loop.leave();
   function startPreview() {
     if (source || !view) return;
     autoPreview = false;
