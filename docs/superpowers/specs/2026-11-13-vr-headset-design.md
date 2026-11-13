@@ -89,10 +89,11 @@ for a person wearing it.
   - The host's rider is the one with `watch_status.rider_id`. Its `route`
     tells the page when to switch world. In the studio, its entry in
     `studio_state.riders[]` gives the room and seat.
-  - The rider stamping the app does in `main.js` (`followMyRoad`,
-    `onMyOwnRoad`, parked and exercise stamps) moves into a pure module that
-    both pages import, so the two pages can't drift apart.
-  - That refactor is its own commit before the page.
+  - The parked and exercise stamps and the studio rider mapping in `main.js`
+    move into shared modules that both pages import (a refactor commit before
+    the page). `followMyRoad` and `onMyOwnRoad` stay in `main.js`: they serve
+    the tablet's own steering, and `View3D` already places riders that are
+    off every route.
 - **HUD in the 2D window.** Power, cadence, speed and grade come from `state`
   (4 Hz) and `resistance`; only heart rate and the workout come from `display`
   frames (1 Hz). The same split holds for the VR HUD. It's a small DOM overlay, reusing the cockpit model for the derived
@@ -293,7 +294,7 @@ They also want to see which devices are paired.
 
 ## Build order (one PR, ordered commits)
 
-1. Move the rider stamping out of `main.js` into a shared pure module (refactor).
+1. Move the rider stamps and the studio rider mapping out of `main.js` into shared modules (refactor).
 2. `xr_preview` flag on the server and in `/api/info`; `rider_id` in `watch_status`.
 3. `vr.html`: the world watcher with the 2D view and HUD, and the start-menu
    entry. This is #86 step 3.
