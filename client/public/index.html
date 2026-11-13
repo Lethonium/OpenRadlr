@@ -74,6 +74,7 @@
     <link rel="modulepreload" href="js/util/format.js" />
     <link rel="modulepreload" href="js/util/wakeLock.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
+    <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
     <link rel="modulepreload" href="js/view/events.js" />
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
@@ -496,6 +497,20 @@
                     <h2 data-i18n="profilePage.data">Your data</h2>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+          <!-- Every delete in the profile asks here first: what goes, what changes, what stays (view/deleteConfirm.js) -->
+          <div id="delete-confirm" class="delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-lines" hidden>
+            <div class="delete-card">
+              <h2 id="delete-confirm-title"></h2>
+              <ul id="delete-confirm-lines" class="delete-lines"></ul>
+              <label id="delete-confirm-tick-row" class="check" hidden><input id="delete-confirm-tick" type="checkbox" /> <span data-i18n="profilePage.delete.everything.tick">I understand this cannot be undone</span></label>
+              <p id="delete-confirm-error" class="error" role="alert" hidden></p>
+              <div class="delete-actions">
+                <button type="button" id="delete-confirm-export" class="secondary" data-i18n="profilePage.delete.export">Export first</button>
+                <button type="button" id="delete-confirm-cancel" class="secondary" data-i18n="profilePage.delete.cancel">Cancel</button>
+                <button type="button" id="delete-confirm-go" class="danger"></button>
               </div>
             </div>
           </div>
