@@ -1,8 +1,9 @@
 /**
  * Composition root of the VR page (a paired headset or any browser): watches
  * the tablet's ride through the relay as a "world" watcher and draws it in a
- * View3D, in a 2D window. No logic of its own worth testing: the decisions
- * live in vrWorld.js and hud2d.js.
+ * View3D, in a 2D window, with the ride screen's HUD (view/rideHud.js) filled
+ * from the relayed state and the display frames. No logic of its own worth
+ * testing: the decisions live in vrWorld.js and rideHud.js.
  */
 import { applyTranslations } from "../i18n/apply.js";
 import { initLocale, t } from "../i18n/i18n.js";
@@ -14,9 +15,16 @@ import { RiderSmoother } from "../ride/smoothing.js";
 import { RiderStamps } from "../ride/riderStamps.js";
 import { RouteGeometry } from "../route/geometry.js";
 import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "../route/worldMap.js";
-import { formatGrade, formatNumber, formatSpeed, setUnits, speedUnit } from "../util/format.js";
+import { distanceUnit, setUnits, speedUnit } from "../util/format.js";
+import { onRoute } from "../ride/roadRiders.js";
 import { ScreenWakeLock } from "../util/wakeLock.js";
 import { themeColors } from "../view/canvas.js";
+import { chooseLayout, raceStanding } from "../view/hud.js";
+import { drawMinimap } from "../view/minimapView.js";
+import { inRace } from "../view/panels.js";
+import { drawProfile, drawUpcoming } from "../view/profileView.js";
+import { drawRaceTimeline } from "../view/raceTimelineView.js";
+import { RideHud } from "../view/rideHud.js";
 import { routesOf } from "../view/startMenu.js";
 import { studioSceneRiders, studioWorld } from "../view/studioWorld.js";
 import { viewControls } from "../view/viewControls.js";
@@ -24,7 +32,6 @@ import { DEFAULT_BIOME, resolveBiome } from "../view3d/biomes/index.js";
 import { StudioCamera, cameraModeOf } from "../view3d/studioCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D } from "../view3d/view3d.js";
 import { buildScene } from "../view3d/worldScene.js";
-import { hudValues } from "./hud2d.js";
 import { VrWorld, pickHost, worldWanted } from "./vrWorld.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
@@ -34,6 +41,8 @@ const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 const BIOME_KEY = "openride.biome";
 const HUD_MS = 250;
+const DEFAULT_WEIGHT_KG = 75;
+const DEFAULT_FTP = 200;
 
 const $ = (id) => document.getElementById(id);
 const nowS = () => Date.now() / 1000;
@@ -93,7 +102,9 @@ async function buildStudioWorld() {
 function start() {
   initLocale({ storage: localStorage, languages: navigator.languages });
   applyTranslations();
-  setUnits(new ProfileStore().load().units);
+  const profile = new ProfileStore().load();
+  setUnits(profile.units);
+  for (const element of document.querySelectorAll("[data-unit]")) element.textContent = { speed: speedUnit(), distance: distanceUnit() }[element.dataset.unit] ?? element.textContent;
   const paired = pairing(localStorage);
   if (!paired) {
     $("vr-unpaired").hidden = false;
@@ -109,6 +120,7 @@ function start() {
   const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key, view: "world" });
   const stamps = new RiderStamps({ now: nowS });
   const wakeLock = new ScreenWakeLock();
+  const rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline });
   const vrWorld = new VrWorld({ buildRouteWorld, buildStudioWorld });
   let name = paired.name;
   let riderId = null;
@@ -177,6 +189,7 @@ function start() {
       const camera = setting(CAMERA_KEY);
       if (CAMERA_MODES[camera]) view.setCameraMode(camera);
     }
+    if (built.kind === "route") $("hud-route").textContent = built.route.name;
     renderCameraButton();
   });
 
@@ -205,11 +218,41 @@ function start() {
     if (event.key.toLowerCase() === "c" && !event.ctrlKey && !event.metaKey && !event.altKey) cycleCamera();
   });
 
+  /** The ride screen's HUD for the host: moving figures from the state, the rest from the display frames. */
+  function renderRideHud(me, riders) {
+    const rider = me ?? host;
+    const race = latest.race ?? null;
+    const layout = chooseLayout({ choice: "auto", workoutRunning: Boolean(model.workout), racePhase: race?.phase ?? null, inRace: inRace(race, rider, riderId) });
+    if ($("ride").dataset.layout !== layout) $("ride").dataset.layout = layout;
+    const route = world.route;
+    const standing = me ? raceStanding(race, riders, riderId, route.length) : null;
+    const stats = model.stats;
+    rideHud.render(
+      {
+        power: rider.power,
+        cadence: model.cadence,
+        heartRate: model.hr,
+        me,
+        route,
+        rideDistanceM: stats?.distanceM ?? 0,
+        elapsedS: stats?.elapsedS ?? 0,
+        target: model.workout?.target_w ?? null,
+        // The tablet's intensity setting is not in the display frames; its target already includes it.
+        intensity: 1,
+        weightKg: profile.weightKg ?? DEFAULT_WEIGHT_KG,
+        ftp: model.ftp ?? profile.ftp ?? DEFAULT_FTP,
+      },
+      { layout, riders, myId: riderId, standing, colors: themeColors() },
+    );
+  }
+
   const frame = () => {
     requestAnimationFrame(frame);
     if (!view || !latest || !host) return;
     const timeS = nowS();
     let riders;
+    let me = null;
+    let onMyRoute = [];
     if (world.kind === "studio") {
       if (latest.type !== "studio_state") return;
       view.setStudioRooms(latest.rooms);
@@ -218,8 +261,11 @@ function start() {
     } else {
       if (latest.type !== "state" || !smoother) return;
       riders = smoother.sample(timeS);
+      onMyRoute = riders.filter((rider) => onRoute(rider, world.route.id));
+      me = onMyRoute.find((rider) => rider.id === riderId) ?? null;
     }
     view.render({ riders, myId: riderId, myCadence: host.cadence ?? 0, timeS, colors: themeColors() });
+    renderRideHud(me, onMyRoute);
   };
 
   const renderHud = () => {
@@ -227,16 +273,7 @@ function start() {
     $("vr-waiting").textContent = name ? t("vr.waiting", { name }) : t("vr.waitingTablet");
     $("vr-waiting").hidden = status !== "waiting" || !$("vr-invalid").hidden;
     $("vr-badge").hidden = status !== "stale";
-    $("vr-hud").hidden = status === "waiting";
-    const values = hudValues(model, host);
-    const known = (value, format) => (value === null || value === undefined ? "–" : format(value));
-    $("vr-power").textContent = known(values.power, (v) => formatNumber(v, 0));
-    $("vr-cadence").textContent = known(values.cadence, (v) => formatNumber(v, 0));
-    $("vr-speed").textContent = known(values.speedKmh, (kmh) => formatSpeed(kmh / 3.6));
-    $("vr-speed-unit").textContent = speedUnit();
-    $("vr-grade").textContent = known(values.grade, formatGrade);
-    $("vr-hr").textContent = known(values.heartRate, (v) => formatNumber(v, 0));
-    $("vr-hr-stat").hidden = values.heartRate === null;
+    $("hud").hidden = status === "waiting";
     const live = status === "live";
     if (live !== wasLive) {
       wasLive = live;

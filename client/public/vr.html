@@ -12,10 +12,134 @@
     <script type="module" src="js/vr/main.js"></script>
   </head>
   <body class="vr-page">
-    <div class="vr-stage">
-      <canvas id="world3d" class="canvas-world" aria-label="3D view of the ride" data-i18n-attr="aria-label:vr.view"></canvas>
-      <div id="labels3d" class="labels3d" aria-hidden="true"></div>
-    </div>
+    <!-- The ride screen's world and HUD layouts (markup copied from index.html; no controls: the headset only watches). -->
+    <section id="ride" class="ride" data-layout="cockpit">
+      <div id="world-wrap" class="world-wrap">
+        <canvas id="world3d" class="canvas-world" aria-label="3D view of the ride" data-i18n-attr="aria-label:vr.view"></canvas>
+        <div id="labels3d" class="labels3d" aria-hidden="true"></div>
+      </div>
+      <div class="hud" id="hud" aria-live="off" hidden>
+        <div class="hud-info glass">
+          <span class="hud-brand">Open<span>Radlr</span></span>
+          <span class="hud-route" id="hud-route" data-i18n="ride.route">Route</span>
+          <span class="hud-numbers"><span data-m="distance">0.00</span> <span data-unit="distance">km</span> · <span data-m="time">0:00</span> · <span data-m="avg-speed">–</span> <span data-unit="speed">km/h</span> <span data-i18n="ride.avg">avg</span></span>
+          <span class="hud-vehicle" id="hud-vehicle" data-m="vehicle" hidden></span>
+        </div>
+
+        <div class="layout layout-cockpit">
+          <div class="cluster">
+            <div class="cluster-side">
+              <span class="num-l" data-m="speed">0.0</span><span class="caption" data-unit="speed">km/h</span>
+              <span class="num-m" data-m="cadence">–</span><span class="caption">rpm</span>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 300 170" aria-hidden="true">
+                <path class="gauge-track" d="M30 160 A120 120 0 0 1 270 160" pathLength="100" />
+                <path class="gauge-fill" id="gauge-fill" d="M30 160 A120 120 0 0 1 270 160" pathLength="100" />
+                <line class="gauge-target" id="gauge-target" x1="150" y1="26" x2="150" y2="54" hidden />
+              </svg>
+              <span class="gauge-power" data-m="power">0</span>
+              <span class="gauge-sub">W · <strong data-m="wkg">0.0</strong> W/kg · <span data-m="zone">Z1</span><span data-m="target-suffix"></span></span>
+            </div>
+            <div class="cluster-side">
+              <span class="num-l grade" data-m="grade">0.0 %</span><span class="caption" data-i18n="ride.grade">grade</span>
+              <span class="num-m" data-m="hr">–</span><span class="caption">bpm</span>
+            </div>
+          </div>
+          <div class="upcoming">
+            <span class="upcoming-label" data-m="next-marker" data-i18n="ride.roadAhead">Road ahead</span>
+            <canvas id="upcoming" class="canvas-upcoming" aria-label="Elevation of the next 2 km" data-i18n-attr="aria-label:ride.elevationOfTheNext"></canvas>
+          </div>
+        </div>
+
+        <div class="layout layout-broadcast">
+          <div class="bar glass">
+            <div class="bar-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-l" data-m="power">0</span><span class="bar-sub"><span data-m="wkg">0.0</span> W/kg<span data-m="target-suffix"></span></span></div>
+            <div><span class="caption" data-i18n="ride.speed">Speed</span><span class="num-m" data-m="speed">0.0</span><span class="unit" data-unit="speed">km/h</span></div>
+            <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
+            <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
+            <div class="bar-grade"><span class="caption" data-i18n="ride.grade2">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
+          </div>
+          <div class="nearby glass">
+            <h2 data-i18n="ride.nearby">Nearby</h2>
+            <ol id="hud-nearby" class="rider-list"></ol>
+            <div id="hud-seats" class="vehicle-view compact" hidden></div>
+          </div>
+          <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route" data-i18n-attr="aria-label:ride.mapOfTheRoute"></canvas>
+          <div class="strip glass">
+            <canvas id="profile" class="canvas-profile" aria-label="Elevation profile of the lap with all riders" data-i18n-attr="aria-label:ride.elevationProfileOfThe"></canvas>
+            <div class="strip-next"><span class="caption" data-i18n="ride.next">Next</span><strong data-m="next-marker">–</strong><span class="muted" data-m="lap-info" data-i18n="ride.freeRide">Free ride</span><span class="caption" data-i18n="ride.lastSplit">Last split</span><strong data-m="last-split">–</strong></div>
+          </div>
+        </div>
+
+        <div class="layout layout-training">
+          <div class="workout-chip glass">
+            <span class="caption accent" data-i18n="workout.title">Workout</span>
+            <strong id="workout-name" data-i18n="ride.noWorkoutRunning">No workout running</strong>
+            <span id="erg-badge" class="erg-badge" hidden>ERG</span>
+          </div>
+          <div class="training-actions">
+            <button type="button" id="hud-skip" class="glass" data-i18n="ride.skipBlock">Skip block</button>
+            <span class="intensity glass">
+              <button type="button" id="hud-intensity-down" aria-label="Lower intensity" data-i18n-attr="aria-label:ride.lowerIntensity">−</button>
+              <output data-m="intensity">100 %</output>
+              <button type="button" id="hud-intensity-up" aria-label="Raise intensity" data-i18n-attr="aria-label:ride.raiseIntensity">+</button>
+            </span>
+            <button type="button" id="hud-stop" class="glass" data-i18n="ride.stop">Stop</button>
+          </div>
+          <div class="targets glass">
+            <div><span class="caption" data-i18n="ride.target">Target</span><span class="num-xl" data-m="target">–</span></div>
+            <div class="targets-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-xl" data-m="power" id="training-power">0</span></div>
+            <div><span class="caption" data-i18n="ride.blockLeft">Block left</span><span class="num-xl" id="workout-block-time">–</span></div>
+          </div>
+          <div class="band">
+            <div class="band-stats">
+              <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span></div>
+              <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span></div>
+              <div><span class="caption" data-i18n="ride.speed">Speed</span><span class="num-s"><span data-m="speed">0.0</span> <span data-unit="speed">km/h</span></span></div>
+              <div><span class="caption" data-i18n="ride.lastSplit">Last split</span><span class="num-s" data-m="last-split-short">–</span></div>
+            </div>
+            <div class="band-chart">
+              <div class="band-labels"><span id="workout-block" data-i18n="ride.startAWorkoutFrom">Start a workout from the menu (M)</span><span id="workout-next" class="muted"></span></div>
+              <canvas id="workout-chart" class="canvas-workout" aria-label="Workout blocks and progress" data-i18n-attr="aria-label:ride.workoutBlocksAndProgress"></canvas>
+              <div class="progress"><span id="workout-progress"></span></div>
+            </div>
+            <div class="band-stats">
+              <div><span class="caption" data-i18n="ride.elapsed">Elapsed</span><span class="num-m" id="workout-elapsed">0:00</span></div>
+              <div><span class="caption" data-i18n="ride.remaining">Remaining</span><span class="num-m" id="workout-remaining">0:00</span></div>
+              <div><span class="caption" data-i18n="ride.avgPower">Avg power</span><span class="num-s" id="workout-avg">– W</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="layout layout-race">
+          <div class="race-top">
+            <div class="race-position"><span class="caption" data-i18n="ride.position">Position</span><span class="num-l" data-m="position">–</span></div>
+            <div class="glass race-box"><span class="caption" data-i18n="ride.lap">Lap</span><span class="num-m" data-m="lap">–</span></div>
+            <div class="glass race-timeline">
+              <span class="caption" data-m="race-caption" data-i18n="ride.noRaceRunningStart">No race running · start one from the menu (M)</span>
+              <canvas id="race-timeline" class="canvas-timeline" aria-label="Race progress of all racers" data-i18n-attr="aria-label:ride.raceProgressOfAll"></canvas>
+            </div>
+            <div class="glass race-box"><span class="caption" data-i18n="ride.toGo">To go</span><span class="num-m" data-m="to-go">–</span></div>
+          </div>
+          <div id="race-groups-panel" class="groups glass" hidden>
+            <h2><span data-i18n="ride.groups">Groups</span> <span data-i18n="ride.gap">Gap</span></h2>
+            <ol id="race-groups" class="group-list"></ol>
+            <h2 data-i18n="ride.aroundYou">Around you</h2>
+            <ol id="race-around" class="group-list around"></ol>
+          </div>
+          <div class="race-metrics">
+            <div class="glass race-power"><span class="caption" data-i18n="ride.power">Power</span><span class="num-xl" data-m="power">0</span><span class="bar-sub accent"><span data-m="wkg">0.0</span> W/kg</span></div>
+            <div class="glass race-grid">
+              <span class="caption" data-i18n="ride.speed">Speed</span><span class="caption" data-i18n="ride.cadence">Cadence</span>
+              <span class="num-m" data-m="speed">0.0</span><span class="num-m" data-m="cadence">–</span>
+              <span class="caption" data-i18n="ride.heart">Heart</span><span class="caption" data-i18n="ride.grade2">Grade</span>
+              <span class="num-m" data-m="hr">–</span><span class="num-m" data-m="grade">0.0 %</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
     <header class="vr-head">
       <a class="vr-link" href="index.html" data-i18n="vr.back">Back to the app</a>
       <span class="vr-badge" id="vr-badge" data-i18n="vr.notLive" hidden>Not live</span>
@@ -30,12 +154,5 @@
     <p class="vr-message" id="vr-invalid" data-i18n="vr.invalid" hidden>The tablet no longer accepts this screen. Pair it again.</p>
     <p class="vr-message" id="vr-waiting" hidden></p>
     <p class="vr-message" id="vr-note" hidden></p>
-    <div class="vr-hud" id="vr-hud" aria-live="off" hidden>
-      <div class="vr-stat"><span id="vr-power">–</span><small>W</small></div>
-      <div class="vr-stat"><span id="vr-cadence">–</span><small>rpm</small></div>
-      <div class="vr-stat"><span id="vr-speed">–</span><small id="vr-speed-unit"></small></div>
-      <div class="vr-stat"><span id="vr-grade">–</span><small>%</small></div>
-      <div class="vr-stat" id="vr-hr-stat"><span id="vr-hr">–</span><small>bpm</small></div>
-    </div>
   </body>
 </html>

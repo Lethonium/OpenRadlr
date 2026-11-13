@@ -6575,22 +6575,15 @@ body.working-out #paddles {
   margin: 12px 0;
 }
 
-/* The VR page: the ride in a window, with a small HUD. */
+/* The VR page: the ride in a window, with the ride screen's HUD (the .ride rules). */
 .vr-page {
   height: 100vh;
   overflow: hidden;
 }
 
-.vr-stage {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-}
-
 .vr-head {
   position: fixed;
   top: 0;
-  left: 0;
   right: 0;
   z-index: 1;
   display: flex;
@@ -6600,7 +6593,6 @@ body.working-out #paddles {
 }
 
 .vr-link {
-  margin-right: auto;
   padding: 4px 10px;
   border-radius: 6px;
   background: rgba(15, 18, 22, 0.72);
@@ -6629,31 +6621,4 @@ body.working-out #paddles {
   border-radius: var(--radius);
   background: rgba(15, 18, 22, 0.85);
   text-align: center;
-}
-
-.vr-hud {
-  position: fixed;
-  left: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  z-index: 1;
-  display: flex;
-  gap: 8px;
-}
-
-.vr-stat {
-  min-width: 72px;
-  padding: 6px 10px;
-  border-radius: var(--radius);
-  background: rgba(15, 18, 22, 0.72);
-  text-align: center;
-  font-size: 26px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.vr-stat small {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
 }
