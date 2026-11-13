@@ -15,6 +15,17 @@ test("adds with the date", () => {
   assert.deepEqual(new PairedScreens(storage).list(), [{ device: "Quest 3", pairedAt: 1000 }]);
 });
 
+test("pairing the same device again keeps one entry, the newest, last", () => {
+  const screens = new PairedScreens(fakeStorage());
+  screens.add("Quest 3", 1);
+  screens.add("Pixel 8", 2);
+  screens.add("Quest 3", 3);
+  assert.deepEqual(screens.list(), [
+    { device: "Pixel 8", pairedAt: 2 },
+    { device: "Quest 3", pairedAt: 3 },
+  ]);
+});
+
 test("clear empties it", () => {
   const storage = fakeStorage();
   const screens = new PairedScreens(storage);

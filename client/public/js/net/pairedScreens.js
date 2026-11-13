@@ -19,8 +19,9 @@ export class PairedScreens {
     }
   }
 
+  /** One entry per device name: pairing a device again replaces its entry with the new date. */
   add(device, nowMs) {
-    this.#save([...this.list(), { device, pairedAt: nowMs }].slice(-MAX_SCREENS));
+    this.#save([...this.list().filter((e) => e.device !== device), { device, pairedAt: nowMs }].slice(-MAX_SCREENS));
   }
 
   clear() {
