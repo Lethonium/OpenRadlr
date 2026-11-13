@@ -83,7 +83,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
     let mut leaving = false;
     let mut _seat: Option<SlotPermit<()>> = None;
     // A watching connection's registration, and the pairing code this one offered.
-    let mut _watching: Option<WatchGuard> = None;
+    let mut watching: Option<WatchGuard> = None;
     let mut last_code: Option<String> = None;
     let mut checks = tokio::time::interval(Duration::from_secs(1));
     checks.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -217,7 +217,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         }
                     }
                     Action::Watch { key, view } => match state.screens.watch(&key, view, outbox.clone()) {
-                        Ok(guard) => _watching = Some(guard),
+                        Ok(guard) => watching = Some(guard),
                         Err(_) => {
                             let _ = outbox
                                 .send(ServerMessage::error("too_many_screens", "this screen already has enough watchers"))
@@ -248,6 +248,12 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                 }
             }
             _ = checks.tick() => {
+                // A host status that found the phone's queue full goes out now, waiting for room.
+                if let Some(status) = watching.as_ref().and_then(WatchGuard::pending_status) {
+                    if outbox.send(status).await.is_err() {
+                        break;
+                    }
+                }
                 if let Some(reason) = session.expired(now()) {
                     let _ = outbox.send(reason).await;
                     break;

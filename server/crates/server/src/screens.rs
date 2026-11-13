@@ -4,7 +4,9 @@
 //! and get those copies. The game cores know nothing about it.
 //!
 //! A watcher never slows the host: copies use `try_send` and are dropped when
-//! the watcher's outbox is full.
+//! the watcher's outbox is full. A `watch_status` that does not fit is kept
+//! instead and sent by the watcher's own connection (see
+//! [`WatchGuard::pending_status`]), so a phone never misses the host going live.
 
 use crate::protocol::ServerMessage;
 use openradlr_sim::RiderId;
@@ -35,6 +37,15 @@ struct Watcher {
     id: u64,
     view: WatchView,
     outbox: mpsc::Sender<ServerMessage>,
+    /// The latest status, when it did not fit into the outbox.
+    pending_status: Option<ServerMessage>,
+}
+
+impl Watcher {
+    /// Tells the watcher the host's status; a newer status replaces a pending one.
+    fn tell(&mut self, status: ServerMessage) {
+        self.pending_status = self.outbox.try_send(status).err().map(|e| e.into_inner());
+    }
 }
 
 struct Host {
@@ -89,7 +100,7 @@ impl Screens {
         let id = reg.next_id;
         let entry = reg.entries.entry(key.to_owned()).or_default();
         entry.host = Some(Host { id, name: name.clone() });
-        send_all(&entry.watchers, &ServerMessage::WatchStatus { live: true, name });
+        tell_all(&mut entry.watchers, &ServerMessage::WatchStatus { live: true, name });
         HostGuard {
             screens: self.clone(),
             key: key.to_owned(),
@@ -117,8 +128,14 @@ impl Screens {
             Some(host) => (true, host.name.clone()),
             None => (false, String::new()),
         };
-        let _ = outbox.try_send(ServerMessage::WatchStatus { live, name });
-        entry.watchers.push(Watcher { id, view, outbox });
+        let mut watcher = Watcher {
+            id,
+            view,
+            outbox,
+            pending_status: None,
+        };
+        watcher.tell(ServerMessage::WatchStatus { live, name });
+        entry.watchers.push(watcher);
         Ok(WatchGuard {
             screens: self.clone(),
             key: key.to_owned(),
@@ -132,9 +149,9 @@ impl Screens {
     }
 }
 
-fn send_all(watchers: &[Watcher], message: &ServerMessage) {
+fn tell_all(watchers: &mut [Watcher], status: &ServerMessage) {
     for watcher in watchers {
-        let _ = watcher.outbox.try_send(message.clone());
+        watcher.tell(status.clone());
     }
 }
 
@@ -185,7 +202,7 @@ impl Drop for HostGuard {
             if let Some(host) = entry.host.as_ref().filter(|h| h.id == self.id) {
                 let name = host.name.clone();
                 entry.host = None;
-                send_all(&entry.watchers, &ServerMessage::WatchStatus { live: false, name });
+                tell_all(&mut entry.watchers, &ServerMessage::WatchStatus { live: false, name });
             }
         }
         reg.prune(&self.key);
@@ -197,6 +214,21 @@ pub struct WatchGuard {
     screens: Screens,
     key: String,
     id: u64,
+}
+
+impl WatchGuard {
+    /// The host's status if it did not fit into the outbox, once. The watcher's
+    /// connection sends it with a waiting send.
+    pub fn pending_status(&self) -> Option<ServerMessage> {
+        let mut reg = self.screens.lock();
+        reg.entries
+            .get_mut(&self.key)?
+            .watchers
+            .iter_mut()
+            .find(|w| w.id == self.id)?
+            .pending_status
+            .take()
+    }
 }
 
 impl Drop for WatchGuard {
@@ -488,6 +520,41 @@ mod tests {
         assert_eq!(screens.len(), 1);
         drop(g);
         assert_eq!(screens.len(), 0);
+    }
+
+    #[test]
+    fn a_status_that_does_not_fit_waits_for_the_connection() {
+        let screens = Screens::new();
+        let (tx, mut rx) = outbox(1);
+        let guard = screens.watch("k", WatchView::Data, tx).unwrap();
+        // The queue is full with the "waiting" status, so "live" cannot go in.
+        let _host = screens.host("k", 7, "Ana".into());
+        assert_eq!(rx.try_recv().unwrap(), status(false, ""));
+        assert!(rx.try_recv().is_err());
+        assert_eq!(guard.pending_status(), Some(status(true, "Ana")));
+        assert_eq!(guard.pending_status(), None);
+    }
+
+    #[test]
+    fn a_delivered_status_is_not_pending() {
+        let screens = Screens::new();
+        let (guard, mut rx) = watcher(&screens, WatchView::Data);
+        let _host = screens.host("k", 7, "Ana".into());
+        rx.try_recv().unwrap();
+        assert_eq!(rx.try_recv().unwrap(), status(true, "Ana"));
+        assert_eq!(guard.pending_status(), None);
+    }
+
+    #[test]
+    fn a_newer_status_replaces_a_pending_one() {
+        let screens = Screens::new();
+        let (tx, mut rx) = outbox(1);
+        let guard = screens.watch("k", WatchView::Data, tx).unwrap();
+        let host = screens.host("k", 7, "Ana".into());
+        rx.try_recv().unwrap();
+        drop(host);
+        assert_eq!(rx.try_recv().unwrap(), status(false, "Ana"));
+        assert_eq!(guard.pending_status(), None);
     }
 
     #[test]
