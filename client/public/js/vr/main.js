@@ -31,9 +31,12 @@ import { viewControls } from "../view/viewControls.js";
 import { DEFAULT_BIOME, resolveBiome } from "../view3d/biomes/index.js";
 import { StudioCamera, cameraModeOf } from "../view3d/studioCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D } from "../view3d/view3d.js";
+import { Renderer, createContext } from "../view3d/renderer.js";
 import { buildScene } from "../view3d/worldScene.js";
 import { PreviewSource, parseHead } from "./previewSource.js";
 import { VrWorld, pickHost, worldWanted } from "./vrWorld.js";
+import { WebXrSource } from "./webXrSource.js";
+import { switchToXr } from "./xrLoop.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
 const CAMERA_KEY = "openride.camera";
@@ -156,6 +159,7 @@ function start() {
   let smoother = null;
   let wasLive = false;
   let xrPreview = false;
+  let xrSupported = false;
   let autoPreview = new URLSearchParams(location.search).get("preview") === "1";
   let source = null;
 
@@ -199,7 +203,10 @@ function start() {
     smoother = null;
     note("");
     try {
-      view = new View3D($("world3d"), $("labels3d"), built.route, built.scene);
+      // An XR-compatible context, so the headset can draw into it.
+      const gl = createContext($("world3d"), { xrCompatible: true });
+      if (!gl) throw new Error("WebGL 2 is not available");
+      view = new View3D($("world3d"), $("labels3d"), built.route, built.scene, { renderer: new Renderer(gl) });
     } catch (error) {
       console.error(error);
       note(t("vr.unavailable"));
@@ -221,6 +228,7 @@ function start() {
     if (built.kind === "route") $("hud-route").textContent = built.route.name;
     renderCameraButton();
     updatePreviewButton();
+    updateEnterButton();
   });
 
   const cameraLabel = (mode) => viewControls({ studio: world?.kind === "studio" }).cameras.find((camera) => camera.id === mode)?.label ?? mode;
@@ -306,36 +314,70 @@ function start() {
     if (now) view.renderXr({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() }, xrFrame);
   }
 
-  /** Both eyes on this page's canvas, the head from the mouse, the keys or the URL, instead of the 2D window. */
-  function startPreview() {
-    if (source || !view) return;
-    autoPreview = false;
-    const initial = parseHead(location.search) ?? { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] };
-    source = new PreviewSource({ canvas: $("world3d"), now: nowS, input: pageInput($("world3d")), initial });
-    window.openradlrVr.source = source;
-    $("labels3d").hidden = true;
-    $("hud").hidden = true;
-    source.start(onXrFrame);
+  /** Hands the page to an XR frame source (the preview or the headset) in place of the 2D window. */
+  function enter(next) {
+    if (source || !view) return Promise.resolve(false);
+    source = next;
+    window.openradlrVr.source = next;
     updatePreviewButton();
+    updateEnterButton();
+    return switchToXr(next, {
+      stop2d() {
+        $("labels3d").hidden = true;
+        $("hud").hidden = true;
+      },
+      start2d: restore2d,
+      onFrame: onXrFrame,
+    });
   }
-  function stopPreview() {
+  /** Back to the 2D window and its frame loop; safe to call again once it is back. */
+  function restore2d() {
     if (!source) return;
-    source.stop();
     source = null;
     window.openradlrVr.source = null;
     $("labels3d").hidden = false;
     renderHud();
     updatePreviewButton();
+    updateEnterButton();
   }
+  function leave() {
+    const current = source;
+    if (!current) return;
+    current.stop();
+    restore2d();
+  }
+  function startPreview() {
+    if (source || !view) return;
+    autoPreview = false;
+    const initial = parseHead(location.search) ?? { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] };
+    enter(new PreviewSource({ canvas: $("world3d"), now: nowS, input: pageInput($("world3d")), initial }));
+  }
+  async function enterVr() {
+    if (source || !view) return;
+    const entered = await enter(new WebXrSource({ gl: view.renderer.gl, now: nowS }));
+    if (!entered) note(t("vr.enterFailed"));
+  }
+  function updateEnterButton() {
+    $("vr-enter").hidden = !(xrSupported && view) || Boolean(source);
+  }
+  $("vr-enter").addEventListener("click", enterVr);
+  navigator.xr?.isSessionSupported?.("immersive-vr").then(
+    (supported) => {
+      xrSupported = Boolean(supported);
+      updateEnterButton();
+    },
+    () => {},
+  );
   function updatePreviewButton() {
-    const available = xrPreview && Boolean(view);
+    const previewing = source instanceof PreviewSource;
+    const available = xrPreview && Boolean(view) && (previewing || !source);
     $("vr-preview").hidden = !available;
-    $("vr-preview").textContent = t(source ? "vr.leavePreview" : "vr.preview");
+    $("vr-preview").textContent = t(previewing ? "vr.leavePreview" : "vr.preview");
     if (available && autoPreview && host) startPreview();
   }
-  $("vr-preview").addEventListener("click", () => (source ? stopPreview() : startPreview()));
+  $("vr-preview").addEventListener("click", () => (source ? leave() : startPreview()));
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" /* i18n-ok */) stopPreview();
+    if (event.key === "Escape" /* i18n-ok */) leave();
   });
   info().then(
     (data) => {

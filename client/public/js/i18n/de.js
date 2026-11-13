@@ -925,6 +925,7 @@ export default {
   "vr.enter": "VR starten",
   "vr.preview": "VR-Vorschau",
   "vr.leavePreview": "Vorschau verlassen",
+  "vr.enterFailed": "VR konnte auf diesem Gerät nicht gestartet werden.",
   "cockpit.waiting": "Warte auf die Fahrt von {name}…",
   "cockpit.waitingTablet": "Warte auf die Fahrt am Tablet…",
   "cockpit.notLive": "Nicht live",
