@@ -26,7 +26,7 @@ import { inRace, raceStatus } from "../view/panels.js";
 import { drawProfile, drawUpcoming } from "../view/profileView.js";
 import { drawWorkout } from "../view/workoutView.js";
 import { drawRaceTimeline } from "../view/raceTimelineView.js";
-import { RideHud } from "../view/rideHud.js";
+import { RideHud, rideHudValues } from "../view/rideHud.js";
 import { routesOf } from "../view/startMenu.js";
 import { studioSceneRiders, studioWorld } from "../view/studioWorld.js";
 import { viewControls } from "../view/viewControls.js";
@@ -296,7 +296,27 @@ function start() {
     return state ? { workout: planned.workout, state, name: workoutName({ name: plan.id }) } : null;
   }
 
-  /** The ride screen's HUD for the host: moving figures from the state, the rest from the display frames. */
+  /** What the ride HUD shows for the host: moving figures from the state, the rest from the display frames. */
+  function hudSnapshot(me) {
+    const rider = me ?? host;
+    const stats = model.stats;
+    return {
+      power: rider.power,
+      cadence: model.cadence,
+      heartRate: model.hr,
+      me,
+      route: world.route,
+      rideDistanceM: stats?.distanceM ?? 0,
+      elapsedS: stats?.elapsedS ?? 0,
+      target: model.workout?.target_w ?? null,
+      // The tablet's intensity setting is not in the display frames; its target already includes it.
+      intensity: 1,
+      weightKg: profile.weightKg ?? DEFAULT_WEIGHT_KG,
+      ftp: model.ftp ?? profile.ftp ?? DEFAULT_FTP,
+    };
+  }
+
+  /** The ride screen's HUD for the host. */
   function renderRideHud(me, riders) {
     const rider = me ?? host;
     const race = latest.race ?? null;
@@ -304,26 +324,10 @@ function start() {
     if ($("ride").dataset.layout !== layout) $("ride").dataset.layout = layout;
     const route = world.route;
     const standing = me ? raceStanding(race, riders, riderId, route.length) : null;
-    const stats = model.stats;
-    const ftp = model.ftp ?? profile.ftp ?? DEFAULT_FTP;
+    const snapshot = hudSnapshot(me);
+    const ftp = snapshot.ftp;
     const colors = themeColors();
-    rideHud.render(
-      {
-        power: rider.power,
-        cadence: model.cadence,
-        heartRate: model.hr,
-        me,
-        route,
-        rideDistanceM: stats?.distanceM ?? 0,
-        elapsedS: stats?.elapsedS ?? 0,
-        target: model.workout?.target_w ?? null,
-        // The tablet's intensity setting is not in the display frames; its target already includes it.
-        intensity: 1,
-        weightKg: profile.weightKg ?? DEFAULT_WEIGHT_KG,
-        ftp,
-      },
-      { layout, riders, myId: riderId, standing, colors },
-    );
+    rideHud.render(snapshot, { layout, riders, myId: riderId, standing, colors });
     const running = workoutOnTablet(ftp);
     if (running) {
       $("workout-name").textContent = running.name;
@@ -360,7 +364,11 @@ function start() {
 
   function onXrFrame(xrFrame) {
     const now = sample();
-    if (now) view.renderXr({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() }, xrFrame);
+    if (!now) return;
+    // The hologram on the handlebars shows the window's numbers (and the workout, if one runs).
+    const snapshot = hudSnapshot(now.me);
+    const hud = { values: rideHudValues(snapshot), workout: workoutOnTablet(snapshot.ftp) };
+    view.renderXr({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() }, xrFrame, { hud });
   }
 
   /** Hands the page to an XR frame source (the preview or the headset) in place of the 2D window. */

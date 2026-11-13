@@ -46,6 +46,7 @@ import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { isRemote } from "../view/remoteRiders.js";
+import { Hologram } from "../vr/hologram.js";
 import { seatAnchor } from "../vr/seatAnchor.js";
 import { forwardOf, positionOf } from "../vr/xrFrame.js";
 
@@ -342,6 +343,7 @@ export class View3D {
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
   #clips = new Map();
   #lastTime = null;
+  #hologram = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -756,14 +758,18 @@ export class View3D {
    * shadows are left out.
    * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: object}} input as for `render`
    * @param {import("../vr/xrFrame.js").XrFrame} xrFrame
+   * @param {{hud?: {values: object, workout?: object}}} options `hud`: the ride's numbers (see `rideHudValues`) and the
+   *   running workout, for the hologram on the handlebars; without it no hologram is drawn
    */
-  renderXr(input, xrFrame) {
+  renderXr(input, xrFrame, { hud = null } = {}) {
     this.renderer.target(xrFrame.framebuffer, xrFrame.size);
     try {
       const inStudio = input.riders.some((r) => r.id === input.myId && r.studio);
       let headInWorld = null;
+      let bike = null;
       const frame = this.#prepareFrame(input, {
         pose: (me) => {
+          if (me) bike = placement(me.position, yawFor([me.forward[0], 0, me.forward[2]]));
           const studioPov = inStudio && this.camera instanceof StudioCamera ? this.camera.povPose() : null;
           if (!studioPov && !me) return null;
           headInWorld = multiply(seatAnchor(me, { studioPov }), xrFrame.head);
@@ -772,7 +778,12 @@ export class View3D {
       });
       if (!frame || !headInWorld) return;
       // The labels aren't updated in VR, so no occlusion queries either.
-      const drawn = { ...frame, probes: new Map() };
+      const drawn = { ...frame, probes: new Map(), hologram: null };
+      if (hud && bike && !inStudio) {
+        this.#hologram ??= new Hologram(this.renderer);
+        this.#hologram.update(hud.values, { workout: hud.workout }, input.timeS);
+        drawn.hologram = { hologram: this.#hologram, bike };
+      }
       for (const view of xrFrame.views) {
         const pose = multiply(headInWorld, view.headFromEye);
         const viewProjection = multiply(view.projection, invert(pose));
@@ -952,6 +963,8 @@ export class View3D {
     if (rect) this.renderer.viewport(rect);
     // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
     this.#drawWorld(scene, { viewProjection, inverseViewProjection: invert(viewProjection), eye, forward });
+    // The hologram on the handlebars, in front of the finished world (the weather is the camera's, not the bike's).
+    frame.hologram?.hologram.draw(frame.hologram.bike);
 
     // Which riders that could get a label are in sight, for the next frames' labels.
     if (this.renderer.queryOcclusion) {
@@ -1119,6 +1132,7 @@ export class View3D {
   }
 
   dispose() {
+    this.#hologram?.dispose();
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];

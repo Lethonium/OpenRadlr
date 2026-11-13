@@ -477,9 +477,9 @@ Redesigned with the user after Task 6. A bike computer is too small to read, and
     - `update` rebuilds one text mesh when the text changes. It runs at most 4 times a second, and only when the text differs. It uses `pixelText`, with no per-pixel draw calls.
     - `draw` draws the glass panel with `drawTransparent(panel, model, { alpha: 0.18, unlit: 1, tint: CYAN })`, a 3 mm edge frame with `drawBright`, and the text with `drawBright(…, 1)`.
     - Panel geometry:
-      - 0.30 m × 0.15 m;
+      - 0.37 m × 0.15 m (widened from 0.30 after the first screenshot: the grade ran past the edge);
       - its bottom edge 0.04 m above the bar centre (the midpoint of `handL` and `handR`), centred on the stem;
-      - leaning back 20° from vertical, towards the rider.
+      - its top tipped 49° away from the rider, so it faces the seated eye (a 20° tilt towards the rider was tried first: it read edge-on).
     - Text sizes: big digits 0.006 m per pixel (42 mm tall), small 0.0028 m per pixel.
     - `CYAN = [0.55, 0.95, 1.0]`. The text is white-cyan, and power uses its zone colour.
   - In `renderXr` the hologram is drawn last, after the world, in each view. Depth testing stays on, so the hands (Task 7b) can occlude it.

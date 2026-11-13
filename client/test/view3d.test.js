@@ -1205,3 +1205,15 @@ test("renderXr looks from the seat along the road, turned by the head", () => {
   closeVec([(left[0] + right[0]) / 2, (left[1] + right[1]) / 2, (left[2] + right[2]) / 2], [road[0], road[1] + RIDER_GEOMETRY.headHeight, road[2]]);
   close(Math.hypot(right[0] - left[0], right[1] - left[1], right[2] - left[2]), 0.064);
 });
+
+test("renderXr draws the hologram in each eye when given the ride's numbers, and the 2D render never does", () => {
+  const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
+  const glass = () => renderer.transparent.filter((d) => d.options.alpha === 0.18).length;
+  const hud = { values: { power: 200, zone: "Z3", cadence: 90, hr: "–", speed: "30.0", grade: "0.0 %", target: "–" } };
+  view.render(xrInput());
+  assert.equal(glass(), 0, "2D");
+  view.renderXr(xrInput(), xrFrameOf());
+  assert.equal(glass(), 0, "no numbers, no hologram");
+  view.renderXr(xrInput(), xrFrameOf(), { hud });
+  assert.equal(glass(), 2, "one per eye");
+});
