@@ -51,6 +51,7 @@
     <link rel="modulepreload" href="js/ride/lemons.js" />
     <link rel="modulepreload" href="js/ride/milestones.js" />
     <link rel="modulepreload" href="js/ride/rideAutosave.js" />
+    <link rel="modulepreload" href="js/ride/rideGoal.js" />
     <link rel="modulepreload" href="js/ride/rideHistory.js" />
     <link rel="modulepreload" href="js/ride/ridePause.js" />
     <link rel="modulepreload" href="js/ride/rideRecorder.js" />
@@ -87,6 +88,7 @@
     <link rel="modulepreload" href="js/view/photos.js" />
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
+    <link rel="modulepreload" href="js/view/rideGoalView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
@@ -548,6 +550,7 @@
           <div class="hud-notices">
             <div class="hud-status route-only">
               <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
+              <span id="goal-pill" class="pill glass" hidden></span>
               <span id="draft-status" class="pill pill-draft" hidden></span>
               <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
               <span id="group-gap" class="pill glass" hidden></span>
@@ -795,6 +798,27 @@
                     <h3 data-i18n="overview.chart">Power, last 10 minutes</h3>
                     <canvas id="overview-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
                     <div id="overview-figures" class="overview"></div>
+                    <section id="ride-goal" class="ride-goal route-only" aria-labelledby="goal-title">
+                      <h3 id="goal-title" data-i18n="goal.title">Ride goal</h3>
+                      <p class="muted" data-i18n="goal.hint">Counts from the start of this ride. Keep riding after reaching your goal.</p>
+                      <form id="goal-form">
+                        <label><span data-i18n="goal.type">Goal type</span>
+                          <select id="goal-kind">
+                            <option value="time" data-i18n="goal.time">Time</option>
+                            <option value="distance" data-i18n="goal.distance">Distance</option>
+                            <option value="climbing" data-i18n="goal.climbing">Climbing</option>
+                          </select>
+                        </label>
+                        <label><span data-i18n="goal.target">Target</span> <span id="goal-unit"></span>
+                          <input id="goal-target" type="number" min="0.01" step="any" required />
+                        </label>
+                        <button type="submit" class="primary-small" data-i18n="goal.set">Set goal</button>
+                        <button type="button" id="goal-clear" data-i18n="goal.clear" hidden>Remove goal</button>
+                      </form>
+                      <p id="goal-error" role="alert" data-i18n="goal.invalid" hidden>Enter a target greater than zero.</p>
+                      <p id="goal-status" hidden></p>
+                      <progress id="goal-progress" max="1" value="0" aria-label="Ride goal progress" data-i18n-attr="aria-label:goal.progressLabel" hidden></progress>
+                    </section>
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="view" role="region" aria-labelledby="menu-nav-view-title" hidden>

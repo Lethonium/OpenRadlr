@@ -1,5 +1,18 @@
 // German dictionary (informal "du"). Missing keys fall back to English.
 export default {
+  "goal.title": "Fahrziel",
+  "goal.hint": "Zählt ab Beginn dieser Fahrt. Nach Erreichen deines Ziels kannst du weiterfahren.",
+  "goal.type": "Zieltyp",
+  "goal.time": "Zeit",
+  "goal.distance": "Distanz",
+  "goal.climbing": "Höhenmeter",
+  "goal.target": "Zielwert",
+  "goal.set": "Ziel setzen",
+  "goal.clear": "Ziel entfernen",
+  "goal.invalid": "Gib einen Zielwert größer als null ein.",
+  "goal.progressLabel": "Fortschritt des Fahrziels",
+  "goal.progress": "Ziel: {current} / {target}",
+  "goal.reached": "Ziel erreicht: {target}!",
   "app.description": "OpenRadlr — Open-Source-Indoor-Cycling mit Freunden und Bots.",
   "menu.language": "Sprache",
   "rider.units": "Einheiten",

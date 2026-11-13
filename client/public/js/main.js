@@ -3,6 +3,8 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
+import { RideGoal } from "./ride/rideGoal.js";
+import { createRideGoalView } from "./view/rideGoalView.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
@@ -328,6 +330,8 @@ const app = {
   smoother: null,
   state: null,
   riderId: null,
+  rideGoal: null,
+  rideGoalView: null,
   rideStartedAt: 0,
   rideDistance: 0,
   /** The pause of this ride (#89), and when (the `now()` clock) its timer stopped. Null in the studio. */
@@ -2071,9 +2075,15 @@ function startRide() {
   if (app.studio) startStudio({ simulated, setSimPower });
   else startRoad({ simulated, setSimPower });
 
+  app.rideGoal = new RideGoal();
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
   startSplits();
+  app.rideGoalView = !app.studio && !app.workout ? createRideGoalView({
+    root: $("ride-goal"), pill: $("goal-pill"), goal: app.rideGoal,
+    read: () => app.recorder.summary(),
+    notify: (message) => notify(message), onChange: saveRide,
+  }) : null;
   initFinish();
   initAfkPrompt();
   initPhotos();
@@ -3094,6 +3104,7 @@ function updateSplits() {
 
 /** Continue: the autosaved recorder and photos, with the gap as a pause. */
 function restoreRide({ snapshot, photos }) {
+  app.rideGoal = new RideGoal(snapshot.goal);
   app.recorder = RideRecorder.from(snapshot.recorder);
   app.recorder.pause(snapshot.savedAt);
   app.recorder.resume(Date.now());
@@ -3141,6 +3152,7 @@ function rideSnapshot() {
     graceS: app.connection?.graceS ?? 0,
     resumePoint: app.studio ? null : app.lastOnRoute,
     recorder: app.recorder.toJSON(),
+    goal: app.rideGoal?.snapshot() ?? null,
   };
 }
 
@@ -4547,7 +4559,10 @@ function frame() {
     speed: app.offline ? 0 : (me?.speed ?? 0),
     elevation: me ? app.route.elevationAt(me.distance) : null,
   });
-  if (kept) updateSplits();
+  if (kept) {
+    updateSplits();
+    app.rideGoalView?.update();
+  }
   if (me && !app.finished) checkMilestones(me, time);
 
   const draftText = draft ? t("hud.drafting", { percent: draft.savingPercent }) : "";

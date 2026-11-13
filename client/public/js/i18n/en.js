@@ -1,5 +1,18 @@
 // English source dictionary and fallback. Flat dotted keys; {name} interpolation.
 export default {
+  "goal.title": "Ride goal",
+  "goal.hint": "Counts from the start of this ride. Keep riding after reaching your goal.",
+  "goal.type": "Goal type",
+  "goal.time": "Time",
+  "goal.distance": "Distance",
+  "goal.climbing": "Climbing",
+  "goal.target": "Target",
+  "goal.set": "Set goal",
+  "goal.clear": "Remove goal",
+  "goal.invalid": "Enter a target greater than zero.",
+  "goal.progressLabel": "Ride goal progress",
+  "goal.progress": "Goal: {current} / {target}",
+  "goal.reached": "Goal reached: {target}!",
   "app.description": "OpenRadlr — open-source indoor cycling with friends and bots.",
   "menu.language": "Language",
   "rider.units": "Units",
