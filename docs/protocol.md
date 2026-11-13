@@ -45,7 +45,7 @@ Workout riders are exempt.
 | `type` | Fields | When |
 | --- | --- | --- |
 | `hello` | `protocol_version`, `client_version` | first message |
-| `join` | `name` (1–24 chars), `weight_kg` (30–200), `route_id`?, `ftp_w`?, `level_w`?, `device`?, `vehicle_code`?, `public_key`?, `features`? | after `welcome`; `ftp_w` sets the studio's targets (default 2.5 W/kg); `level_w` is the riding level the event bots are matched to; `device` is `trainer` (default), `sim`, `paddle` (phone paddles) or `workout` (no bike: a parked bodyweight workout at the route start; the studio refuses it with `unknown_route`, and `vehicle_code` and `resume` are ignored); `vehicle_code` boards that vehicle on joining (the server picks the world from it, `route_id` is ignored); `resume_token` and `resume` (`route_id`, `distance_m`) come back after a dropped connection, see [Reconnecting](#reconnecting); `features` is a list of optional extras, and `"studio_riders"` adds the spin studio's riders to `riders[]` on a world with the studio building (unknown entries are ignored) |
+| `join` | `name` (1–24 chars), `weight_kg` (30–200), `route_id`?, `ftp_w`?, `level_w`?, `device`?, `vehicle_code`?, `public_key`?, `features`? | after `welcome`; `ftp_w` sets the studio's targets (default 2.5 W/kg); `level_w` is the riding level the event bots are matched to; `device` is `trainer` (default), `sim`, `paddle` (phone paddles) or `workout` (no bike: a parked bodyweight workout at the route start; the studio refuses it with `unknown_route`, and `vehicle_code` and `resume` are ignored); `vehicle_code` boards that vehicle on joining (the server picks the world from it, `route_id` is ignored); `resume_token` and `resume` (`route_id`, `distance_m`) come back after a dropped connection, see [Reconnecting](#reconnecting); `features` is a list of optional extras, and `"studio_riders"` adds the spin studio's riders to `riders[]` on a world with the studio building (unknown entries are ignored); `screen_key`? (the tablet's second-screen key, 32 lowercase hex characters: the connection becomes the host of that screen, see [Second screens](#second-screens)) |
 | `telemetry` | `power`, `cadence`? | about 4 Hz |
 | `input` | `action`: `lane_left` \| `lane_right` | on key or button press |
 | `start_race` | `laps` (1–`OPENRADLR_MAX_RACE_LAPS`) | any rider on a route, when no race is running there |
@@ -62,6 +62,10 @@ Workout riders are exempt.
 | `chat` | `text` (≤ 200 chars) | at most 5 in a row, then one every 2 s |
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
 | `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
+| `pair_offer` | `key` (32 lowercase hex characters), `name` | a tablet offers a pairing code for its screen key; no `join` needed, after `hello`. See [Second screens](#second-screens) |
+| `pair_claim` | `code` | a phone claims a pairing code; no `join` needed, after `hello` |
+| `watch` | `key`, `view`?: `data` (default) \| `world` | a phone watches the screen `key` instead of joining; takes no seat. See [Second screens](#second-screens) |
+| `display` | `data`: a JSON object, at most 2048 bytes serialised | a joined host sends opaque data for its paired screens, at most 2 per second. Bigger or faster messages are dropped without a reply |
 
 ## Server → client
 
@@ -76,6 +80,11 @@ Workout riders are exempt.
 | `afk_warning` | `leave_in_s` (the answer window), `can_stay` (false on the final warning) — see the paragraph on timeouts above |
 | `chat` | `rider_id`, `name`, `text` |
 | `error` | `code`, `message` |
+| `pair_code` | `code` (6 characters), `expires_in_s` (300): the code for the screen the connection offered; a new `pair_offer` replaces it |
+| `paired` | `key`, `name` (the name the tablet offered): the screen the phone is now paired with |
+| `pair_claimed` | – : sent to the offering connection when its code is claimed |
+| `watch_status` | `live` (the screen's tablet is riding), `name`: sent when the watch starts and whenever the host arrives or leaves |
+| `display` | `data`: the host's opaque display data, as sent |
 
 `riders[]` holds the riders on the server, whatever their route or distance, up
 to `OPENRADLR_MAX_VISIBLE_RIDERS` (default 200). You, your vehicle's seats and
@@ -168,6 +177,7 @@ belongs to another world; `message` is `route:<id>` to rejoin with), `not_captai
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
 `in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`,
 `afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
+Second screens: `bad_screen_key` (a `screen_key`, `key` or pairing key that is not 32 lowercase hex characters), `pair_code_invalid` (unknown or expired code), `pair_code_expired` (an offering connection's code ran out; connection closed), `too_many_screens` (a fifth watcher; connection closed).
 
 ### Reconnecting
 
@@ -192,6 +202,53 @@ the new rider at that spot on that route, at 0 m/s in the default lane.
 race, event or vehicle. The browser keeps its ride in IndexedDB and only offers
 to continue for 12 hours.
 
+### Second screens
+
+A tablet can show its ride on a second screen, such as a phone running the
+cockpit ([ADR 26](adr/0026-second-screens-through-a-server-relay.md)). The
+server relays the tablet's messages to its screens. It stores nothing: keys
+and codes live in memory and are lost on restart. Both devices keep the same
+key and meet again on the next ride.
+
+**Pairing** needs no `join`:
+
+- The tablet makes a random key of 128 bits (32 lowercase hex characters)
+  once and keeps it. It sends `pair_offer { key, name }` and gets
+  `pair_code { code, expires_in_s: 300 }`. A code has 6 characters from
+  `ABCDEFGHJKMNPQRSTUVWXYZ23456789` and works once. Offering again on the same
+  connection withdraws its earlier code.
+- The offering connection stays open until its code expires, then gets
+  `error { code: "pair_code_expired" }` and is closed. It does not hit the
+  15 s handshake timeout while it waits.
+- The phone sends `pair_claim { code }`. It gets `paired { key, name }`, and
+  the tablet gets `pair_claimed`. An unknown or expired code gets
+  `error { code: "pair_code_invalid" }`.
+
+**The relay:**
+
+- A `join` with `screen_key` makes that connection the host of the key. A
+  newer host replaces the older one. The host's `join` is otherwise as usual.
+- Every message the host's connection sends is copied to the key's watchers,
+  except `welcome`, `joined` and `error`.
+- The host's `display` messages go to the watchers too. The server does not
+  read them.
+- A phone sends `watch { key, view? }` instead of `join`. Its `view` is `data`
+  (the default) or `world`. It gets `watch_status { live, name }` at once and
+  again whenever a host starts or stops, then the copies above.
+- `data` cuts `state.riders` and `studio_state.riders` to the host's own rider
+  or seat and leaves out `studio_state.road_riders`. `world` passes everything
+  through.
+- A watcher can send `leave`. Other messages are ignored. It takes no seat,
+  is not counted in `players`, and the AFK timeout does not apply to it.
+- A key has at most 4 watchers. A fifth gets `error { code: "too_many_screens" }`
+  and is closed.
+- A host's `display` is at most 2048 bytes serialised and at most 2 per second
+  (a burst of 2). Bigger or faster messages are dropped without a reply.
+
+Heart rate reaches the server only this way, in the tablet's `display` data
+(see [ADR 26](adr/0026-second-screens-through-a-server-relay.md)). It is sent
+to that rider's paired screens only, and it is not stored or logged.
+
 ## Limits
 
 Messages beyond the per-connection rate (`OPENRADLR_MESSAGES_PER_SECOND`,
@@ -208,7 +265,7 @@ when `OPENRADLR_ALLOWED_ORIGINS` is set and the page's origin isn't listed, and
 | Route | Response |
 | --- | --- |
 | `GET /healthz` | `ok` |
-| `GET /api/info` | name, version, protocol version, auth mode, `players` (all routes, phone riders included), `phone_players` (of those, on phone paddles), `max_players` (seats for the others) and `max_phone_players` (seats for phone riders, counted apart), `routes[]` (`id`, `name`, `description`, `length_m`, `elevation_gain_m`, `players` riding it and `phone_players` among them, `shared`: true on a route shared with other apps through OpenBikeNet, left out otherwise; default first), `route` (the default, for older clients), `studio` (`id`, `name`, `players`, `rooms` (open rooms, at least 1), `class` and `next` with `class_id`, `name`, `starts_at_s`; missing when closed), `strava` (`enabled`, `required`), `privacy_url` (the operator's privacy policy; missing unless `OPENRADLR_PRIVACY_URL` is set), `analytics` (`domain`, `script`: the page analytics the client loads, #12; missing unless the operator set `OPENRADLR_ANALYTICS_DOMAIN`), `distance_m` (`trainer`, `paddle`: metres ridden on this server in total, see below), `now_s` (the server clock, Unix time) and `events[]` (soonest first: `id`, `name`, `kind`, `route_id`, `lobby_opens_at_s`, `starts_at_s`, `phase` `upcoming` \| `lobby` \| `running`, `entrants`) |
+| `GET /api/info` | name, version, protocol version, auth mode, `players` (all routes, phone riders included), `phone_players` (of those, on phone paddles), `max_players` (seats for the others) and `max_phone_players` (seats for phone riders, counted apart), `routes[]` (`id`, `name`, `description`, `length_m`, `elevation_gain_m`, `players` riding it and `phone_players` among them, `shared`: true on a route shared with other apps through OpenBikeNet, left out otherwise; default first), `route` (the default, for older clients), `studio` (`id`, `name`, `players`, `rooms` (open rooms, at least 1), `class` and `next` with `class_id`, `name`, `starts_at_s`; missing when closed), `strava` (`enabled`, `required`), `privacy_url` (the operator's privacy policy; missing unless `OPENRADLR_PRIVACY_URL` is set), `analytics` (`domain`, `script`: the page analytics the client loads, #12; missing unless the operator set `OPENRADLR_ANALYTICS_DOMAIN`), `distance_m` (`trainer`, `paddle`: metres ridden on this server in total, see below), `screens` (`true`: this server relays to [second screens](#second-screens)), `now_s` (the server clock, Unix time) and `events[]` (soonest first: `id`, `name`, `kind`, `route_id`, `lobby_opens_at_s`, `starts_at_s`, `phase` `upcoming` \| `lobby` \| `running`, `entrants`) |
 | `GET /api/route?id=…` | a route file (see [routes](routes.md)); the default route without `id`, 404 for unknown ids |
 | `GET /api/map?id=…` | a shared map's road network file, unchanged (see [routes](routes.md#road-networks)); 404 for maps without one |
 | `GET /api/studio` | the spin studio: `slot_s` (1800), `lobby_s` (300), `seats_per_room`, `classes[]` (`id`, `name`, `description`, `duration_s`, `segments[]` with `duration_s`, `from`/`to` as a fraction of FTP, `cadence` `[lo, hi]`, `cue`), `schedule[]` (the current slot and the next five: `class_id`, `name`, `starts_at_s`); 404 when the studio is closed |
@@ -242,6 +299,7 @@ Shared vehicles (#55) added `create_vehicle`, `board_vehicle`, `leave_vehicle`,
 `vehicle_code` in `join`, `state.vehicle`, `riders[].vehicle` and `cadence`, the
 three vehicle game events and the vehicle error codes within version 2.
 Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` within version 2.
+Second screens (#87) added `pair_offer`, `pair_code`, `pair_claim`, `paired`, `pair_claimed`, `watch`, `watch_status`, `display`, `join.screen_key`, `screens` in `/api/info` and the `bad_screen_key`, `pair_code_invalid`, `pair_code_expired` and `too_many_screens` errors within version 2.
 Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.

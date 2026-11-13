@@ -7,9 +7,11 @@
 
 use crate::afk::{AfkEvent, AfkWatch};
 use crate::guard::{ConnectionLimits, TokenBucket};
+use crate::pair_codes::PAIR_CODE_TTL_S;
 use crate::protocol::{
     ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, Side, PROTOCOL_VERSION,
 };
+use crate::screens::WatchView;
 use crate::studio::STUDIO_ID;
 use crate::ServerInfo;
 use openradlr_sim::RiderId;
@@ -20,7 +22,24 @@ pub enum Phase {
     AwaitingHello,
     AwaitingJoin,
     Joined(RiderId),
+    /// A second screen watching a tablet's ride; it takes no seat.
+    Watching,
 }
+
+/// A screen key: 32 lowercase hex characters.
+fn valid_screen_key(key: &str) -> bool {
+    key.len() == 32 && key.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn bad_screen_key() -> Action {
+    Action::Reply(ServerMessage::error(
+        "bad_screen_key",
+        "a screen key is 32 lowercase hex characters",
+    ))
+}
+
+/// The most a `display` message may weigh serialised.
+const MAX_DISPLAY_BYTES: usize = 2048;
 
 /// What the connection should do in response to a client message.
 #[derive(Debug, PartialEq)]
@@ -44,9 +63,27 @@ pub enum Action {
         resume_token: Option<String>,
         /// Place the rider where the ride left off; ignored with a vehicle code.
         resume: Option<ResumePoint>,
+        /// The tablet's second-screen key: its ride is relayed to the paired screens.
+        screen_key: Option<String>,
         /// Optional extras the client asked for (see `ClientMessage::Join`).
         features: Vec<String>,
     },
+    /// Offer a pairing code for the screen `key`.
+    PairOffer {
+        key: String,
+        name: String,
+    },
+    /// Claim a pairing code.
+    PairClaim {
+        code: String,
+    },
+    /// Watch the screen `key` (the phase is already `Watching`).
+    Watch {
+        key: String,
+        view: WatchView,
+    },
+    /// Opaque display data to relay to the paired screens.
+    Display(serde_json::Value),
     /// The rider answered an AFK warning with Stay.
     Stayed,
     /// Leave the game; the rider is removed and the connection is closed.
@@ -104,9 +141,12 @@ pub struct Session {
     messages: TokenBucket,
     chat: TokenBucket,
     vehicles: TokenBucket,
+    display: TokenBucket,
     dropped: u32,
     opened_s: f64,
     last_message_s: f64,
+    /// When this connection last offered a pairing code: it then waits for the claim.
+    offered_s: Option<f64>,
     afk: AfkWatch,
 }
 
@@ -119,9 +159,11 @@ impl Session {
             messages: TokenBucket::new(limits.message_burst, limits.messages_per_second),
             chat: TokenBucket::new(limits.chat_burst, 1.0 / limits.chat_interval_s.max(0.001)),
             vehicles: TokenBucket::new(limits.vehicle_burst, 1.0 / limits.vehicle_interval_s.max(0.001)),
+            display: TokenBucket::new(2.0, 2.0),
             dropped: 0,
             opened_s: now_s,
             last_message_s: now_s,
+            offered_s: None,
             afk: AfkWatch::inert(),
         }
     }
@@ -159,6 +201,10 @@ impl Session {
             Phase::Joined(_) if now_s - self.last_message_s > self.limits.idle_timeout_s => {
                 Some(ServerMessage::error("idle_timeout", "no messages for too long"))
             }
+            Phase::AwaitingJoin if self.offered_s.is_some() => self
+                .offered_s
+                .filter(|offered_s| now_s - offered_s > PAIR_CODE_TTL_S)
+                .map(|_| ServerMessage::error("pair_code_expired", "the pairing code has expired")),
             Phase::AwaitingHello | Phase::AwaitingJoin if now_s - self.opened_s > self.limits.handshake_timeout_s => {
                 Some(ServerMessage::error(
                     "handshake_timeout",
@@ -215,10 +261,12 @@ impl Session {
                     vehicle_code,
                     resume_token,
                     resume,
+                    screen_key,
                     features,
                     ..
                 },
             ) => match device {
+                _ if screen_key.as_deref().is_some_and(|key| !valid_screen_key(key)) => bad_screen_key(),
                 DeviceKind::Sim if !self.info.allow_simulated_trainer => Action::Reply(ServerMessage::error(
                     "device_not_allowed",
                     "this server only accepts real trainers",
@@ -242,6 +290,7 @@ impl Session {
                     vehicle_code: None,
                     resume_token,
                     resume: None,
+                    screen_key,
                     features,
                 },
                 _ => Action::Join {
@@ -254,10 +303,41 @@ impl Session {
                     vehicle_code,
                     resume_token,
                     resume,
+                    screen_key,
                     features,
                 },
             },
+            (Phase::AwaitingJoin, ClientMessage::PairOffer { key, name }) => {
+                if valid_screen_key(&key) {
+                    self.offered_s = Some(now_s);
+                    Action::PairOffer { key, name }
+                } else {
+                    bad_screen_key()
+                }
+            }
+            (Phase::AwaitingJoin, ClientMessage::PairClaim { code }) => Action::PairClaim { code },
+            (Phase::AwaitingJoin, ClientMessage::Watch { key, view }) => {
+                if valid_screen_key(&key) {
+                    self.phase = Phase::Watching;
+                    Action::Watch { key, view }
+                } else {
+                    bad_screen_key()
+                }
+            }
             (Phase::AwaitingJoin, _) => Action::Reply(ServerMessage::error("join_required", "send join first")),
+            (Phase::Watching, ClientMessage::Leave) => Action::Leave,
+            (Phase::Watching, _) => Action::Ignore,
+            (Phase::Joined(_), ClientMessage::Display { data }) => {
+                if data.to_string().len() <= MAX_DISPLAY_BYTES && self.display.allow(now_s) {
+                    Action::Display(data)
+                } else {
+                    Action::Ignore
+                }
+            }
+            (
+                Phase::Joined(_),
+                ClientMessage::PairOffer { .. } | ClientMessage::PairClaim { .. } | ClientMessage::Watch { .. },
+            ) => Action::Ignore,
             (Phase::Joined(_), ClientMessage::Hello { .. } | ClientMessage::Join { .. }) => Action::Reply(
                 ServerMessage::error("already_joined", "this connection has already joined"),
             ),
@@ -380,6 +460,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
                 features: vec![],
             }
         );
@@ -455,6 +536,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                screen_key: None,
                 features: vec![],
             }
         );
@@ -787,5 +869,127 @@ mod tests {
         s.on_text(r#"{"type":"telemetry","power":0}"#, 40.0);
         assert_eq!(s.expired(69.0), None);
         assert!(matches!(s.expired(71.0), Some(ServerMessage::Error { ref code, .. }) if code == "idle_timeout"));
+    }
+
+    const KEY: &str = "0123456789abcdef0123456789abcdef";
+
+    fn watch_json() -> String {
+        format!(r#"{{"type":"watch","key":"{KEY}"}}"#)
+    }
+
+    #[test]
+    fn pairing_needs_no_join() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            s.on_text(
+                &format!(r#"{{"type":"pair_offer","key":"{KEY}","name":"Tablet"}}"#),
+                0.1
+            ),
+            Action::PairOffer {
+                key: KEY.into(),
+                name: "Tablet".into()
+            }
+        );
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+        assert_eq!(
+            s.on_text(r#"{"type":"pair_claim","code":"ABC234"}"#, 0.2),
+            Action::PairClaim { code: "ABC234".into() }
+        );
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+    }
+
+    #[test]
+    fn an_offered_code_keeps_the_connection_open_until_it_expires() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(
+            &format!(r#"{{"type":"pair_offer","key":"{KEY}","name":"Tablet"}}"#),
+            1.0,
+        );
+        assert_eq!(s.expired(1.0 + PAIR_CODE_TTL_S), None);
+        assert!(
+            matches!(s.expired(1.0 + PAIR_CODE_TTL_S + 1.0), Some(ServerMessage::Error { ref code, .. }) if code == "pair_code_expired")
+        );
+    }
+
+    #[test]
+    fn watch_moves_to_watching() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            s.on_text(&watch_json(), 0.1),
+            Action::Watch {
+                key: KEY.into(),
+                view: WatchView::Data
+            }
+        );
+        assert_eq!(s.phase(), Phase::Watching);
+        let world = s.on_text(&format!(r#"{{"type":"watch","key":"{KEY}","view":"world"}}"#), 0.2);
+        assert!(matches!(world, Action::Ignore));
+    }
+
+    #[test]
+    fn a_watcher_cannot_ride() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(&watch_json(), 0.1);
+        assert_eq!(s.on_text(r#"{"type":"telemetry","power":200}"#, 0.2), Action::Ignore);
+        assert_eq!(s.on_text(JOIN, 0.3), Action::Ignore);
+        assert_eq!(s.on_text(r#"{"type":"leave"}"#, 0.4), Action::Leave);
+    }
+
+    #[test]
+    fn a_watcher_never_times_out() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(&watch_json(), 0.1);
+        assert_eq!(s.expired(100_000.0), None);
+        assert_eq!(s.poll_afk(100_000.0), None);
+    }
+
+    #[test]
+    fn display_over_2048_bytes_is_dropped() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(JOIN, 0.1);
+        s.joined(5, DeviceKind::Trainer, 0.0);
+        let big = "x".repeat(2048);
+        let too_big = format!(r#"{{"type":"display","data":{{"t":"{big}"}}}}"#);
+        assert_eq!(s.on_text(&too_big, 1.0), Action::Ignore);
+        let small = r#"{"type":"display","data":{"hr":120}}"#;
+        assert_eq!(s.on_text(small, 2.0), Action::Display(serde_json::json!({"hr": 120})));
+    }
+
+    #[test]
+    fn display_beyond_two_per_second_is_dropped() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        s.on_text(JOIN, 0.1);
+        s.joined(5, DeviceKind::Trainer, 0.0);
+        let display = r#"{"type":"display","data":{"hr":120}}"#;
+        assert!(matches!(s.on_text(display, 1.0), Action::Display(_)));
+        assert!(matches!(s.on_text(display, 1.0), Action::Display(_)));
+        assert_eq!(s.on_text(display, 1.0), Action::Ignore);
+        assert!(matches!(s.on_text(display, 1.5), Action::Display(_)));
+    }
+
+    #[test]
+    fn a_bad_screen_key_is_refused() {
+        for key in [
+            "short",
+            "0123456789ABCDEF0123456789ABCDEF",
+            "0123456789abcdef0123456789abcdeg",
+        ] {
+            let mut s = session();
+            s.on_text(HELLO, 0.0);
+            let offer = format!(r#"{{"type":"pair_offer","key":"{key}","name":"T"}}"#);
+            assert!(is_error(&s.on_text(&offer, 0.1), "bad_screen_key"), "{key}");
+            let watch = format!(r#"{{"type":"watch","key":"{key}"}}"#);
+            assert!(is_error(&s.on_text(&watch, 0.2), "bad_screen_key"), "{key}");
+            assert_eq!(s.phase(), Phase::AwaitingJoin);
+            let join = format!(r#"{{"type":"join","name":"Anna","weight_kg":70,"screen_key":"{key}"}}"#);
+            assert!(is_error(&s.on_text(&join, 0.3), "bad_screen_key"), "{key}");
+        }
     }
 }

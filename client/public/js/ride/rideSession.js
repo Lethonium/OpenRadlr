@@ -12,7 +12,7 @@ import { applyDifficulty } from "./difficulty.js";
  *   seconds, so a change of grade comes as a ramp, not a jolt; gear and
  *   difficulty changes still apply at once.
  *
- * Heart rate is shown locally only and never sent to the server.
+ * Heart rate is never sent to the game; with a paired second screen it is forwarded to that screen only (ADR 0026).
  */
 export class RideSession {
   latest = { power: 0, cadence: null, heartRate: null };

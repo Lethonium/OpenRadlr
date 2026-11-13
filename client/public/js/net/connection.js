@@ -143,6 +143,11 @@ export class GameConnection extends Emitter {
     if (text.trim()) this.#send(ClientMessages.chat(text));
   }
 
+  /** Sends opaque display data for the paired second screens. */
+  sendDisplay(data) {
+    this.#send(ClientMessages.display(data));
+  }
+
   close() {
     this.#socket?.close();
   }

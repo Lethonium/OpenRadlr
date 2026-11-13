@@ -87,6 +87,10 @@ pub struct AppState {
     pub stats: DistanceStats,
     /// AFK warning counters, shared by all connections.
     pub afk: AfkStats,
+    /// Pairing codes for second screens.
+    pub pair_codes: crate::pair_codes::PairCodes,
+    /// Hosts and watchers of paired screens.
+    pub screens: crate::screens::Screens,
 }
 
 #[derive(Debug, Serialize)]
@@ -129,6 +133,8 @@ pub struct InfoResponse {
     /// Metres ridden on this server since the counters began, by device (#65).
     /// The device is the client's own claim, so this is a vanity counter.
     pub distance_m: DistanceInfo,
+    /// Whether this server pairs second screens (always true).
+    pub screens: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -449,6 +455,7 @@ async fn info(State(state): State<AppState>) -> Json<InfoResponse> {
                 paddle: totals.paddle_m.round(),
             }
         },
+        screens: true,
     })
 }
 

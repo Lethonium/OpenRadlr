@@ -331,6 +331,8 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         allow_paddle_mode: config.allow_paddle_mode,
         stats: stats.clone(),
         afk: AfkStats::default(),
+        pair_codes: crate::pair_codes::PairCodes::new(),
+        screens: crate::screens::Screens::new(),
     };
     let headers = crate::headers::security_headers(config.analytics.as_ref(), config.public_url.as_deref());
     Ok((router(state, config.static_dir.as_deref(), &headers), stats))

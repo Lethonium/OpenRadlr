@@ -6566,3 +6566,11 @@ body.working-out #paddles {
   }
 }
 
+
+.screens-code {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+  margin: 12px 0;
+}
