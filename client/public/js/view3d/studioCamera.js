@@ -19,6 +19,13 @@ export function cameraModeOf(saved) {
   return STUDIO_CAMERAS.includes(saved) ? saved : "seat";
 }
 
+/** My own head on the saddle looking over the bar, without the pedal bob: the pose a headset sits in. */
+export function povPose(mySeat) {
+  const seat = seatPosition(mySeat ?? 3);
+  const y = seat[1] + RIDER_GEOMETRY.headHeight;
+  return { eye: [seat[0], y, seat[2]], target: [seat[0], y - 0.3, seat[2] - 10] };
+}
+
 /**
  * Camera eye and target for a mode, from my seat. `pov` is my own head on the
  * saddle looking over the bar; it bobs with `cadence` (rpm) at `timeS`, not
@@ -32,8 +39,8 @@ export function studioCamera(mode, mySeat, { cadence = 0, timeS = 0, reducedMoti
   const seat = seatPosition(mySeat ?? 3);
   if (mode === "pov") {
     const bob = reducedMotion ? 0 : BOB_M * Math.sin(2 * Math.PI * (cadence / 60) * timeS);
-    const y = seat[1] + RIDER_GEOMETRY.headHeight + bob;
-    return { eye: [seat[0], y, seat[2]], target: [seat[0], y - 0.3, seat[2] - 10] };
+    const { eye, target } = povPose(mySeat);
+    return { eye: [eye[0], eye[1] + bob, eye[2]], target: [target[0], target[1] + bob, target[2]] };
   }
   // Over my shoulder, in front of the row behind me.
   return { eye: [seat[0] * 0.9, seat[1] + 2.25, seat[2] + 1.9], target: [coachHead[0], coachHead[1] - 0.4, coachHead[2]] };
@@ -81,6 +88,14 @@ export class StudioCamera {
     this.#room = room;
     this.#seat = seat;
     this.update(0, 0, 0);
+  }
+
+  /** My head on the saddle in the world, still: no bob. */
+  povPose() {
+    const pose = povPose(this.#seat);
+    const floor = floorTransform(this.#site, this.#room);
+    const world = ([x, y, z]) => transformPoint(floor, [x, y + SLAB, z]).slice(0, 3);
+    return { eye: world(pose.eye), target: world(pose.target) };
   }
 
   /** Same signature as the chase camera's; only the time step matters. */

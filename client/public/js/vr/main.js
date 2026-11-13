@@ -32,6 +32,7 @@ import { DEFAULT_BIOME, resolveBiome } from "../view3d/biomes/index.js";
 import { StudioCamera, cameraModeOf } from "../view3d/studioCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D } from "../view3d/view3d.js";
 import { buildScene } from "../view3d/worldScene.js";
+import { PreviewSource, parseHead } from "./previewSource.js";
 import { VrWorld, pickHost, worldWanted } from "./vrWorld.js";
 
 const COCKPIT_KEY = "openradlr.cockpit";
@@ -71,11 +72,35 @@ async function fetchJson(url) {
 const fetchRouteFile = (id) => fetchJson(`/api/route?id=${encodeURIComponent(id)}`);
 const fetchNetworkFile = (mapId) => fetchJson(`/api/map?id=${encodeURIComponent(mapId)}`);
 
+/** What the server says about itself, fetched once. */
+let serverInfo = null;
+const info = () => (serverInfo ??= fetchJson("/api/info"));
+
 /** The routes the server offers (for the map's neighbours); empty if /api/info fails. */
-let infoRoutes = null;
-async function listedRoutes() {
-  infoRoutes ??= fetchJson("/api/info").then(routesOf, () => []);
-  return infoRoutes;
+const listedRoutes = () => info().then(routesOf, () => []);
+
+/** The preview's head input from the page: dragging the canvas and the keyboard. */
+function pageInput(canvas) {
+  return {
+    onDrag(fn) {
+      let last = null;
+      canvas.addEventListener("pointerdown", (event) => {
+        last = event;
+        canvas.setPointerCapture?.(event.pointerId);
+      });
+      canvas.addEventListener("pointermove", (event) => {
+        if (!last) return;
+        fn(event.clientX - last.clientX, event.clientY - last.clientY);
+        last = event;
+      });
+      for (const end of ["pointerup", "pointercancel"]) canvas.addEventListener(end, () => (last = null));
+    },
+    onKey(fn) {
+      window.addEventListener("keydown", (event) => {
+        if (!event.ctrlKey && !event.metaKey && !event.altKey) fn(event.key);
+      });
+    },
+  };
 }
 
 function biomeId() {
@@ -130,6 +155,9 @@ function start() {
   let world = null;
   let smoother = null;
   let wasLive = false;
+  let xrPreview = false;
+  let autoPreview = new URLSearchParams(location.search).get("preview") === "1";
+  let source = null;
 
   const note = (text) => {
     $("vr-note").textContent = text ?? "";
@@ -144,6 +172,7 @@ function start() {
   connection.on("state", (message) => {
     vrWorld.want(worldWanted(message, riderId));
     host = pickHost(message.riders, riderId);
+    updatePreviewButton();
     // The cockpit model follows one rider: the host.
     model.onState({ ...message, riders: host ? [host] : [] }, name);
     if (message.type === "state") {
@@ -191,6 +220,7 @@ function start() {
     }
     if (built.kind === "route") $("hud-route").textContent = built.route.name;
     renderCameraButton();
+    updatePreviewButton();
   });
 
   const cameraLabel = (mode) => viewControls({ studio: world?.kind === "studio" }).cameras.find((camera) => camera.id === mode)?.label ?? mode;
@@ -246,34 +276,81 @@ function start() {
     );
   }
 
-  const frame = () => {
-    requestAnimationFrame(frame);
-    if (!view || !latest || !host) return;
+  /** The riders to draw now, or null until the world, the host and a state of the right kind are there. */
+  function sample() {
+    if (!view || !latest || !host) return null;
     const timeS = nowS();
-    let riders;
-    let me = null;
-    let onMyRoute = [];
     if (world.kind === "studio") {
-      if (latest.type !== "studio_state") return;
+      if (latest.type !== "studio_state") return null;
       view.setStudioRooms(latest.rooms);
       view.camera.place?.(latest.room, host.seat);
-      riders = studioSceneRiders(latest);
-    } else {
-      if (latest.type !== "state" || !smoother) return;
-      riders = smoother.sample(timeS);
-      onMyRoute = riders.filter((rider) => onRoute(rider, world.route.id));
-      me = onMyRoute.find((rider) => rider.id === riderId) ?? null;
+      return { timeS, riders: studioSceneRiders(latest), me: null, onMyRoute: [] };
     }
-    view.render({ riders, myId: riderId, myCadence: host.cadence ?? 0, timeS, colors: themeColors() });
-    renderRideHud(me, onMyRoute);
+    if (latest.type !== "state" || !smoother) return null;
+    const riders = smoother.sample(timeS);
+    const onMyRoute = riders.filter((rider) => onRoute(rider, world.route.id));
+    return { timeS, riders, me: onMyRoute.find((rider) => rider.id === riderId) ?? null, onMyRoute };
+  }
+
+  const frame = () => {
+    requestAnimationFrame(frame);
+    if (source) return;
+    const now = sample();
+    if (!now) return;
+    view.render({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() });
+    renderRideHud(now.me, now.onMyRoute);
   };
+
+  function onXrFrame(xrFrame) {
+    const now = sample();
+    if (now) view.renderXr({ riders: now.riders, myId: riderId, myCadence: host.cadence ?? 0, timeS: now.timeS, colors: themeColors() }, xrFrame);
+  }
+
+  /** Both eyes on this page's canvas, the head from the mouse, the keys or the URL, instead of the 2D window. */
+  function startPreview() {
+    if (source || !view) return;
+    autoPreview = false;
+    const initial = parseHead(location.search) ?? { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] };
+    source = new PreviewSource({ canvas: $("world3d"), now: nowS, input: pageInput($("world3d")), initial });
+    window.openradlrVr.source = source;
+    $("labels3d").hidden = true;
+    $("hud").hidden = true;
+    source.start(onXrFrame);
+    updatePreviewButton();
+  }
+  function stopPreview() {
+    if (!source) return;
+    source.stop();
+    source = null;
+    window.openradlrVr.source = null;
+    $("labels3d").hidden = false;
+    renderHud();
+    updatePreviewButton();
+  }
+  function updatePreviewButton() {
+    const available = xrPreview && Boolean(view);
+    $("vr-preview").hidden = !available;
+    $("vr-preview").textContent = t(source ? "vr.leavePreview" : "vr.preview");
+    if (available && autoPreview && host) startPreview();
+  }
+  $("vr-preview").addEventListener("click", () => (source ? stopPreview() : startPreview()));
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */) stopPreview();
+  });
+  info().then(
+    (data) => {
+      xrPreview = Boolean(data.xr_preview);
+      updatePreviewButton();
+    },
+    () => {},
+  );
 
   const renderHud = () => {
     const status = model.status;
     $("vr-waiting").textContent = name ? t("vr.waiting", { name }) : t("vr.waitingTablet");
     $("vr-waiting").hidden = status !== "waiting" || !$("vr-invalid").hidden;
     $("vr-badge").hidden = status !== "stale";
-    $("hud").hidden = status === "waiting";
+    $("hud").hidden = status === "waiting" || Boolean(source);
     const live = status === "live";
     if (live !== wasLive) {
       wasLive = live;

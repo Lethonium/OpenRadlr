@@ -46,6 +46,8 @@ import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { isRemote } from "../view/remoteRiders.js";
+import { seatAnchor } from "../vr/seatAnchor.js";
+import { forwardOf, positionOf } from "../vr/xrFrame.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -747,10 +749,48 @@ export class View3D {
   }
 
   /**
+   * Draws one frame of a headset (or its preview) into the views of `xrFrame`.
+   * The rider's head is the camera: the seat anchor (my head on the saddle, facing
+   * the road or the stage) times the head pose, so nothing moves except with the
+   * head and the bike. Nothing is drawn while my rider isn't placed. Labels and
+   * shadows are left out.
+   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: object}} input as for `render`
+   * @param {import("../vr/xrFrame.js").XrFrame} xrFrame
+   */
+  renderXr(input, xrFrame) {
+    this.renderer.target(xrFrame.framebuffer, xrFrame.size);
+    try {
+      const inStudio = input.riders.some((r) => r.id === input.myId && r.studio);
+      let headInWorld = null;
+      const frame = this.#prepareFrame(input, {
+        pose: (me) => {
+          const studioPov = inStudio && this.camera instanceof StudioCamera ? this.camera.povPose() : null;
+          if (!studioPov && !me) return null;
+          headInWorld = multiply(seatAnchor(me, { studioPov }), xrFrame.head);
+          return { eye: positionOf(headInWorld), forward: forwardOf(headInWorld) };
+        },
+      });
+      if (!frame || !headInWorld) return;
+      // The labels aren't updated in VR, so no occlusion queries either.
+      const drawn = { ...frame, probes: new Map() };
+      for (const view of xrFrame.views) {
+        const pose = multiply(headInWorld, view.headFromEye);
+        const viewProjection = multiply(view.projection, invert(pose));
+        this.#drawView(drawn, { viewProjection, eye: positionOf(pose), forward: forwardOf(pose), rect: view.rect });
+      }
+    } finally {
+      this.renderer.target(null);
+    }
+  }
+
+  /**
    * What one frame shares between its views: the camera moved, the riders placed
    * and posed, what is near enough to draw, and the shadow map. Null without a camera.
+   * In XR (`xr.pose(me)` gives the head's eye and forward, or null when my rider
+   * isn't there) the head, not the camera, decides what is near enough to draw;
+   * my own body is left out, the bike stays; the ride lens is used and no shadows.
    */
-  #prepareFrame({ riders, myId, myCadence, timeS, colors }) {
+  #prepareFrame({ riders, myId, myCadence, timeS, colors }, xr = null) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
@@ -776,22 +816,26 @@ export class View3D {
       this.camera.cadence = myCadence ?? 0;
       this.camera.update(0, 0, dt);
     } else if (me) this.camera.update(me.rider.distance, me.rider.lane, dt, myVehicle);
-    if (!this.camera.eye) return null;
+    const head = xr ? xr.pose(me) : { eye: this.camera.eye, forward: this.camera.eye && normalize(sub(this.camera.target, this.camera.eye)) };
+    if (!head?.eye) return null;
+    const { eye, forward } = head;
 
-    const lens = this.lens;
+    const lens = xr ? RIDE_LENS : this.lens;
     const preset = resolvePreset(this.timeMode);
     const light = resolvedLight(preset, this.biome, lens.haze);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
     const visible = [];
     for (const { rider, position, forward, gym } of placed.filter((p) => !p.rider.vehicle)) {
-      const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
+      const fromCamera = Math.hypot(position[0] - eye[0], position[2] - eye[2]);
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
       const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
       const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
-      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
+      // In XR the camera is in my head: the body is left out, the bike stays.
+      const hidden = xr && rider.id === myId ? { torso: [], limbs: [] } : {};
+      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts, ...hidden });
     }
 
     // Seated riders are drawn through their vehicle, once per vehicle.
@@ -799,7 +843,7 @@ export class View3D {
     const seatHeads = new Map();
     for (const vehicle of placedVehicles(placed)) {
       const { position } = vehicle.at;
-      const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
+      const fromCamera = Math.hypot(position[0] - eye[0], position[2] - eye[2]);
       const mine = vehicle.seats.some((r) => r?.id === myId);
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && !mine)) continue;
       const parts = this.#vehicleParts(vehicle, dt, tints, myId);
@@ -812,19 +856,17 @@ export class View3D {
     if (this.#studio) {
       const seated = this.#studio.riders(riders);
       for (const { rider, position, forward, yaw } of [...seated, ...this.#studio.coaches()]) {
-        const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
+        const fromCamera = Math.hypot(position[0] - eye[0], position[2] - eye[2]);
         const mine = rider.id === myId;
         if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && rider.id !== INSTRUCTOR.id)) continue;
         const tint = rider.id === INSTRUCTOR.id ? tints.bot : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
         const parts = this.#riderParts(rider, position, forward, rider.cadence ?? (rider.power > 0 ? 85 : 0), dt);
         // In my own point of view the camera sits in my head: the body is left out, the bike stays.
-        const hidden = mine && this.camera.mode === "pov" ? { torso: [], limbs: [] } : {};
+        const hidden = mine && (xr || this.camera.mode === "pov") ? { torso: [], limbs: [] } : {};
         visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts, ...hidden });
       }
     }
 
-    const eye = this.camera.eye;
-    const forward = normalize(sub(this.camera.target, eye));
     const rotorMatrices = this.rotors
       .filter((r) => Math.hypot(r.hub[0] - eye[0], r.hub[2] - eye[2]) < SCENE.rotorDistance)
       .map((r) => ({ hub: r.hub, model: multiply(placement(r.hub, r.yaw), rotationXAbout([0, 0, 0], r.phase + timeS * r.speed)) }));
@@ -848,7 +890,7 @@ export class View3D {
     const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
 
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
-    if (this.shadowsEnabled && high && lens.shadows) {
+    if (!xr && this.shadowsEnabled && high && lens.shadows) {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
@@ -896,7 +938,7 @@ export class View3D {
       for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
     }
 
-    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
+    const scene = { light, lens, high, shadowed: high && !xr, visible, vehicles, crowd, lemons, rotorMatrices };
     return { riders, myId, timeS, dt, lens, me, placed, visible, gymSpots, seatHeads, probes, scene, eye, forward };
   }
 
@@ -930,8 +972,8 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
+  #drawWorld({ light, lens, high, shadowed, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
+    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: shadowed ? light.shadowStrength : 0 });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {

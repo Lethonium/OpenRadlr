@@ -31,6 +31,7 @@ import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, i
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
+import { previewFrame } from "../public/js/vr/previewSource.js";
 
 const close = (a, b, eps = 1e-5) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const closeVec = (a, b, eps = 1e-5) => a.forEach((v, i) => close(v, b[i], eps));
@@ -340,6 +341,10 @@ class StubRenderer {
     return false;
   }
   resize() {}
+  targets = [];
+  target(framebuffer, size = null) {
+    this.targets.push({ framebuffer, size });
+  }
   /** The scissored viewport of the pass being drawn, null for the whole canvas. */
   viewport(rect) {
     this.pass = rect;
@@ -1134,3 +1139,69 @@ const EXPECTED_WORKOUT_CALLS = [
   "drawTransparent",
   "viewport null",
 ];
+
+// --- XR frames (a headset or its preview): one frame, a view per eye ---------------
+
+const xrPose = { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] };
+const xrFrameOf = (pose = xrPose) => previewFrame({ width: 800, height: 400, timeS: 1, pose });
+const xrMe = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+const xrInput = (riders = [xrMe], timeS = 1) => ({ riders, myId: 1, myCadence: 90, timeS, colors });
+const xrDraws = (view, renderer, mesh) => renderer.draws.filter((d) => d.handle === mesh);
+
+test("renderXr draws every view into its own rect", () => {
+  const { view, renderer } = gymView([]);
+  const frame = xrFrameOf();
+  view.renderXr(xrInput(), frame);
+  assert.deepEqual(
+    renderer.viewports.filter(Boolean),
+    frame.views.map((v) => v.rect),
+  );
+  assert.equal(renderer.begins, 2, "a world pass per eye");
+  assert.deepEqual(renderer.targets, [{ framebuffer: null, size: frame.size }, { framebuffer: null, size: null }], "targets the frame, then back to the canvas");
+});
+
+test("renderXr prepares the frame once: the pedals advance once per call, not once per eye", () => {
+  const other = { id: 2, name: "Other", distance: 200, lane: 1, speed: 8, power: 150 };
+  const secondFrameLegs = (render) => {
+    const { view, renderer } = gymView([]);
+    render(view, 1);
+    renderer.draws.length = 0;
+    render(view, 1.05);
+    return xrDraws(view, renderer, view.thighs[riderLook(2).variant]).map((d) => [...d.model]);
+  };
+  const flat = secondFrameLegs((view, timeS) => view.render(xrInput([xrMe, other], timeS)));
+  const xr = secondFrameLegs((view, timeS) => view.renderXr(xrInput([xrMe, other], timeS), xrFrameOf()));
+  assert.equal(xr.length, 2 * flat.length, "both legs, in both eyes");
+  assert.deepEqual(xr.slice(0, flat.length), flat);
+  assert.deepEqual(xr.slice(flat.length), flat);
+});
+
+test("renderXr hides my body but not my bike", () => {
+  const { view, renderer } = gymView([]);
+  view.render(xrInput());
+  const thigh = view.thighs[riderLook(1).variant];
+  const bike = view.bodies[riderLook(1).variant];
+  assert.ok(xrDraws(view, renderer, thigh).length > 0, "the 2D view draws my legs");
+  renderer.draws.length = 0;
+  view.renderXr(xrInput(), xrFrameOf());
+  assert.equal(xrDraws(view, renderer, thigh).length, 0, "no legs in VR");
+  assert.equal(xrDraws(view, renderer, bike).length, 2, "the bike, once per eye");
+});
+
+test("renderXr draws nothing without my rider", () => {
+  const { view, renderer } = gymView([]);
+  view.renderXr(xrInput([{ ...xrMe, id: 2 }]), xrFrameOf());
+  assert.equal(renderer.begins, 0);
+  assert.deepEqual(renderer.targets.at(-1), { framebuffer: null, size: null }, "the canvas is the target again");
+});
+
+test("renderXr looks from the seat along the road, turned by the head", () => {
+  const { view, renderer } = gymView([]);
+  const seen = [];
+  renderer.begin = ({ camera }) => seen.push(camera);
+  view.renderXr(xrInput(), xrFrameOf());
+  const road = riderPosition(squareRoute(), 100, 1).position;
+  const [left, right] = seen;
+  closeVec([(left[0] + right[0]) / 2, (left[1] + right[1]) / 2, (left[2] + right[2]) / 2], [road[0], road[1] + RIDER_GEOMETRY.headHeight, road[2]]);
+  close(Math.hypot(right[0] - left[0], right[1] - left[1], right[2] - left[2]), 0.064);
+});

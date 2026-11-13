@@ -924,6 +924,7 @@ export default {
   "vr.unavailable": "The 3D view is not available on this device.",
   "vr.enter": "Enter VR",
   "vr.preview": "Preview VR",
+  "vr.leavePreview": "Leave preview",
   "cockpit.waiting": "Waiting for {name}'s ride…",
   "cockpit.waitingTablet": "Waiting for the tablet's ride…",
   "cockpit.notLive": "Not live",
