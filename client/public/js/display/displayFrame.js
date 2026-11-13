@@ -12,6 +12,9 @@ export const DISPLAY_LIMIT_BYTES = 2048;
 const ZONES = 6;
 const NAME_MAX_CHARS = 60;
 
+/** Serialised size as the server measures it: UTF-8 bytes. */
+const bytesOf = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
+
 /** The ride's name for the cockpit: when it began, epoch ms. A reconnect or a restored ride keeps it. */
 export const rideId = (recording) => recording.samples[0]?.t;
 
@@ -59,10 +62,10 @@ export function displayFrame({ heartRate, grade, ftp, cadence, recording, workou
 export function workoutPlanFrame(workout, ftp, ride) {
   const plan = { id: workout.name, name: workout.name.slice(0, NAME_MAX_CHARS), steps: [] };
   const frame = { ...(ride !== undefined ? { ride } : {}), workout_plan: plan };
-  let bytes = JSON.stringify(frame).length;
+  let bytes = bytesOf(frame);
   for (const segment of workout.segments) {
     const step = { s: segment.durationS, from_w: Math.round(segment.from * ftp), to_w: Math.round(segment.to * ftp) };
-    bytes += JSON.stringify(step).length + 1;
+    bytes += bytesOf(step) + 1;
     if (bytes > DISPLAY_LIMIT_BYTES) break;
     plan.steps.push(step);
   }

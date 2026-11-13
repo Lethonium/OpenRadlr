@@ -12,7 +12,8 @@ function recording(powers) {
   const pauses = [];
   return { summary: RideRecorder.from({ samples, pauses }).summary(), samples, pauses };
 }
-const size = (value) => JSON.stringify(value).length;
+/** Bytes on the wire, as the server counts them: UTF-8, not UTF-16 code units. */
+const size = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
 
 test("a frame carries heart rate, grade and live stats", () => {
   const frame = displayFrame({ heartRate: 142, grade: 3.5, ftp: 200, recording: recording(Array(61).fill(200)), workout: null });
@@ -97,4 +98,11 @@ test("frames name the ride by its first sample, so a cockpit can tell rides apar
   const workout = createWorkout({ name: "Test", segments: [steady(60, 0.5)] });
   assert.equal(workoutPlanFrame(workout, 200, T0).ride, T0);
   assert.equal("ride" in displayFrame({ ftp: 200, recording: recording([]) }), false);
+});
+
+test("the plan limit counts UTF-8 bytes, not characters", () => {
+  const workout = createWorkout({ name: "Ü".repeat(80), segments: Array.from({ length: 500 }, () => steady(40, 0.6)) });
+  const plan = workoutPlanFrame(workout, 250, T0);
+  assert.ok(size(plan) <= DISPLAY_LIMIT_BYTES, `${size(plan)} bytes`);
+  assert.ok(size(plan) > DISPLAY_LIMIT_BYTES - 40, `fills the frame: ${size(plan)} bytes`);
 });
