@@ -23,6 +23,7 @@ import { chooseLayout, raceStanding } from "../view/hud.js";
 import { drawMinimap } from "../view/minimapView.js";
 import { inRace } from "../view/panels.js";
 import { drawProfile, drawUpcoming } from "../view/profileView.js";
+import { drawWorkout } from "../view/workoutView.js";
 import { drawRaceTimeline } from "../view/raceTimelineView.js";
 import { RideHud } from "../view/rideHud.js";
 import { routesOf } from "../view/startMenu.js";
@@ -148,7 +149,7 @@ function start() {
   const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key, view: "world" });
   const stamps = new RiderStamps({ now: nowS });
   const wakeLock = new ScreenWakeLock();
-  const rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline });
+  const rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline, drawWorkout });
   const vrWorld = new VrWorld({ buildRouteWorld, buildStudioWorld });
   let name = paired.name;
   let riderId = null;

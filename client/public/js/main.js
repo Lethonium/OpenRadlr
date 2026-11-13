@@ -32,7 +32,7 @@ import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
-import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
+import { PRESET_WORKOUTS, parseZwo, totalDuration, workoutDescription, workoutName } from "./ride/workout.js";
 import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
 import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
@@ -61,15 +61,13 @@ import { drawMinimap } from "./view/minimapView.js";
 import {
   LAYOUT_LABELS,
   chooseLayout,
-  formatPosition,
-  formatTimeGap,
   nextLayoutChoice,
   nextMarker,
   raceStanding,
   splitLabel,
   splitLine,
 } from "./view/hud.js";
-import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
+import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { RideHud, averageSpeed } from "./view/rideHud.js";
 import { drawRideMap } from "./view/rideMapView.js";
@@ -3501,7 +3499,7 @@ function renderGear() {
 
 /** HUD parts shared by roads and the studio. */
 function initHudCommon() {
-  app.rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline });
+  app.rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline, drawWorkout });
   app.hud = app.rideHud.metrics;
   renderUnits();
   initMenu();
@@ -3832,44 +3830,6 @@ function renderRaceCall(race, me) {
   $("race-call-button").textContent = entered ? t("race.call.leave") : t("race.call.join");
 }
 
-function renderRaceLists(standing) {
-  const groups = $("race-groups");
-  const around = $("race-around");
-  if (!standing) {
-    groups.replaceChildren();
-    around.replaceChildren();
-    return;
-  }
-  const row = (className, cells) => {
-    const item = document.createElement("li");
-    if (className) item.className = className;
-    for (const [text, cellClass] of cells) {
-      const cell = document.createElement("span");
-      if (cellClass) cell.className = cellClass;
-      cell.textContent = text;
-      item.append(cell);
-    }
-    return item;
-  };
-  groups.replaceChildren(
-    ...standing.groups.slice(0, 5).map((group) =>
-      row(group.mine ? "mine" : "", [
-        [t("race.group", { label: group.label, riders: tn("menu.riders", group.size) })],
-        [formatTimeGap(group.gapS, { mine: group.mine }), "gap"],
-      ]),
-    ),
-  );
-  around.replaceChildren(
-    ...standing.around.map((entry) =>
-      row(entry.mine ? "mine" : "", [
-        [String(entry.position), "pos"],
-        [riderName(entry.rider), "rider-name"],
-        [formatTimeGap(entry.gapS, { mine: entry.mine }), "gap"],
-      ]),
-    ),
-  );
-}
-
 // ------------------------------------------------------------- training ---
 
 function initTraining({ simulated, setSimPower }) {
@@ -4073,19 +4033,8 @@ function renderWorkoutProgress(time) {
   }
   stats.lastT = time;
 
-  if (app.layout === "training") {
-    drawWorkout($("workout-chart"), { workout, elapsedS: state.elapsedS, colors: themeColors() });
-  }
-  const total = state.elapsedS + state.remainingS;
-  const next = workout.segments[state.index + 1];
-  const nextWatts = next ? Math.round(((next.from + next.to) / 2) * (app.training.player?.ftp ?? app.profile.ftp) * app.training.intensity) : 0;
-  $("workout-block").textContent = t("training.block", { n: state.index + 1, total: workout.segments.length, label: segmentLabel(state.segment.label) }) + (paused ? t("training.paused") : "");
-  $("workout-next").textContent = next ? t("training.next", { label: segmentLabel(next.label), time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
-  $("workout-block-time").textContent = formatDuration(state.segmentRemainingS);
-  $("workout-elapsed").textContent = formatDuration(state.elapsedS);
-  $("workout-remaining").textContent = formatDuration(state.remainingS);
-  $("workout-avg").textContent = stats.seconds > 0 ? `${Math.round(stats.joules / stats.seconds)} W` : "– W";
-  $("workout-progress").style.width = `${total > 0 ? ((state.elapsedS / total) * 100).toFixed(1) : 0}%`;
+  const avgW = stats.seconds > 0 ? stats.joules / stats.seconds : null;
+  app.rideHud.renderWorkout({ workout, state, ftp: app.training.player?.ftp ?? app.profile.ftp, intensity: app.training.intensity, avgW, paused, layout: app.layout, colors: themeColors() });
 }
 
 // ---------------------------------------------------------------- views ---
@@ -4435,17 +4384,7 @@ function updatePanels() {
 
   app.standing = raceStanding(race, app.state.riders, app.riderId, app.route.length);
   updateLayout();
-  renderRaceLists(app.layout === "race" ? app.standing : null);
-  $("race-groups-panel").hidden = !app.standing;
-  const hud = app.hud;
-  const standing = app.standing;
-  hud.set("lap-info", status);
-  hud.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
-  hud.set("lap", standing ? `${standing.lap}/${standing.laps}` : "–");
-  hud.set("to-go", standing ? formatLength(standing.toGoM) : "–");
-  hud.set("race-caption", raceCaption(race, standing, status, standing ? formatLength(standing.toGoM) : "–"));
-  // The progress bar only while I race; otherwise the caption alone, centred in its box.
-  $("race-timeline").hidden = !standing;
+  app.rideHud.renderRace({ race, standing: app.standing, status });
 }
 
 /**

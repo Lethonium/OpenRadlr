@@ -1,11 +1,13 @@
 /**
  * The ride HUD's numbers and canvases, shared by the ride screen (main.js)
  * and the VR page (vr/main.js): the same markup, filled from a snapshot of
- * the ride. The banner, splits, recorder and race lists stay with the tablet.
+ * the ride. The banner, splits and recorder stay with the tablet.
  */
-import { t } from "../i18n/i18n.js";
+import { t, tn } from "../i18n/i18n.js";
+import { segmentLabel } from "../ride/workout.js";
 import { formatDistance, formatDuration, formatGrade, formatLength, formatSpeed, formatWkg } from "../util/format.js";
-import { MetricBinder, gaugeFraction, nextMarker, powerZone } from "./hud.js";
+import { MetricBinder, formatPosition, formatTimeGap, gaugeFraction, nextMarker, powerZone } from "./hud.js";
+import { raceCaption, riderName } from "./panels.js";
 
 /** Average speed once there are enough seconds to mean something. */
 export const averageSpeed = (metres, seconds) => (seconds >= 5 ? formatSpeed(metres / seconds) : "–");
@@ -50,7 +52,7 @@ export class RideHud {
 
   /**
    * @param {Element} root holds the `.layout` blocks
-   * @param {{drawProfile: Function, drawMinimap: Function, drawUpcoming: Function, drawRaceTimeline: Function}} draw (canvas, options)
+   * @param {{drawProfile: Function, drawMinimap: Function, drawUpcoming: Function, drawRaceTimeline: Function, drawWorkout: Function}} draw (canvas, options)
    */
   constructor(root, draw) {
     this.#root = root;
@@ -85,6 +87,81 @@ export class RideHud {
     const onTarget = target !== null && Math.abs(watts - target) <= Math.max(10, target * 0.05);
     trainingPower.classList.toggle("on-target", onTarget);
     trainingPower.classList.toggle("off-target", target !== null && !onTarget);
+  }
+
+  /**
+   * The training layout's workout part: chart, block, next block, times, average and progress.
+   * @param {{workout: object, state: object, ftp: number, intensity: number, avgW: ?number, paused: boolean, layout: string, colors: object}} input
+   *   `state` is a running workout's position (`TrainingControl#workoutState`); `avgW` the average power so far, if any
+   */
+  renderWorkout({ workout, state, ftp, intensity, avgW, paused, layout, colors }) {
+    if (layout === "training") this.#draw.drawWorkout(this.#el("workout-chart"), { workout, elapsedS: state.elapsedS, colors });
+    const total = state.elapsedS + state.remainingS;
+    const next = workout.segments[state.index + 1];
+    const nextWatts = next ? Math.round(((next.from + next.to) / 2) * ftp * intensity) : 0;
+    this.#el("workout-block").textContent = t("training.block", { n: state.index + 1, total: workout.segments.length, label: segmentLabel(state.segment.label) }) + (paused ? t("training.paused") : "");
+    this.#el("workout-next").textContent = next ? t("training.next", { label: segmentLabel(next.label), time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
+    this.#el("workout-block-time").textContent = formatDuration(state.segmentRemainingS);
+    this.#el("workout-elapsed").textContent = formatDuration(state.elapsedS);
+    this.#el("workout-remaining").textContent = formatDuration(state.remainingS);
+    this.#el("workout-avg").textContent = avgW === null ? "– W" : `${Math.round(avgW)} W`;
+    this.#el("workout-progress").style.width = `${total > 0 ? ((state.elapsedS / total) * 100).toFixed(1) : 0}%`;
+  }
+
+  /**
+   * The race layout's text and lists: lap line, position, lap, distance to go, caption, the progress bar's visibility and the groups.
+   * @param {{race: ?object, standing: ?object, status: string}} input `standing` is mine, if I race; `status` is `raceStatus()`
+   */
+  renderRace({ race, standing, status }) {
+    const toGo = standing ? formatLength(standing.toGoM) : "–";
+    this.metrics.set("lap-info", status);
+    this.metrics.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
+    this.metrics.set("lap", standing ? `${standing.lap}/${standing.laps}` : "–");
+    this.metrics.set("to-go", toGo);
+    this.metrics.set("race-caption", raceCaption(race, standing, status, toGo));
+    // The progress bar only while I race; otherwise the caption alone, centred in its box.
+    this.#el("race-timeline").hidden = !standing;
+    this.#el("race-groups-panel").hidden = !standing;
+    this.#renderRaceLists(standing);
+  }
+
+  #renderRaceLists(standing) {
+    const groups = this.#el("race-groups");
+    const around = this.#el("race-around");
+    if (!standing) {
+      groups.replaceChildren();
+      around.replaceChildren();
+      return;
+    }
+    const document = this.#root.ownerDocument;
+    const row = (className, cells) => {
+      const item = document.createElement("li");
+      if (className) item.className = className;
+      for (const [text, cellClass] of cells) {
+        const cell = document.createElement("span");
+        if (cellClass) cell.className = cellClass;
+        cell.textContent = text;
+        item.append(cell);
+      }
+      return item;
+    };
+    groups.replaceChildren(
+      ...standing.groups.slice(0, 5).map((group) =>
+        row(group.mine ? "mine" : "", [
+          [t("race.group", { label: group.label, riders: tn("menu.riders", group.size) })],
+          [formatTimeGap(group.gapS, { mine: group.mine }), "gap"],
+        ]),
+      ),
+    );
+    around.replaceChildren(
+      ...standing.around.map((entry) =>
+        row(entry.mine ? "mine" : "", [
+          [String(entry.position), "pos"],
+          [riderName(entry.rider), "rider-name"],
+          [formatTimeGap(entry.gapS, { mine: entry.mine }), "gap"],
+        ]),
+      ),
+    );
   }
 
   /** Gauge arc and target tick for the cockpit. */
