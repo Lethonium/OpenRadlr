@@ -254,8 +254,9 @@ export class Renderer {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
+  /** Creates the sun's depth texture (once per size: a renderer shared by several views keeps one). Returns false if the device cannot render depth. */
   createShadowMap(size = 2048) {
+    if (this.shadow?.size === size) return true;
     const gl = this.gl;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);

@@ -43,6 +43,17 @@ test("target binds the framebuffer at once, so XR draws into it without a shadow
   assert.deepEqual(calls, [["bindFramebuffer", gl.FRAMEBUFFER, null]]);
 });
 
+test("a second view on the same renderer reuses its shadow map", () => {
+  const { gl } = fakeGl();
+  let textures = 0;
+  const counting = new Proxy(gl, { get: (target, name) => (name === "createTexture" ? () => (textures += 1, {}) : name === "checkFramebufferStatus" ? () => target.FRAMEBUFFER_COMPLETE : target[name]) });
+  const renderer = new Renderer(counting);
+  textures = 0;
+  assert.equal(renderer.createShadowMap(512), true);
+  assert.equal(renderer.createShadowMap(512), true);
+  assert.equal(textures, 1);
+});
+
 test("viewport(null) returns to the target size", () => {
   const { gl, calls } = fakeGl();
   const renderer = new Renderer(gl);

@@ -121,3 +121,12 @@ test("the preview rests both hands on the grips", () => {
     [0, 1, 2].forEach((k) => close(palm[12 + k], grips[hand.handedness][k], 1e-5));
   }
 });
+
+test("stopping lets go of the page's input", () => {
+  let disposed = 0;
+  const preview = new PreviewSource({ canvas: { width: 0, height: 0, clientWidth: 8, clientHeight: 4 }, schedule() {}, now: () => 0, input: { onDrag() {}, onKey() {}, dispose: () => (disposed += 1) } });
+  preview.start(() => {});
+  assert.equal(disposed, 0, "starting keeps it");
+  preview.stop();
+  assert.equal(disposed, 1);
+});

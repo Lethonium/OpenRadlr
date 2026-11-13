@@ -61,6 +61,7 @@ export function previewFrame({ width, height, timeS, pose }) {
 /** @implements {import("./xrFrame.js").XrFrameSource} */
 export class PreviewSource {
   #canvas;
+  #input;
   #schedule;
   #now;
   #initial;
@@ -70,11 +71,12 @@ export class PreviewSource {
 
   /**
    * @param {{canvas: {width: number, height: number, clientWidth: number, clientHeight: number}, schedule?: (tick: () => void) => unknown, now: () => number,
-   *   input: {onDrag: (fn: (dx: number, dy: number) => void) => void, onKey: (fn: (key: string) => void) => void},
+   *   input: {onDrag: (fn: (dx: number, dy: number) => void) => void, onKey: (fn: (key: string) => void) => void, dispose?: () => void},
    *   initial?: {yawDeg: number, pitchDeg: number, position: number[]}}} deps
    */
   constructor({ canvas, schedule = (tick) => requestAnimationFrame(tick), now, input, initial = { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] } }) {
     this.#canvas = canvas;
+    this.#input = input;
     this.#schedule = schedule;
     this.#now = now;
     this.#initial = initial;
@@ -102,7 +104,8 @@ export class PreviewSource {
   }
 
   async start(onFrame) {
-    this.stop();
+    this.#running = false;
+    this.#ticket += 1;
     this.#running = true;
     const ticket = this.#ticket;
     const tick = () => {
@@ -118,8 +121,10 @@ export class PreviewSource {
     this.#schedule(tick);
   }
 
+  /** Stops the frames and lets go of the page's input (a stopped preview is done for good). */
   stop() {
     this.#running = false;
     this.#ticket += 1;
+    this.#input.dispose?.();
   }
 }
