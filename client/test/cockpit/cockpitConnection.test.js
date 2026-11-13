@@ -39,6 +39,14 @@ test("watches with the given view", () => {
   assert.deepEqual(sockets[0].sent.at(-1), { type: "watch", key: KEY, view: "world" });
 });
 
+test("watches with the device name when given", () => {
+  const { connection, sockets } = setup({ device: "Quest 3" });
+  connection.start();
+  sockets[0].open();
+  sockets[0].receive({ type: "welcome" });
+  assert.deepEqual(sockets[0].sent.at(-1), { type: "watch", key: KEY, view: "data", device: "Quest 3" });
+});
+
 test("status, state and display are emitted", () => {
   const { connection, sockets } = setup();
   const seen = [];

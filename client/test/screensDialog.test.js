@@ -14,11 +14,18 @@ function fakeEl() {
   };
 }
 
-function setup({ confirmAnswer = true } = {}) {
-  const els = { code: fakeEl(), countdown: fakeEl(), bar: fakeEl(), renew: fakeEl(), unpair: fakeEl(), status: fakeEl(), note: fakeEl() };
+function fakeNode(tag) {
+  return { tag, className: "", textContent: "", children: [], append(...kids) { this.children.push(...kids); }, setAttribute() {} };
+}
+
+function setup({ confirmAnswer = true, initial = [] } = {}) {
+  const els = { code: fakeEl(), countdown: fakeEl(), bar: fakeEl(), renew: fakeEl(), unpair: fakeEl(), status: fakeEl(), note: fakeEl(), empty: fakeEl() };
+  els.list = { children: [], replaceChildren(...kids) { this.children = kids; } };
+  const stored = [...initial];
+  const paired = { list: () => stored, add: (device, at) => stored.push({ device, pairedAt: at }), clear: () => (stored.length = 0) };
   els.bar.vars = {};
   els.bar.style = { setProperty: (name, value) => (els.bar.vars[name] = value) };
-  const session = Object.assign(new Emitter(), { calls: [], start() { this.calls.push("start"); }, renew() { this.calls.push("renew"); }, close() { this.calls.push("close"); } });
+  const session = Object.assign(new Emitter(), { calls: [], start() { this.calls.push("start"); }, query() { this.calls.push("query"); }, renew() { this.calls.push("renew"); }, close() { this.calls.push("close"); } });
   const scheduler = fakeScheduler();
   const clock = { ms: 0 };
   const asked = [];
@@ -31,9 +38,12 @@ function setup({ confirmAnswer = true } = {}) {
     clearInterval: scheduler.clearInterval,
     confirm: (question) => (asked.push(question), confirmAnswer),
     onUnpair: () => unpaired.push(true),
-    t: (key) => key,
+    paired,
+    doc: { createElement: fakeNode },
+    formatDate: (ms) => `on ${ms}`,
+    t: (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
   });
-  return { els, session, scheduler, clock, asked, unpaired, dialog };
+  return { els, session, scheduler, clock, asked, unpaired, dialog, paired };
 }
 
 test("opening starts a session and shows the code it gets", () => {
@@ -69,7 +79,7 @@ test("a claimed code shows the paired status", () => {
   const { dialog, els, session } = setup();
   dialog.open();
   session.emit("code", { code: "ABC234", expiresInS: 300 });
-  session.emit("claimed");
+  session.emit("claimed", { device: null });
   assert.equal(els.status.textContent, "screens.paired");
 });
 
@@ -97,4 +107,52 @@ test("closing stops the countdown and the session", () => {
   dialog.close();
   assert.equal(scheduler.active, 0);
   assert.equal(session.calls.at(-1), "close");
+});
+
+const rowTexts = (els) => els.list.children.map((li) => li.children.map((c) => c.textContent));
+
+test("a claimed code adds the device to the list with the date", () => {
+  const { dialog, els, session, clock } = setup();
+  dialog.open();
+  clock.ms = 5000;
+  session.emit("claimed", { device: "Pixel 8" });
+  assert.deepEqual(rowTexts(els), [["", "Pixel 8", "on 5000"]]);
+  assert.equal(els.status.textContent, 'screens.pairedDevice {"device":"Pixel 8"}');
+});
+
+test("the list says nothing is paired when it is empty", () => {
+  const { dialog, els } = setup();
+  dialog.showList();
+  assert.equal(els.empty.hidden, false);
+  assert.deepEqual(els.list.children, []);
+});
+
+test("showing the list asks the server who watches and marks those live", () => {
+  const { dialog, els, session } = setup({ initial: [{ device: "Quest 3", pairedAt: 1 }, { device: "Pixel 8", pairedAt: 2 }] });
+  dialog.showList();
+  assert.deepEqual(session.calls, ["start", "query"]);
+  assert.equal(els.empty.hidden, true);
+  assert.deepEqual(els.list.children.map((li) => li.children[0].className), ["screens-dot", "screens-dot"]);
+  session.emit("watching", ["Quest 3"]);
+  assert.deepEqual(els.list.children.map((li) => li.children[0].className), ["screens-dot is-live", "screens-dot"]);
+  assert.deepEqual(rowTexts(els)[0], ["", "Quest 3", "on 1 · screens.live"]);
+  assert.equal(session.calls.at(-1), "close");
+});
+
+test("the list asks again every few seconds and stops when closed", () => {
+  const { dialog, session, scheduler } = setup();
+  dialog.showList();
+  scheduler.fire();
+  assert.equal(session.calls.filter((c) => c === "query").length, 2);
+  dialog.close();
+  assert.equal(scheduler.active, 0);
+});
+
+test("unpairing empties the list", () => {
+  const { dialog, els, paired } = setup({ initial: [{ device: "Quest 3", pairedAt: 1 }] });
+  dialog.showList();
+  els.unpair.click();
+  assert.deepEqual(paired.list(), []);
+  assert.deepEqual(els.list.children, []);
+  assert.equal(els.empty.hidden, false);
 });

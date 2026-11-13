@@ -33,6 +33,7 @@
     <link rel="modulepreload" href="js/input/panelStack.js" />
     <link rel="modulepreload" href="js/native/app.js" />
     <link rel="modulepreload" href="js/net/connection.js" />
+    <link rel="modulepreload" href="js/net/pairedScreens.js" />
     <link rel="modulepreload" href="js/net/protocol.js" />
     <link rel="modulepreload" href="js/net/reconnector.js" />
     <link rel="modulepreload" href="js/net/screenPairing.js" />
@@ -131,6 +132,7 @@
     <link rel="modulepreload" href="js/ble/zwiftProtocol.js" />
     <link rel="modulepreload" href="js/i18n/de.js" />
     <link rel="modulepreload" href="js/i18n/en.js" />
+    <link rel="modulepreload" href="js/net/deviceName.js" />
     <link rel="modulepreload" href="js/ride/fitFile.js" />
     <link rel="modulepreload" href="js/ride/ftpTest.js" />
     <link rel="modulepreload" href="js/ride/liveStats.js" />
@@ -1071,6 +1073,8 @@
           <div class="menu-pages">
             <div class="menu-page" data-screens-view="menu">
               <p class="hint" data-i18n="screens.hint">Show your ride on a phone or a VR headset, or use this device as a second screen for another tablet.</p>
+              <ul id="screens-list" class="screens-list" aria-label="Paired screens" data-i18n-attr="aria-label:screens.listLabel"></ul>
+              <p id="screens-empty" class="hint" data-i18n="screens.none" hidden>No screens paired yet</p>
               <div class="screens-actions">
                 <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a new screen</button>
                 <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>

@@ -6615,6 +6615,38 @@ body.working-out #paddles {
   gap: 8px;
 }
 
+/* The paired screens: a dot (lit while the screen watches), its name and when it was paired. */
+.screens-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.screens-device {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.screens-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--grid);
+}
+
+.screens-dot.is-live {
+  background: var(--remote);
+  box-shadow: 0 0 6px var(--remote);
+}
+
 .screens-centered {
   justify-items: center;
   text-align: center;

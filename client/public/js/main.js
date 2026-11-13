@@ -112,6 +112,7 @@ import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n
 import { languageOptions } from "./i18n/selector.js";
 import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
 import { COCKPIT_KEY, PairingSession, isPaired, pairDevice, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { PairedScreens } from "./net/pairedScreens.js";
 import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
@@ -1587,6 +1588,8 @@ function initScreens() {
     unpair: $("screens-unpair"),
     status: $("screens-status"),
     note: $("screens-note"),
+    list: $("screens-list"),
+    empty: $("screens-empty"),
   };
   const dialog = createScreensDialog({
     els,
@@ -1596,7 +1599,10 @@ function initScreens() {
     clearInterval: (id) => globalThis.clearInterval(id),
     confirm: (message) => confirm(message),
     onUnpair: () => renewScreenKey(storage, randomBytes),
-    t: (key) => t(key),
+    paired: new PairedScreens(storage),
+    doc: document,
+    formatDate: (ms) => new Date(ms).toLocaleDateString(getLocale()),
+    t: (key, params) => t(key, params),
   });
   let claimPage = null;
   let opener = null;
@@ -1610,7 +1616,8 @@ function initScreens() {
   const show = (view) => {
     for (const el of views) el.hidden = el.dataset.screensView !== view;
     $("screens-back").hidden = view === "menu";
-    if (view !== "code") dialog.close();
+    if (view === "menu") dialog.showList();
+    else if (view !== "code") dialog.close();
   };
   const open = () => {
     opener = document.activeElement;

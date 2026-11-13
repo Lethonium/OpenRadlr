@@ -8,6 +8,7 @@
 import { applyTranslations } from "../i18n/apply.js";
 import { initLocale, t } from "../i18n/i18n.js";
 import { defaultServerUrl } from "../net/protocol.js";
+import { deviceName } from "../net/deviceName.js";
 import { pairDevice } from "../net/screenPairing.js";
 import { mountPairNow } from "../view/codeInput.js";
 import { ProfileStore } from "../profile/profileStore.js";
@@ -162,7 +163,7 @@ function start() {
   });
 
   const model = new CockpitModel({ now: () => Date.now() });
-  const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key, view: "world" });
+  const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key, view: "world", device: deviceName(navigator.userAgent) });
   const stamps = new RiderStamps({ now: nowS });
   const wakeLock = new ScreenWakeLock();
   const rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline, drawWorkout });

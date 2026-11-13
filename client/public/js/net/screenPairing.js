@@ -1,4 +1,5 @@
 import { Emitter } from "../util/emitter.js";
+import { deviceName } from "./deviceName.js";
 import { ClientMessages, defaultServerUrl, parseServerMessage } from "./protocol.js";
 
 const KEY_STORAGE = "openradlr.screenKey";
@@ -29,18 +30,22 @@ export const isPaired = (storage) => storage?.getItem(PAIRED_STORAGE) === "1";
 /**
  * The tablet's side of pairing: one connection that offers the screen key and
  * waits for a phone to claim the code. Emits "code" ({ code, expiresInS }),
- * "claimed" and "error" (the server's { code, message }).
+ * "claimed" ({ device }), "watching" (the device names watching the key, after
+ * query()) and "error" (the server's { code, message }).
  */
 export class PairingSession extends Emitter {
   #socket = null;
   #welcomed = false;
+  #wantQuery = false;
 
   constructor({ url, createSocket = (u) => new WebSocket(u), key, name, storage }) {
     super();
     Object.assign(this, { url, createSocket, key, name, storage });
   }
 
-  start() {
+  /** Connects; with `offer: false` it offers no code (a connection only for query()). */
+  start({ offer = true } = {}) {
+    this.offer = offer;
     const socket = this.createSocket(this.url);
     this.#socket = socket;
     this.#welcomed = false;
@@ -51,12 +56,15 @@ export class PairingSession extends Emitter {
       if (!message) return;
       if (message.type === "welcome") {
         this.#welcomed = true;
-        this.#offer();
+        if (this.offer) this.#offer();
+        if (this.#wantQuery) this.#sendQuery();
       } else if (message.type === "pair_code") {
         this.emit("code", { code: message.code, expiresInS: message.expires_in_s });
       } else if (message.type === "pair_claimed") {
         this.storage?.setItem(PAIRED_STORAGE, "1");
-        this.emit("claimed");
+        this.emit("claimed", { device: message.device ?? null });
+      } else if (message.type === "screens_watching") {
+        this.emit("watching", message.devices ?? []);
       } else if (message.type === "error") {
         this.emit("error", { code: message.code, message: message.message });
       }
@@ -67,6 +75,16 @@ export class PairingSession extends Emitter {
   renew() {
     if (this.#socket?.readyState === OPEN && this.#welcomed) this.#offer();
     else this.start();
+  }
+
+  /** Asks which devices watch the key; the answer comes as "watching". Waits for the welcome. */
+  query() {
+    this.#wantQuery = true;
+    if (this.#welcomed) this.#sendQuery();
+  }
+
+  #sendQuery() {
+    this.#send(ClientMessages.screensQuery(this.key));
   }
 
   close() {
@@ -83,7 +101,7 @@ export class PairingSession extends Emitter {
 }
 
 /** The phone's side: claims a code. Resolves with { key, name }; rejects with `code` set on a server error. */
-export function claimCode({ url, createSocket = (u) => new WebSocket(u), code }) {
+export function claimCode({ url, createSocket = (u) => new WebSocket(u), code, device }) {
   return new Promise((resolve, reject) => {
     const socket = createSocket(url);
     let done = false;
@@ -97,7 +115,7 @@ export function claimCode({ url, createSocket = (u) => new WebSocket(u), code })
     socket.addEventListener("message", (event) => {
       const message = parseServerMessage(event.data);
       if (!message) return;
-      if (message.type === "welcome") socket.send(JSON.stringify(ClientMessages.pairClaim(code)));
+      if (message.type === "welcome") socket.send(JSON.stringify(ClientMessages.pairClaim(code, device)));
       else if (message.type === "paired") finish(resolve, { key: message.key, name: message.name });
       else if (message.type === "error") finish(reject, Object.assign(new Error(message.message ?? message.code), { code: message.code }));
     });
@@ -110,8 +128,13 @@ export function claimCode({ url, createSocket = (u) => new WebSocket(u), code })
 export const COCKPIT_KEY = "openradlr.cockpit";
 
 /** Claims `code` and remembers the tablet it pairs this device with. Rejects like claimCode. */
-export async function pairDevice({ code, storage, claim = (c) => claimCode({ url: defaultServerUrl(), code: c }) }) {
-  const paired = await claim(code);
+export async function pairDevice({
+  code,
+  storage,
+  device = deviceName(globalThis.navigator?.userAgent),
+  claim = (c, d) => claimCode({ url: defaultServerUrl(), code: c, device: d }),
+}) {
+  const paired = await claim(code, device);
   storage.setItem(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
   return paired;
 }

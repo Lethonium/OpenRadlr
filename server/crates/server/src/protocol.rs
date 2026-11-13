@@ -147,12 +147,22 @@ pub enum ClientMessage {
     /// Claim a pairing code from a second screen.
     PairClaim {
         code: String,
+        /// The claiming screen's device name (shown on the tablet).
+        #[serde(default)]
+        device: Option<String>,
     },
     /// Watch the screen `key` ride (no seat is taken).
     Watch {
         key: String,
         #[serde(default)]
         view: WatchView,
+        /// The watching screen's device name (shown on the tablet).
+        #[serde(default)]
+        device: Option<String>,
+    },
+    /// Ask which devices currently watch the screen `key`.
+    ScreensQuery {
+        key: String,
     },
     /// Opaque display data for the paired screens.
     Display {
@@ -341,7 +351,15 @@ pub enum ServerMessage {
         name: String,
     },
     /// The offering connection's code was claimed by a second screen.
-    PairClaimed,
+    PairClaimed {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device: Option<String>,
+    },
+    /// The device names that watch a screen key (the answer to `screens_query`,
+    /// and pushed to the host while it rides).
+    ScreensWatching {
+        devices: Vec<String>,
+    },
     /// Whether a watched screen's tablet is riding, its name and, while it
     /// rides, the tablet's rider id.
     WatchStatus {

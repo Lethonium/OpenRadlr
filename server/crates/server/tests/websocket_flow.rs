@@ -1248,6 +1248,65 @@ async fn a_paired_phone_follows_the_tablets_rides() {
 }
 
 #[tokio::test]
+async fn the_tablet_hears_which_device_claimed_its_code() {
+    let addr = start_server(0).await;
+    let mut offerer = connect(addr).await;
+    hello(&mut offerer).await;
+    send(
+        &mut offerer,
+        &format!(r#"{{"type":"pair_offer","key":"{SCREEN_KEY}","name":"Tablet"}}"#),
+    )
+    .await;
+    let code = expect_type(&mut offerer, "pair_code").await["code"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut phone = connect(addr).await;
+    hello(&mut phone).await;
+    send(
+        &mut phone,
+        &format!(r#"{{"type":"pair_claim","code":"{code}","device":"Pixel 8"}}"#),
+    )
+    .await;
+    expect_type(&mut phone, "paired").await;
+    assert_eq!(expect_type(&mut offerer, "pair_claimed").await["device"], "Pixel 8");
+}
+
+#[tokio::test]
+async fn screens_query_lists_the_connected_watchers() {
+    let addr = start_server(0).await;
+    let mut phone = connect(addr).await;
+    hello(&mut phone).await;
+    send(
+        &mut phone,
+        &format!(r#"{{"type":"watch","key":"{SCREEN_KEY}","device":"Quest 3"}}"#),
+    )
+    .await;
+    expect_type(&mut phone, "watch_status").await;
+
+    let mut tablet = connect(addr).await;
+    hello(&mut tablet).await;
+    send(
+        &mut tablet,
+        &format!(r#"{{"type":"screens_query","key":"{SCREEN_KEY}"}}"#),
+    )
+    .await;
+    assert_eq!(
+        expect_type(&mut tablet, "screens_watching").await["devices"],
+        serde_json::json!(["Quest 3"])
+    );
+    send(
+        &mut tablet,
+        &format!(r#"{{"type":"screens_query","key":"{}"}}"#, "f".repeat(32)),
+    )
+    .await;
+    assert_eq!(
+        expect_type(&mut tablet, "screens_watching").await["devices"],
+        serde_json::json!([])
+    );
+}
+
+#[tokio::test]
 async fn info_announces_screens() {
     let addr = start_server(0).await;
     let (_, body) = http_get(addr, "/api/info").await;

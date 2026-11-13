@@ -63,8 +63,9 @@ Workout riders are exempt.
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
 | `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
 | `pair_offer` | `key` (32 lowercase hex characters), `name` | a tablet offers a pairing code for its screen key; no `join` needed, after `hello`. See [Second screens](#second-screens) |
-| `pair_claim` | `code` | a phone claims a pairing code; no `join` needed, after `hello` |
-| `watch` | `key`, `view`?: `data` (default) \| `world` | a phone watches the screen `key` instead of joining; takes no seat. See [Second screens](#second-screens) |
+| `pair_claim` | `code`, `device`? (≤ 40 characters) | a phone claims a pairing code; no `join` needed, after `hello`. The `device` name goes to the tablet |
+| `watch` | `key`, `view`?: `data` (default) \| `world`, `device`? (≤ 40 characters) | a phone watches the screen `key` instead of joining; takes no seat. See [Second screens](#second-screens) |
+| `screens_query` | `key` | asks which devices watch the screen `key`; no `join` needed, after `hello`. Always answered with `screens_watching` (empty for an unknown key) |
 | `display` | `data`: a JSON object, at most 2048 bytes serialised | a joined host sends opaque data for its paired screens, at most 2 per second. Bigger or faster messages are dropped without a reply |
 
 ## Server → client
@@ -82,7 +83,8 @@ Workout riders are exempt.
 | `error` | `code`, `message` |
 | `pair_code` | `code` (6 characters), `expires_in_s` (300): the code for the screen the connection offered; a new `pair_offer` replaces it |
 | `paired` | `key`, `name` (the name the tablet offered): the screen the phone is now paired with |
-| `pair_claimed` | – : sent to the offering connection when its code is claimed |
+| `pair_claimed` | `device`? (the claiming phone's name): sent to the offering connection when its code is claimed |
+| `screens_watching` | `devices`: the names of the devices watching a key, in arrival order (watchers without a `device` are left out). The answer to `screens_query`; also pushed to a host while it rides whenever a watcher arrives or leaves, and not copied to watchers |
 | `watch_status` | `live` (the screen's tablet is riding), `name`, `rider_id`? (the tablet's rider id while it rides): sent when the watch starts and whenever the host arrives or leaves |
 | `display` | `data`: the host's opaque display data, as sent |
 
@@ -221,7 +223,9 @@ key and meet again on the next ride.
   `error { code: "pair_code_expired" }` and is closed. It does not hit the
   15 s handshake timeout while it waits.
 - The phone sends `pair_claim { code }`. It gets `paired { key, name }`, and
-  the tablet gets `pair_claimed`. An unknown or expired code gets
+  the tablet gets `pair_claimed { device? }`. The `device` is trimmed and cut
+  to 40 characters; it is kept only while the code and the connections live.
+  An unknown or expired code gets
   `error { code: "pair_code_invalid" }`.
 
 **The relay:**
@@ -310,6 +314,7 @@ Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` wi
 Second screens (#87) added `pair_offer`, `pair_code`, `pair_claim`, `paired`, `pair_claimed`, `watch`, `watch_status`, `display`, `join.screen_key`, `screens` in `/api/info` and the `bad_screen_key`, `pair_code_invalid`, `pair_code_expired` and `too_many_screens` errors within version 2.
 Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
+The list of paired screens added `pair_claim.device`, `watch.device`, `pair_claimed.device`, `screens_query` and `screens_watching` within version 2.
 VR headset display added `watch_status.rider_id` and `xr_preview` in `/api/info` within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.

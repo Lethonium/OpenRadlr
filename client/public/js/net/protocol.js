@@ -62,14 +62,16 @@ export const ClientMessages = Object.freeze({
   /** A tablet offers a pairing code for its screen key. */
   pairOffer: ({ key, name }) => ({ type: "pair_offer", key, name }),
   /** A phone claims a pairing code. */
-  pairClaim: (code) => ({ type: "pair_claim", code }),
+  pairClaim: (code, device) => ({ type: "pair_claim", code, ...(device ? { device } : {}) }),
   /** A phone watches a screen key; `view` is "data" or "world". */
-  watch: (key, view = "data") => ({ type: "watch", key, view }),
+  watch: (key, view = "data", device) => ({ type: "watch", key, view, ...(device ? { device } : {}) }),
+  /** Asks which devices watch the screen key. */
+  screensQuery: (key) => ({ type: "screens_query", key }),
   /** Opaque data for the paired screens (at most 2048 bytes, 2 per second). */
   display: (data) => ({ type: "display", data }),
 });
 
-const SERVER_TYPES = new Set(["welcome", "joined", "state", "studio_state", "resistance", "event", "chat", "error", "afk_warning", "pair_code", "paired", "pair_claimed", "watch_status", "display"]);
+const SERVER_TYPES = new Set(["welcome", "joined", "state", "studio_state", "resistance", "event", "chat", "error", "afk_warning", "pair_code", "paired", "pair_claimed", "screens_watching", "watch_status", "display"]);
 
 /**
  * Parses a server frame. Returns null for anything that is not a known message.

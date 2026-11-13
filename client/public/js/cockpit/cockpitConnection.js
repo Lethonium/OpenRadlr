@@ -16,9 +16,9 @@ export class CockpitConnection extends Emitter {
   #stopped = false;
   #failures = 0;
 
-  constructor({ url, createSocket = (u) => new WebSocket(u), key, schedule = (fn, ms) => setTimeout(fn, ms), view = "data" }) {
+  constructor({ url, createSocket = (u) => new WebSocket(u), key, schedule = (fn, ms) => setTimeout(fn, ms), view = "data", device }) {
     super();
-    Object.assign(this, { url, createSocket, key, schedule, view });
+    Object.assign(this, { url, createSocket, key, schedule, view, device });
   }
 
   start() {
@@ -54,7 +54,7 @@ export class CockpitConnection extends Emitter {
     switch (message.type) {
       case "welcome":
         this.#failures = 0;
-        this.#send(socket, ClientMessages.watch(this.key, this.view));
+        this.#send(socket, ClientMessages.watch(this.key, this.view, this.device));
         break;
       case "watch_status":
         this.emit("status", { live: Boolean(message.live), name: message.name, riderId: message.rider_id ?? null });

@@ -36,6 +36,8 @@ pub struct TooManyScreens;
 struct Watcher {
     id: u64,
     view: WatchView,
+    /// The watching screen's device name, when it gave one.
+    device: Option<String>,
     outbox: mpsc::Sender<ServerMessage>,
     /// The latest status, when it did not fit into the outbox.
     pending_status: Option<ServerMessage>,
@@ -52,6 +54,8 @@ struct Host {
     id: u64,
     name: String,
     rider_id: RiderId,
+    /// The host connection's outbox, told who watches.
+    outbox: Option<mpsc::Sender<ServerMessage>>,
 }
 
 #[derive(Default)]
@@ -104,6 +108,7 @@ impl Screens {
             id,
             name: name.clone(),
             rider_id,
+            outbox: None,
         });
         tell_all(
             &mut entry.watchers,
@@ -126,6 +131,7 @@ impl Screens {
         &self,
         key: &str,
         view: WatchView,
+        device: Option<String>,
         outbox: mpsc::Sender<ServerMessage>,
     ) -> Result<WatchGuard, TooManyScreens> {
         let mut reg = self.lock();
@@ -143,11 +149,13 @@ impl Screens {
         let mut watcher = Watcher {
             id,
             view,
+            device,
             outbox,
             pending_status: None,
         };
         watcher.tell(ServerMessage::WatchStatus { live, name, rider_id });
         entry.watchers.push(watcher);
+        tell_host(entry);
         Ok(WatchGuard {
             screens: self.clone(),
             key: key.to_owned(),
@@ -155,9 +163,28 @@ impl Screens {
         })
     }
 
+    /// The device names of the watchers of `key`, in arrival order (empty for an
+    /// unknown key). Watchers that gave no name are left out.
+    pub fn watching(&self, key: &str) -> Vec<String> {
+        self.lock().entries.get(key).map(devices_of).unwrap_or_default()
+    }
+
     #[cfg(test)]
     fn len(&self) -> usize {
         self.lock().entries.len()
+    }
+}
+
+fn devices_of(entry: &Entry) -> Vec<String> {
+    entry.watchers.iter().filter_map(|w| w.device.clone()).collect()
+}
+
+/// Pushes the watcher list to the host's own connection, if it listens.
+fn tell_host(entry: &Entry) {
+    if let Some(outbox) = entry.host.as_ref().and_then(|h| h.outbox.as_ref()) {
+        let _ = outbox.try_send(ServerMessage::ScreensWatching {
+            devices: devices_of(entry),
+        });
     }
 }
 
@@ -180,7 +207,10 @@ impl HostGuard {
     pub fn publish(&self, message: &ServerMessage) {
         if matches!(
             message,
-            ServerMessage::Welcome { .. } | ServerMessage::Joined { .. } | ServerMessage::Error { .. }
+            ServerMessage::Welcome { .. }
+                | ServerMessage::Joined { .. }
+                | ServerMessage::Error { .. }
+                | ServerMessage::ScreensWatching { .. }
         ) {
             return;
         }
@@ -199,6 +229,20 @@ impl HostGuard {
             };
             let _ = watcher.outbox.try_send(copy);
         }
+    }
+
+    /// Has the watcher list pushed to `outbox` (the host's own connection),
+    /// now and whenever a watcher arrives or leaves.
+    pub fn notify_to(&self, outbox: mpsc::Sender<ServerMessage>) {
+        let mut reg = self.screens.lock();
+        let Some(entry) = reg.entries.get_mut(&self.key) else {
+            return;
+        };
+        let Some(host) = entry.host.as_mut().filter(|h| h.id == self.id) else {
+            return;
+        };
+        host.outbox = Some(outbox);
+        tell_host(entry);
     }
 
     /// Sends the host's opaque display data to every watcher.
@@ -253,6 +297,7 @@ impl Drop for WatchGuard {
         let mut reg = self.screens.lock();
         if let Some(entry) = reg.entries.get_mut(&self.key) {
             entry.watchers.retain(|w| w.id != self.id);
+            tell_host(entry);
         }
         reg.prune(&self.key);
     }
@@ -372,7 +417,7 @@ mod tests {
 
     fn watcher(screens: &Screens, view: WatchView) -> (WatchGuard, mpsc::Receiver<ServerMessage>) {
         let (tx, rx) = outbox(64);
-        let guard = screens.watch("k", view, tx).unwrap();
+        let guard = screens.watch("k", view, None, tx).unwrap();
         (guard, rx)
     }
 
@@ -503,7 +548,10 @@ mod tests {
         let screens = Screens::new();
         let _guards: Vec<_> = (0..MAX_WATCHERS).map(|_| watcher(&screens, WatchView::Data)).collect();
         let (tx, _rx) = outbox(4);
-        assert!(matches!(screens.watch("k", WatchView::Data, tx), Err(TooManyScreens)));
+        assert!(matches!(
+            screens.watch("k", WatchView::Data, None, tx),
+            Err(TooManyScreens)
+        ));
     }
 
     #[test]
@@ -580,7 +628,7 @@ mod tests {
     fn a_status_that_does_not_fit_waits_for_the_connection() {
         let screens = Screens::new();
         let (tx, mut rx) = outbox(1);
-        let guard = screens.watch("k", WatchView::Data, tx).unwrap();
+        let guard = screens.watch("k", WatchView::Data, None, tx).unwrap();
         // The queue is full with the "waiting" status, so "live" cannot go in.
         let _host = screens.host("k", 7, "Ana".into());
         assert_eq!(rx.try_recv().unwrap(), status(false, ""));
@@ -603,7 +651,7 @@ mod tests {
     fn a_newer_status_replaces_a_pending_one() {
         let screens = Screens::new();
         let (tx, mut rx) = outbox(1);
-        let guard = screens.watch("k", WatchView::Data, tx).unwrap();
+        let guard = screens.watch("k", WatchView::Data, None, tx).unwrap();
         let host = screens.host("k", 7, "Ana".into());
         rx.try_recv().unwrap();
         drop(host);
@@ -616,7 +664,7 @@ mod tests {
         let screens = Screens::new();
         let host = screens.host("k", 1, "Ana".into());
         let (slow_tx, _slow_rx) = outbox(1);
-        let _slow = screens.watch("k", WatchView::Data, slow_tx).unwrap();
+        let _slow = screens.watch("k", WatchView::Data, None, slow_tx).unwrap();
         let (_g, mut fast) = watcher(&screens, WatchView::Data);
         fast.try_recv().unwrap();
         for _ in 0..10 {
@@ -625,5 +673,54 @@ mod tests {
         for _ in 0..10 {
             assert_eq!(fast.try_recv().unwrap(), resistance());
         }
+    }
+
+    fn named_watcher(screens: &Screens, device: &str) -> (WatchGuard, mpsc::Receiver<ServerMessage>) {
+        let (tx, rx) = outbox(64);
+        let guard = screens.watch("k", WatchView::Data, Some(device.into()), tx).unwrap();
+        (guard, rx)
+    }
+
+    fn devices(list: &[&str]) -> ServerMessage {
+        ServerMessage::ScreensWatching {
+            devices: list.iter().map(|d| (*d).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn watching_lists_the_named_watchers() {
+        let screens = Screens::new();
+        let (_a, _rx_a) = named_watcher(&screens, "Quest 3");
+        let (_b, _rx_b) = watcher(&screens, WatchView::Data);
+        let (_c, _rx_c) = named_watcher(&screens, "Pixel 8");
+        assert_eq!(screens.watching("k"), vec!["Quest 3".to_owned(), "Pixel 8".to_owned()]);
+    }
+
+    #[test]
+    fn watching_an_unknown_key_is_empty() {
+        assert!(Screens::new().watching("nobody").is_empty());
+    }
+
+    #[test]
+    fn the_host_hears_when_a_watcher_arrives_and_leaves() {
+        let screens = Screens::new();
+        let host = screens.host("k", 1, "Ana".into());
+        let (tx, mut rx) = outbox(8);
+        host.notify_to(tx);
+        assert_eq!(rx.try_recv().unwrap(), devices(&[]));
+        let (guard, _rx) = named_watcher(&screens, "Quest 3");
+        assert_eq!(rx.try_recv().unwrap(), devices(&["Quest 3"]));
+        drop(guard);
+        assert_eq!(rx.try_recv().unwrap(), devices(&[]));
+    }
+
+    #[test]
+    fn the_hosts_device_list_is_not_relayed() {
+        let screens = Screens::new();
+        let host = screens.host("k", 1, "Ana".into());
+        let (_g, mut rx) = watcher(&screens, WatchView::World);
+        rx.try_recv().unwrap();
+        host.publish(&devices(&["Quest 3"]));
+        assert!(rx.try_recv().is_err());
     }
 }
