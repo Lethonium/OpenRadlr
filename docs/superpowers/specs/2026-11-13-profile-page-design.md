@@ -113,8 +113,8 @@ Best laps       Rolling Hills 21:58 · Coast Loop 48:12
   record has no mode the row just shows no icon).
 - Tapping a row opens it inline: splits (`view/splitsView.js` renders the table already) and the power
   curve from `record.curve` as a small chart (5 s, 1 min, 5 min, 20 min, longest).
-- **Delete this ride** in the open row, with a confirm step. It removes the record (`RideHistory.delete`,
-  new), so totals and the FTP estimate change accordingly; this is said in the confirm text.
+- **Delete this ride** in the open row, through the delete confirmation (below). It removes the record
+  (`RideHistory.delete`, new), so totals and the FTP estimate change accordingly.
 
 ### Your data
 
@@ -133,12 +133,34 @@ A list of what this browser keeps, with a count and what it is for:
   key and the screen pairing secret, plus a `version` and `exportedAt`. *My call:* the private key stays
   out; a file in a downloads folder is not where a signing key should go, and servers don't verify keys
   yet (ADR 0003). Import is #97.
-- **Delete:** per row (with a confirm), and "Delete everything on this device" (confirm with the count).
+- **Delete:** per row, and "Delete everything on this device", each through the delete confirmation.
   Deleting the profile resets to defaults and a new key pair on the next start, as for a new rider.
 - The data module is pure over injected stores; the counts come from the stores' `keys()`.
 - A line under the list saying what leaves the device: while riding, the server gets the name, weight,
   riding level and public key ("join", `net/protocol.js`) and the live ride; a ride goes to Strava
   only when the rider uploads it. Everything else stays here.
+
+### Delete confirmation
+
+Every delete (one ride, one kind of data, everything) goes through the same confirmation, so nothing is
+deleted by a stray tap:
+
+- **A modal dialog on top of the profile**, not an inline button swap. Esc, the backdrop and Cancel close
+  it without deleting; focus starts on **Cancel**, so Enter or a second tap doesn't delete.
+- **It says plainly what deleting means**, per item, with the count:
+  - what is deleted ("42 rides from 3 March to 13 November");
+  - what changes because of it ("Your totals and the FTP estimated from your rides start again from
+    what is left. Your set FTP stays." / "The best-lap ghosts on these routes are gone." / for the
+    profile: "Your name, weight, FTP and settings go back to the defaults, and servers will see you as
+    a new rider.");
+  - what it does not touch (rides already uploaded to Strava stay there);
+  - that it cannot be undone, with an **Export first** button next to it (except for a single ride).
+- **The delete button names the action and the amount** ("Delete 42 rides", "Delete everything") in a
+  destructive style, never just "OK".
+- Delete everything also asks the rider to tick "I understand this cannot be undone" before its button
+  is enabled.
+- A failed delete (storage error) says so and leaves the dialog open.
+- The texts are pure functions (item, counts, dates → strings), tested in en; de follows.
 
 ## Build order
 
@@ -148,7 +170,7 @@ One PR, ordered commits (the project's way for one feature).
 2. Overview: rider, totals, best laps (`GhostStore.all`).
 3. Rides: list, inline detail, delete (`RideHistory.delete`).
 4. FTP over time.
-5. Your data: inventory, export, delete.
+5. Your data: inventory, export, delete, with the delete confirmation (also used by step 3).
 
 ## Left to the builder
 
