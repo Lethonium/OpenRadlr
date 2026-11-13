@@ -201,6 +201,62 @@
   - Expected: the host's ride seen from the chase camera, and the HUD numbers changing.
 - [ ] **Step 6: Commit** `feat(client): Show your ride in a 3D window on a paired headset`.
 
+### Task 3b: The tablet's ride HUD in the VR window
+
+Added after Task 3, at the user's request: the window shows the tablet's ride HUD, in the same look and layouts, not a reduced bike computer. The headset only watches, so the HUD's controls stay on the tablet. Two commits: a refactor that shares the HUD, then the feature.
+
+**Files:**
+- Create: `client/public/js/view/rideHud.js`
+- Modify:
+  - `client/public/js/main.js`: the number filling in `frame()` (~4575–4615), `renderGauge` (~3845), the per-layout canvases in `frame()`, and `updateLayout` (~3743).
+  - `client/public/vr.html`, `client/public/js/vr/main.js`: the `.vr-hud` boxes and `hud2d.js` are replaced.
+  - `styles.css`, only if the ride rules are scoped to `#ride`.
+- Delete: `client/public/js/vr/hud2d.js` and `client/test/vr/hud2d.test.js`.
+- Test:
+  - `client/test/rideHud.test.js`
+  - `client/test/vr/vrHudMarkup.test.js`
+
+**Interfaces:**
+- Produces:
+  - `rideHudValues(snapshot): Record<string, string|number>`. It is pure and gives the values for every `data-m` key the tablet sets in `frame()` today: `power`, `wkg`, `zone`, `target`, `target-suffix`, `cadence`, `hr`, `speed`, `grade`, `distance`, `avg-speed`, `time`, `intensity`, `next-marker`.
+    - `snapshot = { power, cadence, heartRate, me, route, rideDistanceM, elapsedS, target: number|null, intensity, weightKg, ftp }`.
+    - Unknown numbers render as `–`, exactly as the tablet does now.
+  - `class RideHud { constructor(root: Element, { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline }); render(snapshot, { layout, riders, myId, standing, colors }): void }`.
+    - It sets the `data-m` values through `MetricBinder`, draws the gauge (`renderGauge` moves in here), toggles `on-target` / `off-target`, and draws only the visible layout's canvases.
+    - `main.js` calls it each frame. The banner, splits, milestones, recorder, draft pill and race lists stay in `main.js`.
+- VR page:
+  - `vr.html` contains the `#ride` section's `.hud-info` bar and the four `.layout` blocks, copied from `index.html` with the same markup and ids.
+    - It does not contain `.hud-actions`, `.hud-gear`, the junction, the calls, or the studio layout.
+    - The `<section>` carries `data-layout`, so the existing CSS shows the right layout.
+  - `vr/main.js` builds the snapshot:
+    - power, speed and distance from the smoothed host rider (`state`);
+    - cadence and heart rate from the latest `display` frame (`hr`, `cadence`);
+    - the ride time from `display.stats`;
+    - the target from `display.workout.target_w`;
+    - FTP from `display.ftp`;
+    - the weight from the local profile (or the default).
+  - The layout comes from `chooseLayout({ choice: "auto", workoutRunning: Boolean(display.workout), racePhase: state.race?.phase ?? null, inRace })`. The standing comes from `raceStanding`, as on the tablet.
+
+- [ ] **Step 1 (refactor): Write the failing tests.**
+  - `rideHudValues`:
+    - `fills every metric the tablet shows`: the key set above;
+    - `unknown cadence and heart rate show a dash`;
+    - `the target suffix is empty without a target`;
+    - `grade reads the route at my distance`.
+  - `RideHud`:
+    - `draws only the visible layout's canvases`: with fakes for the draw functions; cockpit calls `drawUpcoming` only, and broadcast calls `drawProfile` and `drawMinimap`.
+- [ ] **Step 2: Run them.** Expected: FAIL.
+- [ ] **Step 3: Move the code and switch `main.js` to `RideHud`.**
+  - Behaviour stays the same. The existing tests still pass.
+  - Check a ride screenshot against the previous one.
+- [ ] **Step 4: Commit** `refactor(client): Share the ride HUD between pages`.
+- [ ] **Step 5 (feature): Write the failing tests.**
+  - `vrHudMarkup`: `the VR page's HUD layouts match the ride screen's`. It extracts each `.layout-cockpit|broadcast|training|race` block and the `.hud-info` block from both HTML files and compares them after normalising whitespace.
+  - `the VR page's HUD has no controls`: no `#pause-ride`, `#shift-up`, `#take-photo` or `#open-menu`.
+- [ ] **Step 6: Implement the VR side.** Delete `hud2d.js` and its test.
+- [ ] **Step 7: Run the full client checks.** Expected: all pass.
+- [ ] **Step 8: Commit** `feat(client): Show the full ride HUD in the headset window`.
+
 ### Task 4: Draw the 3D view per view (refactor)
 
 **Files:**
