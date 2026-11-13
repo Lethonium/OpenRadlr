@@ -57,6 +57,7 @@ test("the pairing messages are built as the protocol says", () => {
   assert.deepEqual(ClientMessages.watch(KEY), { type: "watch", key: KEY, view: "data" });
   assert.deepEqual(ClientMessages.watch(KEY, "world", "Quest 3"), { type: "watch", key: KEY, view: "world", device: "Quest 3" });
   assert.deepEqual(ClientMessages.screensQuery(KEY), { type: "screens_query", key: KEY });
+  assert.deepEqual(ClientMessages.screensRevoke(KEY), { type: "screens_revoke", key: KEY });
   assert.deepEqual(ClientMessages.watch(KEY, "world"), { type: "watch", key: KEY, view: "world" });
   assert.deepEqual(ClientMessages.display({ hr: 120 }), { type: "display", data: { hr: 120 } });
 });
@@ -198,4 +199,20 @@ test("a refused code stores nothing", async () => {
   const storage = { setItem: (k, v) => (stored[k] = v) };
   await assert.rejects(pairDevice({ code: "ABC234", storage, claim: async () => { throw new Error("no"); } }));
   assert.deepEqual(stored, {});
+});
+
+test("revoke sends the key to the server once it has welcomed us, then reports the answer", () => {
+  let socket;
+  const session = new PairingSession({ url: "ws://x/ws", createSocket: (url) => (socket = new FakeSocket(url)), key: KEY, name: "Anna", storage: fakeStorage() });
+  const answers = [];
+  session.on("watching", (devices) => answers.push(devices));
+  session.start({ offer: false });
+  socket.open();
+  session.revoke();
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello"]);
+  socket.receive({ type: "welcome" });
+  assert.deepEqual(socket.sent.at(-1), { type: "screens_revoke", key: KEY });
+  assert.deepEqual(socket.sent.map((m) => m.type), ["hello", "screens_revoke"]);
+  socket.receive({ type: "screens_watching", devices: [] });
+  assert.deepEqual(answers, [[]]);
 });

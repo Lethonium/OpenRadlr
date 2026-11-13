@@ -25,7 +25,7 @@ function setup({ confirmAnswer = true, initial = [] } = {}) {
   const paired = { list: () => stored, add: (device, at) => stored.push({ device, pairedAt: at }), clear: () => (stored.length = 0) };
   els.bar.vars = {};
   els.bar.style = { setProperty: (name, value) => (els.bar.vars[name] = value) };
-  const session = Object.assign(new Emitter(), { calls: [], start() { this.calls.push("start"); }, query() { this.calls.push("query"); }, renew() { this.calls.push("renew"); }, close() { this.calls.push("close"); } });
+  const session = Object.assign(new Emitter(), { calls: [], start() { this.calls.push("start"); }, revoke() { this.calls.push("revoke"); }, query() { this.calls.push("query"); }, renew() { this.calls.push("renew"); }, close() { this.calls.push("close"); } });
   const scheduler = fakeScheduler();
   const clock = { ms: 0 };
   const asked = [];
@@ -90,7 +90,20 @@ test("unpair asks first and renews the key", () => {
   assert.deepEqual(asked, ["screens.unpairConfirm"]);
   assert.equal(unpaired.length, 1);
   assert.equal(els.note.textContent, "screens.unpaired");
-  assert.deepEqual(session.calls, ["start", "close"]);
+  assert.deepEqual(session.calls, ["start", "close", "start", "revoke"]);
+});
+
+test("unpair revokes the old key on a connection of its own, before the key is renewed", () => {
+  const { els, unpaired, session, dialog } = setup();
+  const order = [];
+  session.start = () => order.push("start");
+  session.revoke = () => order.push(`revoke after ${unpaired.length} unpairs`);
+  dialog.open();
+  order.length = 0;
+  els.unpair.click();
+  assert.deepEqual(order, ["start", "revoke after 0 unpairs"]);
+  session.emit("watching", []);
+  assert.equal(session.calls.at(-1), "close");
 });
 
 test("unpair does nothing when not confirmed", () => {

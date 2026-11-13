@@ -31,12 +31,13 @@ export const isPaired = (storage) => storage?.getItem(PAIRED_STORAGE) === "1";
  * The tablet's side of pairing: one connection that offers the screen key and
  * waits for a phone to claim the code. Emits "code" ({ code, expiresInS }),
  * "claimed" ({ device }), "watching" (the device names watching the key, after
- * query()) and "error" (the server's { code, message }).
+ * query() or revoke()) and "error" (the server's { code, message }).
  */
 export class PairingSession extends Emitter {
   #socket = null;
   #welcomed = false;
   #wantQuery = false;
+  #wantRevoke = false;
 
   constructor({ url, createSocket = (u) => new WebSocket(u), key, name, storage }) {
     super();
@@ -58,6 +59,7 @@ export class PairingSession extends Emitter {
         this.#welcomed = true;
         if (this.offer) this.#offer();
         if (this.#wantQuery) this.#sendQuery();
+        if (this.#wantRevoke) this.#send(ClientMessages.screensRevoke(this.key));
       } else if (message.type === "pair_code") {
         this.emit("code", { code: message.code, expiresInS: message.expires_in_s });
       } else if (message.type === "pair_claimed") {
@@ -81,6 +83,15 @@ export class PairingSession extends Emitter {
   query() {
     this.#wantQuery = true;
     if (this.#welcomed) this.#sendQuery();
+  }
+
+  /**
+   * Tells the server this key is unpaired for good: its watchers are sent back to pairing and
+   * it is refused from now on. The answer comes as "watching" (empty). Waits for the welcome.
+   */
+  revoke() {
+    this.#wantRevoke = true;
+    if (this.#welcomed) this.#send(ClientMessages.screensRevoke(this.key));
   }
 
   #sendQuery() {

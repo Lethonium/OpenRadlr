@@ -1307,6 +1307,42 @@ async fn screens_query_lists_the_connected_watchers() {
 }
 
 #[tokio::test]
+async fn unpairing_all_screens_ends_the_watchers_and_refuses_the_key() {
+    let addr = start_server(0).await;
+    let mut phone = connect(addr).await;
+    hello(&mut phone).await;
+    send(&mut phone, &format!(r#"{{"type":"watch","key":"{SCREEN_KEY}"}}"#)).await;
+    expect_type(&mut phone, "watch_status").await;
+
+    let mut tablet = connect(addr).await;
+    hello(&mut tablet).await;
+    send(
+        &mut tablet,
+        &format!(r#"{{"type":"screens_revoke","key":"{SCREEN_KEY}"}}"#),
+    )
+    .await;
+    assert_eq!(
+        expect_type(&mut tablet, "screens_watching").await["devices"],
+        serde_json::json!([])
+    );
+    assert_eq!(expect_type(&mut phone, "error").await["code"], "bad_screen_key");
+
+    let mut late = connect(addr).await;
+    hello(&mut late).await;
+    send(&mut late, &format!(r#"{{"type":"watch","key":"{SCREEN_KEY}"}}"#)).await;
+    assert_eq!(expect_type(&mut late, "error").await["code"], "bad_screen_key");
+
+    let mut host = connect(addr).await;
+    hello(&mut host).await;
+    send(
+        &mut host,
+        &format!(r#"{{"type":"join","name":"Tablet","weight_kg":70,"screen_key":"{SCREEN_KEY}"}}"#),
+    )
+    .await;
+    assert_eq!(expect_type(&mut host, "error").await["code"], "bad_screen_key");
+}
+
+#[tokio::test]
 async fn info_announces_screens() {
     let addr = start_server(0).await;
     let (_, body) = http_get(addr, "/api/info").await;

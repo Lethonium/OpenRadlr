@@ -11,12 +11,15 @@
 use crate::protocol::ServerMessage;
 use openradlr_sim::RiderId;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::mpsc;
 
 /// Watchers one screen key serves at most.
 pub const MAX_WATCHERS: usize = 4;
+
+/// Revoked keys remembered at most; the oldest are forgotten first.
+pub const MAX_REVOKED: usize = 10_000;
 
 /// What a watcher sees of the host's ride.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -68,6 +71,9 @@ struct Entry {
 struct Registry {
     entries: HashMap<String, Entry>,
     next_id: u64,
+    revoked: HashSet<String>,
+    /// `revoked` in the order the keys were revoked.
+    revoked_order: VecDeque<String>,
 }
 
 impl Registry {
@@ -161,6 +167,31 @@ impl Screens {
             key: key.to_owned(),
             id,
         })
+    }
+
+    /// Ends the pairing of `key` for good: its watchers are dropped (their connections
+    /// notice through [`WatchGuard::is_revoked`]) and the key is refused from now on, see
+    /// [`Screens::is_revoked`]. Only the most recent [`MAX_REVOKED`] keys are remembered.
+    pub fn revoke(&self, key: &str) {
+        let mut reg = self.lock();
+        if reg.revoked.insert(key.to_owned()) {
+            reg.revoked_order.push_back(key.to_owned());
+            if reg.revoked_order.len() > MAX_REVOKED {
+                if let Some(oldest) = reg.revoked_order.pop_front() {
+                    reg.revoked.remove(&oldest);
+                }
+            }
+        }
+        if let Some(entry) = reg.entries.get_mut(key) {
+            entry.watchers.clear();
+            tell_host(entry);
+        }
+        reg.prune(key);
+    }
+
+    /// Whether `key` was revoked (and is not yet forgotten).
+    pub fn is_revoked(&self, key: &str) -> bool {
+        self.lock().revoked.contains(key)
     }
 
     /// The device names of the watchers of `key`, in arrival order (empty for an
@@ -278,6 +309,14 @@ pub struct WatchGuard {
 }
 
 impl WatchGuard {
+    /// Whether the watcher was dropped by [`Screens::revoke`]; its connection should end.
+    pub fn is_revoked(&self) -> bool {
+        let reg = self.screens.lock();
+        !reg.entries
+            .get(&self.key)
+            .is_some_and(|e| e.watchers.iter().any(|w| w.id == self.id))
+    }
+
     /// The host's status if it did not fit into the outbox, once. The watcher's
     /// connection sends it with a waiting send.
     pub fn pending_status(&self) -> Option<ServerMessage> {
@@ -541,6 +580,52 @@ mod tests {
         };
         assert_eq!(a.try_recv().unwrap(), expected);
         assert_eq!(b.try_recv().unwrap(), expected);
+    }
+
+    #[test]
+    fn revoking_a_key_drops_its_watchers_and_refuses_it_from_then_on() {
+        let screens = Screens::new();
+        let (guard, _rx) = watcher(&screens, WatchView::Data);
+        let (other, _rx2) = {
+            let (tx, rx) = outbox(4);
+            (screens.watch("other", WatchView::Data, None, tx).unwrap(), rx)
+        };
+        assert!(!guard.is_revoked());
+        assert!(!screens.is_revoked("k"));
+        screens.revoke("k");
+        assert!(guard.is_revoked());
+        assert!(screens.is_revoked("k"));
+        assert!(!other.is_revoked());
+        assert!(!screens.is_revoked("other"));
+        assert!(screens.watching("k").is_empty());
+    }
+
+    #[test]
+    fn revoking_tells_the_host_nobody_watches() {
+        let screens = Screens::new();
+        let host = screens.host("k", 1, "Ana".into());
+        let (host_tx, mut host_rx) = outbox(8);
+        host.notify_to(host_tx);
+        let (_g, _rx) = watcher(&screens, WatchView::Data);
+        while host_rx.try_recv().is_ok() {}
+        screens.revoke("k");
+        assert_eq!(
+            host_rx.try_recv().unwrap(),
+            ServerMessage::ScreensWatching { devices: vec![] }
+        );
+    }
+
+    #[test]
+    fn only_the_latest_revoked_keys_are_remembered() {
+        let screens = Screens::new();
+        for i in 0..=MAX_REVOKED {
+            screens.revoke(&format!("key{i}"));
+        }
+        assert!(!screens.is_revoked("key0"));
+        assert!(screens.is_revoked("key1"));
+        assert!(screens.is_revoked(&format!("key{MAX_REVOKED}")));
+        screens.revoke("key1");
+        assert_eq!(screens.lock().revoked.len(), MAX_REVOKED);
     }
 
     #[test]

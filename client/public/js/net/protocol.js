@@ -67,6 +67,7 @@ export const ClientMessages = Object.freeze({
   watch: (key, view = "data", device) => ({ type: "watch", key, view, ...(device ? { device } : {}) }),
   /** Asks which devices watch the screen key. */
   screensQuery: (key) => ({ type: "screens_query", key }),
+  screensRevoke: (key) => ({ type: "screens_revoke", key }),
   /** Opaque data for the paired screens (at most 2048 bytes, 2 per second). */
   display: (data) => ({ type: "display", data }),
 });

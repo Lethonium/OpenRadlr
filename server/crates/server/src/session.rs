@@ -98,6 +98,10 @@ pub enum Action {
     ScreensQuery {
         key: String,
     },
+    /// End the screen `key`'s watchers and refuse the key from now on.
+    ScreensRevoke {
+        key: String,
+    },
     /// Opaque display data to relay to the paired screens.
     Display(serde_json::Value),
     /// The rider answered an AFK warning with Stay.
@@ -336,6 +340,13 @@ impl Session {
                 device: clean_device(device),
             },
             (Phase::AwaitingJoin, ClientMessage::ScreensQuery { key }) => Action::ScreensQuery { key },
+            (Phase::AwaitingJoin, ClientMessage::ScreensRevoke { key }) => {
+                if valid_screen_key(&key) {
+                    Action::ScreensRevoke { key }
+                } else {
+                    bad_screen_key()
+                }
+            }
             (Phase::AwaitingJoin, ClientMessage::Watch { key, view, device }) => {
                 if valid_screen_key(&key) {
                     self.phase = Phase::Watching;
@@ -363,7 +374,8 @@ impl Session {
                 ClientMessage::PairOffer { .. }
                 | ClientMessage::PairClaim { .. }
                 | ClientMessage::Watch { .. }
-                | ClientMessage::ScreensQuery { .. },
+                | ClientMessage::ScreensQuery { .. }
+                | ClientMessage::ScreensRevoke { .. },
             ) => Action::Ignore,
             (Phase::Joined(_), ClientMessage::Hello { .. } | ClientMessage::Join { .. }) => Action::Reply(
                 ServerMessage::error("already_joined", "this connection has already joined"),
@@ -977,6 +989,21 @@ mod tests {
             Action::ScreensQuery { key: KEY.into() }
         );
         assert_eq!(s.phase(), Phase::AwaitingJoin);
+    }
+
+    #[test]
+    fn a_screens_revoke_needs_no_join_but_a_good_key() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            s.on_text(&format!(r#"{{"type":"screens_revoke","key":"{KEY}"}}"#), 0.1),
+            Action::ScreensRevoke { key: KEY.into() }
+        );
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+        assert!(is_error(
+            &s.on_text(r#"{"type":"screens_revoke","key":"short"}"#, 0.2),
+            "bad_screen_key"
+        ));
     }
 
     #[test]

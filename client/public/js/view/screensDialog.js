@@ -83,6 +83,16 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
     listSession = null;
   }
 
+  /** Has the server send the watchers of the current key back to pairing; it is renewed right after. */
+  function revokeKey() {
+    const revoker = createSession();
+    const finish = () => revoker.close();
+    revoker.on("watching", finish);
+    revoker.on("error", finish);
+    revoker.start({ offer: false });
+    revoker.revoke();
+  }
+
   function end() {
     stopTimer();
     stopList();
@@ -99,6 +109,7 @@ export function createScreensDialog({ els, createSession, now, setInterval, clea
   els.unpair.addEventListener("click", () => {
     if (!confirm(t("screens.unpairConfirm"))) return;
     end();
+    revokeKey();
     onUnpair();
     paired.clear();
     watching = [];

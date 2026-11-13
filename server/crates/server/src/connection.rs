@@ -108,6 +108,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         let _ = outbox.send(message).await;
                         break;
                     }
+                    Action::Join { screen_key: Some(ref key), .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
+                    }
                     Action::Join {
                         name,
                         weight_kg,
@@ -199,6 +203,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             Err(_) => break,
                         }
                     }
+                    Action::PairOffer { ref key, .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
+                    }
                     Action::PairOffer { key, name } => {
                         let code = state.pair_codes.offer(key, name, outbox.clone(), last_code.as_deref());
                         last_code = Some(code.clone());
@@ -213,6 +221,13 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                             break;
                         }
                     }
+                    Action::ScreensRevoke { key } => {
+                        state.screens.revoke(&key);
+                        let reply = ServerMessage::ScreensWatching { devices: Vec::new() };
+                        if outbox.send(reply).await.is_err() {
+                            break;
+                        }
+                    }
                     Action::PairClaim { code, device } => {
                         let reply = match state.pair_codes.claim(&code, device) {
                             Some((key, name)) => ServerMessage::Paired { key, name },
@@ -221,6 +236,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         if outbox.send(reply).await.is_err() {
                             break;
                         }
+                    }
+                    Action::Watch { ref key, .. } if state.screens.is_revoked(key) => {
+                        let _ = outbox.send(revoked_key()).await;
+                        break;
                     }
                     Action::Watch { key, view, device } => match state.screens.watch(&key, view, device, outbox.clone()) {
                         Ok(guard) => watching = Some(guard),
@@ -259,6 +278,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                     if outbox.send(status).await.is_err() {
                         break;
                     }
+                }
+                // The tablet unpaired this screen.
+                if watching.as_ref().is_some_and(WatchGuard::is_revoked) {
+                    let _ = outbox.send(revoked_key()).await;
+                    break;
                 }
                 if let Some(reason) = session.expired(now()) {
                     let _ = outbox.send(reason).await;
@@ -310,6 +334,10 @@ pub async fn serve(socket: WebSocket, state: AppState) {
 /// Codes are typed by hand: trimmed and upper-cased, as boarding does.
 fn normalise_code(code: &str) -> String {
     code.trim().to_ascii_uppercase()
+}
+
+fn revoked_key() -> ServerMessage {
+    ServerMessage::error("bad_screen_key", "the tablet unpaired this screen")
 }
 
 fn join_error(error: JoinError) -> ServerMessage {

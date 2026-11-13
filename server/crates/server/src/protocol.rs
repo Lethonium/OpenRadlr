@@ -164,6 +164,11 @@ pub enum ClientMessage {
     ScreensQuery {
         key: String,
     },
+    /// The tablet unpaired all its screens: end the watchers of the screen `key`
+    /// and refuse the key from now on. Answered with `screens_watching`.
+    ScreensRevoke {
+        key: String,
+    },
     /// Opaque display data for the paired screens.
     Display {
         data: serde_json::Value,

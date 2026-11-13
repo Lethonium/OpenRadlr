@@ -66,6 +66,7 @@ Workout riders are exempt.
 | `pair_claim` | `code`, `device`? (≤ 40 characters) | a phone claims a pairing code; no `join` needed, after `hello`. The `device` name goes to the tablet |
 | `watch` | `key`, `view`?: `data` (default) \| `world`, `device`? (≤ 40 characters) | a phone watches the screen `key` instead of joining; takes no seat. See [Second screens](#second-screens) |
 | `screens_query` | `key` | asks which devices watch the screen `key`; no `join` needed, after `hello`. Always answered with `screens_watching` (empty for an unknown key) |
+| `screens_revoke` | `key` | the tablet unpaired all its screens: the key's watchers get `error { code: "bad_screen_key" }` and are closed, and the key is refused from then on (`watch`, `pair_offer` and `join.screen_key` get `bad_screen_key`). No `join` needed, after `hello`. Answered with an empty `screens_watching`. The server remembers at most the latest 10 000 revoked keys, in memory only |
 | `display` | `data`: a JSON object, at most 2048 bytes serialised | a joined host sends opaque data for its paired screens, at most 2 per second. Bigger or faster messages are dropped without a reply |
 
 ## Server → client
@@ -179,7 +180,7 @@ belongs to another world; `message` is `route:<id>` to rejoin with), `not_captai
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
 `in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`,
 `afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
-Second screens: `bad_screen_key` (a `screen_key`, `key` or pairing key that is not 32 lowercase hex characters), `pair_code_invalid` (unknown or expired code), `pair_code_expired` (an offering connection's code ran out; connection closed), `too_many_screens` (a fifth watcher; connection closed).
+Second screens: `bad_screen_key` (a `screen_key`, `key` or pairing key that is not 32 lowercase hex characters, or one the tablet revoked with `screens_revoke`), `pair_code_invalid` (unknown or expired code), `pair_code_expired` (an offering connection's code ran out; connection closed), `too_many_screens` (a fifth watcher; connection closed).
 
 ### Reconnecting
 
@@ -244,6 +245,11 @@ key and meet again on the next ride.
   through.
 - A watcher can send `leave`. Other messages are ignored. It takes no seat,
   is not counted in `players`, and the AFK timeout does not apply to it.
+- When the tablet unpairs all screens it sends `screens_revoke { key }` for
+  its old key (and makes a new one). The watchers of that key get
+  `error { code: "bad_screen_key" }` and are closed; the cockpit and VR pages
+  then offer to pair again. The key stays refused until the server forgets it
+  (a restart, or 10 000 newer revoked keys).
 - A key has at most 4 watchers. A fifth gets `error { code: "too_many_screens" }`
   and is closed.
 - A host's `display` is at most 2048 bytes serialised and at most 2 per second
@@ -314,7 +320,7 @@ Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` wi
 Second screens (#87) added `pair_offer`, `pair_code`, `pair_claim`, `paired`, `pair_claimed`, `watch`, `watch_status`, `display`, `join.screen_key`, `screens` in `/api/info` and the `bad_screen_key`, `pair_code_invalid`, `pair_code_expired` and `too_many_screens` errors within version 2.
 Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
-The list of paired screens added `pair_claim.device`, `watch.device`, `pair_claimed.device`, `screens_query` and `screens_watching` within version 2.
+The list of paired screens added `pair_claim.device`, `watch.device`, `pair_claimed.device`, `screens_query` and `screens_watching` within version 2. Unpairing added `screens_revoke` within version 2.
 VR headset display added `watch_status.rider_id` and `xr_preview` in `/api/info` within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.
