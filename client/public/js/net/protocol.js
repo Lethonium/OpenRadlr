@@ -13,6 +13,8 @@ export const ClientMessages = Object.freeze({
     type: "join",
     name,
     weight_kg: weightKg,
+    // The valley world then also lists the spin studio's riders.
+    features: ["studio_riders"],
     ...(publicKey ? { public_key: publicKey } : {}),
     ...(routeId ? { route_id: routeId } : {}),
     // The spin studio sets targets from it; route worlds ignore it.

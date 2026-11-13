@@ -55,6 +55,7 @@
     <link rel="modulepreload" href="js/ride/ridePause.js" />
     <link rel="modulepreload" href="js/ride/rideRecorder.js" />
     <link rel="modulepreload" href="js/ride/rideSession.js" />
+    <link rel="modulepreload" href="js/ride/roadRiders.js" />
     <link rel="modulepreload" href="js/ride/smoothing.js" />
     <link rel="modulepreload" href="js/ride/splits.js" />
     <link rel="modulepreload" href="js/ride/trainingControl.js" />
@@ -91,6 +92,7 @@
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
     <link rel="modulepreload" href="js/view/stravaUploadView.js" />
+    <link rel="modulepreload" href="js/view/studioWorld.js" />
     <link rel="modulepreload" href="js/view/vehicleView.js" />
     <link rel="modulepreload" href="js/view/viewControls.js" />
     <link rel="modulepreload" href="js/view/viewPopover.js" />
@@ -100,6 +102,7 @@
     <link rel="modulepreload" href="js/view3d/biomes/index.js" />
     <link rel="modulepreload" href="js/view3d/highlight.js" />
     <link rel="modulepreload" href="js/view3d/menuCamera.js" />
+    <link rel="modulepreload" href="js/view3d/studioCamera.js" />
     <link rel="modulepreload" href="js/view3d/studioScene.js" />
     <link rel="modulepreload" href="js/view3d/view3d.js" />
     <link rel="modulepreload" href="js/view3d/worldScene.js" />
@@ -151,6 +154,10 @@
     <link rel="modulepreload" href="js/view3d/riderPose.js" />
     <link rel="modulepreload" href="js/view3d/statues.js" />
     <link rel="modulepreload" href="js/view3d/structures.js" />
+    <link rel="modulepreload" href="js/view3d/studioBuilding.js" />
+    <link rel="modulepreload" href="js/view3d/studioLayer.js" />
+    <link rel="modulepreload" href="js/view3d/studioLayout.js" />
+    <link rel="modulepreload" href="js/view3d/studioRoom.js" />
     <link rel="modulepreload" href="js/view3d/vehicleModel.js" />
     <link rel="modulepreload" href="js/view3d/vehicleScene.js" />
     <link rel="modulepreload" href="js/view3d/world.js" />
@@ -162,11 +169,11 @@
     <link rel="modulepreload" href="js/view3d/biomes/winter/people.js" />
     <link rel="modulepreload" href="js/view3d/biomes/winter/terrain.js" />
     <link rel="modulepreload" href="js/view3d/features.js" />
+    <link rel="modulepreload" href="js/view3d/pixelFont.js" />
     <link rel="modulepreload" href="js/view3d/weather.js" />
     <link rel="modulepreload" href="js/view3d/zones.js" />
     <link rel="modulepreload" href="js/view3d/biomes/helpers.js" />
     <link rel="modulepreload" href="js/view3d/biomes/winter/animals.js" />
-    <link rel="modulepreload" href="js/view3d/pixelFont.js" />
     <!-- /modulepreload -->
   </head>
   <body>
@@ -430,10 +437,6 @@
           <div id="labels3d" class="labels3d" aria-hidden="true"></div>
         </div>
         <canvas id="ride-map" class="canvas-ride-map" aria-label="Top-down map of the road around you" data-i18n-attr="aria-label:ride.mapOfTheRoad"></canvas>
-        <div id="studio-wrap" class="world-wrap studio-only" hidden>
-          <canvas id="studio3d" class="canvas-world" aria-label="3D view of the spin studio" data-i18n-attr="aria-label:ride.3dViewOfThe2"></canvas>
-          <div id="studio-labels" class="labels3d" aria-hidden="true"></div>
-        </div>
 
         <!-- Phone paddles: tap left and right in turn; swipe above them for lanes -->
         <div id="paddles" class="paddles" data-zone="idle" hidden>

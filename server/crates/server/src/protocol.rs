@@ -4,6 +4,7 @@
 //! for the full description. Bump [`PROTOCOL_VERSION`] on breaking changes.
 
 use crate::obn::remote::RemoteRider;
+use crate::studio_mirror::StudioSeat;
 use openradlr_sim::events::{EventInfo, EventKind, EventLength, EventNotice, EventResult, EventView};
 use openradlr_sim::physics::RiderPhysics;
 use openradlr_sim::race::{RaceEvent, RacePhase, RaceResult};
@@ -70,6 +71,10 @@ pub enum ClientMessage {
         /// Where the ride left off; the server places the rider there.
         #[serde(default)]
         resume: Option<ResumePoint>,
+        /// Optional extras the client wants; `"studio_riders"` shows the spin studio's riders
+        /// on the road. Unknown entries are ignored.
+        #[serde(default)]
+        features: Vec<String>,
     },
     Telemetry {
         power: f64,
@@ -282,6 +287,9 @@ pub enum ServerMessage {
         rooms: usize,
         class: ClassState,
         riders: Vec<SeatState>,
+        /// What the room's windows show: riders on the road outside and in the other rooms.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        road_riders: Vec<RiderState>,
     },
     Resistance {
         grade_percent: f64,
@@ -492,6 +500,16 @@ pub struct RiderState {
     /// What a bot is doing (`pull`, `attack`, `answer`, `sprint`); left out while it just rides.
     #[serde(rename = "move", skip_serializing_if = "Option::is_none")]
     pub bot_move: Option<&'static str>,
+    /// Where in the spin studio the rider sits, for studio riders shown on the road.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub studio: Option<StudioPlace>,
+}
+
+/// A room and bike of the spin studio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct StudioPlace {
+    pub room: usize,
+    pub seat: usize,
 }
 
 impl RiderState {
@@ -518,6 +536,37 @@ impl RiderState {
             team: None,
             style: None,
             bot_move: None,
+            studio: None,
+        }
+    }
+
+    /// A rider on a studio bike, as the road shows them: on no route, at rest.
+    pub fn studio_seat(s: &StudioSeat) -> RiderState {
+        RiderState {
+            id: s.id,
+            name: s.name.clone(),
+            is_bot: s.is_bot,
+            route: None,
+            distance: 0.0,
+            road: None,
+            lap: None,
+            lane: 0.0,
+            speed: 0.0,
+            power: s.power.round(),
+            device: DeviceKind::Trainer,
+            vehicle: None,
+            cadence: s.cadence.map(f64::round),
+            parked: false,
+            exercise: None,
+            app: None,
+            side: None,
+            team: None,
+            style: None,
+            bot_move: None,
+            studio: Some(StudioPlace {
+                room: s.room,
+                seat: s.seat,
+            }),
         }
     }
 }
@@ -886,7 +935,33 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         team: bot.map(|b| b.profile().team.id()),
         style: bot.map(|b| b.profile().style.id()),
         bot_move: bot.and_then(|b| b.current_move().id()),
+        studio: None,
     }
+}
+
+/// Humans before bots, then nearest to `at` first.
+fn sort_nearest(world: &World, riders: &mut [&Rider], at: (f64, f64)) {
+    let distance = |r: &Rider| {
+        let (rx, ry) = world.rider_xy(r);
+        (rx - at.0).hypot(ry - at.1)
+    };
+    riders.sort_by(|a, b| a.is_bot().cmp(&b.is_bot()).then(distance(a).total_cmp(&distance(b))));
+}
+
+/// The `max` riders nearest to the world position `at`, humans before bots.
+pub fn nearest_riders(
+    world: &World,
+    at: (f64, f64),
+    max: usize,
+    tags_of: &dyn Fn(RiderId) -> RiderTags,
+) -> Vec<RiderState> {
+    let mut riders: Vec<&Rider> = world.riders().collect();
+    sort_nearest(world, &mut riders, at);
+    riders
+        .into_iter()
+        .take(max)
+        .map(|r| rider_state(world, r, tags_of(r.id)))
+        .collect()
 }
 
 /// State as `viewer` sees it: at most `max_visible` riders, whatever their
@@ -910,12 +985,7 @@ pub fn state_message(
             || own_vehicle.is_some_and(|v| v.seats.contains(&Some(r.id)))
             || (r.route == me.route && world.is_entered(r.id))
     });
-    // Humans before bots, then nearest first; the rest of the list is cut off.
-    let distance = |r: &Rider| {
-        let (rx, ry) = world.rider_xy(r);
-        (rx - x).hypot(ry - y)
-    };
-    others.sort_by(|a, b| a.is_bot().cmp(&b.is_bot()).then(distance(a).total_cmp(&distance(b))));
+    sort_nearest(world, &mut others, (x, y));
     others.truncate(max_visible.saturating_sub(always.len()));
     always.extend(others);
     let riders = always
@@ -969,7 +1039,7 @@ fn vehicle_state(world: &World, v: &Vehicle) -> VehicleState {
 }
 
 /// State of one studio room.
-pub fn studio_state_message(studio: &Studio, room: usize, tick: u64) -> ServerMessage {
+pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[RiderState]) -> ServerMessage {
     let clock = studio.clock();
     let class = studio.timetable().class(&clock);
     let riders = studio.rooms()[room]
@@ -998,6 +1068,7 @@ pub fn studio_state_message(studio: &Studio, room: usize, tick: u64) -> ServerMe
             elapsed_s: round2(clock.elapsed_s),
         },
         riders,
+        road_riders: road.to_vec(),
     }
 }
 
@@ -1138,6 +1209,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                features: vec![],
             }
         );
         assert_eq!(
@@ -1153,6 +1225,7 @@ mod tests {
                 vehicle_code: None,
                 resume_token: None,
                 resume: None,
+                features: vec![],
             }
         );
         let paddler =
@@ -1261,7 +1334,35 @@ mod tests {
             team: None,
             style: None,
             bot_move: None,
+            studio: None,
         }
+    }
+
+    #[test]
+    fn a_studio_seat_serialises_with_its_place_and_no_route() {
+        let seat = StudioSeat {
+            id: 7,
+            name: "Anna".into(),
+            is_bot: false,
+            power: 150.0,
+            cadence: Some(90.0),
+            room: 1,
+            seat: 4,
+        };
+        let json = serde_json::to_string(&RiderState::studio_seat(&seat)).unwrap();
+        assert!(json.contains(r#""studio":{"room":1,"seat":4}"#), "{json}");
+        assert!(json.contains(r#""route":null"#), "{json}");
+    }
+
+    #[test]
+    fn join_features_default_to_empty() {
+        let plain = ClientMessage::parse(r#"{"type":"join","name":"Anna","weight_kg":70}"#).unwrap();
+        assert!(matches!(plain, ClientMessage::Join { features, .. } if features.is_empty()));
+        let asked = ClientMessage::parse(
+            r#"{"type":"join","name":"Anna","weight_kg":70,"features":["studio_riders","future"]}"#,
+        )
+        .unwrap();
+        assert!(matches!(asked, ClientMessage::Join { features, .. } if features == ["studio_riders", "future"]));
     }
 
     #[test]

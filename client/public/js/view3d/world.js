@@ -20,6 +20,7 @@ import {
   buildBridge,
   buildBikeCafe,
   buildOutdoorGym,
+  studioSite,
   buildFarms,
   buildRiverPath,
   buildRiverWater,
@@ -1052,6 +1053,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const cafes = [];
   const cafeSpots = [];
   const gyms = [];
+  let studio = null;
   for (const { road: r, cafeId } of cafeRoads) {
     const start = r.positionAt(0);
     if (cafes.some((c) => Math.hypot(c.x - start.x, c.y - start.y) < 30)) continue;
@@ -1062,6 +1064,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The outdoor gym next to it, where workout riders train (#77).
     const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome, cafeId });
     if (gym) gyms.push(gym);
+    // The spin studio across the road from the Valley Café only.
+    if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
@@ -1130,6 +1134,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     zones: zonesOf.get(route),
     cafes: cafeSpots,
     gyms,
+    studio,
     waterLevel: ground.water,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),

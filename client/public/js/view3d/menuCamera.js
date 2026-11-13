@@ -14,6 +14,7 @@
  * coarse height grid), so it runs on the main thread without the terrain.
  */
 import { lerp3 } from "./math.js";
+import { FLOOR_HEIGHT } from "./studioBuilding.js";
 import { roadFrame } from "./world.js";
 
 export const MENU_CAMERA = Object.freeze({
@@ -41,6 +42,9 @@ export const MENU_CAMERA = Object.freeze({
   gymRate: 0.09,
   gymDistance: 38,
   gymHeight: 17,
+  /** Circling the spin studio (a two-floor glass box at least): distance and height (metres). */
+  studioDistance: 40,
+  studioHeight: 15,
   /** Close on one gym statue: metres in front of the plinth and above its top, the sideways swing (rad) and its rate (rad/s). */
   statueDistance: 4.5,
   statueHeight: 2,
@@ -113,6 +117,15 @@ export function gymPose(gym, overview, angle, settings = MENU_CAMERA) {
   // A hill beside the gym lifts the camera, never into it.
   eye[1] = Math.max(eye[1], groundAt(overview, eye[0], eye[2]) + settings.gymHeight * 0.6);
   return { eye, target: [cx, cy + 1.2, cz] };
+}
+
+/** Over the spin studio (`{position, yaw}`), looking at the middle of its two floors from `angle`. */
+export function studioPose(site, overview, angle, settings = MENU_CAMERA) {
+  const [cx, cy, cz] = site.position;
+  const eye = [cx + Math.cos(angle) * settings.studioDistance, cy + settings.studioHeight, cz + Math.sin(angle) * settings.studioDistance];
+  // A hill beside the studio lifts the camera, never into it.
+  eye[1] = Math.max(eye[1], groundAt(overview, eye[0], eye[2]) + settings.studioHeight * 0.6);
+  return { eye, target: [cx, cy + FLOOR_HEIGHT, cz] };
 }
 
 /**
@@ -191,6 +204,21 @@ function gymShot(ctx, gym) {
     },
     pose() {
       return gymPose(gym, ctx.overview, this.angle, ctx.settings);
+    },
+  };
+}
+
+function studioShot(ctx, site) {
+  return {
+    view: "studio",
+    site,
+    // Start in front of the glass, on the road side.
+    angle: Math.atan2(-Math.cos(site.yaw), -Math.sin(site.yaw)) - 0.6,
+    advance(step, landed) {
+      if (ctx.moving && landed) this.angle = (this.angle + ctx.settings.gymRate * step) % (2 * Math.PI);
+    },
+    pose() {
+      return studioPose(site, ctx.overview, this.angle, ctx.settings);
     },
   };
 }
@@ -299,6 +327,12 @@ export class MenuCamera {
   showGym(gym) {
     if (this.#goal.view === "gym" && this.#goal.gym === gym) return;
     this.#go(gymShot(this.#ctx, gym));
+  }
+
+  /** Glide down to the spin studio (`{position, yaw}`) and circle it. */
+  showStudio(site) {
+    if (this.#goal.view === "studio" && this.#goal.site === site) return;
+    this.#go(studioShot(this.#ctx, site));
   }
 
   /** Glide down to a gym statue (`{position, yaw, top}`) and look at it from the road side. */
