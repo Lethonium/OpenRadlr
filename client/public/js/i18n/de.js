@@ -1044,4 +1044,12 @@ export default {
   "profilePage.data.deleteAll": "Alles auf diesem Gerät löschen",
   "profilePage.data.exportFailed": "Export ging nicht: Dieser Browser hat OpenRadlr seinen Speicher nicht lesen lassen.",
   "profilePage.data.note": "Was dieses Gerät verlässt: Während du fährst, bekommt der Server deinen Namen, dein Gewicht, dein Fahrniveau und deinen Fahrer-Schlüssel sowie deine laufende Fahrt. Zu Strava geht eine Fahrt nur, wenn du sie hochlädst. Alles andere bleibt hier.",
+  "profilePage.ftp.title": "FTP im Verlauf",
+  "profilePage.ftp.legendSet": "Eingestellte FTP",
+  "profilePage.ftp.legendEstimate": "Aus deinen Fahrten geschätzt",
+  "profilePage.ftp.legendTest": "FTP-Test",
+  "profilePage.ftp.notEnough": "Fahr ein paar Wochen mit Leistungsmesser oder Smart-Trainer, dann siehst du hier, wie sich deine FTP bewegt.",
+  "profilePage.ftp.chart": "FTP im Verlauf: {parts}.",
+  "profilePage.ftp.chartSet": "eingestellt von {from} W auf {to} W",
+  "profilePage.ftp.chartEstimate": "aus deinen Fahrten geschätzt zuletzt {last} W",
 };

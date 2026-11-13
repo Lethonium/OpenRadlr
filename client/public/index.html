@@ -479,6 +479,16 @@
                     <h3 data-i18n="profilePage.totals">Totals</h3>
                     <dl id="profile-totals" class="profile-totals"></dl>
                   </div>
+                  <div id="profile-ftp-panel" class="panel">
+                    <h3 data-i18n="profilePage.ftp.title">FTP over time</h3>
+                    <canvas id="profile-ftp-chart" class="profile-ftp-chart" role="img"></canvas>
+                    <ul id="profile-ftp-legend" class="profile-legend">
+                      <li class="legend-set" data-i18n="profilePage.ftp.legendSet">Set FTP</li>
+                      <li class="legend-estimate" data-i18n="profilePage.ftp.legendEstimate">Estimated from your rides</li>
+                      <li class="legend-test" data-i18n="profilePage.ftp.legendTest">FTP test</li>
+                    </ul>
+                    <p id="profile-ftp-note" class="field-hint" hidden data-i18n="profilePage.ftp.notEnough">Ride with a power meter or smart trainer for a few weeks to see your FTP move.</p>
+                  </div>
                   <div class="panel">
                     <h3 data-i18n="profilePage.bestLaps">Best laps</h3>
                     <ul id="profile-bests" class="profile-list"></ul>
