@@ -40,7 +40,7 @@
   - shown grouped `ABC DEF`;
   - device names at most 40 characters.
 - **No duplicate CSS rules:** in `styles.css` a selector must not repeat, and a property must not be overridden in the same rule. Reuse `.menu-dialog`, `.secondary` and the existing input rules.
-- **Commits:** use `git -c user.email=lethonium.software@gmail.com commit …` and end every message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Commits:** commit with the global git identity (its noreply address links the commits to the GitHub account; never pass another `user.email`) and end every message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
 
