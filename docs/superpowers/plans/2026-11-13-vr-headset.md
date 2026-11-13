@@ -257,6 +257,51 @@ Added after Task 3, at the user's request: the window shows the tablet's ride HU
 - [ ] **Step 7: Run the full client checks.** Expected: all pass.
 - [ ] **Step 8: Commit** `feat(client): Show the full ride HUD in the headset window`.
 
+### Task 3c: Workout, race and units in the VR window
+
+Added after the window check: the training and race layouts were missing their workout and race parts, and the headset showed mph for a metric tablet. Two commits: a refactor, then the feature.
+
+**Files:**
+- Modify:
+  - `client/public/js/view/rideHud.js`
+  - `client/public/js/main.js` (`renderWorkoutProgress` ~4058, lines 4076–4088; the race fields after `raceStanding` ~4436; `renderRaceLists` ~3835)
+  - `client/public/js/display/displayFrame.js`
+  - `client/public/js/vr/main.js`, `vr.html`, `styles.css`
+  - `client/public/js/cockpit/main.js` (units)
+  - `docs/protocol.md` (the display frame's fields)
+- Create: `client/public/js/vr/workoutFromPlan.js`
+- Test:
+  - `client/test/rideHud.test.js`
+  - `client/test/displayFrame.test.js` (or the existing display frame test)
+  - `client/test/vr/workoutFromPlan.test.js`
+
+**Interfaces:**
+- Produces (refactor, moved from `main.js` with no behaviour change):
+  - `RideHud#renderWorkout({ workout, state, ftp, intensity, avgW: number|null, paused, layout })` covers the chart, block, next, block time, elapsed, remaining, average and progress.
+  - `RideHud#renderRace({ race, standing, status })` covers `lap-info`, `position`, `lap`, `to-go`, `race-caption`, the timeline being hidden, and the groups lists.
+  - Whatever `main.js` keeps (the tablet's own controls and the race call) stays there.
+- Produces (feature):
+  - The display frame gains `units: "metric" | "imperial"` (the tablet's profile). The cockpit and VR pages call `setUnits` from it when present, and fall back to the local profile.
+  - `workoutFromPlan(plan, ftp): workout` gives the shape `drawWorkout` and `renderWorkout` read. Segments have `durationS`, `from`, `to` (as FTP fractions) and no label.
+  - `workoutState(workout, frameWorkout): state` gives `{ index, elapsedS, remainingS, segmentRemainingS, segment, finished: false }` from `step` and `step_elapsed_s`.
+  - The VR page renders the training layout with these, using intensity 1 (the target already carries it). `avgW` is averaged on the page over the workout's frames.
+  - It renders the race layout with `raceStanding` from the relayed `state.race`. The status text is built as the tablet builds it.
+- Polish:
+  - "Back to the app" uses the app's `.text-button glass` look like the other buttons in the bar.
+  - The camera button hides in preview and in VR (the camera is the head there).
+
+- [ ] **Step 1 (refactor): Write the failing tests.**
+  - `renderWorkout fills the block and progress` with a fake root: two segments, 30 s into the second, progress 75% for 40 + 40 s.
+  - `renderRace shows the position and laps` and `renderRace hides the timeline without a standing`.
+- [ ] **Step 2: Move the code; switch `main.js`.** Run the full client checks; expected all pass.
+- [ ] **Step 3: Commit** `refactor(client): Share the ride HUD's workout and race parts`.
+- [ ] **Step 4 (feature): Write the failing tests.**
+  - `displayFrame` carries the units.
+  - `workoutFromPlan` turns watts into FTP fractions (a 200→300 W step at FTP 200 gives `from` 1, `to` 1.5).
+  - `workoutState` puts step 1 with 30 s elapsed of steps 60 s and 120 s at an elapsed time of 90 s, with 90 s remaining.
+- [ ] **Step 5: Implement.** Run the full client checks; expected all pass.
+- [ ] **Step 6: Commit** `feat(client): Show the workout, race and the tablet's units in the headset window`.
+
 ### Task 4: Draw the 3D view per view (refactor)
 
 **Files:**
