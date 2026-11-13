@@ -168,9 +168,9 @@ One PR, ordered commits (the project's way for one feature).
 
 1. Profile dialog shell: markup, a second `createMenuDialog`, opener in the Rider box, three empty pages.
 2. Overview: rider, totals, best laps (`GhostStore.all`).
-3. Rides: list, inline detail, delete (`RideHistory.delete`).
+3. Rides: list, inline detail, delete (`RideHistory.delete`) with the delete confirmation.
 4. FTP over time.
-5. Your data: inventory, export, delete, with the delete confirmation (also used by step 3).
+5. Your data: inventory, export, delete (reusing the delete confirmation).
 
 ## Left to the builder
 
