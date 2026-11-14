@@ -126,7 +126,7 @@ rather than imposing a fixed block.
 | training | `.hud-goals` only, upper-left (the workout band owns the bottom) |
 | broadcast | `.hud-goals` above `.nearby` |
 | race | `.hud-goals` above the groups/nearby list |
-| studio | `.hud-goals` upper-left — the studio moves the ticker to the right and the coach cue to the top centre, so the mid-left is free |
+| studio | none: the studio leaves the left free, but goals are left out there for now (workouts don't count toward goals; revisit with quests) |
 
 ### Small screens
 
@@ -185,20 +185,16 @@ rather than imposing a fixed block.
 - Anything that changes the simulation or the server (still cosmetic/meta only).
 - Editing goals during a ride (that stays on the profile, before a ride).
 
+## Decisions (2026-11-14)
+
+1. **Broadcast and race:** the goals list sits **above** the nearby riders, both in
+   the shared left column.
+2. **Phones:** one glanceable line, no button or sheet.
+3. **Studio:** no goals section for now (revisit with quests).
+
 ## Left to the builder
 
 - Exact column width, spacing and glass styling within the existing HUD CSS.
-- Phone collapse wording/markup (one line vs. a button + sheet), chosen after checking
-  the two breakpoints.
-- Whether the studio shows the goals section (workouts don't count toward goals, but a
-  lap or total goal could still be useful) — decide with a quick UI check.
+- Phone collapse markup and wording for the one line (reuse `goalLine`'s text).
 - Whether the cockpit tile is added by default to new cockpit layouts or offered in the
   add-tile catalogue only.
-
-## Open questions for the user
-
-1. In broadcast and race, is **goals above the nearby riders** acceptable, or should
-   goals yield to riders there (rider list first, goals below or a compact line)?
-2. On phones, prefer **one glanceable line** (no tapping) or a **small goals button**
-   that opens the full list?
-3. Should the **studio** show the goals section?
