@@ -9,7 +9,9 @@
  * snapshots, and a critically damped spring follows that line. A lane change
  * moves at the server's pace, eased in and out, instead of stepping at 4 Hz
  * (each new snapshot used to kick the sideways speed). The spring makes up
- * for the delay: a change still lands as soon as it used to.
+ * for the delay: a change still lands as soon as it used to. My own rider
+ * skips the delay (`laneDelayOf`), so steering answers at once and lemons and
+ * the ghost lap see my lane without it.
  */
 /** Distances of riders off every route (#15) just grow: no loop to wrap around. */
 const OPEN_ROAD = Object.freeze({ wrap: (d) => d, signedGap: (a, b) => b - a });
@@ -22,12 +24,16 @@ export class RiderSmoother {
    * @param {{maxExtrapolationS?: number, correctionRate?: number, routeOf?: (rider: object) => object | undefined}} [options]
    *   `routeOf` finds a rider's own route (riders of other routes on the map, #14); `route` without it
    */
-  constructor(route, { maxExtrapolationS = 0.6, correctionRate = 6, laneDelayS = 0.25, laneStiffness = 18, routeOf = () => undefined } = {}) {
+  /**
+   * `laneDelayOf(rider)` gives the seconds a rider's lane is drawn behind its
+   * snapshots (default `laneDelayS` for everyone); 0 for my own rider.
+   */
+  constructor(route, { maxExtrapolationS = 0.6, correctionRate = 6, laneDelayS = 0.25, laneDelayOf = () => laneDelayS, laneStiffness = 18, routeOf = () => undefined } = {}) {
     this.route = route;
     this.routeOf = routeOf;
     this.maxExtrapolationS = maxExtrapolationS;
     this.correctionRate = correctionRate;
-    this.laneDelayS = laneDelayS;
+    this.laneDelayOf = laneDelayOf;
     this.laneStiffness = laneStiffness;
   }
 
@@ -85,7 +91,7 @@ export class RiderSmoother {
 
   /** Moves `entry.lane` along the lane one update back, through a critically damped spring. */
   #glideLane(entry, nowS, dt) {
-    const target = laneAt(entry.lanes, nowS - this.laneDelayS);
+    const target = laneAt(entry.lanes, nowS - this.laneDelayOf(entry.snapshot));
     // A long pause (a hidden tab): no spring to wind up, just be there.
     if (dt > 0.5) {
       entry.lane = target;

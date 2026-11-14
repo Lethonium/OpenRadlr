@@ -69,8 +69,8 @@ test("smoother wraps riders of other routes at their own route's line (#14)", ()
 });
 
 /** A lane change from 1 to 2 at a lane per second, sent at 4 Hz and drawn at 60 fps. */
-function drawLaneChange() {
-  const smoother = new RiderSmoother(squareRoute());
+function drawLaneChange(options = {}) {
+  const smoother = new RiderSmoother(squareRoute(), options);
   const laneAt = (t) => 1 + Math.min(1, Math.max(0, t - 0.5));
   const lanes = [];
   let next = 0;
@@ -94,6 +94,17 @@ test("smoother settles a lane change in its lane, without overshooting", () => {
   const { lanes } = drawLaneChange();
   assert.ok(Math.max(...lanes.map((l) => l.lane)) <= 2 + 1e-9, "never past lane 2");
   assert.ok(lanes.find((l) => l.lane > 1.98).t <= 1.95, "in lane 2 no later than before the glide");
+});
+
+test("my own rider's lane change is not drawn late: no delay, and ahead of before", () => {
+  // Old behaviour: an exponential blend (rate 6) to each new snapshot; it reached lane 2 at 1.95 s.
+  const mine = drawLaneChange({ laneDelayOf: (rider) => (rider.id === 1 ? 0 : 0.25) }).lanes;
+  const others = drawLaneChange().lanes;
+  const reached = (lanes) => lanes.find((l) => l.lane > 1.98).t;
+  assert.ok(reached(mine) <= 1.95 - 0.15, `in lane 2 at ${reached(mine).toFixed(2)} s, well before the old 1.95 s`);
+  assert.ok(reached(mine) < reached(others), "ahead of other riders, who glide a quarter second behind");
+  const lanes = mine;
+  assert.ok(Math.max(...lanes.map((l) => l.lane)) <= 2 + 1e-9, "never past lane 2");
 });
 
 test("smoother forgets riders that left", () => {
