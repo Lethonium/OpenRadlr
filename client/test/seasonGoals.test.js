@@ -74,6 +74,15 @@ test("loadGoals: a goal missing its target is dropped, the valid one kept", () =
   assert.equal(state.rhythmStartMs, MON);
 });
 
+test("loadGoals: a goal whose end is before its start is dropped, the rest still usable", () => {
+  const backwards = { ...goalOver(10), id: "bad", startMs: at(2027, 2, 1), endMs: at(2027, 1, 1) };
+  const state = loadGoals(fakeStorage(JSON.stringify({ version: 1, rhythmStartMs: MON, goals: [backwards, goalOver(10)] })));
+  assert.deepEqual(state.goals.map((goal) => goal.id), ["g1"]);
+  // The junk goal never reaches goalWeek, so reading a week never throws.
+  const w = goalWeek(state.goals[0], { records: [], best: null, rhythmStartMs: state.rhythmStartMs, nowMs: week(1) });
+  assert.equal(w.index, 1);
+});
+
 test("loadGoals: a throwing storage is an empty state", () => {
   const storage = { getItem: () => { throw new Error("denied"); } };
   assert.deepEqual(loadGoals(storage), { rhythmStartMs: null, image: "reached", goals: [] });
@@ -267,6 +276,16 @@ test("long: a recovery week asks 70 % of the longest so far", () => {
   const w = goalWeek(longGoal, { records: [ride(week(3), 38 * KM)], best: null, rhythmStartMs: MON, nowMs: week(4) });
   assert.equal(w.recovery, true);
   near(w.step, 0.7 * 38 * KM);
+});
+
+test("long: an easy week with no ride yet asks a share of the week's plan, not zero", () => {
+  const w = goalWeek(longGoal, { records: [], best: null, rhythmStartMs: MON, nowMs: week(4) });
+  assert.equal(w.recovery, true);
+  assert.ok(w.step > 0, `easy week asks ${w.step}`);
+  assert.equal(w.done, false);
+  // 70 % of the build step this Monday would ask without any history:
+  // ease-out at build week 3 of 7 leaves 0.36 of the 50 km target.
+  near(w.step, 0.7 * 0.36 * 50 * KM);
 });
 
 test("long: the ride in progress counts for this week's long ride", () => {
