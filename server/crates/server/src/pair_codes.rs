@@ -17,7 +17,7 @@ pub const PAIR_CODE_TTL_S: f64 = 300.0;
 
 /// The characters a pairing code is drawn from. No I, L, O, 0 or 1, so a code
 /// read aloud or off a screen is unambiguous.
-pub const PAIR_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+pub const PAIR_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // pragma: allowlist secret (an alphabet)
 
 const CODE_LEN: usize = 6;
 
