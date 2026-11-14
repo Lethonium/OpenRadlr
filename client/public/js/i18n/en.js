@@ -1131,4 +1131,5 @@ export default {
   "goals.form.date": "Date",
   "goals.form.save": "Save goal",
   "goals.form.cancel": "Cancel",
+  "goals.menu.hint": "You set and change goals on your profile, before a ride.",
 };
