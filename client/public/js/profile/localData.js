@@ -5,7 +5,9 @@
  * `indexedDbStore`): `{history, ghosts, autosave}`.
  */
 
-export const DATA_ITEMS = ["profile", "rides", "bestLaps", "progress", "unfinished", "settings"];
+import { GOALS_KEY, loadGoals } from "./seasonGoals.js";
+
+export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings"];
 
 const PROFILE_KEY = "openride.profile.v1";
 const SUMMITS_KEY = "openradlr.summits";
@@ -27,7 +29,7 @@ function storageKeys(storage) {
 }
 
 /** Every other key of ours: devices, pairings, cockpit, language, Strava receipts, view settings. */
-const settingsKeys = (storage) => storageKeys(storage).filter((key) => key !== PROFILE_KEY && !PROGRESS_KEYS.includes(key));
+const settingsKeys = (storage) => storageKeys(storage).filter((key) => key !== PROFILE_KEY && key !== GOALS_KEY && !PROGRESS_KEYS.includes(key));
 
 function parseJson(text, fallback) {
   try {
@@ -55,6 +57,10 @@ const COUNTS = {
   profile: ({ storage }) => (storage.getItem(PROFILE_KEY) === null ? 0 : 1),
   rides: ({ stores }) => stores.history.keys().then((keys) => keys.length),
   bestLaps: ({ stores }) => stores.ghosts.keys().then((keys) => keys.length),
+  goals: ({ storage }) => {
+    const text = storage.getItem(GOALS_KEY);
+    return loadGoals({ getItem: () => text }).goals.length;
+  },
   progress: ({ storage }) => {
     const { summits, lemons } = progressOf(storage);
     return { summits: summits.length, lemons };
@@ -87,6 +93,7 @@ export async function exportData({ storage, stores, now }) {
     profile,
     rides: await values(stores.history, await stores.history.keys()),
     bestLaps: await values(stores.ghosts, await stores.ghosts.keys()),
+    goals: parseJson(storage.getItem(GOALS_KEY), null),
     progress: progressOf(storage),
     // Photos are blobs; they don't go into JSON.
     unfinished: autosaveKeys.includes(UNFINISHED_KEY) ? await stores.autosave.get(UNFINISHED_KEY) : null,
@@ -107,6 +114,7 @@ async function clearStore(store) {
 
 const DELETES = {
   profile: ({ storage }) => storage.removeItem(PROFILE_KEY),
+  goals: ({ storage }) => storage.removeItem(GOALS_KEY),
   progress: ({ storage }) => PROGRESS_KEYS.forEach((key) => storage.removeItem(key)),
   settings: ({ storage }) => settingsKeys(storage).forEach((key) => storage.removeItem(key)),
 };

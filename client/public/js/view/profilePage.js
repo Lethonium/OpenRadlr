@@ -9,7 +9,7 @@ import { formatDistanceWithUnit, formatDuration, formatElevation } from "../util
 import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
-export const PROFILE_PAGES = ["overview", "rides", "data"];
+export const PROFILE_PAGES = ["goals", "overview", "rides", "data"];
 export const RIDES_PAGE_SIZE = 20;
 
 const CURVE_KEYS = [5, 60, 300, 1200];
@@ -111,6 +111,7 @@ const DATA_NAMES = {
   profile: "profilePage.data.profile",
   rides: "profilePage.data.rides",
   bestLaps: "profilePage.data.bestLaps",
+  goals: "profilePage.data.goals",
   progress: "profilePage.data.progress",
   unfinished: "profilePage.data.unfinished",
   settings: "profilePage.data.settings",
@@ -120,6 +121,7 @@ const DATA_DETAILS = {
   profile: "profilePage.data.profile.detail",
   rides: "profilePage.data.rides.detail",
   bestLaps: "profilePage.data.bestLaps.detail",
+  goals: "profilePage.data.goals.detail",
   progress: "profilePage.data.progress.detail",
   unfinished: "profilePage.data.unfinished.detail",
   settings: "profilePage.data.settings.detail",
@@ -133,6 +135,8 @@ function dataCount({ id, count }) {
       return tn("profilePage.rideCount", count);
     case "bestLaps":
       return tn("profilePage.data.bestLapCount", count);
+    case "goals":
+      return tn("goals.count", count);
     case "progress":
       return t("profilePage.data.progressCount", count);
     case "unfinished":
