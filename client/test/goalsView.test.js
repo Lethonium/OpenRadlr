@@ -94,8 +94,8 @@ test("goalCard: a reached goal and a finished one say so plainly", () => {
 
 test("goalCard in imperial units", imperial(() => {
   const card = goalCard(total, week({ progress: 1240 * KM, step: 150 * KM, soFar: 62 * KM }), ctx);
-  assert.equal(card.progress, "771 / 1,243 mi");
-  assert.equal(card.week, "This week 39 / 93 mi · week 6 of 20");
+  assert.equal(card.progress, "770 / 1,243 mi");
+  assert.equal(card.week, "This week 38 / 93 mi · week 6 of 20");
 }));
 
 test("goalLine: the short form for the HUD and the menu", () => {
@@ -216,4 +216,14 @@ test("goalsSummary: the count and this week's total for the Overview", () => {
   assert.equal(goalsSummary(entries), "2 goals · this week 62 / 150 km");
   assert.equal(goalsSummary(entries.slice(0, 1)), "1 goal");
   assert.equal(goalsSummary([]), null);
+});
+
+test("hudGoal: nothing in a race or event, where the others count", () => {
+  const entries = [{ goal: total, week: week({ step: 150 * KM, soFar: 85 * KM }) }];
+  assert.equal(hudGoal(entries, { routeId: null, racing: true }), null);
+});
+
+test("so far rounds down, so a step not yet done never reads as met", () => {
+  assert.equal(goalLine(total, week({ step: 150 * KM, soFar: 149.6 * KM })), "Week 149 / 150 km");
+  assert.equal(goalLine({ ...total, metric: "time" }, week({ step: 3 * 3600, soFar: 3 * 3600 - 20 })), "Week 2:59 / 3:00 h");
 });
