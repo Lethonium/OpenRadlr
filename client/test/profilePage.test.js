@@ -1,0 +1,196 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
+
+const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
+const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
+const noRides = { week: zero, month: zero, all: zero };
+
+test("the profile has three pages", () => {
+  assert.deepEqual(PROFILE_PAGES, ["overview", "rides", "data"]);
+});
+
+test("routeName: server name, Studio for null, id when unknown", () => {
+  const routes = [{ id: "rolling-hills", name: "Rolling Hills" }];
+  assert.equal(routeName("rolling-hills", routes), "Rolling Hills");
+  assert.equal(routeName(null, routes), "Studio");
+  assert.equal(routeName("gone", routes), "gone");
+});
+
+test("overviewLines: rider with level, FTP with where it came from", () => {
+  const lines = overviewLines({ profile, totals: noRides, bests: [], routes: [] });
+  assert.equal(lines.rider, "Ralf · Riding level 3.4 W/kg (from your rides)");
+  assert.equal(lines.ftp, "FTP 245 W · Measured by the ramp test.");
+});
+
+test("overviewLines: totals per period in the rider's units", () => {
+  const totals = { week: { rides: 2, distanceM: 62000, durationS: 7800, elevationGainM: 400 }, month: { ...zero, rides: 5, distanceM: 210000 }, all: { ...zero, rides: 40, distanceM: 1240000, elevationGainM: 14200 } };
+  const lines = overviewLines({ profile, totals, bests: [], routes: [] });
+  assert.deepEqual(lines.totals.map((row) => row.label), ["This week", "This month", "All rides"]);
+  assert.equal(lines.totals[0].value, "2 rides · 62.0 km · 2:10:00 · 400 m");
+  assert.equal(lines.totals[2].value, "40 rides · 1,240 km · 0:00 · 14200 m");
+  assert.equal(lines.empty, null);
+});
+
+test("overviewLines: a new rider gets the empty text, no NaN", () => {
+  const lines = overviewLines({ profile: { ...profile, name: "", levelW: null }, totals: noRides, bests: [], routes: [] });
+  assert.equal(lines.empty, "No rides yet. Your totals, FTP and best laps show up here after your first ride.");
+  assert.equal(lines.rider, "No name yet");
+  assert.ok(!JSON.stringify(lines).includes("NaN"));
+});
+
+test("overviewLines: best laps by route name with lap time", () => {
+  const lines = overviewLines({ profile, totals: noRides, bests: [{ routeId: "rolling-hills", durationS: 1318 }], routes: [{ id: "rolling-hills", name: "Rolling Hills" }] });
+  assert.deepEqual(lines.bests, ["Rolling Hills · 21:58"]);
+});
+
+const rec = (extra = {}) => ({ id: "1", startedAt: new Date(2026, 10, 10, 18).getTime(), routeId: "rolling-hills", distanceM: 21400, durationS: 2700, avgPower: 198.4, elevationGainM: 210, device: "trainer", curve: { 5: 610, 15: 500, 60: 380, 300: 290, 1200: 241, 1800: 230, 3600: null }, ...extra });
+
+test("rides come 20 at a time", () => {
+  assert.equal(RIDES_PAGE_SIZE, 20);
+});
+
+test("rideRows: one row per ride with units and route name", () => {
+  const [row] = rideRows([rec()], [{ id: "rolling-hills", name: "Rolling Hills" }], { locale: "en" });
+  assert.equal(row.id, "1");
+  assert.equal(row.route, "Rolling Hills");
+  assert.equal(row.distance, "21.4 km");
+  assert.equal(row.time, "45:00");
+  assert.equal(row.power, "198 W");
+  assert.equal(row.climbing, "210 m");
+  assert.match(row.date, /10/);
+  assert.equal(row.device, null);
+});
+
+test("rideRows: paddle and simulator rides are marked", () => {
+  assert.equal(rideRows([rec({ device: "paddle" })], [], {})[0].device, "paddle");
+  assert.equal(rideRows([rec({ device: "sim" })], [], {})[0].device, "sim");
+});
+
+test("rideRows: an old record without power, route or device still renders", () => {
+  const [old] = rideRows([{ id: "2", startedAt: 1, distanceM: 1000, durationS: 60 }], [], {});
+  assert.equal(old.power, "–");
+  assert.equal(old.route, "Studio");
+  assert.equal(old.climbing, "0 m");
+  assert.equal(old.device, null);
+});
+
+test("rideRows: empty history gives no rows", () => {
+  assert.deepEqual(rideRows([], [], {}), []);
+});
+
+test("curveRows: key durations and the longest one", () => {
+  assert.deepEqual(curveRows(rec().curve), [
+    { label: "5 s", watts: "610 W" },
+    { label: "1 min", watts: "380 W" },
+    { label: "5 min", watts: "290 W" },
+    { label: "20 min", watts: "241 W" },
+    { label: "30 min", watts: "230 W" },
+  ]);
+});
+
+test("curveRows: a short ride lists only what it has", () => {
+  assert.deepEqual(curveRows({ 5: 400, 15: 380, 60: null }).map((row) => row.label), ["5 s", "15 s"]);
+});
+
+test("curveRows: no curve gives no rows", () => {
+  assert.deepEqual(curveRows(undefined), []);
+});
+
+const items = [
+  { id: "profile", count: 1, readable: true },
+  { id: "rides", count: 42, readable: true },
+  { id: "bestLaps", count: 0, readable: true },
+  { id: "progress", count: { summits: 7, lemons: 12 }, readable: true },
+  { id: "unfinished", count: 0, readable: true },
+  { id: "settings", count: null, readable: false },
+];
+
+test("dataRows: one row per item with its count in words", () => {
+  const rows = dataRows(items);
+  assert.deepEqual(rows.map((row) => row.id), ["profile", "rides", "bestLaps", "progress", "unfinished", "settings"]);
+  const by = Object.fromEntries(rows.map((row) => [row.id, row]));
+  assert.equal(by.rides.name, "Rides");
+  assert.equal(by.rides.count, "42 rides");
+  assert.equal(by.progress.count, "7 summits · 12 golden lemons");
+  assert.equal(by.unfinished.count, "None");
+  assert.ok(by.rides.detail.length > 0);
+});
+
+test("dataRows: only what is there and readable can be deleted", () => {
+  const by = Object.fromEntries(dataRows(items).map((row) => [row.id, row]));
+  assert.equal(by.rides.canDelete, true);
+  assert.equal(by.bestLaps.canDelete, false);
+  assert.equal(by.settings.canDelete, false);
+  assert.equal(by.settings.count, "Can't be read in this browser");
+});
+
+test("dataRows: the profile is reset, the others deleted", () => {
+  const by = Object.fromEntries(dataRows(items).map((row) => [row.id, row]));
+  assert.equal(by.profile.action, "Reset");
+  assert.equal(by.rides.action, "Delete");
+  assert.equal(by.rides.actionLabel, "Delete Rides");
+});
+
+const WEEK = 7 * 864e5;
+
+test("ftpChartModel: the y range pads 10 W and rounds out to 10 W", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 243 }, { t: WEEK, ftp: 251 }], estimated: [] }, 300, 120);
+  assert.equal(m.yTicks.at(0).label, "230 W");
+  assert.equal(m.yTicks.at(-1).label, "270 W");
+});
+
+test("ftpChartModel: a higher FTP is drawn higher, a later one further right", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200 }, { t: 10 * WEEK, ftp: 260 }], estimated: [] }, 300, 120);
+  assert.ok(m.set[1].y < m.set[0].y);
+  assert.ok(m.set[1].x > m.set[0].x);
+});
+
+test("ftpChartModel: FTP tests are marked", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200, test: false }, { t: WEEK, ftp: 230, test: true }], estimated: [] }, 300, 120);
+  assert.deepEqual(m.set.map((p) => p.test), [false, true]);
+});
+
+test("ftpChartModel: a week without an estimate is a gap", () => {
+  const m = ftpChartModel({ set: [], estimated: [{ t: 0, ftp: 240 }, { t: WEEK, ftp: null }, { t: 2 * WEEK, ftp: 248 }] }, 300, 120);
+  assert.equal(m.estimated[1], null);
+  assert.ok(m.estimated[2].x > m.estimated[0].x);
+});
+
+test("ftpChartModel: every point stays inside the canvas", () => {
+  const m = ftpChartModel({ set: [{ t: 0, ftp: 200 }, { t: WEEK, ftp: 400 }], estimated: [{ t: WEEK, ftp: 300 }] }, 300, 120);
+  for (const p of [...m.set, ...m.estimated]) {
+    assert.ok(p.x >= 0 && p.x <= 300 && p.y >= 0 && p.y <= 120);
+  }
+});
+
+test("ftpChartModel: the first and last date label the time axis", () => {
+  const m = ftpChartModel({ set: [{ t: Date.UTC(2026, 8, 1, 12), ftp: 200 }, { t: Date.UTC(2026, 10, 10, 12), ftp: 210 }], estimated: [] }, 300, 120, { locale: "en" });
+  assert.equal(m.xLabels.length, 2);
+  assert.match(m.xLabels[0].label, /Sep/);
+  assert.match(m.xLabels[1].label, /Nov/);
+});
+
+test("ftpChartLabel: says in words how the FTP moved", () => {
+  const label = ftpChartLabel({ set: [{ t: 0, ftp: 235 }, { t: WEEK, ftp: 245 }], estimated: [{ t: WEEK, ftp: 251 }] });
+  assert.equal(label, "FTP over time: set from 235 W to 245 W, estimated from your rides 251 W last.");
+});
+
+test("rideRows: a workout shows its plan and time, no ride figures", () => {
+  const [row] = rideRows([{ version: 2, kind: "workout", id: "9", planName: "Mobility", startedAt: 1, durationS: 1500, measured: false }], [], {});
+  assert.equal(row.route, "Mobility");
+  assert.equal(row.time, "25:00");
+  assert.equal(row.workout, true);
+  assert.equal(row.distance, null);
+  assert.equal(row.power, null);
+  assert.equal(row.climbing, null);
+});
+
+test("rideRows: a ride is no workout", () => {
+  assert.equal(rideRows([rec()], [], {})[0].workout, false);
+});
+
+test("overviewLines: unreadable rides say so instead of the new-rider text", () => {
+  const lines = overviewLines({ profile, totals: noRides, bests: [], routes: [], unreadable: true });
+  assert.equal(lines.empty, "Your rides can't be read in this browser right now. Nothing was deleted.");
+});

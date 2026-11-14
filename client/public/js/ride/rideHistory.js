@@ -12,9 +12,9 @@ const PREFIX = "ride:";
 
 /**
  * The record of a ride.
- * @param {{recorder: import("./rideRecorder.js").RideRecorder, splits: object[], splitMode: string, routeId: ?string, measured: boolean, profile: {ftp?: number, weightKg?: number}, test?: ?string}} ride
+ * @param {{recorder: import("./rideRecorder.js").RideRecorder, splits: object[], splitMode: string, routeId: ?string, measured: boolean, profile: {ftp?: number, weightKg?: number}, test?: ?string, device?: ?string}} ride
  */
-export function rideRecord({ recorder, splits, splitMode, routeId, measured, profile, test = null }) {
+export function rideRecord({ recorder, splits, splitMode, routeId, measured, profile, test = null, device = null }) {
   const first = recorder.samples[0];
   const last = recorder.samples.at(-1);
   const summary = recorder.summary();
@@ -26,6 +26,8 @@ export function rideRecord({ recorder, splits, splitMode, routeId, measured, pro
     endedAt: last.t,
     routeId: routeId ?? null,
     measured: Boolean(measured),
+    // "trainer", "paddle" or "sim" (ble/devices.js deviceKind); missing on older records.
+    device,
     ftp: profile.ftp ?? null,
     weightKg: profile.weightKg ?? null,
     ...summary,
@@ -41,7 +43,7 @@ export function rideRecord({ recorder, splits, splitMode, routeId, measured, pro
 export class RideHistory {
   #reported = false;
 
-  /** @param {{store: {get: Function, put: Function, keys: Function}, log?: (...args: any[]) => void}} options */
+  /** @param {{store: {get: Function, put: Function, keys: Function, delete: Function}, log?: (...args: any[]) => void}} options */
   constructor({ store, log = console.warn }) {
     this.store = store;
     this.log = log;
@@ -62,6 +64,14 @@ export class RideHistory {
   /** Stores the record; a storage error is logged once and swallowed. */
   save(record) {
     return this.#safely(() => this.store.put(PREFIX + record.id, record));
+  }
+
+  /** Removes one ride; false when the storage failed. */
+  delete(id) {
+    return this.#safely(async () => {
+      await this.store.delete(PREFIX + id);
+      return true;
+    }, false);
   }
 
   /** All records, newest first. */

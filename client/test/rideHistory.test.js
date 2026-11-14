@@ -90,3 +90,25 @@ test("a blocked store never throws and logs once", async () => {
   assert.equal(logged.length, 1);
   assert.deepEqual(await history.list(), []);
 });
+
+test("rideRecord: keeps the device kind", () => {
+  const r = rideRecord({ recorder: recorder(), splits: [], splitMode: "5", routeId: null, measured: false, profile: {}, device: "paddle" });
+  assert.equal(r.device, "paddle");
+});
+
+test("rideRecord: no device is null", () => {
+  assert.equal(record().device, null);
+});
+
+test("delete removes one ride", async () => {
+  const history = new RideHistory({ store: mapStore() });
+  await history.save(record(T0));
+  await history.save(record(T0 + 86_400_000));
+  assert.equal(await history.delete(String(T0)), true);
+  assert.deepEqual((await history.list()).map((r) => r.id), [String(T0 + 86_400_000)]);
+});
+
+test("delete reports a storage error as false", async () => {
+  const history = new RideHistory({ store: { ...mapStore(), delete: async () => { throw new Error("quota"); } }, log: () => {} });
+  assert.equal(await history.delete("1"), false);
+});
