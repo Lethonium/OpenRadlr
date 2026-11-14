@@ -17,7 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
-import { finishGoalLine, goalCard, goalsSummary, hudGoal, imageGoalLine, parseGoalForm } from "./view/goalsView.js";
+import { finishGoalLine, goalCard, goalsPanel, goalsSummary, hudGoal, imageGoalLine, parseGoalForm } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -3025,17 +3025,18 @@ function liveGoals() {
   return app.goalLive.entries;
 }
 
-/** The HUD's goal pill: the goal most relevant to this ride, hidden in a race or event. */
-function updateGoalPill(me) {
-  const pill = $("goal-pill");
+/** The left column's goals list: one line per goal, most relevant first, hidden in a race or event. */
+function renderGoalPanel() {
+  const me = myRider(app.state?.riders ?? []);
   const racing = inRace(app.state?.race, me, app.riderId) || Boolean(app.state?.event?.entered);
-  const text = hudGoal(liveGoals(), { routeId: app.route.id, racing });
-  if (!text) {
-    pill.hidden = true;
-    return;
-  }
-  if (pill.textContent !== text) pill.textContent = text;
-  pill.hidden = false;
+  const panel = goalsPanel(liveGoals(), { routeId: app.route?.id ?? null, racing });
+  const section = $("hud-goals");
+  section.hidden = !panel.title;
+  if (!panel.title) return;
+  $("hud-goals-list").replaceChildren(...panel.lines.map((line) => textElement("li", line)));
+  const more = $("hud-goals-more");
+  more.hidden = panel.more === 0;
+  more.textContent = panel.more ? t("goals.panel.more", { n: panel.more }) : "";
 }
 
 /**
@@ -5041,6 +5042,7 @@ function updatePanels() {
   renderRiderList($("bot-list"), sections.bots, app.riderId);
   $("bot-heading").hidden = $("bot-list").hidden = sections.bots.length === 0;
   renderOnline();
+  renderGoalPanel();
   if (app.layout === "broadcast") renderRiderList($("hud-nearby"), nearbyRiders(me, app.state.riders, app.route, 7), app.riderId);
   const race = app.state.race;
   // Event results stay until the next race is called.
@@ -5158,7 +5160,6 @@ function frame() {
 
   if (me && !app.finished) collectLemons(me);
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
-  if (me && !app.finished) updateGoalPill(me);
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {

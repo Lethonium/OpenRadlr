@@ -2100,12 +2100,71 @@ body.riding {
   top: 140px;
 }
 
-.nearby {
+/* --- left column: the season goals (later quests) and, in broadcast, the
+   nearby riders. Shared by every layout; the studio leaves it out. ------- */
+
+.hud-left {
   position: absolute;
-  left: var(--gap);
   top: 140px;
+  left: var(--gap);
   width: 300px;
+  max-height: calc(100% - 160px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.ride[data-mode="studio"] .hud-left,
+.ride[data-mode="studio"] .hud-goals {
+  display: none;
+}
+
+/* The training layout hides the info bar; its workout chip owns the top left,
+   so the goals sit a little lower there. */
+.ride[data-layout="training"] .hud-left {
+  top: 150px;
+}
+
+/* The race layout's position and lap boxes span the top from 76px, so the
+   goals column starts below them. */
+.ride[data-layout="race"] .hud-left {
+  top: 196px;
+}
+
+.hud-goals {
+  padding: 12px 16px 10px;
+}
+
+.hud-goals h2 {
+  color: var(--hud-muted);
+}
+
+.hud-goals-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.hud-goals-more {
+  margin: 6px 0 0;
+  color: var(--hud-muted);
+  font-size: 13px;
+}
+
+.nearby {
+  position: static;
+  width: auto;
   padding: 12px 0 8px;
+}
+
+/* The nearby list belongs to the broadcast layout alone. */
+.ride:not([data-layout="broadcast"]) .nearby {
+  display: none;
 }
 
 .nearby h2,
@@ -3635,6 +3694,12 @@ button.danger {
     display: none;
   }
 
+  /* The race row wraps on narrower screens and fills the left; the goals step
+     aside there rather than overlap it. */
+  .ride[data-layout="race"] .hud-left {
+    display: none;
+  }
+
   .ride[data-layout="broadcast"] .hud-gear {
     top: 80px;
   }
@@ -4878,6 +4943,17 @@ body:not(.riding)::after {
     top: 66px;
   }
 
+  /* One glanceable goal line on a phone; the rest wait for the profile. */
+  .hud-left {
+    top: 152px;
+    width: min(300px, calc(100% - 2 * var(--gap)));
+  }
+
+  .hud-goals-list li:not(:first-child),
+  .hud-goals-more {
+    display: none;
+  }
+
   .pill {
     padding: 5px 12px;
     font-size: 13px;
@@ -5062,6 +5138,16 @@ body:not(.riding)::after {
 
   .hud-status {
     top: var(--gap);
+  }
+
+  .hud-left {
+    top: calc(var(--gap) + 52px);
+    width: min(280px, calc(100% - 2 * var(--gap)));
+  }
+
+  .hud-goals-list li:not(:first-child),
+  .hud-goals-more {
+    display: none;
   }
 
   .junction {

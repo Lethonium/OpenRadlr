@@ -684,6 +684,21 @@
             </button>
           </div>
 
+          <!-- Left column: the season goals (later also NPC quests), the nearby riders in
+               broadcast. Shared by every layout; hidden in the studio. -->
+          <div id="hud-left" class="hud-left route-only">
+            <section id="hud-goals" class="hud-goals glass" aria-labelledby="hud-goals-title" hidden>
+              <h2 id="hud-goals-title" data-i18n="goals.panel.title">Goals</h2>
+              <ul id="hud-goals-list" class="hud-goals-list"></ul>
+              <p id="hud-goals-more" class="hud-goals-more" hidden></p>
+            </section>
+            <div class="nearby glass">
+              <h2 data-i18n="ride.nearby">Nearby</h2>
+              <ol id="hud-nearby" class="rider-list"></ol>
+              <div id="hud-seats" class="vehicle-view compact" hidden></div>
+            </div>
+          </div>
+
           <div class="view-popover glass" id="view-popover" role="dialog" aria-label="View" data-i18n-attr="aria-label:drawer.view" hidden></div>
 
           <div class="hud-gear glass" id="hud-gear-tile" hidden>
@@ -703,7 +718,6 @@
               <span id="race-status" class="pill glass" data-i18n="ride.freeRide">Free ride</span>
               <span id="draft-status" class="pill pill-draft" hidden></span>
               <span id="ghost-gap" class="pill glass pill-ghost" title="Your gap to your best lap on this route" hidden data-i18n-attr="title:ghost.gapTitle"></span>
-              <span id="goal-pill" class="pill glass pill-goal" title="This week's step of your season goal" hidden data-i18n-attr="title:goals.pillTitle"></span>
               <span id="group-gap" class="pill glass" hidden></span>
               <span id="sharing-line" class="pill glass" hidden></span>
               <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
@@ -783,11 +797,6 @@
               <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
               <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
               <div class="bar-grade"><span class="caption" data-i18n="ride.grade2">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
-            </div>
-            <div class="nearby glass">
-              <h2 data-i18n="ride.nearby">Nearby</h2>
-              <ol id="hud-nearby" class="rider-list"></ol>
-              <div id="hud-seats" class="vehicle-view compact" hidden></div>
             </div>
             <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route" data-i18n-attr="aria-label:ride.mapOfTheRoute"></canvas>
             <div class="strip glass">
