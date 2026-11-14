@@ -1133,4 +1133,9 @@ export default {
   "goals.form.cancel": "Cancel",
   "goals.menu.hint": "You set and change goals on your profile, before a ride.",
   "goals.pillTitle": "This week's step of your season goal",
+  "goals.image.long": "Longest {amount} of {target} by {date}",
+  "goals.image.label": "On the ride's summary image",
+  "goals.image.reached": "Reached goals",
+  "goals.image.progress": "Goals and this week's progress",
+  "goals.image.off": "Nothing",
 };

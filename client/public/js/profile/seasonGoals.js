@@ -10,6 +10,8 @@ import { weekStart } from "./stats.js";
 export const GOALS_KEY = "openradlr.goals";
 export const MAX_GOALS = 5;
 export const KINDS = ["total", "long", "lap"];
+/** What the ride's summary image shows of the goals: reached goals, also this week's progress, or nothing. */
+export const IMAGE_MODES = ["reached", "progress", "off"];
 const METRICS = ["distance", "time", "climb"];
 const VERSION = 1;
 
@@ -29,7 +31,7 @@ const HORIZON_WEEKS = 104;
 const DAY_MS = 86_400_000;
 const EPSILON = 1e-6;
 
-const emptyState = () => ({ rhythmStartMs: null, goals: [] });
+const emptyState = () => ({ rhythmStartMs: null, image: IMAGE_MODES[0], goals: [] });
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
 
@@ -46,7 +48,8 @@ export function loadGoals(storage) {
     const data = JSON.parse(storage.getItem(GOALS_KEY) ?? "null");
     if (!data || data.version !== VERSION || !Array.isArray(data.goals)) return emptyState();
     const goals = data.goals.filter(validGoal);
-    return { rhythmStartMs: goals.length && finite(data.rhythmStartMs) ? data.rhythmStartMs : null, goals };
+    const image = IMAGE_MODES.includes(data.image) ? data.image : IMAGE_MODES[0];
+    return { rhythmStartMs: goals.length && finite(data.rhythmStartMs) ? data.rhythmStartMs : null, image, goals };
   } catch {
     return emptyState();
   }
