@@ -13,6 +13,8 @@ export const MAX_PHOTOS = 30;
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'; // i18n-ok
 const NUM = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif'; // i18n-ok
 const ACCENT = "#ff7a1a";
+/** A reached or moved season goal: gold, as on the finish screen. */
+const GOLD = "#f2c14e";
 
 /** "openradlr-2026-10-14-1530-rolling-hills-3.png" */
 export function photoFileName(t, routeId = "ride", suffix = "") {
@@ -199,7 +201,7 @@ export function composePhoto(scene, { routeName, stats, when }, doc = document) 
  * @param {{routeName: string, serverName: string, when: Date, stats: [string, string][],
  *          power: number[], elevation: (number|null)[], scene?: HTMLCanvasElement | null}} info
  */
-export function composeSummary({ routeName, serverName, when, stats, power, elevation, scene = null }, doc = document) {
+export function composeSummary({ routeName, serverName, when, stats, power, elevation, scene = null, goalLine = null }, doc = document) {
   const W = 1600;
   const H = 1200;
   const canvas = doc.createElement("canvas");
@@ -251,6 +253,13 @@ export function composeSummary({ routeName, serverName, when, stats, power, elev
     while (ctx.measureText(value).width > cellW - 32 && (size -= 4) > 28);
     ctx.fillText(value, x, y + 80);
   });
+
+  // The season goal this ride reached or moved (#99), in gold between the totals and the chart.
+  if (goalLine) {
+    ctx.fillStyle = GOLD;
+    ctx.font = `700 34px ${SANS}`;
+    ctx.fillText(fit(ctx, goalLine, width), left, 710);
+  }
 
   // Elevation (filled) and power (line) over the ride.
   const chart = { x: left, y: 800, w: width, h: 280 };

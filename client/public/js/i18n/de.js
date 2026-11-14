@@ -1133,4 +1133,9 @@ export default {
   "goals.form.cancel": "Abbrechen",
   "goals.menu.hint": "Ziele setzt und änderst du in deinem Profil, vor einer Fahrt.",
   "goals.pillTitle": "Der Schritt dieser Woche für dein Saisonziel",
+  "goals.image.long": "Längste {amount} von {target} bis {date}",
+  "goals.image.label": "Auf dem Zusammenfassungsbild der Fahrt",
+  "goals.image.reached": "Erreichte Ziele",
+  "goals.image.progress": "Ziele und der Fortschritt dieser Woche",
+  "goals.image.off": "Nichts",
 };

@@ -6928,3 +6928,7 @@ body.working-out #paddles {
   color: #f2c14e;
   font-weight: 600;
 }
+
+.goal-image-row {
+  margin-top: 16px;
+}

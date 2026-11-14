@@ -171,6 +171,36 @@ function weekDoneText(goal, week) {
   return t("goals.finish.lap", { time: lapTime(week.soFar) });
 }
 
+/** A goal this ride moved, for the summary image: "1,240 / 2,000 km by 20 March", "Longest 39 km of 50 km by 31 December". */
+function progressItem(goal, week, routes, locale) {
+  const date = dayMonth(goal.endMs, locale);
+  if (goal.kind === "total") return t("goals.title", { what: pair(goal, week.progress, goal.target), date });
+  if (goal.kind === "long") return t("goals.image.long", { amount: amount(goal.metric, week.progress), target: amount(goal.metric, goal.target), date });
+  return `${progressText(goal, week)} · ${goalTitle(goal, routes, { locale })}`;
+}
+
+/**
+ * The summary image's gold line by the rider's setting (`mode` from the goals' `image`):
+ * "reached" shows a reached goal only, "progress" also a week done and what the ride moved.
+ */
+export function imageGoalLine(before, after, mode, { routes, locale } = {}) {
+  if (mode === "off") return null;
+  let items = goalChanges(before, after, { routes });
+  if (mode === "reached") items = items.filter((item) => item.rank === 0);
+  else {
+    const was = new Map(before.map((entry) => [entry.goal.id, entry.week]));
+    const named = new Set(items.map((item) => item.goal.id));
+    for (const { goal, week } of after) {
+      const old = was.get(goal.id);
+      if (!old || named.has(goal.id) || week.reached || week.progress === old.progress || week.progress === null) continue;
+      items.push({ rank: 2, goal, text: progressItem(goal, week, routes, locale) });
+    }
+  }
+  // The star marks the line; the finish screen's ticks would repeat it.
+  const shown = items.slice(0, 2).map((item) => item.text.replace(/ ✓$/, ""));
+  return shown.length ? `★ ${shown.join(" · ")}` : null;
+}
+
 /** The finish screen's line, at most two items, or null when the ride changed nothing. */
 export function finishGoalLine(before, after, { routes } = {}) {
   const items = goalChanges(before, after, { routes }).slice(0, 2);

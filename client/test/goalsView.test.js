@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setUnits } from "../public/js/util/format.js";
-import { finishGoalLine, goalCard, goalsSummary, goalLine, goalTitle, hudGoal, parseGoalForm } from "../public/js/view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, imageGoalLine, goalLine, goalTitle, hudGoal, parseGoalForm } from "../public/js/view/goalsView.js";
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
 const endOfDay = (y, m, d) => new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
@@ -226,4 +226,33 @@ test("hudGoal: nothing in a race or event, where the others count", () => {
 test("so far rounds down, so a step not yet done never reads as met", () => {
   assert.equal(goalLine(total, week({ step: 150 * KM, soFar: 149.6 * KM })), "Week 149 / 150 km");
   assert.equal(goalLine({ ...total, metric: "time" }, week({ step: 3 * 3600, soFar: 3 * 3600 - 20 })), "Week 2:59 / 3:00 h");
+});
+
+const imageBefore = [
+  { goal: total, week: week({ progress: 1990 * KM, step: 150 * KM, soFar: 140 * KM }) },
+  { goal: long, week: week({ progress: 38 * KM, step: 41 * KM, soFar: 0 }) },
+];
+const imageReached = [
+  { goal: total, week: week({ progress: 2010 * KM, reached: true }) },
+  { goal: long, week: week({ progress: 42 * KM, step: 41 * KM, soFar: 42 * KM, done: true }) },
+];
+
+test("imageGoalLine: nothing when the rider turned it off", () => {
+  assert.equal(imageGoalLine(imageBefore, imageReached, "off", ctx), null);
+});
+
+test("imageGoalLine: reached goals only, by default", () => {
+  assert.equal(imageGoalLine(imageBefore, imageReached, "reached", ctx), "★ Goal reached: 2,000 km");
+  const weekOnly = [imageBefore[0], imageReached[1]];
+  assert.equal(imageGoalLine(imageBefore, weekOnly, "reached", ctx), null);
+});
+
+test("imageGoalLine: with progress, a week done and the goal's progress, at most two", () => {
+  const after = [
+    { goal: total, week: week({ progress: 2000 * KM - 1, step: 150 * KM, soFar: 150 * KM, done: true }) },
+    { goal: long, week: week({ progress: 39 * KM, step: 41 * KM, soFar: 39 * KM }) },
+  ];
+  assert.equal(imageGoalLine(imageBefore, after, "progress", ctx), "★ Week done: 150 / 150 km · Longest 39 km of 50 km by 31 December");
+  assert.equal(imageGoalLine(imageBefore, imageReached, "progress", ctx), "★ Goal reached: 2,000 km · This week's long ride: 42 km");
+  assert.equal(imageGoalLine(imageBefore, imageBefore, "progress", ctx), null);
 });

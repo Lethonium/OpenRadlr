@@ -17,7 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
-import { finishGoalLine, goalCard, goalsSummary, hudGoal, parseGoalForm } from "./view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, hudGoal, imageGoalLine, parseGoalForm } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -3060,6 +3060,14 @@ async function showFinishGoals() {
   const text = finishGoalLine(before, after, { routes: routesOf(app.info) });
   line.textContent = text ?? "";
   line.hidden = !text;
+  // An image drawn before the saves were in gets its goal line now.
+  if (app.summaryDrawn && summaryGoalLine()) refreshSummaryImage();
+}
+
+/** The summary image's goal line by the rider's setting, once the finish knows what the ride changed. */
+function summaryGoalLine() {
+  if (!app.finishGoals) return null;
+  return imageGoalLine(app.finishGoals.before, app.finishGoals.after, app.goals.image, { routes: routesOf(app.info), locale: getLocale() });
 }
 
 /** The in-game menu's Goals page: this week's steps with the ride so far, no edit buttons. */
@@ -3075,6 +3083,8 @@ function renderProfileGoals() {
   const routes = routesOf(app.info);
   $("profile-goals").replaceChildren(...entries.map((entry) => goalCardElement(entry, routes)));
   $("profile-goals-empty").hidden = entries.length > 0;
+  $("goal-image-row").hidden = entries.length === 0;
+  $("goal-image").value = app.goals.image;
   $("profile-goal-new").hidden = !$("goal-form").hidden || activeGoals(app.goals, now).length >= MAX_GOALS;
 }
 
@@ -3145,6 +3155,7 @@ function initGoalForm() {
   $("goal-kind").addEventListener("change", syncGoalForm);
   $("goal-metric").addEventListener("change", syncGoalForm);
   $("goal-end").addEventListener("change", syncGoalForm);
+  $("goal-image").addEventListener("change", () => saveGoalsState({ ...app.goals, image: $("goal-image").value }));
   $("goal-form").addEventListener("submit", (event) => {
     event.preventDefault();
     submitGoalForm();
@@ -3511,8 +3522,10 @@ function openFinish() {
   closeDrawers();
   const stats = finishStats();
   app.finishScene = null;
+  app.summaryDrawn = false;
   requestScene((scene) => {
     app.finishScene = scene;
+    app.summaryDrawn = true;
     refreshSummaryImage();
   });
   renderPhotos();
@@ -4010,6 +4023,7 @@ async function summaryImage() {
     power: samples.map((s) => s.power),
     elevation: samples.map((s) => s.elevation),
     scene: app.finishScene,
+    goalLine: summaryGoalLine(),
   });
   const blob = await canvasToPng(canvas);
   return { blob, name: photoFileName(samples[0]?.t ?? Date.now(), app.rideRoute.id, "summary") };

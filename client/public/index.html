@@ -477,6 +477,13 @@
                     <p id="profile-goals-empty" class="field-hint" hidden data-i18n="goals.empty">No goals yet. Set one for the season and every ride counts towards it: OpenRadlr turns it into a step for each week, with an easy week every fourth.</p>
                     <ul id="profile-goals" class="goal-cards"></ul>
                     <button type="button" id="profile-goal-new" class="secondary" data-i18n="goals.new">Set a goal</button>
+                    <label id="goal-image-row" class="goal-image-row" hidden><span data-i18n="goals.image.label">On the ride's summary image</span>
+                      <select id="goal-image">
+                        <option value="reached" data-i18n="goals.image.reached">Reached goals</option>
+                        <option value="progress" data-i18n="goals.image.progress">Goals and this week's progress</option>
+                        <option value="off" data-i18n="goals.image.off">Nothing</option>
+                      </select>
+                    </label>
                   </div>
                   <form id="goal-form" class="panel goal-form" hidden novalidate>
                     <h3 id="goal-form-title" data-i18n="goals.form.new">New goal</h3>

@@ -143,3 +143,13 @@ test("ride photos can be saved and shared before the summary is ready", () => {
   photos.add("photo", { name: "photo.png" });
   assert.deepEqual(photoActions(photos, true), { summaryEnabled: false, allVisible: true, shareVisible: true });
 });
+
+test("the summary card draws a goal line between the totals and the chart, only when given", () => {
+  const plain = recordingDoc();
+  composeSummary(RIDE, plain.doc);
+  assert.deepEqual(plain.texts.filter(({ y }) => y > 660 && y < 760), []);
+  const gold = recordingDoc();
+  composeSummary({ ...RIDE, goalLine: "★ Goal reached: 2,000 km" }, gold.doc);
+  const line = gold.texts.find(({ text }) => text.includes("Goal reached"));
+  assert.ok(line && line.y > 660 && line.y < 760, JSON.stringify(line));
+});

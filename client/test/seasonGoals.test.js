@@ -60,7 +60,7 @@ test("constants", () => {
 });
 
 test("loadGoals: missing, broken or another version is an empty state", () => {
-  const empty = { rhythmStartMs: null, goals: [] };
+  const empty = { rhythmStartMs: null, image: "reached", goals: [] };
   assert.deepEqual(loadGoals(fakeStorage()), empty);
   assert.deepEqual(loadGoals(fakeStorage("{")), empty);
   assert.deepEqual(loadGoals(fakeStorage(JSON.stringify({ version: 2, rhythmStartMs: MON, goals: [goalOver(10)] }))), empty);
@@ -76,12 +76,12 @@ test("loadGoals: a goal missing its target is dropped, the valid one kept", () =
 
 test("loadGoals: a throwing storage is an empty state", () => {
   const storage = { getItem: () => { throw new Error("denied"); } };
-  assert.deepEqual(loadGoals(storage), { rhythmStartMs: null, goals: [] });
+  assert.deepEqual(loadGoals(storage), { rhythmStartMs: null, image: "reached", goals: [] });
 });
 
 test("saveGoals writes what loadGoals reads, and says false when storage throws", () => {
   const storage = fakeStorage();
-  const state = { rhythmStartMs: MON, goals: [goalOver(10)] };
+  const state = { rhythmStartMs: MON, image: "progress", goals: [goalOver(10)] };
   assert.equal(saveGoals(storage, state), true);
   assert.deepEqual(loadGoals(storage), state);
   assert.equal(saveGoals({ setItem: () => { throw new Error("quota"); } }, state), false);
@@ -328,4 +328,11 @@ test("week count across the end of summer time (TZ=Europe/Zurich)", () => {
     console.log(JSON.stringify([autumn.count, autumn.index, spring.count, spring.index]));`;
   const out = execFileSync(process.execPath, ["--input-type=module", "-e", code], { env: { ...process.env, TZ: "Europe/Zurich" } });
   assert.deepEqual(JSON.parse(String(out)), [3, 3, 3, 2]);
+});
+
+test("the summary image setting: reached goals unless set, an unknown value is the default", () => {
+  assert.equal(loadGoals(fakeStorage(JSON.stringify({ version: 1, rhythmStartMs: null, goals: [] }))).image, "reached");
+  assert.equal(loadGoals(fakeStorage(JSON.stringify({ version: 1, rhythmStartMs: null, image: "off", goals: [] }))).image, "off");
+  assert.equal(loadGoals(fakeStorage(JSON.stringify({ version: 1, rhythmStartMs: null, image: "gold", goals: [] }))).image, "reached");
+  assert.equal(removeGoal({ rhythmStartMs: MON, image: "off", goals: [goalOver(10)] }, "g1").image, "off");
 });
