@@ -241,7 +241,18 @@ function parseLapTime(text) {
   return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
 }
 
-const parseNumber = (text) => (String(text).trim() === "" ? NaN : Number(String(text).trim().replace(",", ".")));
+/**
+ * A typed number in either language: "2,000" and "2.000" group thousands (as the
+ * cards show targets), "2,5" and "2.5" are decimals.
+ */
+function parseNumber(text) {
+  const value = String(text).replace(/[\s\u00a0\u202f]/g, "");
+  if (value === "") return NaN;
+  // A separator before groups of exactly three digits groups thousands; the other one, if any, is the decimal point.
+  const grouped = /^\d{1,3}([.,])\d{3}(?:\1\d{3})*(?:([.,])\d+)?$/.exec(value);
+  if (grouped && grouped[1] !== grouped[2]) return Number(value.split(grouped[1]).join("").replace(",", "."));
+  return Number(value.replace(",", "."));
+}
 
 function parseTarget(kind, metric, text) {
   if (kind === "lap") return parseLapTime(String(text));
