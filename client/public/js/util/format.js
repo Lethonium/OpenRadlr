@@ -36,6 +36,8 @@ export function defaultUnits(locale) {
 export const speedUnit = () => (imperial() ? "mph" : "km/h");
 /** Metres in one distance unit (a kilometre or a mile). */
 export const unitMetres = () => (imperial() ? M_PER_MILE : 1000);
+/** Metres per displayed unit of height (m or ft). */
+export const unitHeightMetres = () => (imperial() ? M_PER_FOOT : 1);
 export const distanceUnit = () => (imperial() ? "mi" : "km");
 export const elevationUnit = () => (imperial() ? "ft" : "m");
 export const weightUnit = () => (imperial() ? "lb" : "kg");
