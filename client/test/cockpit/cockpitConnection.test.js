@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CockpitConnection } from "../../public/js/cockpit/cockpitConnection.js";
 import { FakeSocket } from "../helpers.js";
 
-const KEY = "0123456789abcdef0123456789abcdef";
+const KEY = "0123456789abcdef0123456789abcdef"; // pragma: allowlist secret (a test placeholder)
 
 function setup() {
   const sockets = [];

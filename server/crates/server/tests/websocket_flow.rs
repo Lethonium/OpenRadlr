@@ -1166,7 +1166,7 @@ async fn afk_stay_then_leave_counts_each_outcome() {
     }
 }
 
-const SCREEN_KEY: &str = "0123456789abcdef0123456789abcdef";
+const SCREEN_KEY: &str = "0123456789abcdef0123456789abcdef"; // pragma: allowlist secret (a test placeholder)
 
 /// A tablet that joins with the screen key and returns its socket and rider id.
 async fn tablet_rides(addr: SocketAddr) -> (Socket, u64) {
