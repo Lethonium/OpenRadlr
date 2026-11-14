@@ -38,13 +38,15 @@ function zoneSeconds(samples, ftp) {
  * @param {?{workout: {name: string, segments: object[]}, state: object}} [input.workout]
  *   the running workout and its position (`TrainingControl#workoutState`, target adjusted)
  */
-export function displayFrame({ heartRate, grade, ftp, cadence, recording, workout }) {
+export function displayFrame({ heartRate, grade, ftp, cadence, recording, workout, goalLine = null }) {
   const frame = {};
   const ride = rideId(recording);
   if (ride !== undefined) frame.ride = ride;
   if (Number.isFinite(heartRate)) frame.hr = heartRate;
   if (Number.isFinite(grade)) frame.grade = grade;
   if (Number.isFinite(cadence)) frame.cadence = cadence;
+  // The rider's top season goal this week, one short line for the cockpit's goals tile.
+  if (typeof goalLine === "string" && goalLine) frame.goals = goalLine;
   frame.ftp = ftp;
   frame.stats = liveStats({ ...recording, ftp });
   frame.zones_s = zoneSeconds(recording.samples, ftp);

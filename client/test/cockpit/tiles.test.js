@@ -40,8 +40,20 @@ test("every tile has a label key, sizes and a value or a draw", () => {
 test("the catalogue has the tiles of the spec", () => {
   assert.deepEqual(
     TILES.map((t) => t.id).sort(),
-    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "speedGraph", "minimap", "profile", "laps", "raceGaps"].sort(),
+    ["power3s", "heartRate", "cadence", "speed", "grade", "elapsed", "workout", "zones", "avgPower", "np", "kj", "distance", "efforts", "load", "climbed", "avgHeartRate", "powerGraph", "hrGraph", "speedGraph", "minimap", "profile", "laps", "raceGaps", "goals"].sort(),
   );
+});
+
+test("the goals tile shows the goal line, and hides without one", () => {
+  const tile = tileById("goals");
+  const model = riding();
+  model.onDisplay({ hr: 142, grade: 0, ftp: 250, stats: STATS, zones_s: [0, 0, 0, 0, 0, 0], goals: "Lap goal this week 21:43" });
+  assert.equal(tile.value(model), "Lap goal this week 21:43");
+  assert.equal(tile.hidden(model), false);
+  assert.equal(tile.unit?.() ?? "", "");
+  const none = tileById("goals");
+  const empty = riding();
+  assert.equal(none.hidden(empty), true);
 });
 
 test("number tiles read the model", () => {

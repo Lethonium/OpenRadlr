@@ -951,6 +951,7 @@ export default {
   "cockpit.tile.profile": "Höhenprofil",
   "cockpit.tile.laps": "Runde",
   "cockpit.tile.raceGaps": "Rennergebnis",
+  "cockpit.tile.goals": "Saisonziel",
   "profilePage.title": "Profil",
   "profilePage.open": "Profil",
   "profilePage.pages": "Profilseiten",
