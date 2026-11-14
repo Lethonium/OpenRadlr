@@ -2108,18 +2108,15 @@ body.riding {
   padding: 12px 0 8px;
 }
 
-/* A narrower gap column ("+515 m", "−1.9 km"), so a bot's name keeps room beside its badge. */
-.nearby .rider {
-  grid-template-columns: minmax(0, 1fr) auto 64px;
-}
-
 .nearby h2,
 .groups h2 {
   padding: 0 16px;
   color: var(--hud-muted);
 }
 
+/* A narrower gap column ("+515 m", "−1.9 km"), so a bot's name keeps room beside its badge. */
 .nearby .rider {
+  grid-template-columns: minmax(0, 1fr) auto 64px;
   padding: 5px 16px;
 }
 
@@ -6660,4 +6657,3 @@ body.working-out #paddles {
   flex-wrap: wrap;
   justify-content: center;
 }
-
