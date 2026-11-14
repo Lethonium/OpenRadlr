@@ -663,6 +663,8 @@
             <span class="hud-brand">Open<span>Radlr</span></span>
             <span class="hud-route" id="hud-route" data-i18n="ride.route">Route</span>
             <span class="hud-numbers"><span data-m="distance">0.00</span> <span data-unit="distance">km</span> · <span data-m="time">0:00</span> · <span data-m="avg-speed">–</span> <span data-unit="speed">km/h</span> <span data-i18n="ride.avg">avg</span></span>
+            <!-- This week's goals, one at a time (#99); the menu's Goals page has them all -->
+            <span class="hud-goal route-only" hidden><span class="caption" data-i18n="goals.hud.label">Goal</span> <span data-m="goal"></span></span>
             <span class="hud-vehicle" id="hud-vehicle" data-m="vehicle" hidden></span>
           </div>
 
@@ -684,21 +686,6 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
               <span data-i18n="ride.menu">Menu</span>
             </button>
-          </div>
-
-          <!-- Left column: the season goals (later also NPC quests), the nearby riders in
-               broadcast. Shared by every layout; hidden in the studio. -->
-          <div id="hud-left" class="hud-left route-only">
-            <section id="hud-goals" class="hud-goals glass" aria-labelledby="hud-goals-title" hidden>
-              <h2 id="hud-goals-title" data-i18n="goals.panel.title">Goals</h2>
-              <ul id="hud-goals-list" class="hud-goals-list"></ul>
-              <p id="hud-goals-more" class="hud-goals-more" hidden></p>
-            </section>
-            <div class="nearby glass">
-              <h2 data-i18n="ride.nearby">Nearby</h2>
-              <ol id="hud-nearby" class="rider-list"></ol>
-              <div id="hud-seats" class="vehicle-view compact" hidden></div>
-            </div>
           </div>
 
           <div class="view-popover glass" id="view-popover" role="dialog" aria-label="View" data-i18n-attr="aria-label:drawer.view" hidden></div>
@@ -801,6 +788,11 @@
               <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
               <div class="bar-grade"><span class="caption" data-i18n="ride.grade2">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
             </div>
+            <div class="nearby glass">
+              <h2 data-i18n="ride.nearby">Nearby</h2>
+              <ol id="hud-nearby" class="rider-list"></ol>
+              <div id="hud-seats" class="vehicle-view compact" hidden></div>
+            </div>
             <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route" data-i18n-attr="aria-label:ride.mapOfTheRoute"></canvas>
             <div class="strip glass">
               <canvas id="profile" class="canvas-profile" aria-label="Elevation profile of the lap with all riders" data-i18n-attr="aria-label:ride.elevationProfileOfThe"></canvas>
@@ -814,6 +806,7 @@
               <span class="caption accent" data-i18n="workout.title">Workout</span>
               <strong id="workout-name" data-i18n="ride.noWorkoutRunning">No workout running</strong>
               <span id="erg-badge" class="erg-badge" hidden>ERG</span>
+              <span class="hud-goal route-only" hidden><span class="caption" data-i18n="goals.hud.label">Goal</span> <span data-m="goal"></span></span>
             </div>
             <div class="training-actions">
               <button type="button" id="hud-skip" class="glass" data-i18n="ride.skipBlock">Skip block</button>

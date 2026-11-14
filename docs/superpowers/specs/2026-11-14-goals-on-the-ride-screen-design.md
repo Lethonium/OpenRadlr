@@ -3,6 +3,11 @@
 Investigation and design, 2026-11-14. Follow-up to season goals (#99), part of the
 Progress and motivation milestone (#98). Client only.
 
+> **Superseded the same day.** On screen, the left column took too much room and
+> ran into the ticker in cockpit and training. The goals now show as **one line in
+> the info card**, each open goal in turn (8 s each); the menu's Goals page has the
+> details. The quests list can come back when there are quests to show.
+
 ## Problem
 
 The season goal shows in the ride HUD as **one pill in the shared status row**

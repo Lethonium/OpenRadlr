@@ -17,7 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
-import { finishGoalLine, goalCard, goalsPanel, goalsSummary, hudGoal, imageGoalLine, parseGoalForm } from "./view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -1575,7 +1575,7 @@ function startDisplayFeed() {
       planSent = { connection, workout, ticks: 0 };
     }
     const state = workout ? training.workoutState() : null;
-    const goals = goalsPanel(liveGoals(), { routeId: app.route?.id ?? null });
+    const goals = hudGoalLines(liveGoals(), { routeId: app.route?.id ?? null });
     connection.sendDisplay(
       displayFrame({
         heartRate: app.session.latest.heartRate,
@@ -1584,7 +1584,7 @@ function startDisplayFeed() {
         cadence: app.session.latest.cadence,
         recording: overviewRecording(),
         workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
-        goalLine: goals.lines[0] ?? null,
+        goalLine: goals[0] ?? null,
       }),
     );
   }, DISPLAY_INTERVAL_MS);
@@ -3030,18 +3030,13 @@ function liveGoals() {
   return app.goalLive.entries;
 }
 
-/** The left column's goals list: one line per goal, most relevant first, hidden in a race or event. */
-function renderGoalPanel() {
+/** The info card's goal line: this week's open goals one at a time, most relevant first; none in a race or event. */
+function renderGoalLine() {
   const me = myRider(app.state?.riders ?? []);
   const racing = inRace(app.state?.race, me, app.riderId) || Boolean(app.state?.event?.entered);
-  const panel = goalsPanel(liveGoals(), { routeId: app.route?.id ?? null, racing });
-  const section = $("hud-goals");
-  section.hidden = !panel.title;
-  if (!panel.title) return;
-  $("hud-goals-list").replaceChildren(...panel.lines.map((line) => textElement("li", line)));
-  const more = $("hud-goals-more");
-  more.hidden = panel.more === 0;
-  more.textContent = panel.more ? t("goals.panel.more", { n: panel.more }) : "";
+  const line = rotatingGoal(hudGoalLines(liveGoals(), { routeId: app.route?.id ?? null, racing }), Date.now());
+  app.hud.set("goal", line ?? "");
+  for (const element of document.querySelectorAll(".hud-goal")) element.hidden = line === null;
 }
 
 /**
@@ -5052,7 +5047,7 @@ function updatePanels() {
   renderRiderList($("bot-list"), sections.bots, app.riderId);
   $("bot-heading").hidden = $("bot-list").hidden = sections.bots.length === 0;
   renderOnline();
-  renderGoalPanel();
+  renderGoalLine();
   if (app.layout === "broadcast") renderRiderList($("hud-nearby"), nearbyRiders(me, app.state.riders, app.route, 7), app.riderId);
   const race = app.state.race;
   // Event results stay until the next race is called.

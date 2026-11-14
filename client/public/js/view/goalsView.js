@@ -150,20 +150,25 @@ function relevance({ goal }, routeId) {
 }
 
 /**
- * The ride screen's left goals list: one short line per open goal, the most
- * relevant to this ride first, at most `max` with `more` left over. `title` is
- * the heading, or null when there is nothing to show (none, or in a race).
+ * The ride screen's goal lines: one short line per open goal, the most relevant
+ * to this ride first; none in a race or event.
  */
-export function goalsPanel(entries, { routeId = null, racing = false, max = 3 } = {}) {
-  if (racing) return { title: null, lines: [], more: 0 };
-  const active = entries.filter(({ week }) => !week.finished && !week.reached);
-  const ordered = active
+export function hudGoalLines(entries, { routeId = null, racing = false } = {}) {
+  if (racing) return [];
+  return entries
+    .filter(({ week }) => !week.finished && !week.reached)
     .map((entry, index) => ({ entry, rank: relevance(entry, routeId), index }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map(({ entry }) => entry);
-  const shown = ordered.slice(0, max);
-  const lines = shown.map(({ goal, week }) => goalLine(goal, week));
-  return { title: lines.length ? t("goals.panel.title") : null, lines, more: ordered.length - shown.length };
+    .map(({ entry: { goal, week } }) => goalLine(goal, week));
+}
+
+/** How long the ride screen shows each goal line before the next. */
+const GOAL_LINE_MS = 8000;
+
+/** The goal line to show at `nowMs`: each in turn, or null without any. */
+export function rotatingGoal(lines, nowMs) {
+  if (!lines.length) return null;
+  return lines[Math.floor(nowMs / GOAL_LINE_MS) % lines.length];
 }
 
 /** The Overview's line: "2 goals · this week 62 / 150 km" (the first total still open), or null without goals. */

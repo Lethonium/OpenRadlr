@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setUnits } from "../public/js/util/format.js";
-import { finishGoalLine, goalCard, goalsPanel, goalsSummary, imageGoalLine, goalLine, goalTitle, hudGoal, parseGoalForm } from "../public/js/view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, hudGoalLines, imageGoalLine, goalLine, goalTitle, hudGoal, parseGoalForm, rotatingGoal } from "../public/js/view/goalsView.js";
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
 const endOfDay = (y, m, d) => new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
@@ -131,19 +131,17 @@ const goalLong = { goal: long, week: week({ step: 41 * KM, soFar: 31 * KM }) };
 const goalLap = { goal: lap, week: week({ step: 1276 }) };
 const goalLapOther = { goal: lapOther, week: week({ step: 1300 }) };
 
-test("goalsPanel: nothing to show without open goals", () => {
-  assert.deepEqual(goalsPanel([]), { title: null, lines: [], more: 0 });
+test("hudGoalLines: nothing to show without open goals", () => {
+  assert.deepEqual(hudGoalLines([]), []);
   const done = [
     { goal: total, week: week({ reached: true }) },
     { goal: long, week: week({ finished: true }) },
   ];
-  assert.deepEqual(goalsPanel(done), { title: null, lines: [], more: 0 });
+  assert.deepEqual(hudGoalLines(done), []);
 });
 
-test("goalsPanel: the goal on this route first, then the long ride, then totals, then the rest", () => {
-  const panel = goalsPanel([goalTotal, goalLong, goalLapOther, goalLap], { routeId: "rolling-hills", max: 4 });
-  assert.equal(panel.title, "Goals");
-  assert.deepEqual(panel.lines, [
+test("hudGoalLines: the goal on this route first, then the long ride, then totals, then the rest", () => {
+  assert.deepEqual(hudGoalLines([goalTotal, goalLong, goalLapOther, goalLap], { routeId: "rolling-hills" }), [
     "Lap goal this week 21:16",
     "Long ride 31 / 41 km",
     "Week 85 / 150 km",
@@ -151,19 +149,26 @@ test("goalsPanel: the goal on this route first, then the long ride, then totals,
   ]);
 });
 
-test("goalsPanel: at most three lines, the rest counted", () => {
-  const panel = goalsPanel([goalTotal, goalLong, goalLapOther, goalLap], { routeId: "coast", max: 2 });
-  assert.deepEqual(panel.lines, ["Lap goal this week 21:40", "Long ride 31 / 41 km"]);
-  assert.equal(panel.more, 2);
+test("hudGoalLines: nothing in a race", () => {
+  assert.deepEqual(hudGoalLines([goalTotal, goalLong], { racing: true }), []);
 });
 
-test("goalsPanel: nothing in a race", () => {
-  assert.deepEqual(goalsPanel([goalTotal, goalLong], { racing: true }), { title: null, lines: [], more: 0 });
+test("hudGoalLines: a lap goal without a lap yet still has a line", () => {
+  assert.deepEqual(hudGoalLines([{ goal: lap, week: week({ step: null, progress: null }) }], { routeId: "rolling-hills" }), ["Lap goal: no lap yet"]);
 });
 
-test("goalsPanel: a lap goal without a lap yet still has a line", () => {
-  const panel = goalsPanel([{ goal: lap, week: week({ step: null, progress: null }) }], { routeId: "rolling-hills" });
-  assert.deepEqual(panel.lines, ["Lap goal: no lap yet"]);
+test("rotatingGoal: each line in turn, eight seconds each, from the first", () => {
+  const lines = ["a", "b", "c"];
+  assert.equal(rotatingGoal(lines, 0), "a");
+  assert.equal(rotatingGoal(lines, 7_999), "a");
+  assert.equal(rotatingGoal(lines, 8_000), "b");
+  assert.equal(rotatingGoal(lines, 16_000), "c");
+  assert.equal(rotatingGoal(lines, 24_000), "a");
+});
+
+test("rotatingGoal: one line stays, none is null", () => {
+  assert.equal(rotatingGoal(["a"], 123_456), "a");
+  assert.equal(rotatingGoal([], 0), null);
 });
 
 test("hudGoal: a done lap goal drops out like the others, falling through to a total", () => {
