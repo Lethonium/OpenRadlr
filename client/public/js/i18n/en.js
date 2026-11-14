@@ -1091,6 +1091,7 @@ export default {
   "goals.error.route": "Pick a route where you have a best lap.",
   "goals.error.met": "You already have that: {value}. Pick a bigger goal.",
   "goals.error.full": "You can follow up to {max} goals at a time. Remove one first.",
+  "goals.error.save": "Your goal could not be saved. Check that this browser allows site storage, then try again.",
   "goals.count.one": "{n} goal",
   "goals.count.other": "{n} goals",
   "goals.summary.week": "this week {pair}",

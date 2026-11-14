@@ -2970,9 +2970,11 @@ function loadGoalsState() {
   return app.goals;
 }
 
+/** Stores the goals and takes them on; false, keeping the last stored ones, when storage refuses. */
 function saveGoalsState(state) {
+  if (!saveGoals(browserStorage(), state)) return false;
   app.goals = state;
-  saveGoals(browserStorage(), state);
+  return true;
 }
 
 /**
@@ -3141,9 +3143,8 @@ async function removeGoalAsked(goal, title) {
   await app.deleteConfirm.ask({
     texts: deleteTexts("goal", { title }),
     onConfirm: async () => {
-      removed = true;
-      saveGoalsState(removeGoal(app.goals, goal.id));
-      return true;
+      removed = saveGoalsState(removeGoal(app.goals, goal.id));
+      return removed;
     },
   });
   if (!removed) return;
@@ -3159,7 +3160,9 @@ function initGoalForm() {
   $("goal-kind").addEventListener("change", syncGoalForm);
   $("goal-metric").addEventListener("change", syncGoalForm);
   $("goal-end").addEventListener("change", syncGoalForm);
-  $("goal-image").addEventListener("change", () => saveGoalsState({ ...app.goals, image: $("goal-image").value }));
+  $("goal-image").addEventListener("change", () => {
+    if (!saveGoalsState({ ...app.goals, image: $("goal-image").value })) $("goal-image").value = app.goals.image;
+  });
   $("goal-form").addEventListener("submit", (event) => {
     event.preventDefault();
     submitGoalForm();
@@ -3250,7 +3253,11 @@ function submitGoalForm() {
     $("goal-form-error").hidden = false;
     return;
   }
-  saveGoalsState(id ? replaceGoal(app.goals, result.goal) : addGoal(app.goals, result.goal, now));
+  if (!saveGoalsState(id ? replaceGoal(app.goals, result.goal) : addGoal(app.goals, result.goal, now))) {
+    $("goal-form-error").textContent = t("goals.error.save");
+    $("goal-form-error").hidden = false;
+    return;
+  }
   $("goal-form").hidden = true;
   loadProfile().then(() => $("profile-goal-new").focus());
 }

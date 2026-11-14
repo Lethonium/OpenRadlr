@@ -1091,6 +1091,7 @@ export default {
   "goals.error.route": "Wähl eine Strecke, auf der du eine Bestzeit hast.",
   "goals.error.met": "Das hast du schon: {value}. Wähl ein größeres Ziel.",
   "goals.error.full": "Du kannst bis zu {max} Ziele gleichzeitig verfolgen. Entferne zuerst eines.",
+  "goals.error.save": "Dein Ziel konnte nicht gespeichert werden. Prüfe, ob dieser Browser Website-Daten speichern darf, und versuche es noch einmal.",
   "goals.count.one": "{n} Ziel",
   "goals.count.other": "{n} Ziele",
   "goals.summary.week": "diese Woche {pair}",
