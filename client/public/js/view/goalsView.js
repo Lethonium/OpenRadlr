@@ -4,7 +4,7 @@
  * come from `profile/seasonGoals.js`.
  */
 
-import { t } from "../i18n/i18n.js";
+import { t, tn } from "../i18n/i18n.js";
 import { distanceUnit, elevationUnit, formatDuration, formatNumber, unitHeightMetres, unitMetres } from "../util/format.js";
 import { MAX_GOALS, endPresets } from "../profile/seasonGoals.js";
 import { routeName } from "./profilePage.js";
@@ -138,6 +138,14 @@ export function hudGoal(entries, { routeId }) {
     entries.find((entry) => open(entry) && entry.goal.kind === "long" && !entry.week.done) ??
     entries.find((entry) => open(entry) && entry.goal.kind === "total" && !entry.week.done);
   return pick ? goalLine(pick.goal, pick.week) : null;
+}
+
+/** The Overview's line: "2 goals · this week 62 / 150 km" (the first total still open), or null without goals. */
+export function goalsSummary(entries) {
+  if (!entries.length) return null;
+  const count = tn("goals.count", entries.length);
+  const total = entries.find((entry) => open(entry) && entry.goal.kind === "total");
+  return total ? `${count} · ${t("goals.summary.week", { pair: pair(total.goal, total.week.soFar, total.week.step) })}` : count;
 }
 
 /** What this ride changed, as items most important first ({rank, text}); shared with the summary image. */

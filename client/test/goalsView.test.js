@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setUnits } from "../public/js/util/format.js";
-import { finishGoalLine, goalCard, goalLine, goalTitle, hudGoal, parseGoalForm } from "../public/js/view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, goalLine, goalTitle, hudGoal, parseGoalForm } from "../public/js/view/goalsView.js";
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
 const endOfDay = (y, m, d) => new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
@@ -206,4 +206,14 @@ test("parseGoalForm: at most five goals", () => {
   const result = parseGoalForm(form(), { nowMs: NOW, records: [], bests: [], activeCount: 5 });
   assert.equal(result.error, "goals.error.full");
   assert.equal(result.message, "You can follow up to 5 goals at a time. Remove one first.");
+});
+
+test("goalsSummary: the count and this week's total for the Overview", () => {
+  const entries = [
+    { goal: long, week: week({ step: 41 * KM, soFar: 0 }) },
+    { goal: total, week: week({ step: 150 * KM, soFar: 62 * KM }) },
+  ];
+  assert.equal(goalsSummary(entries), "2 goals · this week 62 / 150 km");
+  assert.equal(goalsSummary(entries.slice(0, 1)), "1 goal");
+  assert.equal(goalsSummary([]), null);
 });

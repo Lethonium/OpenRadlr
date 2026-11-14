@@ -13,6 +13,8 @@ const ITEMS = {
   ride: (f) => ({ title: t("profilePage.delete.ride.title"), lines: [t("profilePage.delete.ride.what", { date: f.date ?? "" }), t("profilePage.delete.ride.totals"), t("profilePage.delete.ride.strava")], action: t("profilePage.delete.ride.action"), offerExport: false }),
   rides: (f) => ({ title: t("profilePage.delete.rides.title"), lines: [tn("profilePage.delete.rides.what", f.count, { from: f.from ?? "", to: f.to ?? "" }), t("profilePage.delete.rides.totals"), t("profilePage.delete.rides.strava")], action: tn("profilePage.delete.rides.action", f.count) }),
   bestLaps: (f) => ({ title: t("profilePage.delete.bestLaps.title"), lines: [tn("profilePage.delete.bestLaps.what", f.count), t("profilePage.delete.bestLaps.ghosts")], action: tn("profilePage.delete.bestLaps.action", f.count) }),
+  goal: (f) => ({ title: t("profilePage.delete.goal.title"), lines: [t("profilePage.delete.goal.what", { title: f.title ?? "" }), t("profilePage.delete.goal.rides")], action: t("profilePage.delete.goal.action"), offerExport: false }),
+  goals: (f) => ({ title: t("profilePage.delete.goals.title"), lines: [tn("profilePage.delete.goals.what", f.count), t("profilePage.delete.goal.rides")], action: tn("profilePage.delete.goals.action", f.count) }),
   profile: () => ({ title: t("profilePage.delete.profile.title"), lines: [t("profilePage.delete.profile.what"), t("profilePage.delete.profile.server"), t("profilePage.delete.profile.stays")], action: t("profilePage.delete.profile.action") }),
   progress: (f) => ({ title: t("profilePage.delete.progress.title"), lines: [t("profilePage.delete.progress.what", { summits: f.summits ?? 0, lemons: f.lemons ?? 0 }), t("profilePage.delete.progress.again")], action: t("profilePage.delete.progress.action") }),
   unfinished: () => ({ title: t("profilePage.delete.unfinished.title"), lines: [t("profilePage.delete.unfinished.what")], action: t("profilePage.delete.unfinished.action") }),
@@ -22,8 +24,8 @@ const ITEMS = {
 
 /**
  * What a delete means, for the confirmation.
- * @param {"ride" | "rides" | "bestLaps" | "profile" | "progress" | "unfinished" | "settings" | "everything"} item
- * @param {{count?: number, from?: string, to?: string, date?: string, summits?: number, lemons?: number}} facts
+ * @param {"ride" | "rides" | "bestLaps" | "goal" | "goals" | "profile" | "progress" | "unfinished" | "settings" | "everything"} item
+ * @param {{count?: number, from?: string, to?: string, date?: string, title?: string, summits?: number, lemons?: number}} facts
  */
 export function deleteTexts(item, facts = {}) {
   const texts = ITEMS[item]({ count: 0, ...facts });

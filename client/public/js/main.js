@@ -16,6 +16,8 @@ import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
+import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
+import { goalCard, goalsSummary, parseGoalForm } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -58,7 +60,7 @@ import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "./route/worl
 import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
-import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
+import { displayToKg, distanceUnit, elevationUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitHeightMetres, unitMetres, weightUnit } from "./util/format.js";
 import { prepareCanvas, themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
@@ -271,6 +273,9 @@ const app = {
   /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
   updateDismissed: false,
   profile: profiles.load(),
+  /** The season goals as stored, and the rides and best laps their weeks are computed from. */
+  goals: { rhythmStartMs: null, goals: [] },
+  goalData: null,
   /** The workout card picked in the start menu (a preset id) and the figure chip pressed on it (index or null). */
   workoutPick: null,
   workoutFigure: null,
@@ -2789,6 +2794,8 @@ function initProfile() {
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
+  initGoalForm();
+  $("profile-goals-link").addEventListener("click", () => app.profileDialog.open("goals"));
   $("profile-rides-more").addEventListener("click", () => {
     app.profileRidesShown += RIDES_PAGE_SIZE;
     renderProfileRides();
@@ -2808,6 +2815,8 @@ function openProfile(page) {
 async function loadProfile(keep) {
   const [records, bests, items] = await Promise.all([app.history.list(), app.ghosts.all(), inventory(dataSources())]);
   app.profileData = { records, bests, items };
+  app.goalData = { records, bests };
+  loadGoalsState();
   if (keep !== "rides") app.profileRidesShown = RIDES_PAGE_SIZE;
   app.profileOpenRide = null;
   renderProfile();
@@ -2817,6 +2826,7 @@ async function loadProfile(keep) {
 
 function renderProfile() {
   if (!app.profileData) return;
+  renderProfileGoals();
   renderProfileOverview();
   renderProfileFtp();
   renderProfileRides();
@@ -2828,6 +2838,9 @@ function renderProfileOverview() {
   const lines = overviewLines({ profile: app.profile, totals: periodTotals(records, Date.now()), bests, routes: routesOf(app.info), locale: getLocale(), unreadable: !historyReadable() });
   $("profile-rider").textContent = lines.rider;
   $("profile-ftp").textContent = lines.ftp;
+  const summary = goalsSummary(goalEntries().filter(({ week }) => !week.finished));
+  $("profile-goals-link").hidden = !summary;
+  $("profile-goals-link").textContent = summary ?? "";
   $("profile-empty").hidden = !lines.empty;
   $("profile-empty").textContent = lines.empty ?? "";
   $("profile-totals-panel").hidden = Boolean(lines.empty);
@@ -2942,6 +2955,206 @@ async function deleteRide(record) {
   if (tried) await loadProfile("rides");
 }
 
+// ---------------------------------------------------------------- goals ---
+
+/** The season goals as stored (profile/seasonGoals.js); unreadable storage is no goals. */
+function loadGoalsState() {
+  app.goals = loadGoals(browserStorage());
+  return app.goals;
+}
+
+function saveGoalsState(state) {
+  app.goals = state;
+  saveGoals(browserStorage(), state);
+}
+
+/**
+ * Each goal with this week (`goalWeek`) from the rides and best laps in `app.goalData`;
+ * a lap goal's Monday best is stored the first time a week is read. `live` is the ride in progress.
+ */
+function goalEntries(nowMs = Date.now(), live = null) {
+  const { records = [], bests = [] } = app.goalData ?? {};
+  const bestOf = (goal) => bests.find((best) => best.routeId === goal.routeId) ?? null;
+  const goals = app.goals.goals.map((goal) => refreshWeekBest(goal, bestOf(goal), nowMs));
+  if (goals.some((goal, i) => goal !== app.goals.goals[i])) saveGoalsState({ ...app.goals, goals });
+  return goals.map((goal) => ({
+    goal,
+    week: goalWeek(goal, { records, best: bestOf(goal), rhythmStartMs: app.goals.rhythmStartMs, nowMs, live }),
+  }));
+}
+
+/** The profile's Goals page: a card per goal, the form when open. */
+function renderProfileGoals() {
+  const now = Date.now();
+  const entries = goalEntries(now);
+  const routes = routesOf(app.info);
+  $("profile-goals").replaceChildren(...entries.map((entry) => goalCardElement(entry, routes)));
+  $("profile-goals-empty").hidden = entries.length > 0;
+  $("profile-goal-new").hidden = !$("goal-form").hidden || activeGoals(app.goals, now).length >= MAX_GOALS;
+}
+
+function goalCardElement({ goal, week }, routes) {
+  const card = goalCard(goal, week, { routes, locale: getLocale() });
+  const item = document.createElement("li");
+  item.className = "goal-card";
+  const title = textElement("span", card.title);
+  title.className = "goal-card-title";
+  const progress = textElement("span", card.progress);
+  progress.className = "goal-card-progress";
+  const bar = document.createElement("div");
+  bar.className = "progress";
+  const fill = document.createElement("span");
+  fill.style.width = `${Math.round(card.fraction * 100)}%`;
+  bar.append(fill);
+  item.append(title, progress, bar);
+  if (card.week) {
+    const line = textElement("p", card.week);
+    line.className = card.done ? "goal-card-week done" : "goal-card-week";
+    item.append(line);
+  }
+  if (card.note) {
+    const note = textElement("p", card.note);
+    note.className = "field-hint goal-card-note";
+    item.append(note);
+  }
+  const actions = document.createElement("div");
+  actions.className = "goal-card-actions";
+  if (!week.finished) {
+    const change = textElement("button", t("goals.change"));
+    change.type = "button";
+    change.className = "secondary small";
+    change.setAttribute("aria-label", `${t("goals.change")}: ${card.title}`);
+    change.addEventListener("click", () => openGoalForm(goal));
+    actions.append(change);
+  }
+  const remove = textElement("button", t("goals.remove"));
+  remove.type = "button";
+  remove.className = "secondary small profile-ride-delete";
+  remove.setAttribute("aria-label", `${t("goals.remove")}: ${card.title}`);
+  remove.addEventListener("click", () => removeGoalAsked(goal, card.title));
+  actions.append(remove);
+  item.append(actions);
+  return item;
+}
+
+async function removeGoalAsked(goal, title) {
+  let removed = false;
+  await app.deleteConfirm.ask({
+    texts: deleteTexts("goal", { title }),
+    onConfirm: async () => {
+      removed = true;
+      saveGoalsState(removeGoal(app.goals, goal.id));
+      return true;
+    },
+  });
+  if (!removed) return;
+  await loadProfile();
+  $("profile-goal-new").focus();
+}
+
+const GOAL_END_KEYS = { winter: "goals.end.winter", weeks8: "goals.end.weeks8", weeks12: "goals.end.weeks12", yearEnd: "goals.end.yearEnd" };
+
+function initGoalForm() {
+  $("profile-goal-new").addEventListener("click", () => openGoalForm(null));
+  $("goal-cancel").addEventListener("click", closeGoalForm);
+  $("goal-kind").addEventListener("change", syncGoalForm);
+  $("goal-metric").addEventListener("change", syncGoalForm);
+  $("goal-end").addEventListener("change", syncGoalForm);
+  $("goal-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitGoalForm();
+  });
+}
+
+/** Opens the form for a new goal, or filled in to change `goal`. */
+function openGoalForm(goal) {
+  const form = $("goal-form");
+  form.dataset.goalId = goal?.id ?? "";
+  $("goal-form-title").textContent = t(goal ? "goals.form.change" : "goals.form.new");
+  const now = Date.now();
+  const presets = endPresets(now);
+  const dayMonth = (ms) => new Date(ms).toLocaleDateString(getLocale(), { day: "numeric", month: "long" });
+  $("goal-end").replaceChildren(
+    ...presets.map((preset) => new Option(`${t(GOAL_END_KEYS[preset.id])} · ${dayMonth(preset.endMs)}`, preset.id)),
+    new Option(t("goals.end.date"), "date"),
+  );
+  const { bests = [] } = app.goalData ?? {};
+  const routes = routesOf(app.info);
+  $("goal-route").replaceChildren(...bests.map((best) => new Option(routes.find((route) => route.id === best.routeId)?.name ?? best.routeId, best.routeId)));
+  $("goal-kind").value = goal?.kind ?? "total";
+  $("goal-metric").value = goal?.metric ?? "distance";
+  if (goal?.routeId) $("goal-route").value = goal.routeId;
+  $("goal-target").value = goal ? goalTargetText(goal) : "";
+  const preset = goal && presets.find((entry) => entry.endMs === goal.endMs);
+  $("goal-end").value = !goal ? "winter" : preset ? preset.id : "date";
+  $("goal-date").value = goal ? isoDate(goal.endMs) : isoDate(now + 8 * 7 * 86_400_000);
+  $("goal-form-error").hidden = true;
+  form.hidden = false;
+  syncGoalForm();
+  renderProfileGoals();
+  $("goal-kind").focus();
+}
+
+function closeGoalForm() {
+  $("goal-form").hidden = true;
+  renderProfileGoals();
+  $("profile-goal-new").focus();
+}
+
+/** Shows the fields the kind needs, and the target's unit. */
+function syncGoalForm() {
+  const kind = $("goal-kind").value;
+  // A long ride is distance or time; climbing is a total only.
+  $("goal-metric").querySelector('option[value="climb"]').hidden = kind === "long";
+  if (kind === "long" && $("goal-metric").value === "climb") $("goal-metric").value = "distance";
+  $("goal-metric-row").hidden = kind === "lap";
+  $("goal-route-row").hidden = kind !== "lap" || $("goal-route").options.length === 0;
+  $("goal-no-routes").hidden = kind !== "lap" || $("goal-route").options.length > 0;
+  $("goal-date-row").hidden = $("goal-end").value !== "date";
+  const metric = kind === "lap" ? "lap" : $("goal-metric").value;
+  $("goal-target-unit").textContent = { distance: distanceUnit(), time: "h", climb: elevationUnit(), lap: "m:ss" }[metric];
+}
+
+/** A goal's target as the form shows it, in the rider's units. */
+function goalTargetText(goal) {
+  if (goal.kind === "lap") return formatDuration(goal.target);
+  if (goal.metric === "distance") return String(Math.round((goal.target / unitMetres()) * 10) / 10);
+  if (goal.metric === "climb") return String(Math.round(goal.target / unitHeightMetres()));
+  return String(Math.round((goal.target / 3600) * 100) / 100);
+}
+
+function isoDate(ms) {
+  const date = new Date(ms);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function submitGoalForm() {
+  const now = Date.now();
+  const id = $("goal-form").dataset.goalId;
+  const end = $("goal-end").value;
+  const fields = {
+    id: id || undefined,
+    kind: $("goal-kind").value,
+    metric: $("goal-metric").value,
+    target: $("goal-target").value,
+    routeId: $("goal-route").value,
+    endPreset: end === "date" ? "" : end,
+    endDate: $("goal-date").value,
+  };
+  const { records = [], bests = [] } = app.goalData ?? {};
+  const activeCount = activeGoals(app.goals, now).filter((goal) => goal.id !== id).length;
+  const result = parseGoalForm(fields, { nowMs: now, records, bests, activeCount });
+  if (result.error) {
+    $("goal-form-error").textContent = result.message;
+    $("goal-form-error").hidden = false;
+    return;
+  }
+  saveGoalsState(id ? replaceGoal(app.goals, result.goal) : addGoal(app.goals, result.goal, now));
+  $("goal-form").hidden = true;
+  loadProfile().then(() => $("profile-goal-new").focus());
+}
+
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
   return { storage: browserStorage(), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
@@ -3002,6 +3215,7 @@ function deleteFacts(id) {
   const dates = rideRows([records.at(-1), records[0]].filter(Boolean), [], { locale: getLocale() }).map((row) => row.date);
   if (id === "progress") return count("progress") ?? {};
   if (id === "bestLaps") return { count: count("bestLaps") ?? 0 };
+  if (id === "goals") return { count: count("goals") ?? 0 };
   return { count: records.length, from: dates[0], to: dates[1] };
 }
 

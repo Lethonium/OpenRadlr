@@ -25,6 +25,7 @@ function mapStore(entries = {}) {
   };
 }
 
+const goal = (id) => ({ id, kind: "total", metric: "distance", target: 1e6, routeId: null, startMs: 0, endMs: 1e12, createdAt: 0 });
 const stores = () => ({
   history: mapStore({ "ride:1": { id: "1", startedAt: 1 }, "ride:2": { id: "2", startedAt: 2 } }),
   ghosts: mapStore({ "ghost:rolling-hills": { routeId: "rolling-hills", durationS: 1318 } }),
@@ -38,11 +39,12 @@ const storage = () => fakeStorage({
   "openradlr.screenKey": "s3cret",
   "openradlr.cockpit": JSON.stringify({ key: "0123456789abcdef0123456789abcdef", url: "x" }),
   "other.app": "x",
+  "openradlr.goals": JSON.stringify({ version: 1, rhythmStartMs: 0, goals: [goal("a"), goal("b")] }),
 });
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
 
 test("the data items, in order", () => {
-  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "progress", "unfinished", "settings"]);
+  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings"]);
 });
 
 test("inventory counts each item", async () => {
@@ -162,4 +164,23 @@ test("deleteItem: everything goes on past a broken store and reports the failure
   assert.equal(await deleteItem("everything", { storage: s, stores: st }), false);
   assert.deepEqual(await st.ghosts.keys(), []);
   assert.equal(s.getItem("openradlr.summits"), null);
+});
+
+test("inventory counts goals, and settings leave them out", async () => {
+  const by = byId(await inventory({ storage: storage(), stores: stores() }));
+  assert.equal(by.goals.count, 2);
+  assert.equal(by.settings.count, 3);
+});
+
+test("export has the goals as an item of their own", async () => {
+  const data = await exportData({ storage: storage(), stores: stores(), now: 7 });
+  assert.deepEqual(data.goals.goals.map((g) => g.id), ["a", "b"]);
+  assert.equal(data.settings["openradlr.goals"], undefined);
+});
+
+test("deleteItem: goals removes the goals only", async () => {
+  const s = storage();
+  assert.equal(await deleteItem("goals", { storage: s, stores: stores() }), true);
+  assert.equal(s.getItem("openradlr.goals"), null);
+  assert.equal(s.getItem("openradlr.devices"), "[]");
 });

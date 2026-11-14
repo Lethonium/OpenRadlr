@@ -51,8 +51,23 @@ test("deleteTexts: everything needs the tick", () => {
   assert.equal(deleteTexts("everything", { count: 3 }).action, "Delete everything");
 });
 
+test("deleteTexts: one goal is named, and rides stay", () => {
+  const x = deleteTexts("goal", { title: "2,000 km by 20 March" });
+  assert.equal(x.title, "Remove this goal?");
+  assert.ok(x.lines[0].includes("2,000 km by 20 March"));
+  assert.ok(x.lines.some((line) => /rides stay/.test(line)));
+  assert.equal(x.action, "Remove goal");
+  assert.equal(x.offerExport, false);
+});
+
+test("deleteTexts: all goals with their count", () => {
+  const x = deleteTexts("goals", { count: 3 });
+  assert.equal(x.action, "Delete 3 goals");
+  assert.ok(x.lines.some((line) => /rides stay/.test(line)));
+});
+
 test("deleteTexts: every kind of data has its texts", () => {
-  for (const item of ["ride", "rides", "bestLaps", "profile", "progress", "unfinished", "settings", "everything"]) {
+  for (const item of ["ride", "rides", "bestLaps", "goal", "goals", "profile", "progress", "unfinished", "settings", "everything"]) {
     const x = deleteTexts(item, { count: 2, summits: 1, lemons: 3, from: "a", to: "b", date: "d" });
     assert.ok(x.title && x.action && x.lines.length >= 2, item);
     assert.ok(![x.title, x.action, ...x.lines].join(" ").includes("{"), item);
