@@ -20,7 +20,7 @@ where the goals live in the UI and how the weekly steps are kept.
 - Automatic weekly steps with 3:1 build/recovery weeks on a shared calendar, re-planned every Monday.
 - A **Goals** page in the in-game menu showing this week's steps, updated live during the ride.
 - **One small HUD line** with the goal most relevant to the ride on screen.
-- **One line on the finish screen** saying what this ride changed.
+- **One line on the finish screen** saying what this ride changed, and optionally on the summary image.
 
 ## Non-goals
 
@@ -184,6 +184,18 @@ captured at ride start (the same the HUD uses) and the state after the ride reco
 are saved (main.js awaits both before writing the line); at most two items, most important first (goal reached,
 then week done, then progress).
 
+### Summary image
+
+The ride's summary image (`composeSummary` in `view/photos.js`, the 4:3 card for Strava) gets one gold line
+between the stat grid and the power/elevation chart, from the same items as the finish line:
+"★ Goal reached · 2,000 km since 1 November", "★ Week done 150 / 150 km · 1,240 / 2,000 km by 20 March".
+
+- A setting on the profile's Goals page, "On the summary image": **reached goals** (default), **goals and
+  this week's progress**, **nothing**. Stored with the goals (`image: "reached" | "progress" | "off"`).
+  With "reached goals" the line shows only on the ride that reaches a goal (decided by the user).
+- At most two items, most important first; nothing drawn when there is nothing to show.
+- The image is redrawn once the ride record and any new best lap are saved.
+
 ## Build order
 
 Ordered commits in one stacked PR (base `feat/profile-goals`).
@@ -192,6 +204,7 @@ Ordered commits in one stacked PR (base `feat/profile-goals`).
 2. Profile → Goals: cards, form, remove via the delete confirmation; goals in Your data (export, delete).
 3. In-game menu Goals page.
 4. HUD line and finish screen line.
+5. The goal line on the summary image, with its setting.
 
 ## Left to the builder
 
