@@ -192,6 +192,26 @@ rather than imposing a fixed block.
 2. **Phones:** one glanceable line, no button or sheet.
 3. **Studio:** no goals section for now (revisit with quests).
 
+## What shipped (2026-11-14)
+
+Implemented in `feat/season-goals` (PR #102):
+
+- `goalsPanel(entries, { routeId, racing, max })` in `view/goalsView.js`: the
+  ordered lines and a `+N more` count; `title` null when there is nothing to show.
+- `#hud-left` with `#hud-goals` in `index.html`, placed by CSS per layout: alone on
+  the mid-left in cockpit and training, below the race row in wide race, one line
+  on phones and short landscape, hidden in the studio. In broadcast the nearby
+  riders moved into the column below the goals. The `#goal-pill` and
+  `updateGoalPill` are gone, and the now-unused `goals.pillTitle` key with them.
+- Narrow race (`max-width: 1100px`): the goals step aside, as the race row wraps
+  and fills the left there (the nearby list and minimap already hide).
+- The phone cockpit: `goals` in the `display` frame (the top line) and a "Season
+  goal" text tile, offered in the add-tile catalogue (not in the default layout).
+
+Left as a follow-up: the cockpit tile's look with a live line (pairing a second
+screen in a headless check is out of scope here; the tile's value and hiding are
+unit-tested).
+
 ## Left to the builder
 
 - Exact column width, spacing and glass styling within the existing HUD CSS.

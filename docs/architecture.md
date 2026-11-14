@@ -210,10 +210,17 @@ groups split at 15 m gaps, time gaps from my speed), `nextMarker` and the
 gauge maths. Each layout has its own copy of a metric; elements are marked
 `data-m="power"` and `MetricBinder` writes all copies, skipping unchanged
 values. Only the canvases of the visible layout are drawn each frame.
-Controls that aren't needed while riding live off the HUD. The menu (M) is a
+Controls that aren't needed while riding live off the HUD.
+
+A shared left column (`#hud-left`) holds the season goals (`#hud-goals`, one
+short line per active goal, most relevant first, from `view/goalsView.js`
+`goalsPanel`) and, in the broadcast layout, the nearby riders below them; it
+leaves room for NPC quests later. It sits alone on the mid-left in cockpit and
+training, below the position and lap row in race, collapses to one line on
+phones and hides in the studio and on narrow race screens. The menu (M) is a
 dialog over the dimmed ride: a page list (Overview with live ride stats, View,
-Vehicle, Race, Events, Training, Settings) next to the open page, full screen
-with the list first on a phone; `view/menuPages.js` models the pages and
+Vehicle, Race, Events, Training, Goals, Settings) next to the open page, full
+screen with the list first on a phone; `view/menuPages.js` models the pages and
 `view/menuDialog.js` handles opening, focus and the Finish-ride confirm step.
 The top bar's View popover holds the quick view switches. Riders and chat stay
 in the left drawer.
