@@ -64,7 +64,7 @@ export function saveGoals(storage, state) {
 
 /** Adds a goal; the first one anchors the shared rhythm on this Monday. */
 export function addGoal(state, goal, nowMs) {
-  const rhythmStartMs = state.goals.length && state.rhythmStartMs != null ? state.rhythmStartMs : weekStart(nowMs);
+  const rhythmStartMs = state.goals.length && finite(state.rhythmStartMs) ? state.rhythmStartMs : weekStart(nowMs);
   return { ...state, rhythmStartMs, goals: [...state.goals, goal] };
 }
 
@@ -118,7 +118,7 @@ function progressValue(goal, records, best) {
   return sum(all.filter((r) => r.startedAt >= goal.startMs && r.startedAt <= goal.endMs), goal.metric);
 }
 
-const isReached = (goal, value) => value != null && (goal.kind === "lap" ? value <= goal.target : value >= goal.target);
+const isReached = (goal, value) => value !== null && (goal.kind === "lap" ? value <= goal.target : value >= goal.target);
 
 /** How far a goal is: total so far, longest ride, or best lap (null without one). */
 export function goalProgress(goal, { records, best }) {
@@ -228,9 +228,9 @@ export function goalWeek(goal, { records, best, rhythmStartMs, nowMs, live = nul
   const mondayBest = goal.weekBest?.weekStartMs === monday ? goal.weekBest.durationS : finite(best?.durationS) ? best.durationS : null;
   const laps = [finite(best?.durationS) && best.recordedAt >= monday ? best.durationS : null, live?.lapS ?? null].filter(finite);
   const soFar = laps.length ? Math.min(...laps) : null;
-  if (mondayBest == null) return { ...none, soFar };
+  if (!finite(mondayBest)) return { ...none, soFar };
   const step = recovery ? mondayBest : goal.target + (mondayBest - goal.target) * easeOut(buildIndex, buildWeeks);
-  return { ...base, step, soFar, done: soFar != null && soFar <= step + EPSILON, reachable: true, earliestEndMs: null };
+  return { ...base, step, soFar, done: soFar !== null && soFar <= step + EPSILON, reachable: true, earliestEndMs: null };
 }
 
 /** Progress including the ride in progress: added for a total, the longer ride, the faster lap. */
