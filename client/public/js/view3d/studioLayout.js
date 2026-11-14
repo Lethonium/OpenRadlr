@@ -15,4 +15,3 @@ export function seatPosition(seat) {
   const column = seat % 8;
   return [(column - 3.5) * SEAT_GAP, row * RISER, row * ROW_GAP];
 }
-

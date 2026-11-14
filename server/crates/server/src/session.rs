@@ -871,7 +871,7 @@ mod tests {
         assert!(matches!(s.expired(71.0), Some(ServerMessage::Error { ref code, .. }) if code == "idle_timeout"));
     }
 
-    const KEY: &str = "0123456789abcdef0123456789abcdef";
+    const KEY: &str = "0123456789abcdef0123456789abcdef"; // pragma: allowlist secret (a test placeholder)
 
     fn watch_json() -> String {
         format!(r#"{{"type":"watch","key":"{KEY}"}}"#)
@@ -978,7 +978,7 @@ mod tests {
     fn a_bad_screen_key_is_refused() {
         for key in [
             "short",
-            "0123456789ABCDEF0123456789ABCDEF",
+            "0123456789ABCDEF0123456789ABCDEF", // pragma: allowlist secret (a test placeholder)
             "0123456789abcdef0123456789abcdeg",
         ] {
             let mut s = session();
