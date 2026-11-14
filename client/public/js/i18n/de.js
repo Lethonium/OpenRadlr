@@ -1131,4 +1131,5 @@ export default {
   "goals.form.date": "Datum",
   "goals.form.save": "Ziel speichern",
   "goals.form.cancel": "Abbrechen",
+  "goals.menu.hint": "Ziele setzt und änderst du in deinem Profil, vor einer Fahrt.",
 };

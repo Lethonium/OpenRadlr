@@ -17,7 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
-import { goalCard, goalsSummary, parseGoalForm } from "./view/goalsView.js";
+import { goalCard, goalsSummary, hudGoal, parseGoalForm } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -2177,6 +2177,7 @@ function startRide() {
   initHudCommon();
   if (app.studio) startStudio({ simulated, setSimPower });
   else startRoad({ simulated, setSimPower });
+  startGoals();
 
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
@@ -2724,6 +2725,7 @@ function updateGhostLap(me, time) {
 
 /** A finished lap: kept if it's the best on its route, and then the ghost of the next one. */
 function keepLap(event, lap) {
+  noteGoalLap(event);
   app.ghosts.offer(event).then(({ best, previousS }) => {
     if (!best) return;
     if (app.ghostLap === lap) lap.best = { routeId: event.routeId, durationS: event.durationS, trace: event.trace };
@@ -2979,8 +2981,50 @@ function goalEntries(nowMs = Date.now(), live = null) {
   if (goals.some((goal, i) => goal !== app.goals.goals[i])) saveGoalsState({ ...app.goals, goals });
   return goals.map((goal) => ({
     goal,
-    week: goalWeek(goal, { records, best: bestOf(goal), rhythmStartMs: app.goals.rhythmStartMs, nowMs, live }),
+    week: goalWeek(goal, { records, best: bestOf(goal), rhythmStartMs: app.goals.rhythmStartMs, nowMs, live: live && { ...live, lapS: live.laps?.get(goal.routeId) ?? null } }),
   }));
+}
+
+/**
+ * At ride start: the goals and the rides and best laps their weeks come from, read
+ * in the background; the menu offers its Goals page once they are in.
+ */
+function startGoals() {
+  loadGoalsState();
+  app.goalData = null;
+  app.goalLive = null;
+  app.goalLaps = new Map();
+  const ride = app.ride;
+  Promise.all([app.history.list(), app.ghosts.all()]).then(([records, bests]) => {
+    if (app.ride !== ride) return;
+    app.goalData = { records, bests };
+    app.menuDialog?.refreshPages(menuPages());
+  });
+}
+
+/** A lap finished in this ride: it counts for a lap goal on its route this week. */
+function noteGoalLap(event) {
+  const fastest = app.goalLaps?.get(event.routeId) ?? Infinity;
+  app.goalLaps?.set(event.routeId, Math.min(fastest, event.durationS));
+  app.goalLive = null;
+}
+
+/** This week of each active goal with the ride so far, recomputed at most once a second. */
+function liveGoals() {
+  if (!app.goalData || !app.recorder || !app.goalLaps) return [];
+  const at = Date.now();
+  if (!app.goalLive || at - app.goalLive.at >= 1000) {
+    const { distanceM, durationS, elevationGainM } = app.recorder.summary();
+    const live = { distanceM, durationS, elevationGainM, laps: app.goalLaps };
+    app.goalLive = { at, entries: goalEntries(at, live).filter(({ week }) => !week.finished) };
+  }
+  return app.goalLive.entries;
+}
+
+/** The in-game menu's Goals page: this week's steps with the ride so far, no edit buttons. */
+function renderMenuGoals() {
+  const routes = routesOf(app.info);
+  $("menu-goals").replaceChildren(...liveGoals().map((entry) => goalCardElement(entry, routes, { edit: false })));
 }
 
 /** The profile's Goals page: a card per goal, the form when open. */
@@ -2993,7 +3037,7 @@ function renderProfileGoals() {
   $("profile-goal-new").hidden = !$("goal-form").hidden || activeGoals(app.goals, now).length >= MAX_GOALS;
 }
 
-function goalCardElement({ goal, week }, routes) {
+function goalCardElement({ goal, week }, routes, { edit = true } = {}) {
   const card = goalCard(goal, week, { routes, locale: getLocale() });
   const item = document.createElement("li");
   item.className = "goal-card";
@@ -3033,7 +3077,7 @@ function goalCardElement({ goal, week }, routes) {
   remove.setAttribute("aria-label", `${t("goals.remove")}: ${card.title}`);
   remove.addEventListener("click", () => removeGoalAsked(goal, card.title));
   actions.append(remove);
-  item.append(actions);
+  if (edit) item.append(actions);
   return item;
 }
 
@@ -4110,6 +4154,7 @@ function initMenu() {
     onPage: (page) => {
       for (const item of $("menu").querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
       syncOverview(page);
+      if (page === "goals") renderMenuGoals();
     },
     onChange: ({ open, confirming }) => {
       syncOverview(app.menuDialog?.page ?? null);
@@ -4126,7 +4171,7 @@ function initMenu() {
 
 /** The menu's pages for this ride. */
 function menuPages(rows = menuEventRows()) {
-  return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0 });
+  return visiblePages({ studio: Boolean(app.studio), hasEvents: rows.length > 0, hasGoals: liveGoals().length > 0 });
 }
 
 /** What the Overview page shows: the recording so far and the live figures of the HUD. */
@@ -4166,6 +4211,7 @@ function menuStatusContext() {
     ergTarget: training?.ergTarget,
     eventCount: menuEventRows().length,
     units: app.profile.units,
+    goalLine: hudGoal(liveGoals(), { routeId: app.route?.id ?? null }),
   };
 }
 
@@ -4176,6 +4222,7 @@ function renderMenuStatus() {
     setText(item.querySelector(".menu-nav-title"), pageTitle(id));
     setText(item.querySelector(".menu-nav-status"), pageStatus(id, ctx));
   }
+  if (app.menuDialog?.page === "goals") renderMenuGoals();
 }
 
 /** Opens the menu (on `pageId` if given), closing the left drawer and the View popover; not once finished. */

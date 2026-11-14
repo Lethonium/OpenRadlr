@@ -932,6 +932,7 @@
                 <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span id="menu-nav-race-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-events" class="menu-nav-item" data-menu-nav="events"><span id="menu-nav-events-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-training" class="menu-nav-item" data-menu-nav="training"><span id="menu-nav-training-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span id="menu-nav-goals-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span id="menu-nav-settings-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
               </nav>
               <div class="menu-pages">
@@ -1059,6 +1060,13 @@
                   <div id="ride-difficulty-panel" class="panel">
                     <h2><span data-i18n="start.climbFeel">Climb feel</span> <output id="ride-difficulty-value">50 %</output></h2>
                     <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="goals" role="region" aria-labelledby="menu-nav-goals-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="goals.page">Goals</h2>
+                    <ul id="menu-goals" class="goal-cards"></ul>
+                    <p class="field-hint" data-i18n="goals.menu.hint">You set and change goals on your profile, before a ride.</p>
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
