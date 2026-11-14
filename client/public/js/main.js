@@ -1575,6 +1575,7 @@ function startDisplayFeed() {
       planSent = { connection, workout, ticks: 0 };
     }
     const state = workout ? training.workoutState() : null;
+    const goals = goalsPanel(liveGoals(), { routeId: app.route?.id ?? null });
     connection.sendDisplay(
       displayFrame({
         heartRate: app.session.latest.heartRate,
@@ -1583,6 +1584,7 @@ function startDisplayFeed() {
         cadence: app.session.latest.cadence,
         recording: overviewRecording(),
         workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
+        goalLine: goals.lines[0] ?? null,
       }),
     );
   }, DISPLAY_INTERVAL_MS);

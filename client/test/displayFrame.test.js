@@ -62,6 +62,14 @@ test("a finished workout adds no workout field", () => {
   assert.equal("workout" in frame, false);
 });
 
+test("a frame carries the goal line, and leaves it out without one", () => {
+  const withGoal = displayFrame({ ftp: 190, recording: recording([100]), goalLine: "Lap goal this week 21:43" });
+  assert.equal(withGoal.goals, "Lap goal this week 21:43");
+  const without = displayFrame({ ftp: 190, recording: recording([100]) });
+  assert.equal("goals" in without, false);
+  assert.ok(size(withGoal) <= DISPLAY_LIMIT_BYTES, `${size(withGoal)} bytes`);
+});
+
 test("every frame of a 2-hour ride stays under the limit", () => {
   const powers = Array.from({ length: 7201 }, (_, i) => 100 + ((i * 37) % 300));
   const workout = PRESET_WORKOUTS.at(-1);

@@ -53,6 +53,17 @@ const number = (id, sizes, read, { unit, zone, hidden } = {}) => ({
 
 const graph = (id, sizes, draw, hidden) => ({ id, labelKey: label(id), sizes, draw, ...(hidden && { hidden }) });
 
+/** A text tile: a sentence in the tile, not a big number (styled `.tile-text`). */
+const textTile = (id, sizes, read, hidden) => ({
+  id,
+  labelKey: label(id),
+  sizes,
+  text: true,
+  value: (model) => read(model),
+  unit: () => "",
+  ...(hidden && { hidden }),
+});
+
 const stat = (model, field) => model.stats?.[field];
 
 /** Draws a series (oldest first) as a line over the full width; 0 and non-numbers are gaps. */
@@ -207,6 +218,7 @@ export const TILES = Object.freeze([
   graph("profile", ["wide", "big"], drawProfile, offRoute),
   number("laps", ["half", "wide"], (m) => (inRace(m) ? `${m.lap} / ${m.race.laps}` : NONE), { hidden: (m) => !inRace(m) }),
   graph("raceGaps", ["wide", "big"], drawRaceGaps, (m) => !(m.race?.results?.length > 0)),
+  textTile("goals", ["wide", "big"], (m) => m.goals ?? NONE, (m) => !m.goals),
 ]);
 
 /** What a new cockpit shows, top to bottom. */
