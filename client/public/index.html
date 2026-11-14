@@ -264,8 +264,10 @@
 
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset>
-              <legend data-i18n="rider.title">Rider</legend>
-              <button type="button" id="open-profile" class="secondary small open-profile" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
+              <legend class="rider-heading">
+                <span data-i18n="rider.title">Rider</span>
+                <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
+              </legend>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
