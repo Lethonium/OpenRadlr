@@ -39,6 +39,8 @@ function validGoal(goal) {
   if (!goal || typeof goal !== "object" || typeof goal.id !== "string") return false;
   if (!KINDS.includes(goal.kind) || !METRICS.includes(goal.metric)) return false;
   if (!finite(goal.target) || goal.target <= 0 || !finite(goal.startMs) || !finite(goal.endMs)) return false;
+  // A goal whose end is before its start has no weeks; keeping it would throw later.
+  if (goal.endMs < goal.startMs) return false;
   return goal.kind !== "lap" || typeof goal.routeId === "string";
 }
 
@@ -181,15 +183,19 @@ function earliestEnd(mondayMs, thisRecovery, anchor, start, done, grow) {
 export function goalWeek(goal, { records, best, rhythmStartMs, nowMs, live = null }) {
   const weeks = goalWeeks(goal, rhythmStartMs);
   const monday = weekStart(nowMs);
-  const position = Math.min(Math.max(weeksBetween(weeks[0].mondayMs, monday), 0), weeks.length - 1);
-  const { recovery } = weeks[position];
-  const finished = nowMs > goal.endMs;
   const all = rides(records);
   const thisWeek = all.filter((r) => r.startedAt >= monday);
-  const beforeMonday = all.filter((r) => r.startedAt < monday);
-
   const progress = liveProgress(goal, progressValue(goal, records, best), live);
   const reached = isReached(goal, progress);
+  const finished = nowMs > goal.endMs || weeks.length === 0;
+  // A goal with no weeks (junk that slipped past the store) has nothing to plan.
+  if (weeks.length === 0) {
+    return { index: 0, count: 0, recovery: false, finished, reached, progress, step: null, soFar: null, done: false, reachable: true, earliestEndMs: null };
+  }
+  const position = Math.min(Math.max(weeksBetween(weeks[0].mondayMs, monday), 0), weeks.length - 1);
+  const { recovery } = weeks[position];
+  const beforeMonday = all.filter((r) => r.startedAt < monday);
+
   const base = { index: position + 1, count: weeks.length, recovery, finished, reached, progress };
   const none = { ...base, step: null, soFar: null, done: false, reachable: true, earliestEndMs: null };
   if (finished || reached) return none;
@@ -219,7 +225,8 @@ export function goalWeek(goal, { records, best, rhythmStartMs, nowMs, live = nul
     const soFar = Math.max(longest(thisWeek, goal.metric), amount(live, goal.metric));
     const cap = longestSoFar > 0 ? LONG_CAP * longestSoFar : Infinity;
     const planned = goal.target - (goal.target - longestSoFar) * easeOut(buildIndex, buildWeeks);
-    const step = recovery ? LONG_RECOVERY * longestSoFar : Math.min(planned, cap);
+    // An easy week trims the longest so far; with nothing yet, the week's own plan.
+    const step = recovery ? LONG_RECOVERY * (longestSoFar || planned) : Math.min(planned, cap);
     const buildLeft = weeks.slice(position).filter((w) => !w.recovery).length;
     const reachable = longestSoFar === 0 || longestSoFar * LONG_CAP ** buildLeft >= goal.target - EPSILON;
     const grow = (level, easy) => (easy ? level : level * LONG_CAP);
