@@ -17,7 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
-import { goalCard, goalsSummary, hudGoal, parseGoalForm } from "./view/goalsView.js";
+import { finishGoalLine, goalCard, goalsSummary, hudGoal, parseGoalForm } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -2726,7 +2726,9 @@ function updateGhostLap(me, time) {
 /** A finished lap: kept if it's the best on its route, and then the ghost of the next one. */
 function keepLap(event, lap) {
   noteGoalLap(event);
-  app.ghosts.offer(event).then(({ best, previousS }) => {
+  const offered = app.ghosts.offer(event);
+  app.goalLapSaves?.push(offered);
+  offered.then(({ best, previousS }) => {
     if (!best) return;
     if (app.ghostLap === lap) lap.best = { routeId: event.routeId, durationS: event.durationS, trace: event.trace };
     const time = formatDuration(event.durationS);
@@ -2994,6 +2996,8 @@ function startGoals() {
   app.goalData = null;
   app.goalLive = null;
   app.goalLaps = new Map();
+  app.goalLapSaves = [];
+  app.historySave = null;
   const ride = app.ride;
   Promise.all([app.history.list(), app.ghosts.all()]).then(([records, bests]) => {
     if (app.ride !== ride) return;
@@ -3019,6 +3023,43 @@ function liveGoals() {
     app.goalLive = { at, entries: goalEntries(at, live).filter(({ week }) => !week.finished) };
   }
   return app.goalLive.entries;
+}
+
+/** The HUD's goal pill: the goal most relevant to this ride, hidden in a race or event. */
+function updateGoalPill(me) {
+  const pill = $("goal-pill");
+  const racing = inRace(app.state?.race, me, app.riderId) || Boolean(app.state?.event?.entered);
+  const text = hudGoal(liveGoals(), { routeId: app.route.id, racing });
+  if (!text) {
+    pill.hidden = true;
+    return;
+  }
+  if (pill.textContent !== text) pill.textContent = text;
+  pill.hidden = false;
+}
+
+/**
+ * The finish screen's goal line: this week as it stood at ride start against the
+ * same week once the ride and any new best lap are saved. Hidden when nothing changed.
+ */
+async function showFinishGoals() {
+  const line = $("finish-goals");
+  line.hidden = true;
+  app.finishGoals = null;
+  if (!app.goalData) return;
+  const ride = app.ride;
+  const nowMs = Date.now();
+  const before = goalEntries(nowMs).filter(({ week }) => !week.finished);
+  await Promise.allSettled([app.historySave, ...(app.goalLapSaves ?? [])]);
+  const read = await Promise.all([app.history.list(), app.ghosts.all()]).catch(() => null);
+  if (!read || app.ride !== ride) return;
+  const [records, bests] = read;
+  app.goalData = { records, bests };
+  const after = goalEntries(nowMs);
+  app.finishGoals = { before, after };
+  const text = finishGoalLine(before, after, { routes: routesOf(app.info) });
+  line.textContent = text ?? "";
+  line.hidden = !text;
 }
 
 /** The in-game menu's Goals page: this week's steps with the ride so far, no edit buttons. */
@@ -3461,10 +3502,8 @@ function saveFinishedRide() {
     test: app.ftpTest?.testFlag ?? null,
     device: deviceKind(app.trainer),
   });
-  return app.history
-    .save(record)
-    .then(offerFtp)
-    .catch((error) => console.error("ride history:", error));
+  app.historySave = app.history.save(record);
+  return app.historySave.then(offerFtp).catch((error) => console.error("ride history:", error));
 }
 
 /** Shows the summary of the finished ride; saves nothing. */
@@ -3487,6 +3526,7 @@ function openFinish() {
     }),
   );
   $("finish-route").textContent = `${app.rideRoute.name} · ${app.finishedServerName}`;
+  showFinishGoals();
   const empty = app.recorder.empty;
   app.finishSplits = empty ? [] : rideSplits(true);
   renderSplits($("finish-splits"), app.finishSplits, app.splitUnitM);
@@ -5104,6 +5144,7 @@ function frame() {
 
   if (me && !app.finished) collectLemons(me);
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
+  if (me && !app.finished) updateGoalPill(me);
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {

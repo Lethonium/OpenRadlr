@@ -6921,3 +6921,10 @@ body.working-out #paddles {
   font-weight: 600;
   text-align: left;
 }
+
+/* The finish screen's goal line: gold, as on the summary image. */
+.finish-goals {
+  margin: 8px 0 0;
+  color: #f2c14e;
+  font-weight: 600;
+}

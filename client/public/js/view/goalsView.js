@@ -21,19 +21,19 @@ function dayMonth(ms, locale) {
   }
 }
 
-const whole = (value) => formatNumber(Math.round(value), 0);
+const whole = (value, round = Math.round) => formatNumber(round(value), 0);
 
 /** Seconds → "3:00" (hours and minutes). */
-function hoursMinutes(seconds) {
-  const minutes = Math.round(seconds / 60);
+function hoursMinutes(seconds, round = Math.round) {
+  const minutes = round(seconds / 60);
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 /** A number of the metric without its unit, rounded for display. */
-function bare(metric, value) {
-  if (metric === "distance") return whole(value / unitMetres());
-  if (metric === "climb") return whole(value / unitHeightMetres());
-  return hoursMinutes(value);
+function bare(metric, value, round = Math.round) {
+  if (metric === "distance") return whole(value / unitMetres(), round);
+  if (metric === "climb") return whole(value / unitHeightMetres(), round);
+  return hoursMinutes(value, round);
 }
 
 const unit = (metric) => (metric === "distance" ? distanceUnit() : metric === "climb" ? elevationUnit() : "h");
@@ -44,10 +44,10 @@ function amount(metric, value) {
   return `${bare(metric, value)} ${unit(metric)}`;
 }
 
-/** "85 / 150 km"; a lap "21:10 / 20:00". */
+/** "85 / 150 km"; a lap "21:10 / 20:00". What is done rounds down, so 149.6 of 150 never reads as met. */
 function pair(goal, value, of) {
   if (goal.kind === "lap") return `${lapTime(value)} / ${lapTime(of)}`;
-  return `${bare(goal.metric, value ?? 0)} / ${bare(goal.metric, of)} ${unit(goal.metric)}`;
+  return `${bare(goal.metric, value ?? 0, Math.floor)} / ${bare(goal.metric, of)} ${unit(goal.metric)}`;
 }
 
 const lapTime = (seconds) => formatDuration(Math.round(seconds));
@@ -131,8 +131,9 @@ export function goalLine(goal, week) {
 
 const open = ({ week }) => !week.finished && !week.reached && week.step !== null;
 
-/** The goal most relevant to the ride on screen, or null: a lap goal on this route, a long ride, a total. */
-export function hudGoal(entries, { routeId }) {
+/** The goal most relevant to the ride on screen, or null (always in a race): a lap goal on this route, a long ride, a total. */
+export function hudGoal(entries, { routeId, racing = false }) {
+  if (racing) return null;
   const pick =
     entries.find((entry) => open(entry) && entry.goal.kind === "lap" && entry.goal.routeId === routeId) ??
     entries.find((entry) => open(entry) && entry.goal.kind === "long" && !entry.week.done) ??

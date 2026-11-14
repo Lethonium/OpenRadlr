@@ -1132,4 +1132,5 @@ export default {
   "goals.form.save": "Save goal",
   "goals.form.cancel": "Cancel",
   "goals.menu.hint": "You set and change goals on your profile, before a ride.",
+  "goals.pillTitle": "This week's step of your season goal",
 };
