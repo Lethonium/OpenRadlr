@@ -144,7 +144,7 @@ export class LapRun {
 export class GhostStore {
   #reported = false;
 
-  /** @param {{store: {get: Function, put: Function}, now?: () => number, log?: (...args: any[]) => void}} options */
+  /** @param {{store: {get: Function, put: Function, keys: Function}, now?: () => number, log?: (...args: any[]) => void}} options */
   constructor({ store, now = () => Date.now(), log = console.warn }) {
     this.store = store;
     this.now = now;
@@ -166,6 +166,15 @@ export class GhostStore {
   /** The best lap on `routeId`: `{routeId, durationS, recordedAt, trace}`, or null. */
   best(routeId) {
     return this.#safely(async () => (await this.store.get(PREFIX + routeId)) ?? null, null);
+  }
+
+  /** The best lap of every route, without traces, by route id. */
+  all() {
+    return this.#safely(async () => {
+      const keys = (await this.store.keys()).filter((key) => key.startsWith(PREFIX)).sort();
+      const laps = (await Promise.all(keys.map((key) => this.store.get(key)))).filter(Boolean);
+      return laps.map(({ routeId, durationS, recordedAt }) => ({ routeId, durationS, recordedAt }));
+    }, []);
   }
 
   /**

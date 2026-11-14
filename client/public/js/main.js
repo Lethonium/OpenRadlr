@@ -12,6 +12,10 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
+import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
+import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -55,7 +59,7 @@ import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
 import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
-import { themeColors } from "./view/canvas.js";
+import { prepareCanvas, themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
   LAYOUT_LABELS,
@@ -706,6 +710,7 @@ function initSetup() {
     if (typed && action !== "workout") return showSetupError(normaliseCode(typed).error);
     joinRide().catch(joinFailed);
   });
+  initProfile();
 }
 
 /** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
@@ -2755,6 +2760,275 @@ function startMilestones() {
   });
 }
 
+// -------------------------------------------------------------- profile ---
+
+/** The profile dialog over the start menu: the in-game menu's dialog with its own pages. */
+function initProfile() {
+  const root = $("profile-dialog");
+  app.profileDialog = createMenuDialog({
+    root,
+    stack: panels,
+    matchNarrow: matchMedia(MENU_NARROW_QUERY),
+    pages: PROFILE_PAGES,
+    // While a delete asks for confirmation, Tab stays in its card.
+    focusables: () => focusableIn(app.deleteConfirm?.isOpen ? $("delete-confirm") : root),
+    onPage: (page) => {
+      for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
+      // A canvas on a hidden page has no size: draw the chart when its page shows.
+      if (page === "overview") renderProfileFtp();
+    },
+    onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
+  });
+  app.deleteConfirm = createDeleteConfirm({
+    els: {
+      root: $("delete-confirm"), title: $("delete-confirm-title"), lines: $("delete-confirm-lines"), tickRow: $("delete-confirm-tick-row"), tick: $("delete-confirm-tick"),
+      error: $("delete-confirm-error"), exportButton: $("delete-confirm-export"), cancel: $("delete-confirm-cancel"), go: $("delete-confirm-go"),
+    },
+    stack: panels,
+  });
+  $("open-profile").addEventListener("click", () => openProfile());
+  $("profile-export").addEventListener("click", exportProfileData);
+  $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
+  $("profile-rides-more").addEventListener("click", () => {
+    app.profileRidesShown += RIDES_PAGE_SIZE;
+    renderProfileRides();
+  });
+  relocaliseHooks.push(() => {
+    if (app.profileDialog.isOpen) renderProfile();
+  });
+}
+
+/** Opens the profile on `page` and fills it from fresh reads of the stores. */
+function openProfile(page) {
+  app.profileDialog.open(page);
+  return loadProfile();
+}
+
+/** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
+async function loadProfile(keep) {
+  const [records, bests, items] = await Promise.all([app.history.list(), app.ghosts.all(), inventory(dataSources())]);
+  app.profileData = { records, bests, items };
+  if (keep !== "rides") app.profileRidesShown = RIDES_PAGE_SIZE;
+  app.profileOpenRide = null;
+  renderProfile();
+  // Focus stays on the Rides page: its first ride, or the close button when none is left.
+  if (keep === "rides") ($("profile-rides").querySelector(".profile-ride-summary") ?? $("profile-dialog").querySelector("[data-menu-close]")).focus();
+}
+
+function renderProfile() {
+  if (!app.profileData) return;
+  renderProfileOverview();
+  renderProfileFtp();
+  renderProfileRides();
+  renderProfileData();
+}
+
+function renderProfileOverview() {
+  const { records, bests } = app.profileData;
+  const lines = overviewLines({ profile: app.profile, totals: periodTotals(records, Date.now()), bests, routes: routesOf(app.info), locale: getLocale(), unreadable: !historyReadable() });
+  $("profile-rider").textContent = lines.rider;
+  $("profile-ftp").textContent = lines.ftp;
+  $("profile-empty").hidden = !lines.empty;
+  $("profile-empty").textContent = lines.empty ?? "";
+  $("profile-totals-panel").hidden = Boolean(lines.empty);
+  $("profile-totals").replaceChildren(...lines.totals.flatMap(({ label, value }) => [textElement("dt", label), textElement("dd", value)]));
+  $("profile-bests").replaceChildren(...lines.bests.map((line) => textElement("li", line)));
+  $("profile-bests-none").hidden = lines.bests.length > 0;
+}
+
+/** FTP over time: set and estimated, or a sentence while there is too little to chart. */
+function renderProfileFtp() {
+  if (!app.profileData) return;
+  const series = ftpSeries(app.profileData.records, Date.now());
+  const chart = hasFtpChart(series);
+  $("profile-ftp-panel").hidden = app.profileData.records.length === 0;
+  $("profile-ftp-chart").hidden = !chart;
+  $("profile-ftp-legend").hidden = !chart;
+  $("profile-ftp-note").hidden = chart;
+  if (!chart) return;
+  const canvas = $("profile-ftp-chart");
+  canvas.setAttribute("aria-label", ftpChartLabel(series));
+  if (!canvas.clientWidth) return;
+  const { ctx, width, height } = prepareCanvas(canvas);
+  const css = getComputedStyle($("profile-dialog"));
+  const read = (name) => css.getPropertyValue(name).trim();
+  paintFtpChart(ctx, ftpChartModel(series, width, height, { locale: getLocale() }), { ...themeColors(), set: read("--ftp-set"), estimate: read("--ftp-estimate"), surface: read("--surface") });
+}
+
+/** False when the ride history couldn't be read (the list then says so instead of "no rides yet"). */
+function historyReadable() {
+  return app.profileData.items.find((entry) => entry.id === "rides")?.readable !== false;
+}
+
+/** The Rides page: the newest rides, each opening its splits and power curve. */
+function renderProfileRides() {
+  const { records } = app.profileData;
+  const shown = records.slice(0, app.profileRidesShown);
+  const rows = rideRows(shown, routesOf(app.info), { locale: getLocale() });
+  $("profile-rides-empty").hidden = records.length > 0;
+  $("profile-rides-empty").textContent = historyReadable() ? t("profilePage.rides.empty") : t("profilePage.unreadable");
+  $("profile-rides-more").hidden = records.length <= shown.length;
+  $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i])));
+}
+
+function profileRideItem(row, record) {
+  const open = app.profileOpenRide === row.id;
+  const item = document.createElement("li");
+  item.className = "profile-ride";
+  const summary = document.createElement("button");
+  summary.type = "button";
+  summary.className = "profile-ride-summary";
+  summary.setAttribute("aria-expanded", String(open));
+  const when = textElement("span", `${row.date} · ${row.route}`);
+  when.className = "profile-ride-when";
+  if (row.device) {
+    const icon = document.querySelector(`.mode-card[data-mode="${row.device === "paddle" ? "paddles" : "sim"}"] svg`)?.cloneNode(true);
+    if (icon) {
+      icon.setAttribute("role", "img");
+      icon.setAttribute("aria-label", row.device === "paddle" ? t("devices.paddlesLabel") : t("start.simulator"));
+      icon.removeAttribute("aria-hidden");
+      when.append(" ", icon);
+    }
+  }
+  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].filter((part) => part !== null).join(" · "));
+  figures.className = "profile-ride-figures";
+  summary.append(when, figures);
+  summary.addEventListener("click", () => {
+    app.profileOpenRide = open ? null : row.id;
+    renderProfileRides();
+    $("profile-rides").querySelector(`[data-ride="${CSS.escape(row.id)}"] .profile-ride-summary`)?.focus();
+  });
+  item.dataset.ride = row.id;
+  item.append(summary);
+  if (open) item.append(profileRideDetail(record));
+  return item;
+}
+
+function profileRideDetail(record) {
+  const detail = document.createElement("div");
+  detail.className = "profile-ride-detail";
+  const splits = document.createElement("table");
+  splits.className = "splits";
+  renderSplits(splits, record.splits ?? [], unitMetres());
+  const curve = curveRows(record.curve);
+  if (curve.length) {
+    const list = document.createElement("dl");
+    list.className = "profile-totals";
+    list.append(...curve.flatMap(({ label, watts }) => [textElement("dt", label), textElement("dd", watts)]));
+    detail.append(textElement("h3", t("profilePage.rides.curve")), list);
+  }
+  const scroller = document.createElement("div");
+  scroller.className = "profile-splits";
+  scroller.append(splits);
+  detail.prepend(scroller);
+  const remove = textElement("button", t("profilePage.delete.ride.action"));
+  remove.type = "button";
+  remove.className = "secondary small profile-ride-delete";
+  remove.addEventListener("click", () => deleteRide(record));
+  detail.append(remove);
+  return detail;
+}
+
+async function deleteRide(record) {
+  const date = rideRows([record], [], { locale: getLocale() })[0].date;
+  let tried = false;
+  await app.deleteConfirm.ask({
+    texts: deleteTexts("ride", { date }),
+    onConfirm: () => {
+      tried = true;
+      return app.history.delete(record.id);
+    },
+  });
+  if (tried) await loadProfile("rides");
+}
+
+/** localStorage and the raw IndexedDB stores, for profile/localData.js. */
+function dataSources() {
+  return { storage: browserStorage(), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+}
+
+/** The "Your data" page: each item with its count, export and delete. */
+function renderProfileData() {
+  const { items } = app.profileData;
+  const rows = dataRows(items);
+  $("profile-data").replaceChildren(...rows.map((row) => {
+    const item = document.createElement("li");
+    item.className = "profile-data-row";
+    const name = textElement("span", row.name);
+    name.className = "profile-data-name";
+    const count = textElement("span", row.count);
+    count.className = "profile-data-count";
+    const label = document.createElement("div");
+    label.className = "profile-data-label";
+    label.append(name, count);
+    item.append(label);
+    if (row.canDelete) {
+      const remove = textElement("button", row.action);
+      remove.type = "button";
+      remove.className = "secondary small profile-ride-delete";
+      remove.setAttribute("aria-label", row.actionLabel);
+      remove.addEventListener("click", () => deleteProfileData(row.id));
+      item.append(remove);
+    }
+    const detail = textElement("span", row.detail);
+    detail.className = "profile-data-detail";
+    item.append(detail);
+    return item;
+  }));
+  const anyReadable = items.some((entry) => entry.readable);
+  $("profile-export").disabled = !anyReadable;
+  $("profile-delete-all").disabled = !items.every((entry) => entry.readable);
+}
+
+/** Downloads everything as one file; false (with the error on the page) when the storage couldn't be read. */
+async function exportProfileData() {
+  const now = Date.now();
+  $("profile-data-error").hidden = true;
+  try {
+    const data = await exportData({ ...dataSources(), now });
+    await saveFiles([{ blob: new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), name: exportFileName(now) }]);
+    return true;
+  } catch {
+    $("profile-data-error").textContent = t("profilePage.data.exportFailed");
+    $("profile-data-error").hidden = false;
+    return false;
+  }
+}
+
+/** The facts a delete's confirmation names: counts and, for rides, the first and last date. */
+function deleteFacts(id) {
+  const { records, items } = app.profileData;
+  const count = (key) => items.find((entry) => entry.id === key)?.count;
+  const dates = rideRows([records.at(-1), records[0]].filter(Boolean), [], { locale: getLocale() }).map((row) => row.date);
+  if (id === "progress") return count("progress") ?? {};
+  if (id === "bestLaps") return { count: count("bestLaps") ?? 0 };
+  return { count: records.length, from: dates[0], to: dates[1] };
+}
+
+async function deleteProfileData(id) {
+  let tried = false;
+  await app.deleteConfirm.ask({
+    texts: deleteTexts(id, deleteFacts(id)),
+    onConfirm: () => {
+      tried = true;
+      return deleteItem(id, dataSources());
+    },
+    onExport: exportProfileData,
+  });
+  // Even a delete that failed part-way may have removed something: show what is left.
+  if (!tried) return;
+  // The profile and settings in memory would be written back: start fresh instead.
+  if (needsReload(id)) return location.reload();
+  await loadProfile();
+  $("profile-export").focus();
+}
+
+function textElement(tag, text) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  return node;
+}
+
 function checkMilestones(me, time) {
   if (!app.milestones || !app.recorder) return;
   // The ride's climbing comes from the recorder; reading it every frame would be wasteful.
@@ -2927,6 +3201,7 @@ function saveFinishedRide() {
     measured: hasRealPowerSource(app.trainer),
     profile: app.profile,
     test: app.ftpTest?.testFlag ?? null,
+    device: deviceKind(app.trainer),
   });
   return app.history
     .save(record)

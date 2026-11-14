@@ -165,6 +165,18 @@ test("a broken store is logged once and the ride goes on without ghosts", async 
   assert.equal(logged.length, 1);
 });
 
+test("all lists the best lap per route without traces", async () => {
+  const ghosts = new GhostStore({ store: new MemoryStore(), now: () => 5 });
+  await ghosts.offer({ ...lap(300), routeId: "b" });
+  await ghosts.offer({ ...lap(200), routeId: "a" });
+  assert.deepEqual(await ghosts.all(), [{ routeId: "a", durationS: 200, recordedAt: 5 }, { routeId: "b", durationS: 300, recordedAt: 5 }]);
+});
+
+test("all is empty when storage fails", async () => {
+  const broken = { get: () => Promise.reject(new Error("nope")), put: () => Promise.reject(new Error("nope")), keys: () => Promise.reject(new Error("nope")) };
+  assert.deepEqual(await new GhostStore({ store: broken, log: () => {} }).all(), []);
+});
+
 test("the gap reads as behind (+) or ahead (−), in minutes from a minute on", () => {
   assert.equal(formatLapGap(4.24), "+4.2 s");
   assert.equal(formatLapGap(-4.24), "−4.2 s");

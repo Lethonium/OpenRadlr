@@ -39,7 +39,9 @@
     <link rel="modulepreload" href="js/net/strava.js" />
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
+    <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
     <link rel="modulepreload" href="js/ride/botCalls.js" />
     <link rel="modulepreload" href="js/ride/climbFeel.js" />
@@ -73,6 +75,7 @@
     <link rel="modulepreload" href="js/util/format.js" />
     <link rel="modulepreload" href="js/util/wakeLock.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
+    <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
     <link rel="modulepreload" href="js/view/events.js" />
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
@@ -88,6 +91,7 @@
     <link rel="modulepreload" href="js/view/paddleView.js" />
     <link rel="modulepreload" href="js/view/panels.js" />
     <link rel="modulepreload" href="js/view/photos.js" />
+    <link rel="modulepreload" href="js/view/profilePage.js" />
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
@@ -260,7 +264,10 @@
 
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset>
-              <legend data-i18n="rider.title">Rider</legend>
+              <legend class="rider-heading">
+                <span data-i18n="rider.title">Rider</span>
+                <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
+              </legend>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
@@ -446,6 +453,88 @@
           <span data-i18n="menu.build.updateText">A new version is available.</span>
           <button type="button" id="build-reload" class="update-reload" data-nav-skip data-i18n="menu.build.reload">Reload</button>
           <button type="button" id="update-later" class="update-later" data-nav-skip data-i18n="menu.build.later">Later</button>
+        </div>
+
+        <!-- Profile: the in-game menu's dialog over the start menu (pages left, page right; a phone shows the list first) -->
+        <div id="profile-dialog" class="menu-dialog profile-dialog" role="dialog" aria-label="Profile" hidden data-i18n-attr="aria-label:profilePage.title">
+          <div class="menu-backdrop" data-menu-backdrop>
+            <div class="menu-card">
+              <div class="menu-head">
+                <button type="button" class="icon-button menu-back" data-menu-back aria-label="Back to the menu pages" data-i18n-attr="aria-label:menuDialog.back">‹</button>
+                <h2 data-i18n="profilePage.title">Profile</h2>
+                <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
+              </div>
+              <nav class="menu-nav" aria-label="Profile pages" data-i18n-attr="aria-label:profilePage.pages">
+                <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
+                <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
+                <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
+              </nav>
+              <div class="menu-pages">
+                <div class="menu-page" data-menu-page="overview" role="region" aria-labelledby="profile-nav-overview" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.overview">Overview</h2>
+                    <p id="profile-rider" class="profile-rider"></p>
+                    <p id="profile-ftp" class="muted"></p>
+                    <p id="profile-empty" class="field-hint" hidden></p>
+                  </div>
+                  <div id="profile-totals-panel" class="panel">
+                    <h3 data-i18n="profilePage.totals">Totals</h3>
+                    <dl id="profile-totals" class="profile-totals"></dl>
+                  </div>
+                  <div id="profile-ftp-panel" class="panel">
+                    <h3 data-i18n="profilePage.ftp.title">FTP over time</h3>
+                    <canvas id="profile-ftp-chart" class="profile-ftp-chart" role="img"></canvas>
+                    <ul id="profile-ftp-legend" class="profile-legend">
+                      <li class="legend-set" data-i18n="profilePage.ftp.legendSet">Set FTP</li>
+                      <li class="legend-estimate" data-i18n="profilePage.ftp.legendEstimate">Estimated from your rides</li>
+                      <li class="legend-test" data-i18n="profilePage.ftp.legendTest">FTP test</li>
+                    </ul>
+                    <p id="profile-ftp-note" class="field-hint" hidden data-i18n="profilePage.ftp.notEnough">Ride with a power meter or smart trainer for a few weeks to see your FTP move.</p>
+                  </div>
+                  <div class="panel">
+                    <h3 data-i18n="profilePage.bestLaps">Best laps</h3>
+                    <ul id="profile-bests" class="profile-list"></ul>
+                    <p id="profile-bests-none" class="field-hint" hidden data-i18n="profilePage.bestLaps.none">No best laps yet. Ride a full lap of a loop route to set one.</p>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="rides" role="region" aria-labelledby="profile-nav-rides" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.rides.title">Rides</h2>
+                    <p id="profile-rides-empty" class="field-hint" hidden data-i18n="profilePage.rides.empty">No rides yet. Every ride you finish shows up here.</p>
+                    <ul id="profile-rides" class="profile-rides"></ul>
+                    <button type="button" id="profile-rides-more" class="secondary small" hidden data-i18n="profilePage.rides.more">Show more</button>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="data" role="region" aria-labelledby="profile-nav-data" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.data">Your data</h2>
+                    <p class="field-hint" data-i18n="profilePage.data.lede">What OpenRadlr keeps in this browser. It stays on this device.</p>
+                    <ul id="profile-data" class="profile-data"></ul>
+                    <p id="profile-data-error" class="error" role="alert" hidden></p>
+                    <div class="profile-data-actions">
+                      <button type="button" id="profile-export" class="secondary" data-i18n="profilePage.data.export">Export as a file</button>
+                      <button type="button" id="profile-delete-all" class="secondary profile-ride-delete" data-i18n="profilePage.data.deleteAll">Delete everything on this device</button>
+                    </div>
+                    <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Every delete in the profile asks here first: what goes, what changes, what stays (view/deleteConfirm.js) -->
+          <div id="delete-confirm" class="delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-lines" hidden>
+            <div class="delete-card">
+              <h2 id="delete-confirm-title"></h2>
+              <ul id="delete-confirm-lines" class="delete-lines"></ul>
+              <label id="delete-confirm-tick-row" class="check" hidden><input id="delete-confirm-tick" type="checkbox" /> <span data-i18n="profilePage.delete.everything.tick">I understand this cannot be undone</span></label>
+              <p id="delete-confirm-error" class="error" role="alert" hidden></p>
+              <div class="delete-actions">
+                <button type="button" id="delete-confirm-export" class="secondary" data-i18n="profilePage.delete.export">Export first</button>
+                <button type="button" id="delete-confirm-cancel" class="secondary" data-i18n="profilePage.delete.cancel">Cancel</button>
+                <button type="button" id="delete-confirm-go" class="danger"></button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
