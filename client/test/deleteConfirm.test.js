@@ -202,3 +202,8 @@ test("ask: backing out after its control is gone focuses the fallback", async ()
   await answer;
   assert.equal(fakeEl.focused, fallback);
 });
+
+test("profilePage.delete.failed does not promise that nothing was deleted", () => {
+  assert.doesNotMatch(t("profilePage.delete.failed"), /Nothing was deleted/);
+  assert.match(t("profilePage.delete.failed"), /may already be deleted/);
+});

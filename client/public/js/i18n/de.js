@@ -1013,7 +1013,7 @@ export default {
   "profilePage.delete.everything.action": "Alles löschen",
   "profilePage.delete.everything.tick": "Ich verstehe, dass das nicht rückgängig zu machen ist",
   "profilePage.delete.undo": "Das lässt sich nicht rückgängig machen.",
-  "profilePage.delete.failed": "Löschen ging nicht: Dieser Browser hat OpenRadlr seinen Speicher nicht ändern lassen. Es wurde nichts gelöscht.",
+  "profilePage.delete.failed": "Löschen ging nicht: Dieser Browser hat OpenRadlr seinen Speicher nicht ändern lassen. Ein Teil davon ist vielleicht schon gelöscht: Prüfe, was noch da ist, bevor du es noch einmal versuchst.",
   "profilePage.delete.export": "Erst exportieren",
   "profilePage.delete.cancel": "Abbrechen",
   "profilePage.data.profile": "Profil",
