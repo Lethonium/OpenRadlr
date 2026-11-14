@@ -311,3 +311,14 @@ test("imageGoalLine: a goal that finished on this ride is not sold as progress",
   ];
   assert.equal(imageGoalLine(imageBefore, ended, "progress", ctx), null);
 });
+
+test("parseGoalForm: a target written with a thousands separator, as the cards show it", () => {
+  const target = (text, metric = "distance") => parseGoalForm(form({ metric, target: text }), { nowMs: NOW, records: [], bests: [] }).goal.target;
+  assert.equal(target("2,000"), 2000 * KM);
+  assert.equal(target("2.000"), 2000 * KM);
+  assert.equal(target("1,234.5"), 1234.5 * KM);
+  assert.equal(target("1.234,5"), 1234.5 * KM);
+  assert.equal(target("2 000"), 2000 * KM);
+  assert.equal(target("2,5"), 2.5 * KM);
+  assert.equal(target("20,000", "climb"), 20000);
+});

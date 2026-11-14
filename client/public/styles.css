@@ -2115,11 +2115,6 @@ body.riding {
   overflow: hidden;
 }
 
-.ride[data-mode="studio"] .hud-left,
-.ride[data-mode="studio"] .hud-goals {
-  display: none;
-}
-
 /* The training layout hides the info bar; its workout chip owns the top left,
    so the goals sit a little lower there. */
 .ride[data-layout="training"] .hud-left {
@@ -6957,10 +6952,8 @@ body.working-out #paddles {
   border-bottom: 1px solid var(--border);
 }
 
-.goal-card .progress,
-.goal-card-week,
-.goal-card-note,
-.goal-card-actions {
+/* Title and progress share the first row; the bar, the week, the note and the buttons span it. */
+.goal-card > :not(.goal-card-title, .goal-card-progress) {
   grid-column: 1 / -1;
 }
 
