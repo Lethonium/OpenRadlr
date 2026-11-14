@@ -2785,6 +2785,7 @@ function initProfile() {
       error: $("delete-confirm-error"), exportButton: $("delete-confirm-export"), cancel: $("delete-confirm-cancel"), go: $("delete-confirm-go"),
     },
     stack: panels,
+    fallbackFocus: () => root.querySelector("[data-menu-close]"),
   });
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-export").addEventListener("click", exportProfileData);

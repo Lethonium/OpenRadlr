@@ -3,8 +3,9 @@
  * profile that says what is deleted, what changes because of it, what stays
  * and that it cannot be undone. Cancel has the focus, so a stray Enter or a
  * second tap deletes nothing. `onExport` may resolve false: its error then
- * shows in the card. The DOM elements, the panel stack (Esc) and the
- * document are injected.
+ * shows in the card. Backing out gives the focus back to the control the
+ * delete was asked from, or to `fallbackFocus()` once that is gone. The DOM
+ * elements, the panel stack (Esc) and the document are injected.
  */
 
 import { t, tn } from "../i18n/i18n.js";
@@ -31,9 +32,9 @@ export function deleteTexts(item, facts = {}) {
 }
 
 /**
- * @param {{els: Record<"root" | "title" | "lines" | "tickRow" | "tick" | "error" | "exportButton" | "cancel" | "go", any>, stack: {push: (panel: {close: () => void}) => () => void}, doc?: Document}} options
+ * @param {{els: Record<"root" | "title" | "lines" | "tickRow" | "tick" | "error" | "exportButton" | "cancel" | "go", any>, stack: {push: (panel: {close: () => void}) => () => void}, doc?: Document, fallbackFocus?: () => any}} options
  */
-export function createDeleteConfirm({ els, stack, doc = globalThis.document }) {
+export function createDeleteConfirm({ els, stack, doc = globalThis.document, fallbackFocus = () => null }) {
   let current = null;
 
   // While the delete runs, backing out would hide whether it happened.
@@ -41,10 +42,12 @@ export function createDeleteConfirm({ els, stack, doc = globalThis.document }) {
 
   function finish(answer) {
     if (!current || busy) return;
-    const { resolve, remove } = current;
+    const { resolve, remove, opener } = current;
     current = null;
     remove();
     els.root.hidden = true;
+    // After a delete the caller redraws and places the focus; backing out returns it here.
+    if (!answer) (opener?.isConnected ? opener : fallbackFocus())?.focus();
     resolve(answer);
   }
 
@@ -85,7 +88,7 @@ export function createDeleteConfirm({ els, stack, doc = globalThis.document }) {
     ask({ texts, onConfirm, onExport }) {
       finish(false);
       return new Promise((resolve) => {
-        current = { texts, onConfirm, onExport, resolve, remove: stack.push({ close: () => finish(false) }) };
+        current = { texts, onConfirm, onExport, resolve, opener: doc.activeElement, remove: stack.push({ close: () => finish(false) }) };
         els.title.textContent = texts.title;
         els.lines.replaceChildren(...texts.lines.map((line) => Object.assign(doc.createElement("li"), { textContent: line })));
         els.go.textContent = texts.action;

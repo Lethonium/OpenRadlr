@@ -14,14 +14,23 @@ function fakeEl() {
     focus() { fakeEl.focused = this; },
   };
 }
-const doc = { createElement: (tag) => ({ tag, textContent: "" }) };
+const doc = { createElement: (tag) => ({ tag, textContent: "" }), activeElement: null };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function setup() {
   const els = Object.fromEntries(["root", "title", "lines", "tickRow", "tick", "error", "exportButton", "cancel", "go"].map((k) => [k, fakeEl()]));
   const stack = createPanelStack();
-  const confirm = createDeleteConfirm({ els, stack, doc });
-  return { els, stack, confirm };
+  const fallback = fakeEl();
+  const confirm = createDeleteConfirm({ els, stack, doc, fallbackFocus: () => fallback });
+  return { els, stack, confirm, fallback };
+}
+
+/** The control a delete was asked from, still in the page. */
+function opener() {
+  const el = fakeEl();
+  el.isConnected = true;
+  doc.activeElement = el;
+  return el;
 }
 
 test("deleteTexts: rides say what goes, what changes and what stays", () => {
@@ -168,3 +177,28 @@ test("ask: a failed Export first shows its error in the card", async () => {
   assert.equal(els.error.textContent, t("profilePage.data.exportFailed"));
 });
 
+
+for (const [how, back] of [
+  ["Cancel", ({ els }) => els.cancel.fire("click")],
+  ["Esc", ({ stack }) => stack.closeTop()],
+  ["a click beside the card", ({ els }) => els.root.fire("click", { target: els.root })],
+]) {
+  test(`ask: backing out with ${how} gives the focus back to the control it was asked from`, async () => {
+    const setupped = setup();
+    const from = opener();
+    const answer = setupped.confirm.ask({ texts: deleteTexts("ride", {}), onConfirm: async () => true });
+    back(setupped);
+    await answer;
+    assert.equal(fakeEl.focused, from);
+  });
+}
+
+test("ask: backing out after its control is gone focuses the fallback", async () => {
+  const { els, confirm, fallback } = setup();
+  const from = opener();
+  const answer = confirm.ask({ texts: deleteTexts("ride", {}), onConfirm: async () => true });
+  from.isConnected = false;
+  els.cancel.fire("click");
+  await answer;
+  assert.equal(fakeEl.focused, fallback);
+});
