@@ -14,12 +14,24 @@ const ctx = {
 
 test("overview is first", () => {
   assert.equal(MENU_PAGES[0], "overview");
-  assert.deepEqual(MENU_PAGES, ["overview", "view", "vehicle", "race", "events", "training", "settings"]);
+  assert.deepEqual(MENU_PAGES, ["overview", "view", "vehicle", "race", "events", "training", "goals", "settings"]);
 });
 
 test("studio drops view vehicle race events and keeps training", () => {
   assert.deepEqual(visiblePages({ studio: true, hasEvents: true }),
     ["overview", "training", "settings"]);
+});
+
+test("goals only with goals, also in the studio", () => {
+  assert.ok(!visiblePages({ studio: false, hasEvents: false, hasGoals: false }).includes("goals"));
+  assert.ok(visiblePages({ studio: false, hasEvents: false, hasGoals: true }).includes("goals"));
+  assert.deepEqual(visiblePages({ studio: true, hasEvents: false, hasGoals: true }), ["overview", "training", "goals", "settings"]);
+});
+
+test("the goals status is the HUD's goal line", () => {
+  assert.equal(pageStatus("goals", { goalLine: "Week 85 / 150 km" }), "Week 85 / 150 km");
+  assert.equal(pageStatus("goals", { goalLine: null }), "");
+  assert.equal(pageTitle("goals"), "Goals");
 });
 
 test("events only with events", () => {

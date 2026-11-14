@@ -41,6 +41,7 @@
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/seasonGoals.js" />
     <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
     <link rel="modulepreload" href="js/ride/botCalls.js" />
@@ -81,6 +82,7 @@
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
     <link rel="modulepreload" href="js/view/ftpProvenance.js" />
     <link rel="modulepreload" href="js/view/ftpTestView.js" />
+    <link rel="modulepreload" href="js/view/goalsView.js" />
     <link rel="modulepreload" href="js/view/hud.js" />
     <link rel="modulepreload" href="js/view/mapPreview.js" />
     <link rel="modulepreload" href="js/view/menuDialog.js" />
@@ -465,16 +467,60 @@
                 <button type="button" class="icon-button" data-menu-close aria-label="Close" data-i18n-attr="aria-label:drawer.close">×</button>
               </div>
               <nav class="menu-nav" aria-label="Profile pages" data-i18n-attr="aria-label:profilePage.pages">
+                <button type="button" id="profile-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span class="menu-nav-title" data-i18n="goals.page">Goals</span></button>
                 <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
                 <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
                 <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
               </nav>
               <div class="menu-pages">
+                <div class="menu-page" data-menu-page="goals" role="region" aria-labelledby="profile-nav-goals" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="goals.page">Goals</h2>
+                    <p id="profile-goals-empty" class="field-hint" hidden data-i18n="goals.empty">No goals yet. Set one for the season and every ride counts towards it: OpenRadlr turns it into a step for each week, with an easy week every fourth.</p>
+                    <ul id="profile-goals" class="goal-cards"></ul>
+                    <button type="button" id="profile-goal-new" class="secondary" data-i18n="goals.new">Set a goal</button>
+                    <label id="goal-image-row" class="goal-image-row" hidden><span data-i18n="goals.image.label">On the ride's summary image</span>
+                      <select id="goal-image">
+                        <option value="reached" data-i18n="goals.image.reached">Reached goals</option>
+                        <option value="progress" data-i18n="goals.image.progress">Goals and this week's progress</option>
+                        <option value="off" data-i18n="goals.image.off">Nothing</option>
+                      </select>
+                    </label>
+                  </div>
+                  <form id="goal-form" class="panel goal-form" hidden novalidate>
+                    <h3 id="goal-form-title" data-i18n="goals.form.new">New goal</h3>
+                    <label><span data-i18n="goals.form.kind">Kind</span>
+                      <select id="goal-kind">
+                        <option value="total" data-i18n="goals.kind.total">A total over the season</option>
+                        <option value="long" data-i18n="goals.kind.long">One long ride</option>
+                        <option value="lap" data-i18n="goals.kind.lap">A lap time on a route</option>
+                      </select>
+                    </label>
+                    <label id="goal-metric-row"><span data-i18n="goals.form.metric">Count</span>
+                      <select id="goal-metric">
+                        <option value="distance" data-i18n="goals.metric.distance">Distance</option>
+                        <option value="time" data-i18n="goals.metric.time">Riding time</option>
+                        <option value="climb" data-i18n="goals.metric.climb">Climbing</option>
+                      </select>
+                    </label>
+                    <label id="goal-route-row" hidden><span data-i18n="goals.form.route">Route</span> <select id="goal-route"></select></label>
+                    <p id="goal-no-routes" class="field-hint" hidden data-i18n="goals.form.noRoutes">Ride a full lap of a loop route first: a lap goal starts from your best lap.</p>
+                    <label><span class="label-text"><span data-i18n="goals.form.target">Target</span> (<span id="goal-target-unit"></span>)</span> <input id="goal-target" inputmode="decimal" autocomplete="off" /></label>
+                    <label><span data-i18n="goals.form.end">By</span> <select id="goal-end"></select></label>
+                    <label id="goal-date-row" hidden><span data-i18n="goals.form.date">Date</span> <input id="goal-date" type="date" /></label>
+                    <p id="goal-form-error" class="error" role="alert" hidden></p>
+                    <div class="profile-data-actions">
+                      <button type="submit" data-i18n="goals.form.save">Save goal</button>
+                      <button type="button" id="goal-cancel" class="secondary" data-i18n="goals.form.cancel">Cancel</button>
+                    </div>
+                  </form>
+                </div>
                 <div class="menu-page" data-menu-page="overview" role="region" aria-labelledby="profile-nav-overview" hidden>
                   <div class="panel">
                     <h2 data-i18n="profilePage.overview">Overview</h2>
                     <p id="profile-rider" class="profile-rider"></p>
                     <p id="profile-ftp" class="muted"></p>
+                    <button type="button" id="profile-goals-link" class="goal-link" hidden></button>
                     <p id="profile-empty" class="field-hint" hidden></p>
                   </div>
                   <div id="profile-totals-panel" class="panel">
@@ -640,6 +686,21 @@
             </button>
           </div>
 
+          <!-- Left column: the season goals (later also NPC quests), the nearby riders in
+               broadcast. Shared by every layout; hidden in the studio. -->
+          <div id="hud-left" class="hud-left route-only">
+            <section id="hud-goals" class="hud-goals glass" aria-labelledby="hud-goals-title" hidden>
+              <h2 id="hud-goals-title" data-i18n="goals.panel.title">Goals</h2>
+              <ul id="hud-goals-list" class="hud-goals-list"></ul>
+              <p id="hud-goals-more" class="hud-goals-more" hidden></p>
+            </section>
+            <div class="nearby glass">
+              <h2 data-i18n="ride.nearby">Nearby</h2>
+              <ol id="hud-nearby" class="rider-list"></ol>
+              <div id="hud-seats" class="vehicle-view compact" hidden></div>
+            </div>
+          </div>
+
           <div class="view-popover glass" id="view-popover" role="dialog" aria-label="View" data-i18n-attr="aria-label:drawer.view" hidden></div>
 
           <div class="hud-gear glass" id="hud-gear-tile" hidden>
@@ -738,11 +799,6 @@
               <div><span class="caption" data-i18n="ride.cadence">Cadence</span><span class="num-m" data-m="cadence">–</span><span class="unit">rpm</span></div>
               <div><span class="caption" data-i18n="ride.heart">Heart</span><span class="num-m" data-m="hr">–</span><span class="unit">bpm</span></div>
               <div class="bar-grade"><span class="caption" data-i18n="ride.grade2">Grade</span><span class="num-m grade" data-m="grade">0.0 %</span></div>
-            </div>
-            <div class="nearby glass">
-              <h2 data-i18n="ride.nearby">Nearby</h2>
-              <ol id="hud-nearby" class="rider-list"></ol>
-              <div id="hud-seats" class="vehicle-view compact" hidden></div>
             </div>
             <canvas id="minimap" class="canvas-minimap glass" aria-label="Map of the route" data-i18n-attr="aria-label:ride.mapOfTheRoute"></canvas>
             <div class="strip glass">
@@ -895,6 +951,7 @@
                 <button type="button" id="menu-nav-race" class="menu-nav-item" data-menu-nav="race"><span id="menu-nav-race-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-events" class="menu-nav-item" data-menu-nav="events"><span id="menu-nav-events-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-training" class="menu-nav-item" data-menu-nav="training"><span id="menu-nav-training-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
+                <button type="button" id="menu-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span id="menu-nav-goals-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
                 <button type="button" id="menu-nav-settings" class="menu-nav-item" data-menu-nav="settings"><span id="menu-nav-settings-title" class="menu-nav-title"></span><span class="menu-nav-status"></span></button>
               </nav>
               <div class="menu-pages">
@@ -1024,6 +1081,13 @@
                     <input id="ride-difficulty" type="range" min="0" max="100" step="5" aria-label="Climb feel: how much of each climb the trainer simulates" data-i18n-attr="aria-label:start.climbFeelHowMuch" />
                   </div>
                 </div>
+                <div class="menu-page" data-menu-page="goals" role="region" aria-labelledby="menu-nav-goals-title" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="goals.page">Goals</h2>
+                    <ul id="menu-goals" class="goal-cards"></ul>
+                    <p class="field-hint" data-i18n="goals.menu.hint">You set and change goals on your profile, before a ride.</p>
+                  </div>
+                </div>
                 <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
                   <div class="panel">
                     <h2 data-i18n="drawer.biome">Season</h2>
@@ -1077,6 +1141,7 @@
             <h2 id="finish-title" tabindex="-1" data-i18n="ride.rideComplete">Ride complete</h2>
             <p id="finish-route" class="muted"></p>
             <dl id="finish-summary" class="summary"></dl>
+            <p id="finish-goals" class="finish-goals" hidden></p>
             <canvas id="finish-chart" class="power-chart" role="img" aria-label="Power chart" data-i18n-attr="aria-label:overview.chartLabel"></canvas>
             <table id="finish-splits" class="splits" hidden></table>
             <section id="ftp-prompt" class="ftp-prompt" aria-live="polite" hidden>
