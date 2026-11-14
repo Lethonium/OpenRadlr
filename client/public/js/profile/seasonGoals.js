@@ -78,8 +78,12 @@ export function replaceGoal(state, goal) {
   const goals = state.goals.map((old) => {
     if (old.id !== goal.id) return old;
     const changed = { ...goal, startMs: old.startMs, createdAt: old.createdAt };
-    // A Monday best only holds for the route it was taken on.
-    if (changed.kind !== "lap" || changed.routeId !== old.routeId) delete changed.weekBest;
+    delete changed.weekBest;
+    delete changed.endBest;
+    // The stored bests only hold for the route they were taken on.
+    if (changed.kind !== "lap" || changed.routeId !== old.routeId) return changed;
+    if (old.weekBest) changed.weekBest = old.weekBest;
+    if (old.endBest) changed.endBest = old.endBest;
     return changed;
   });
   return { ...state, goals };
@@ -116,11 +120,15 @@ const rides = (records) => records.filter((record) => record.kind !== "workout" 
 const sum = (list, metric) => list.reduce((total, record) => total + amount(record, metric), 0);
 const longest = (list, metric) => list.reduce((most, record) => Math.max(most, amount(record, metric)), 0);
 
+/** Whether a best lap was set by the goal's end; a best without a date is taken as in time. */
+const inTime = (goal, lap) => finite(lap?.durationS) && !(lap.recordedAt > goal.endMs);
+
+/** The goal's result as of its end: rides after it, and a best lap set after it, do not count. */
 function progressValue(goal, records, best) {
-  if (goal.kind === "lap") return finite(best?.durationS) ? best.durationS : null;
-  const all = rides(records);
+  if (goal.kind === "lap") return inTime(goal, best) ? best.durationS : inTime(goal, goal.endBest) ? goal.endBest.durationS : null;
+  const all = rides(records).filter((r) => r.startedAt <= goal.endMs);
   if (goal.kind === "long") return longest(all, goal.metric);
-  return sum(all.filter((r) => r.startedAt >= goal.startMs && r.startedAt <= goal.endMs), goal.metric);
+  return sum(all.filter((r) => r.startedAt >= goal.startMs), goal.metric);
 }
 
 const isReached = (goal, value) => value !== null && (goal.kind === "lap" ? value <= goal.target : value >= goal.target);
@@ -185,9 +193,9 @@ export function goalWeek(goal, { records, best, rhythmStartMs, nowMs, live = nul
   const monday = weekStart(nowMs);
   const all = rides(records);
   const thisWeek = all.filter((r) => r.startedAt >= monday);
-  const progress = liveProgress(goal, progressValue(goal, records, best), live);
-  const reached = isReached(goal, progress);
   const finished = nowMs > goal.endMs || weeks.length === 0;
+  const progress = liveProgress(goal, progressValue(goal, records, best), finished ? null : live);
+  const reached = isReached(goal, progress);
   // A goal with no weeks (junk that slipped past the store) has nothing to plan.
   if (weeks.length === 0) {
     return { index: 0, count: 0, recovery: false, finished, reached, progress, step: null, soFar: null, done: false, reachable: true, earliestEndMs: null };
@@ -251,12 +259,21 @@ function liveProgress(goal, value, live) {
   return finite(live.lapS) ? Math.min(value ?? Infinity, live.lapS) : value;
 }
 
-/** A lap goal with this week's Monday best stored; the same object when it is current. */
+/**
+ * A lap goal with this week's Monday best stored, and the best set by its end (a
+ * later best replaces the stored lap, so the result is kept here); the same object
+ * when both are current.
+ */
 export function refreshWeekBest(goal, best, nowMs) {
   if (goal.kind !== "lap") return goal;
   const monday = weekStart(nowMs);
-  if (goal.weekBest?.weekStartMs === monday) return goal;
-  return { ...goal, weekBest: { weekStartMs: monday, durationS: finite(best?.durationS) ? best.durationS : null } };
+  const newWeek = goal.weekBest?.weekStartMs !== monday;
+  const newEndBest = inTime(goal, best) && !(goal.endBest?.durationS <= best.durationS);
+  if (!newWeek && !newEndBest) return goal;
+  const next = { ...goal };
+  if (newWeek) next.weekBest = { weekStartMs: monday, durationS: finite(best?.durationS) ? best.durationS : null };
+  if (newEndBest) next.endBest = { durationS: best.durationS, recordedAt: best.recordedAt ?? null };
+  return next;
 }
 
 /** The goals not past their end date. */

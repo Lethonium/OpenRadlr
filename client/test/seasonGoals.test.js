@@ -120,6 +120,16 @@ test("replaceGoal keeps the start, so progress so far stays", () => {
   assert.equal(changed.goals[0].target, 1500 * KM);
 });
 
+test("replaceGoal keeps a lap goal's stored bests while its route stays", () => {
+  const lap = { ...goalOver(10), kind: "lap", metric: "time", target: 1200, routeId: "rolling-hills" };
+  const stored = { ...lap, weekBest: { weekStartMs: MON, durationS: 1300 }, endBest: { durationS: 1300, recordedAt: MON } };
+  const state = { rhythmStartMs: MON, goals: [stored] };
+  const same = replaceGoal(state, { ...lap, target: 1180 }).goals[0];
+  assert.deepEqual([same.weekBest, same.endBest], [stored.weekBest, stored.endBest]);
+  const moved = replaceGoal(state, { ...lap, routeId: "coast" }).goals[0];
+  assert.deepEqual([moved.weekBest, moved.endBest], [undefined, undefined]);
+});
+
 test("endPresets: winter is the next 20 March, at the end of that day", () => {
   const presets = endPresets(at(2026, 11, 18));
   assert.deepEqual(presets.map((preset) => preset.id), ["winter", "weeks8", "weeks12", "yearEnd"]);
@@ -151,6 +161,33 @@ test("goalProgress: a long ride is the longest of all history", () => {
   const goal = goalOver(10, { kind: "long", target: 50 * KM });
   const records = [ride(at(2026, 6, 1), 52 * KM), ride(at(2027, 1, 5), 30 * KM)];
   assert.deepEqual(goalProgress(goal, { records, best: null }), { value: 52 * KM, reached: true });
+});
+
+test("goalProgress: a long ride after the end does not reach a missed goal", () => {
+  const goal = goalOver(2, { kind: "long", target: 50 * KM });
+  const records = [ride(addDays(goal.endMs, -1), 40 * KM), ride(addDays(goal.endMs, 4), 55 * KM)];
+  assert.deepEqual(goalProgress(goal, { records, best: null }), { value: 40 * KM, reached: false });
+});
+
+test("goalProgress: a lap best set after the end counts the best stored before it", () => {
+  const goal = goalOver(2, { kind: "lap", metric: "time", target: 1200, routeId: "rolling-hills", endBest: { durationS: 1250, recordedAt: MON } });
+  const after = { durationS: 1150, recordedAt: addDays(goal.endMs, 4) };
+  assert.deepEqual(goalProgress(goal, { records: [], best: after }), { value: 1250, reached: false });
+});
+
+test("goalProgress: a lap best set after the end, with none stored before it, is no result", () => {
+  const goal = goalOver(2, { kind: "lap", metric: "time", target: 1200, routeId: "rolling-hills" });
+  const after = { durationS: 1150, recordedAt: addDays(goal.endMs, 4) };
+  assert.deepEqual(goalProgress(goal, { records: [], best: after }), { value: null, reached: false });
+});
+
+test("goalWeek: a finished goal ignores a ride in progress after its end", () => {
+  const goal = goalOver(2, { target: 100 * KM });
+  const records = [ride(addDays(goal.endMs, -1), 90 * KM)];
+  const w = goalWeek(goal, { records, best: null, rhythmStartMs: MON, nowMs: addDays(goal.endMs, 3), live: { distanceM: 20 * KM } });
+  assert.equal(w.finished, true);
+  assert.equal(w.progress, 90 * KM);
+  assert.equal(w.reached, false);
 });
 
 test("goalProgress: a lap is the best lap, nothing without one", () => {
@@ -204,8 +241,17 @@ test("refreshWeekBest stores the Monday best once a week", () => {
   const best = { durationS: 1300, recordedAt: monday(1) };
   const fresh = refreshWeekBest(lapGoal, best, week(2));
   assert.deepEqual(fresh.weekBest, { weekStartMs: monday(2), durationS: 1300 });
-  assert.equal(refreshWeekBest(fresh, { durationS: 1250, recordedAt: week(2) }, week(2, 20)), fresh);
+  assert.deepEqual(refreshWeekBest(fresh, { durationS: 1250, recordedAt: week(2) }, week(2, 20)).weekBest, fresh.weekBest);
+  assert.equal(refreshWeekBest(fresh, best, week(2, 20)), fresh);
   assert.equal(refreshWeekBest(goalOver(10), best, week(2)).weekBest, undefined);
+});
+
+test("refreshWeekBest keeps the best lap set before the end", () => {
+  const goal = goalOver(2, { kind: "lap", metric: "time", target: 1200, routeId: "rolling-hills" });
+  const kept = refreshWeekBest(goal, { durationS: 1250, recordedAt: MON }, week(2));
+  assert.deepEqual(kept.endBest, { durationS: 1250, recordedAt: MON });
+  const later = refreshWeekBest(kept, { durationS: 1150, recordedAt: addDays(goal.endMs, 4) }, addDays(goal.endMs, 5));
+  assert.deepEqual(later.endBest, { durationS: 1250, recordedAt: MON });
 });
 
 const totalGoal = goalOver(10); // 2,000 km, recovery weeks 4 and 8
