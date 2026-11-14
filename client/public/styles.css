@@ -3051,14 +3051,13 @@ body.riding {
   z-index: 30;
 }
 
-.start-panel fieldset:has(> .open-profile) {
-  position: relative;
-}
-
-.open-profile {
-  position: absolute;
-  top: -4px;
-  right: 0;
+.rider-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
 }
 
 .profile-totals {
