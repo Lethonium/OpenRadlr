@@ -135,7 +135,7 @@ const open = ({ week }) => !week.finished && !week.reached && week.step !== null
 export function hudGoal(entries, { routeId, racing = false }) {
   if (racing) return null;
   const pick =
-    entries.find((entry) => open(entry) && entry.goal.kind === "lap" && entry.goal.routeId === routeId) ??
+    entries.find((entry) => open(entry) && entry.goal.kind === "lap" && entry.goal.routeId === routeId && !entry.week.done) ??
     entries.find((entry) => open(entry) && entry.goal.kind === "long" && !entry.week.done) ??
     entries.find((entry) => open(entry) && entry.goal.kind === "total" && !entry.week.done);
   return pick ? goalLine(pick.goal, pick.week) : null;
@@ -192,7 +192,8 @@ export function imageGoalLine(before, after, mode, { routes, locale } = {}) {
     const named = new Set(items.map((item) => item.goal.id));
     for (const { goal, week } of after) {
       const old = was.get(goal.id);
-      if (!old || named.has(goal.id) || week.reached || week.progress === old.progress || week.progress === null) continue;
+      // A goal that ended on this ride has no plan to show progress against.
+      if (!old || named.has(goal.id) || week.reached || week.finished || week.progress === old.progress || week.progress === null) continue;
       items.push({ rank: 2, goal, text: progressItem(goal, week, routes, locale) });
     }
   }

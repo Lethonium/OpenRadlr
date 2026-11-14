@@ -125,6 +125,13 @@ test("hudGoal: a total when the long ride is done, nothing when all is done", ()
   assert.equal(hudGoal([], { routeId: null }), null);
 });
 
+test("hudGoal: a done lap goal drops out like the others, falling through to a total", () => {
+  const lapDone = { goal: lap, week: week({ step: 1276, soFar: 1270, done: true }) };
+  const totalOpen = { goal: total, week: week({ step: 150 * KM, soFar: 85 * KM }) };
+  assert.equal(hudGoal([lapDone, totalOpen], { routeId: "rolling-hills" }), "Week 85 / 150 km");
+  assert.equal(hudGoal([lapDone], { routeId: "rolling-hills" }), null);
+});
+
 test("finishGoalLine: a reached goal before a week done, at most two", () => {
   const before = [
     { goal: total, week: week({ progress: 1990 * KM, step: 150 * KM, soFar: 140 * KM }) },
@@ -255,4 +262,11 @@ test("imageGoalLine: with progress, a week done and the goal's progress, at most
   assert.equal(imageGoalLine(imageBefore, after, "progress", ctx), "★ Week done: 150 / 150 km · Longest 39 km of 50 km by 31 December");
   assert.equal(imageGoalLine(imageBefore, imageReached, "progress", ctx), "★ Goal reached: 2,000 km · This week's long ride: 42 km");
   assert.equal(imageGoalLine(imageBefore, imageBefore, "progress", ctx), null);
+});
+
+test("imageGoalLine: a goal that finished on this ride is not sold as progress", () => {
+  const ended = [
+    { goal: total, week: week({ progress: 1500 * KM, finished: true }) },
+  ];
+  assert.equal(imageGoalLine(imageBefore, ended, "progress", ctx), null);
 });
