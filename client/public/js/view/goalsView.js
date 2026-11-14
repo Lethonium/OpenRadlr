@@ -141,6 +141,31 @@ export function hudGoal(entries, { routeId, racing = false }) {
   return pick ? goalLine(pick.goal, pick.week) : null;
 }
 
+/** How relevant a goal is to this ride, lowest first: the lap on this route, a long ride, a total, then the rest. */
+function relevance({ goal }, routeId) {
+  if (goal.kind === "lap") return goal.routeId === routeId ? 0 : 3;
+  if (goal.kind === "long") return 1;
+  if (goal.kind === "total") return 2;
+  return 4;
+}
+
+/**
+ * The ride screen's left goals list: one short line per open goal, the most
+ * relevant to this ride first, at most `max` with `more` left over. `title` is
+ * the heading, or null when there is nothing to show (none, or in a race).
+ */
+export function goalsPanel(entries, { routeId = null, racing = false, max = 3 } = {}) {
+  if (racing) return { title: null, lines: [], more: 0 };
+  const active = entries.filter(({ week }) => !week.finished && !week.reached);
+  const ordered = active
+    .map((entry, index) => ({ entry, rank: relevance(entry, routeId), index }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ entry }) => entry);
+  const shown = ordered.slice(0, max);
+  const lines = shown.map(({ goal, week }) => goalLine(goal, week));
+  return { title: lines.length ? t("goals.panel.title") : null, lines, more: ordered.length - shown.length };
+}
+
 /** The Overview's line: "2 goals · this week 62 / 150 km" (the first total still open), or null without goals. */
 export function goalsSummary(entries) {
   if (!entries.length) return null;

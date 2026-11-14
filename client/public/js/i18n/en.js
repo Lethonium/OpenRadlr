@@ -1105,6 +1105,7 @@ export default {
   "profilePage.delete.goals.action.one": "Delete {n} goal",
   "profilePage.delete.goals.action.other": "Delete {n} goals",
   "goals.page": "Goals",
+  "goals.panel.title": "Goals",
   "goals.empty": "No goals yet. Set one for the season and every ride counts towards it: OpenRadlr turns it into a step for each week, with an easy week every fourth.",
   "goals.new": "Set a goal",
   "goals.change": "Change",
