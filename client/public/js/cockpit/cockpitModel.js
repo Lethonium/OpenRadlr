@@ -125,6 +125,7 @@ export class CockpitModel {
   get stats() { return this.#frame.stats ?? null; }
   get zonesS() { return this.#frame.zones_s ?? null; }
   get workout() { return this.#frame.workout ?? null; }
+  get goals() { return this.#frame.goals ?? null; }
   get plan() { return this.#plan; }
   get history() { return this.#history; }
 

@@ -45,6 +45,7 @@ function buildTile({ id, size }, editing) {
   const tile = tileById(id);
   const root = document.createElement("div");
   root.className = `tile tile-${size}`;
+  if (tile.text) root.classList.add("tile-text");
   const caption = document.createElement("div");
   caption.className = "tile-label";
   caption.textContent = t(tile.labelKey);

@@ -3,22 +3,23 @@
 // (camera, vehicle, workout names) and the raw training state.
 import { t, tn } from "../i18n/i18n.js";
 
-export const MENU_PAGES = ["overview", "view", "vehicle", "race", "events", "training", "settings"];
+export const MENU_PAGES = ["overview", "view", "vehicle", "race", "events", "training", "goals", "settings"];
 
 // The studio's View page would hold only road controls.
 const STUDIO_HIDDEN = new Set(["view", "vehicle", "race", "events"]);
 
-export function visiblePages({ studio, hasEvents }) {
+export function visiblePages({ studio, hasEvents, hasGoals = false }) {
   return MENU_PAGES.filter((id) => {
     if (studio && STUDIO_HIDDEN.has(id)) return false;
     if (id === "events" && !hasEvents) return false;
+    if (id === "goals" && !hasGoals) return false;
     return true;
   });
 }
 
 const TITLE_KEYS = {
   overview: "menuPage.overview", view: "menuPage.view", vehicle: "menuPage.vehicle", race: "menuPage.race",
-  events: "menuPage.events", training: "menuPage.training", settings: "menuPage.settings",
+  events: "menuPage.events", training: "menuPage.training", goals: "goals.page", settings: "menuPage.settings",
 };
 
 export function pageTitle(id) {
@@ -40,6 +41,8 @@ export function pageStatus(id, ctx) {
       return trainingStatus(ctx);
     case "events":
       return tn("menuPage.status.events", ctx.eventCount);
+    case "goals":
+      return ctx.goalLine ?? "";
     case "settings":
       return ctx.units === "imperial" ? t("menuPage.status.imperial") : t("menuPage.status.metric");
     default:

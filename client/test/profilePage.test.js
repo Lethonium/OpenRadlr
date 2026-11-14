@@ -6,8 +6,8 @@ const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftp
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
 const noRides = { week: zero, month: zero, all: zero };
 
-test("the profile has three pages", () => {
-  assert.deepEqual(PROFILE_PAGES, ["overview", "rides", "data"]);
+test("the profile has four pages, goals first", () => {
+  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "rides", "data"]);
 });
 
 test("routeName: server name, Studio for null, id when unknown", () => {
@@ -193,4 +193,11 @@ test("rideRows: a ride is no workout", () => {
 test("overviewLines: unreadable rides say so instead of the new-rider text", () => {
   const lines = overviewLines({ profile, totals: noRides, bests: [], routes: [], unreadable: true });
   assert.equal(lines.empty, "Your rides can't be read in this browser right now. Nothing was deleted.");
+});
+
+test("dataRows: season goals are an item of their own", () => {
+  const [row] = dataRows([{ id: "goals", count: 2, readable: true }]);
+  assert.equal(row.name, "Season goals");
+  assert.equal(row.count, "2 goals");
+  assert.equal(row.canDelete, true);
 });
