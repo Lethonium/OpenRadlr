@@ -31,6 +31,7 @@ import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, i
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
+import { previewFrame } from "../public/js/vr/previewSource.js";
 
 const close = (a, b, eps = 1e-5) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const closeVec = (a, b, eps = 1e-5) => a.forEach((v, i) => close(v, b[i], eps));
@@ -340,6 +341,10 @@ class StubRenderer {
     return false;
   }
   resize() {}
+  targets = [];
+  target(framebuffer, size = null) {
+    this.targets.push({ framebuffer, size });
+  }
   /** The scissored viewport of the pass being drawn, null for the whole canvas. */
   viewport(rect) {
     this.pass = rect;
@@ -1009,4 +1014,226 @@ test("a studio camera follows my seat in the studio, without a road rider of min
   view.render({ riders: [{ id: 9, route: null, studio: { room: 1, seat: 7 }, power: 100 }], myId: 9, timeS: 1, colors });
   assert.ok(view.camera.eye[1] > before[1] + 4, "moved up a floor");
   assert.ok(renderer.draws.length > 0);
+});
+
+// --- one frame's calls (the split into frame and views must not change them) -----
+
+/** A renderer that logs the name of every call (and the rect of a viewport) on top of the recording one. */
+function callLog() {
+  const log = [];
+  const inner = new RecordingRenderer();
+  inner.queryOcclusion = () => {};
+  const renderer = new Proxy(inner, {
+    get(target, name) {
+      const value = target[name];
+      if (typeof value !== "function") return value;
+      return (...args) => {
+        log.push(
+          name === "viewport"
+            ? `viewport ${args[0] ? Object.values(args[0]).join(",") : "null"}`
+            : name,
+        );
+        return value.apply(target, args);
+      };
+    },
+  });
+  return { renderer, log };
+}
+/** A bare stand-in for the DOM the name labels are made of. */
+function stubLabels(t) {
+  const element = () => ({
+    style: {},
+    classList: { toggle() {} },
+    append() {},
+    querySelector: () => null,
+    getBoundingClientRect: () => ({ width: 40, height: 16 }),
+  });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+}
+const collapse = (log) =>
+  log.map((name, i) => (name === log[i - 1] ? null : name)).filter(Boolean);
+
+test("a ride frame makes the same renderer calls as before", (t) => {
+  stubLabels(t);
+  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
+  const { renderer, log } = callLog();
+  const { view } = gymView([], "winter", weather, renderer);
+  view.labelLayer = { append() {} };
+  view.camera.update(100, 1, 0);
+  const rider = {
+    id: 7,
+    name: "Ana",
+    distance: 100,
+    lane: 1,
+    speed: 8,
+    power: 150,
+  };
+  const other = {
+    id: 8,
+    name: "Bo",
+    distance: 110,
+    lane: 0,
+    speed: 8,
+    power: 150,
+  };
+  view.render({ riders: [rider, other], myId: 7, timeS: 12, colors });
+  assert.deepEqual(collapse(log), EXPECTED_RIDE_CALLS);
+});
+
+test("a workout frame with a side view makes the same renderer calls as before", (t) => {
+  stubLabels(t);
+  const gym = testGym();
+  const { renderer, log } = callLog();
+  const { view } = gymView([gym], "temperate", null, renderer);
+  view.labelLayer = { append() {} };
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  view.render({
+    riders: [workoutRider, { ...workoutRider, id: 9 }],
+    myId: 7,
+    timeS: 12,
+    colors,
+  });
+  assert.deepEqual(collapse(log), EXPECTED_WORKOUT_CALLS);
+});
+const EXPECTED_RIDE_CALLS = [
+  "upload",
+  "createShadowMap",
+  "upload",
+  "uploadWeather",
+  "upload",
+  "resize",
+  "beginShadows",
+  "drawShadowCaster",
+  "endShadows",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "queryOcclusion",
+  "drawWeather",
+];
+const EXPECTED_WORKOUT_CALLS = [
+  "createShadowMap",
+  "upload",
+  "resize",
+  "beginShadows",
+  "drawShadowCaster",
+  "endShadows",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "queryOcclusion",
+  "viewport 220,10,90,70",
+  "begin",
+  "draw",
+  "drawBright",
+  "drawCloudLayer",
+  "draw",
+  "drawTransparent",
+  "viewport null",
+];
+
+// --- XR frames (a headset or its preview): one frame, a view per eye ---------------
+
+const xrPose = { yawDeg: 0, pitchDeg: 0, position: [0, 0, 0] };
+const xrFrameOf = (pose = xrPose) => previewFrame({ width: 800, height: 400, timeS: 1, pose });
+const xrMe = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+const xrInput = (riders = [xrMe], timeS = 1) => ({ riders, myId: 1, myCadence: 90, timeS, colors });
+const xrDraws = (view, renderer, mesh) => renderer.draws.filter((d) => d.handle === mesh);
+
+test("renderXr draws every view into its own rect", () => {
+  const { view, renderer } = gymView([]);
+  const frame = xrFrameOf();
+  view.renderXr(xrInput(), frame);
+  assert.deepEqual(
+    renderer.viewports.filter(Boolean),
+    frame.views.map((v) => v.rect),
+  );
+  assert.equal(renderer.begins, 2, "a world pass per eye");
+  assert.deepEqual(renderer.targets, [{ framebuffer: null, size: frame.size }, { framebuffer: null, size: null }], "targets the frame, then back to the canvas");
+});
+
+test("renderXr prepares the frame once: the pedals advance once per call, not once per eye", () => {
+  const other = { id: 2, name: "Other", distance: 200, lane: 1, speed: 8, power: 150 };
+  const secondFrameLegs = (render) => {
+    const { view, renderer } = gymView([]);
+    render(view, 1);
+    renderer.draws.length = 0;
+    render(view, 1.05);
+    return xrDraws(view, renderer, view.thighs[riderLook(2).variant]).map((d) => [...d.model]);
+  };
+  const flat = secondFrameLegs((view, timeS) => view.render(xrInput([xrMe, other], timeS)));
+  const xr = secondFrameLegs((view, timeS) => view.renderXr(xrInput([xrMe, other], timeS), xrFrameOf()));
+  assert.equal(xr.length, 2 * flat.length, "both legs, in both eyes");
+  assert.deepEqual(xr.slice(0, flat.length), flat);
+  assert.deepEqual(xr.slice(flat.length), flat);
+});
+
+test("renderXr hides my body but not my bike", () => {
+  const { view, renderer } = gymView([]);
+  view.render(xrInput());
+  const thigh = view.thighs[riderLook(1).variant];
+  const bike = view.bodies[riderLook(1).variant];
+  assert.ok(xrDraws(view, renderer, thigh).length > 0, "the 2D view draws my legs");
+  renderer.draws.length = 0;
+  view.renderXr(xrInput(), xrFrameOf());
+  assert.equal(xrDraws(view, renderer, thigh).length, 0, "no legs in VR");
+  assert.equal(xrDraws(view, renderer, bike).length, 2, "the bike, once per eye");
+});
+
+test("renderXr draws nothing without my rider", () => {
+  const { view, renderer } = gymView([]);
+  view.renderXr(xrInput([{ ...xrMe, id: 2 }]), xrFrameOf());
+  assert.equal(renderer.begins, 0);
+  assert.deepEqual(renderer.targets.at(-1), { framebuffer: null, size: null }, "the canvas is the target again");
+});
+
+test("renderXr looks from the seat along the road, turned by the head", () => {
+  const { view, renderer } = gymView([]);
+  const seen = [];
+  renderer.begin = ({ camera }) => seen.push(camera);
+  view.renderXr(xrInput(), xrFrameOf());
+  const road = riderPosition(squareRoute(), 100, 1).position;
+  const [left, right] = seen;
+  closeVec([(left[0] + right[0]) / 2, (left[1] + right[1]) / 2, (left[2] + right[2]) / 2], [road[0], road[1] + RIDER_GEOMETRY.headHeight, road[2]]);
+  close(Math.hypot(right[0] - left[0], right[1] - left[1], right[2] - left[2]), 0.064);
+});
+
+/** The mesh handle `renderXr` uploads for the hand bones: the last thing uploaded in a first frame. */
+function renderXrWithHands(frame) {
+  const { view, renderer } = gymView([]);
+  const uploaded = [];
+  const upload = renderer.upload;
+  renderer.upload = (mesh) => uploaded.push(upload.call(renderer, mesh)) && uploaded.at(-1);
+  view.renderXr(xrInput(), frame);
+  return { view, renderer, bone: uploaded.at(-1) };
+}
+
+test("renderXr draws 24 bones per hand, in each eye", () => {
+  const { view, renderer, bone } = renderXrWithHands(xrFrameOf());
+  assert.equal(xrDraws(view, renderer, bone).length, 2 * 2 * 24, "two hands, two eyes");
+});
+
+test("renderXr draws no bones without hands", () => {
+  const { view, renderer, bone } = renderXrWithHands({ ...xrFrameOf(), hands: [] });
+  assert.equal(xrDraws(view, renderer, bone).length, 0);
+});
+
+test("renderXr draws the hologram in each eye when given the ride's numbers, and the 2D render never does", () => {
+  const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
+  const glass = () => renderer.transparent.filter((d) => d.options.alpha === 0.18).length;
+  const hud = { values: { power: 200, zone: "Z3", cadence: 90, hr: "–", speed: "30.0", grade: "0.0 %", target: "–" } };
+  view.render(xrInput());
+  assert.equal(glass(), 0, "2D");
+  view.renderXr(xrInput(), xrFrameOf());
+  assert.equal(glass(), 0, "no numbers, no hologram");
+  view.renderXr(xrInput(), xrFrameOf(), { hud });
+  assert.equal(glass(), 2, "one per eye");
 });

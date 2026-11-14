@@ -6,6 +6,9 @@
 import { applyTranslations } from "../i18n/apply.js";
 import { initLocale, t } from "../i18n/i18n.js";
 import { defaultServerUrl } from "../net/protocol.js";
+import { deviceName } from "../net/deviceName.js";
+import { pairDevice } from "../net/screenPairing.js";
+import { mountPairNow } from "../view/codeInput.js";
 import { ProfileStore } from "../profile/profileStore.js";
 import { prepareCanvas } from "../view/canvas.js";
 import { ZONE_COLORS } from "../view/workoutView.js";
@@ -78,6 +81,13 @@ function buildTile({ id, size }, editing) {
   } };
 }
 
+/** "Pair now" with an inline code entry, for a screen that is not (or no longer) paired. */
+function offerPairing() {
+  if (!$("cockpit-pair-now").hidden) return;
+  $("cockpit-pair-now").hidden = false;
+  mountPairNow({ button: $("cockpit-pair"), entry: $("cockpit-entry"), pair: (code) => pairDevice({ code, storage: localStorage }), onPaired: () => location.reload(), t: (key, params) => t(key, params), doc: document });
+}
+
 function start() {
   initLocale({ storage: localStorage, languages: navigator.languages });
   applyTranslations();
@@ -85,6 +95,7 @@ function start() {
   const paired = pairing(localStorage);
   if (!paired) {
     $("cockpit-unpaired").hidden = false;
+    offerPairing();
     return;
   }
   $("cockpit-forget").hidden = false;
@@ -94,7 +105,7 @@ function start() {
   });
 
   const model = new CockpitModel({ now: () => Date.now() });
-  const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key });
+  const connection = new CockpitConnection({ url: defaultServerUrl(), key: paired.key, device: deviceName(navigator.userAgent) });
   const wakeLock = new ScreenWakeLock();
   let tiles = [];
   let editing = false;
@@ -110,9 +121,14 @@ function start() {
     model.onState(message, name);
     routes.follow(model.routeId);
   });
-  connection.on("display", (data) => model.onDisplay(data));
+  connection.on("display", (data) => {
+    // The tablet's units, not this device's own profile.
+    if (data.units) setUnits(data.units);
+    model.onDisplay(data);
+  });
   connection.on("invalid", () => {
     $("cockpit-invalid").hidden = false;
+    offerPairing();
   });
 
   let wasLive = false;

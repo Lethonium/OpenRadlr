@@ -91,6 +91,8 @@ pub struct Config {
     pub require_strava: bool,
     /// Offer the simulated trainer (keyboard power) on the start screen.
     pub allow_simulated_trainer: bool,
+    /// Offer the headset-free stereo preview of the VR page (`OPENRADLR_XR_PREVIEW`).
+    pub xr_preview: bool,
     /// Offer phone paddles (power from tapping) on the start screen.
     pub allow_paddle_mode: bool,
     /// Host the spin studio next to the routes.
@@ -444,6 +446,7 @@ impl Config {
             stats_file,
             require_strava,
             allow_simulated_trainer: reader.flag("OPENRADLR_ALLOW_SIMULATED_TRAINER", true)?,
+            xr_preview: reader.flag("OPENRADLR_XR_PREVIEW", true)?,
             allow_paddle_mode: reader.flag("OPENRADLR_ALLOW_PADDLE_MODE", true)?,
             studio: reader.flag("OPENRADLR_STUDIO", true)?,
             events,
@@ -662,6 +665,8 @@ mod tests {
                 .unwrap()
                 .allow_simulated_trainer
         );
+        assert!(c.xr_preview);
+        assert!(!config(&[("OPENRADLR_XR_PREVIEW", "false")]).unwrap().xr_preview);
         assert!(c.allow_paddle_mode);
         assert!(
             !config(&[("OPENRADLR_ALLOW_PADDLE_MODE", "false")])

@@ -134,14 +134,15 @@ impl PairCodes {
 
     /// Claims `code` (trimmed, case-insensitive). Returns the screen's `(key, name)`
     /// and removes the code, so it works once. The offering connection is told
-    /// with `PairClaimed`. None for an unknown or expired code.
-    pub fn claim(&self, code: &str) -> Option<(String, String)> {
+    /// with `PairClaimed`, carrying the claimant's `device`. None for an unknown
+    /// or expired code.
+    pub fn claim(&self, code: &str, device: Option<String>) -> Option<(String, String)> {
         let now_s = (self.clock)();
         let pending = self.lock().codes.remove(&normalise(code))?;
         if pending.expires_at_s <= now_s {
             return None;
         }
-        let _ = pending.notify.try_send(ServerMessage::PairClaimed);
+        let _ = pending.notify.try_send(ServerMessage::PairClaimed { device });
         Some((pending.key, pending.name))
     }
 }
@@ -193,9 +194,9 @@ mod tests {
         let (codes, _) = registry();
         let (tx, mut rx) = outbox();
         let code = codes.offer("key".into(), "Tablet".into(), tx, None);
-        assert_eq!(codes.claim(&code), Some(("key".to_owned(), "Tablet".to_owned())));
-        assert_eq!(codes.claim(&code), None);
-        assert!(matches!(rx.try_recv(), Ok(ServerMessage::PairClaimed)));
+        assert_eq!(codes.claim(&code, None), Some(("key".to_owned(), "Tablet".to_owned())));
+        assert_eq!(codes.claim(&code, None), None);
+        assert!(matches!(rx.try_recv(), Ok(ServerMessage::PairClaimed { device: None })));
     }
 
     #[test]
@@ -204,11 +205,11 @@ mod tests {
         let (tx, _rx) = outbox();
         let early = codes.offer("key".into(), "Tablet".into(), tx.clone(), None);
         clock.set(299.9);
-        assert!(codes.claim(&early).is_some());
+        assert!(codes.claim(&early, None).is_some());
         clock.set(0.0);
         let late = codes.offer("key".into(), "Tablet".into(), tx, None);
         clock.set(300.0);
-        assert_eq!(codes.claim(&late), None);
+        assert_eq!(codes.claim(&late, None), None);
     }
 
     #[test]
@@ -220,13 +221,13 @@ mod tests {
         clock.set(1_000.0);
         let code = codes.offer("key".into(), "Tablet".into(), tx.clone(), None);
         clock.set(1_360.0);
-        assert_eq!(codes.claim(&code), None);
+        assert_eq!(codes.claim(&code, None), None);
         // And an offer from a long-lived connection does not sweep a fresh code.
         clock.set(2_000.0);
         let fresh = codes.offer("a".into(), "A".into(), tx.clone(), None);
         clock.set(2_010.0);
         codes.offer("b".into(), "B".into(), tx, None);
-        assert!(codes.claim(&fresh).is_some());
+        assert!(codes.claim(&fresh, None).is_some());
     }
 
     #[test]
@@ -235,8 +236,8 @@ mod tests {
         let (tx, _rx) = outbox();
         let first = codes.offer("key".into(), "Tablet".into(), tx.clone(), None);
         let second = codes.offer("key".into(), "Tablet".into(), tx, Some(&first));
-        assert_eq!(codes.claim(&first), None);
-        assert!(codes.claim(&second).is_some());
+        assert_eq!(codes.claim(&first, None), None);
+        assert!(codes.claim(&second, None).is_some());
     }
 
     #[test]
@@ -245,7 +246,7 @@ mod tests {
         let (tx, _rx) = outbox();
         let code = codes.offer("key".into(), "Tablet".into(), tx, None);
         let sloppy = format!("  {}  ", code.to_lowercase());
-        assert!(codes.claim(&sloppy).is_some());
+        assert!(codes.claim(&sloppy, None).is_some());
     }
 
     #[test]
@@ -259,5 +260,19 @@ mod tests {
         let second = codes.offer("b".into(), "B".into(), tx, None);
         assert_eq!(first, "AAAAAA");
         assert_eq!(second, "BBBBBB");
+    }
+
+    #[test]
+    fn a_claims_device_reaches_the_tablet() {
+        let (codes, _clock) = registry();
+        let (tx, mut rx) = outbox();
+        let code = codes.offer("key".into(), "Tablet".into(), tx, None);
+        codes.claim(&code, Some("Pixel 8".into()));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            ServerMessage::PairClaimed {
+                device: Some("Pixel 8".into())
+            }
+        );
     }
 }

@@ -7,7 +7,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import en from "../public/js/i18n/en.js";
 
-const PAGES = ["index.html", "cockpit.html"];
+const PAGES = ["index.html", "cockpit.html", "vr.html"];
 const htmls = PAGES.map((page) => readFileSync(new URL(`../public/${page}`, import.meta.url), "utf8"));
 
 // en keys neither HTML nor a JS string literal uses (keys built at run time, test seeds).

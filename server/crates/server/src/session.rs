@@ -31,6 +31,16 @@ fn valid_screen_key(key: &str) -> bool {
     key.len() == 32 && key.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
+/// Longest device name kept, in characters.
+const MAX_DEVICE_CHARS: usize = 40;
+
+/// A device name trimmed and cut to [`MAX_DEVICE_CHARS`]; None when nothing is left.
+fn clean_device(device: Option<String>) -> Option<String> {
+    let name: String = device?.trim().chars().take(MAX_DEVICE_CHARS).collect();
+    let name = name.trim_end().to_owned();
+    (!name.is_empty()).then_some(name)
+}
+
 fn bad_screen_key() -> Action {
     Action::Reply(ServerMessage::error(
         "bad_screen_key",
@@ -76,11 +86,21 @@ pub enum Action {
     /// Claim a pairing code.
     PairClaim {
         code: String,
+        device: Option<String>,
     },
     /// Watch the screen `key` (the phase is already `Watching`).
     Watch {
         key: String,
         view: WatchView,
+        device: Option<String>,
+    },
+    /// Which devices watch the screen `key`.
+    ScreensQuery {
+        key: String,
+    },
+    /// End the screen `key`'s watchers and refuse the key from now on.
+    ScreensRevoke {
+        key: String,
     },
     /// Opaque display data to relay to the paired screens.
     Display(serde_json::Value),
@@ -315,11 +335,26 @@ impl Session {
                     bad_screen_key()
                 }
             }
-            (Phase::AwaitingJoin, ClientMessage::PairClaim { code }) => Action::PairClaim { code },
-            (Phase::AwaitingJoin, ClientMessage::Watch { key, view }) => {
+            (Phase::AwaitingJoin, ClientMessage::PairClaim { code, device }) => Action::PairClaim {
+                code,
+                device: clean_device(device),
+            },
+            (Phase::AwaitingJoin, ClientMessage::ScreensQuery { key }) => Action::ScreensQuery { key },
+            (Phase::AwaitingJoin, ClientMessage::ScreensRevoke { key }) => {
+                if valid_screen_key(&key) {
+                    Action::ScreensRevoke { key }
+                } else {
+                    bad_screen_key()
+                }
+            }
+            (Phase::AwaitingJoin, ClientMessage::Watch { key, view, device }) => {
                 if valid_screen_key(&key) {
                     self.phase = Phase::Watching;
-                    Action::Watch { key, view }
+                    Action::Watch {
+                        key,
+                        view,
+                        device: clean_device(device),
+                    }
                 } else {
                     bad_screen_key()
                 }
@@ -336,7 +371,11 @@ impl Session {
             }
             (
                 Phase::Joined(_),
-                ClientMessage::PairOffer { .. } | ClientMessage::PairClaim { .. } | ClientMessage::Watch { .. },
+                ClientMessage::PairOffer { .. }
+                | ClientMessage::PairClaim { .. }
+                | ClientMessage::Watch { .. }
+                | ClientMessage::ScreensQuery { .. }
+                | ClientMessage::ScreensRevoke { .. },
             ) => Action::Ignore,
             (Phase::Joined(_), ClientMessage::Hello { .. } | ClientMessage::Join { .. }) => Action::Reply(
                 ServerMessage::error("already_joined", "this connection has already joined"),
@@ -894,7 +933,10 @@ mod tests {
         assert_eq!(s.phase(), Phase::AwaitingJoin);
         assert_eq!(
             s.on_text(r#"{"type":"pair_claim","code":"ABC234"}"#, 0.2),
-            Action::PairClaim { code: "ABC234".into() }
+            Action::PairClaim {
+                code: "ABC234".into(),
+                device: None
+            }
         );
         assert_eq!(s.phase(), Phase::AwaitingJoin);
     }
@@ -914,6 +956,57 @@ mod tests {
     }
 
     #[test]
+    fn device_names_are_trimmed_and_cut_to_40_characters() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        let long = "é".repeat(60);
+        let cut = "é".repeat(40);
+        assert_eq!(
+            s.on_text(
+                &format!(r#"{{"type":"pair_claim","code":"ABC234","device":"  {long}  "}}"#),
+                0.1
+            ),
+            Action::PairClaim {
+                code: "ABC234".into(),
+                device: Some(cut)
+            }
+        );
+        assert_eq!(
+            s.on_text(r#"{"type":"pair_claim","code":"ABC234","device":"   "}"#, 0.2),
+            Action::PairClaim {
+                code: "ABC234".into(),
+                device: None
+            }
+        );
+    }
+
+    #[test]
+    fn a_screens_query_needs_no_join() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            s.on_text(&format!(r#"{{"type":"screens_query","key":"{KEY}"}}"#), 0.1),
+            Action::ScreensQuery { key: KEY.into() }
+        );
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+    }
+
+    #[test]
+    fn a_screens_revoke_needs_no_join_but_a_good_key() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            s.on_text(&format!(r#"{{"type":"screens_revoke","key":"{KEY}"}}"#), 0.1),
+            Action::ScreensRevoke { key: KEY.into() }
+        );
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+        assert!(is_error(
+            &s.on_text(r#"{"type":"screens_revoke","key":"short"}"#, 0.2),
+            "bad_screen_key"
+        ));
+    }
+
+    #[test]
     fn watch_moves_to_watching() {
         let mut s = session();
         s.on_text(HELLO, 0.0);
@@ -921,7 +1014,8 @@ mod tests {
             s.on_text(&watch_json(), 0.1),
             Action::Watch {
                 key: KEY.into(),
-                view: WatchView::Data
+                view: WatchView::Data,
+                device: None
             }
         );
         assert_eq!(s.phase(), Phase::Watching);

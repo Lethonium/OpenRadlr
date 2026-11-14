@@ -24,6 +24,11 @@ test("a frame carries heart rate, grade and live stats", () => {
   assert.equal(frame.stats.avgPower, 200);
 });
 
+test("a frame carries the tablet's units", () => {
+  assert.equal(displayFrame({ ftp: 200, units: "imperial", recording: recording([100]) }).units, "imperial");
+  assert.equal("units" in displayFrame({ ftp: 200, recording: recording([100]) }), false);
+});
+
 test("a frame without heart rate or workout leaves them out", () => {
   const frame = displayFrame({ heartRate: null, grade: undefined, ftp: 200, recording: recording([100, 100]), workout: null });
   for (const key of ["hr", "grade", "workout"]) assert.equal(key in frame, false, key);
@@ -66,7 +71,7 @@ test("every frame of a 2-hour ride stays under the limit", () => {
   const powers = Array.from({ length: 7201 }, (_, i) => 100 + ((i * 37) % 300));
   const workout = PRESET_WORKOUTS.at(-1);
   const state = { ...positionAt(workout, 100), targetWatts: 250, elapsedS: 100 };
-  const frame = displayFrame({ heartRate: 160, grade: -12.5, ftp: 250, cadence: 95, recording: recording(powers), workout: { workout, state } });
+  const frame = displayFrame({ heartRate: 160, grade: -12.5, ftp: 250, cadence: 95, units: "imperial", recording: recording(powers), workout: { workout, state } });
   assert.ok(size(frame) <= DISPLAY_LIMIT_BYTES, `${size(frame)} bytes`);
 });
 

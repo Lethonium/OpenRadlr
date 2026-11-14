@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { studioWorld } from "../public/js/view/studioWorld.js";
+import { studioSceneRiders, studioWorld } from "../public/js/view/studioWorld.js";
 import { tinyLoopFile, tinyNetworkFile } from "./helpers.js";
 
 const valley = () => {
@@ -50,4 +50,16 @@ test("a network that fails to load counts as no café", async () => {
     ),
     null,
   );
+});
+
+test("studioSceneRiders seats room riders and appends road riders", () => {
+  const state = {
+    room: 1,
+    riders: [{ id: "ann", seat: 3 }],
+    road_riders: [{ id: "bob", route: "tiny-loop" }],
+  };
+  assert.deepEqual(studioSceneRiders(state), [
+    { id: "ann", seat: 3, route: null, studio: { room: 1, seat: 3 } },
+    { id: "bob", route: "tiny-loop" },
+  ]);
 });

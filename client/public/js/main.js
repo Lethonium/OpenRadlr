@@ -12,6 +12,7 @@ import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
+import { mountCodeInput } from "./view/codeInput.js";
 import { viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
@@ -32,10 +33,11 @@ import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
 import { TrainingControl } from "./ride/trainingControl.js";
-import { PRESET_WORKOUTS, parseZwo, totalDuration, segmentLabel, workoutDescription, workoutName } from "./ride/workout.js";
+import { PRESET_WORKOUTS, parseZwo, totalDuration, workoutDescription, workoutName } from "./ride/workout.js";
 import { Gearbox, shiftingCommand } from "./ride/virtualShifting.js";
 import { climbFeelVisible } from "./ride/climbFeel.js";
 import { RiderSmoother } from "./ride/smoothing.js";
+import { RiderStamps } from "./ride/riderStamps.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
@@ -54,25 +56,21 @@ import { fetchMapNeighbours, fetchMapNetwork, roadNetworkOf } from "./route/worl
 import { studioBoard } from "./studio/board.js";
 import { classWorkout } from "./studio/classClock.js";
 import { StudioSession } from "./studio/studioSession.js";
-import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, formatWkg, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
+import { displayToKg, distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation, formatGrade, formatLength, formatNumber, formatSpeed, kgToDisplay, setUnits, speedUnit, unitMetres, weightUnit } from "./util/format.js";
 import { themeColors } from "./view/canvas.js";
 import { drawMinimap } from "./view/minimapView.js";
 import {
   LAYOUT_LABELS,
-  MetricBinder,
   chooseLayout,
-  formatPosition,
-  formatTimeGap,
-  gaugeFraction,
   nextLayoutChoice,
   nextMarker,
-  powerZone,
   raceStanding,
   splitLabel,
   splitLine,
 } from "./view/hud.js";
-import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
+import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceStatus, renderResults, renderRiderList, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
+import { RideHud, averageSpeed } from "./view/rideHud.js";
 import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -103,7 +101,7 @@ import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
-import { studioWorld } from "./view/studioWorld.js";
+import { studioSceneRiders, studioWorld } from "./view/studioWorld.js";
 import { ScreenWakeLock } from "./util/wakeLock.js";
 import { installNativeApp } from "./native/app.js";
 import { PaddleView } from "./view/paddleView.js";
@@ -113,7 +111,8 @@ import { applyTranslations } from "./i18n/apply.js";
 import { getLocale, initLocale, saveLocale, setLocale, t, tn } from "./i18n/i18n.js";
 import { languageOptions } from "./i18n/selector.js";
 import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
-import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { COCKPIT_KEY, PairingSession, isPaired, pairDevice, renewScreenKey, screenKey } from "./net/screenPairing.js";
+import { PairedScreens } from "./net/pairedScreens.js";
 import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
@@ -337,10 +336,8 @@ const app = {
   /** The pause of this ride (#89), and when (the `now()` clock) its timer stopped. Null in the studio. */
   pause: null,
   pausedFrom: null,
-  /** Per rider id: when it was first seen parked, for the animation system to come (#89). */
-  parkedSince: new Map(),
-  /** Per workout rider id: the exercise last seen and since when (the `now()` clock), for its clip (#77). */
-  exerciseSince: new Map(),
+  /** The rider stamps (#89, #77): when each rider was first seen parked, and since when its exercise. */
+  stamps: new RiderStamps({ now }),
   /** Splits (#83): the resolved mode and unit of this ride, the live result, how many closed splits were shown. */
   splitMode: "off",
   splitUnitM: 1000,
@@ -1535,7 +1532,6 @@ function notify(text, kind = "event") {
 // ------------------------------------------------------- second screens ---
 
 const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
-const COCKPIT_KEY = "openradlr.cockpit";
 const DISPLAY_INTERVAL_MS = 1000;
 // The plan goes out again now and then, for a screen that opens or reconnects mid-workout.
 const PLAN_RESEND_TICKS = 10;
@@ -1571,6 +1567,7 @@ function startDisplayFeed() {
         grade: app.session.serverGrade,
         ftp: app.profile.ftp,
         cadence: app.session.latest.cadence,
+        units: app.profile.units,
         recording: overviewRecording(),
         workout: state ? { workout, state: { ...state, targetWatts: training.targetWatts() } } : null,
       }),
@@ -1578,16 +1575,21 @@ function startDisplayFeed() {
   }, DISPLAY_INTERVAL_MS);
 }
 
-/** Pairing from the start menu, and turning this device into a cockpit. */
+/** Pairing from the start menu, and turning this device into a cockpit or a VR display. */
 function initScreens() {
   const storage = browserStorage();
+  const panel = $("screens-panel");
+  const views = [...panel.querySelectorAll("[data-screens-view]")];
   const els = {
-    dialog: $("screens-dialog"),
     code: $("screens-code"),
     countdown: $("screens-countdown"),
+    bar: $("screens-bar"),
     renew: $("screens-renew"),
     unpair: $("screens-unpair"),
     status: $("screens-status"),
+    note: $("screens-note"),
+    list: $("screens-list"),
+    empty: $("screens-empty"),
   };
   const dialog = createScreensDialog({
     els,
@@ -1597,25 +1599,63 @@ function initScreens() {
     clearInterval: (id) => globalThis.clearInterval(id),
     confirm: (message) => confirm(message),
     onUnpair: () => renewScreenKey(storage, randomBytes),
-    t: (key) => t(key),
+    paired: new PairedScreens(storage),
+    doc: document,
+    formatDate: (ms) => new Date(ms).toLocaleDateString(getLocale()),
+    t: (key, params) => t(key, params),
   });
-  $("screens-pair").addEventListener("click", () => dialog.open());
-  $("screens-close").addEventListener("click", () => dialog.close());
-  els.dialog.addEventListener("close", () => dialog.close());
-  $("screens-cockpit").addEventListener("click", async () => {
-    if (!readSetting(COCKPIT_KEY)) {
-      const code = (prompt(t("screens.codePrompt")) ?? "").trim().toUpperCase();
-      if (!code) return;
-      try {
-        const paired = await claimCode({ url: defaultServerUrl(), code });
-        writeSetting(COCKPIT_KEY, JSON.stringify({ key: paired.key, name: paired.name }));
-      } catch (error) {
-        notify(error.code === "pair_code_invalid" ? t("screens.codeInvalid") : t("screens.cannotConnect"), "error");
-        return;
-      }
+  let claimPage = null;
+  let opener = null;
+  const entry = mountCodeInput($("screens-entry"), {
+    t: (key, params) => t(key, params),
+    onSubmit: async (code) => {
+      await pairDevice({ code, storage });
+      location.href = claimPage;
+    },
+  });
+  const show = (view) => {
+    for (const el of views) el.hidden = el.dataset.screensView !== view;
+    $("screens-back").hidden = view === "menu";
+    if (view === "menu") dialog.showList();
+    else if (view !== "code") dialog.close();
+  };
+  const open = () => {
+    opener = document.activeElement;
+    panel.hidden = false;
+    show("menu");
+    $("screens-pair").focus();
+  };
+  const close = () => {
+    dialog.close();
+    panel.hidden = true;
+    opener?.focus?.();
+  };
+  $("screens-open").addEventListener("click", open);
+  $("screens-close").addEventListener("click", close);
+  $("screens-back").addEventListener("click", () => show("menu"));
+  $("screens-backdrop").addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  panel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" /* i18n-ok */) close();
+  });
+  $("screens-pair").addEventListener("click", () => {
+    show("code");
+    dialog.open();
+  });
+  // The same pairing serves both: the device then opens the page it was asked for.
+  const useAs = (page) => () => {
+    if (readSetting(COCKPIT_KEY)) {
+      location.href = page;
+      return;
     }
-    location.href = "cockpit.html";
-  });
+    claimPage = page;
+    entry.reset();
+    show("claim");
+    entry.focus();
+  };
+  $("screens-cockpit").addEventListener("click", useAs("cockpit.html"));
+  $("screens-vr").addEventListener("click", useAs("vr.html"));
 }
 
 // ---------------------------------------------------------- diagnostics ---
@@ -1959,8 +1999,7 @@ function endRide() {
     rideStartedAt: 0,
     pause: null,
     pausedFrom: null,
-    parkedSince: new Map(),
-    exerciseSince: new Map(),
+    stamps: new RiderStamps({ now }),
     rideDistance: 0,
     splits: [],
     shownSplits: 0,
@@ -2043,9 +2082,8 @@ function wireConnection(connection) {
     const mine = message.riders.find((rider) => rider.id === app.riderId);
     if (mine?.route) app.lastOnRoute = { routeId: mine.route, distanceM: mine.distance };
     const me = mine && followMyRoad(mine);
-    const riders = message.riders.map((rider) => stampExercise(stampParked(rider === mine ? me : onMyOwnRoad(rider))));
-    for (const id of app.parkedSince.keys()) if (!message.riders.some((rider) => rider.id === id && rider.parked)) app.parkedSince.delete(id);
-    for (const id of app.exerciseSince.keys()) if (!message.riders.some((rider) => rider.id === id)) app.exerciseSince.delete(id);
+    const riders = message.riders.map((rider) => app.stamps.stamp(rider === mine ? me : onMyOwnRoad(rider)));
+    app.stamps.keep(message.riders);
     // Riders of the map's other routes only show in 3D; panels and 2D views follow my route.
     app.smoother.update(riders, now());
     // Humans on other routes still go in the Riders drawer, under their route's name.
@@ -2097,21 +2135,6 @@ function wireConnection(connection) {
   on("close", () => connectionLost(connection));
 }
 
-/** Notes when a rider was first seen parked and hands it to the view as `parkedSince` (null when not parked). */
-function stampParked(rider) {
-  if (!rider.parked) return { ...rider, parkedSince: null };
-  if (!app.parkedSince.has(rider.id)) app.parkedSince.set(rider.id, now());
-  return { ...rider, parkedSince: app.parkedSince.get(rider.id) };
-}
-
-/** Notes when a rider's `exercise` last changed and hands it to the view as `exerciseSince`: the clip starts there. */
-function stampExercise(rider) {
-  const exercise = rider.exercise ?? null;
-  const seen = app.exerciseSince.get(rider.id);
-  if (!seen || seen.exercise !== exercise) app.exerciseSince.set(rider.id, { exercise, since: now() });
-  return { ...rider, exerciseSince: app.exerciseSince.get(rider.id).since };
-}
-
 function startRide() {
   const info = app.connection.serverInfo;
   $("server-label").textContent = app.studio ? `${info.server_name} · ${app.route.name}` : `${info.server_name} · ${app.route.name} · ${formatDistanceWithUnit(app.route.length, 1)}`;
@@ -2127,8 +2150,7 @@ function startRide() {
   $("hud-route").textContent = app.route.name;
   app.rideStartedAt = now();
   app.pause = app.studio || app.workout ? null : new RidePause({ autoPause: Boolean(app.profile.autoPause) });
-  app.parkedSince = new Map();
-  app.exerciseSince = new Map();
+  app.stamps = new RiderStamps({ now });
 
   if (app.workout) return startWorkout();
 
@@ -2534,11 +2556,6 @@ function studioRoomOnly() {
     console.error(error);
     notify(t("studio.unavailable3d"), "error");
   }
-}
-
-/** The riders of the studio scene: my room's in their seats, then the other floors and the road. */
-function studioSceneRiders(state) {
-  return [...state.riders.map((rider) => ({ ...rider, route: null, studio: { room: state.room, seat: rider.seat } })), ...(state.road_riders ?? [])];
 }
 
 /** The coach reads a cue out loud, if the rider wants that. */
@@ -3157,9 +3174,6 @@ function rideSplits(final) {
   });
 }
 
-/** Whole-ride average speed for the top-left HUD ("–" in the first seconds); time excludes pauses (rideStartedAt follows rejoins). */
-const averageSpeed = (metres, seconds) => (seconds >= 5 ? formatSpeed(metres / seconds) : "–");
-
 /** The "Last split" fields: the full line, and label and time only for the narrow training column. */
 function showLastSplit(split) {
   app.hud.set("last-split", split ? splitLine(split, app.splitUnitM) : "–");
@@ -3527,7 +3541,8 @@ function renderGear() {
 
 /** HUD parts shared by roads and the studio. */
 function initHudCommon() {
-  app.hud = new MetricBinder($("hud"));
+  app.rideHud = new RideHud($("hud"), { drawProfile, drawMinimap, drawUpcoming, drawRaceTimeline, drawWorkout });
+  app.hud = app.rideHud.metrics;
   renderUnits();
   initMenu();
   $("open-menu").addEventListener("click", () => toggleMenu());
@@ -3857,66 +3872,6 @@ function renderRaceCall(race, me) {
   $("race-call-button").textContent = entered ? t("race.call.leave") : t("race.call.join");
 }
 
-function markerText(marker) {
-  if (!marker) return t("ride.roadAhead");
-  return marker.inside ? t("ride.markerToGo", { label: marker.label, distance: formatLength(marker.inM) }) : t("ride.markerIn", { label: marker.label, distance: formatLength(marker.inM) });
-}
-
-/** Gauge arc and target tick for the cockpit. */
-function renderGauge(power, target) {
-  const ftp = app.profile.ftp;
-  $("gauge-fill").style.strokeDashoffset = String(100 - gaugeFraction(power, ftp) * 100);
-  const tick = $("gauge-target");
-  tick.hidden = target === null;
-  if (target === null) return;
-  const angle = Math.PI * (1 - gaugeFraction(target, ftp));
-  const point = (r) => [150 + r * Math.cos(angle), 160 - r * Math.sin(angle)];
-  const [x1, y1] = point(104);
-  const [x2, y2] = point(136);
-  tick.setAttribute("x1", x1.toFixed(1));
-  tick.setAttribute("y1", y1.toFixed(1));
-  tick.setAttribute("x2", x2.toFixed(1));
-  tick.setAttribute("y2", y2.toFixed(1));
-}
-
-function renderRaceLists(standing) {
-  const groups = $("race-groups");
-  const around = $("race-around");
-  if (!standing) {
-    groups.replaceChildren();
-    around.replaceChildren();
-    return;
-  }
-  const row = (className, cells) => {
-    const item = document.createElement("li");
-    if (className) item.className = className;
-    for (const [text, cellClass] of cells) {
-      const cell = document.createElement("span");
-      if (cellClass) cell.className = cellClass;
-      cell.textContent = text;
-      item.append(cell);
-    }
-    return item;
-  };
-  groups.replaceChildren(
-    ...standing.groups.slice(0, 5).map((group) =>
-      row(group.mine ? "mine" : "", [
-        [t("race.group", { label: group.label, riders: tn("menu.riders", group.size) })],
-        [formatTimeGap(group.gapS, { mine: group.mine }), "gap"],
-      ]),
-    ),
-  );
-  around.replaceChildren(
-    ...standing.around.map((entry) =>
-      row(entry.mine ? "mine" : "", [
-        [String(entry.position), "pos"],
-        [riderName(entry.rider), "rider-name"],
-        [formatTimeGap(entry.gapS, { mine: entry.mine }), "gap"],
-      ]),
-    ),
-  );
-}
-
 // ------------------------------------------------------------- training ---
 
 function initTraining({ simulated, setSimPower }) {
@@ -4120,19 +4075,8 @@ function renderWorkoutProgress(time) {
   }
   stats.lastT = time;
 
-  if (app.layout === "training") {
-    drawWorkout($("workout-chart"), { workout, elapsedS: state.elapsedS, colors: themeColors() });
-  }
-  const total = state.elapsedS + state.remainingS;
-  const next = workout.segments[state.index + 1];
-  const nextWatts = next ? Math.round(((next.from + next.to) / 2) * (app.training.player?.ftp ?? app.profile.ftp) * app.training.intensity) : 0;
-  $("workout-block").textContent = t("training.block", { n: state.index + 1, total: workout.segments.length, label: segmentLabel(state.segment.label) }) + (paused ? t("training.paused") : "");
-  $("workout-next").textContent = next ? t("training.next", { label: segmentLabel(next.label), time: formatDuration(next.durationS), watts: nextWatts }) : t("training.lastBlock");
-  $("workout-block-time").textContent = formatDuration(state.segmentRemainingS);
-  $("workout-elapsed").textContent = formatDuration(state.elapsedS);
-  $("workout-remaining").textContent = formatDuration(state.remainingS);
-  $("workout-avg").textContent = stats.seconds > 0 ? `${Math.round(stats.joules / stats.seconds)} W` : "– W";
-  $("workout-progress").style.width = `${total > 0 ? ((state.elapsedS / total) * 100).toFixed(1) : 0}%`;
+  const avgW = stats.seconds > 0 ? stats.joules / stats.seconds : null;
+  app.rideHud.renderWorkout({ workout, state, ftp: app.training.player?.ftp ?? app.profile.ftp, intensity: app.training.intensity, avgW, paused, layout: app.layout, colors: themeColors() });
 }
 
 // ---------------------------------------------------------------- views ---
@@ -4482,17 +4426,7 @@ function updatePanels() {
 
   app.standing = raceStanding(race, app.state.riders, app.riderId, app.route.length);
   updateLayout();
-  renderRaceLists(app.layout === "race" ? app.standing : null);
-  $("race-groups-panel").hidden = !app.standing;
-  const hud = app.hud;
-  const standing = app.standing;
-  hud.set("lap-info", status);
-  hud.set("position", standing ? formatPosition(standing.position, standing.total) : "–");
-  hud.set("lap", standing ? `${standing.lap}/${standing.laps}` : "–");
-  hud.set("to-go", standing ? formatLength(standing.toGoM) : "–");
-  hud.set("race-caption", raceCaption(race, standing, status, standing ? formatLength(standing.toGoM) : "–"));
-  // The progress bar only while I race; otherwise the caption alone, centred in its box.
-  $("race-timeline").hidden = !standing;
+  app.rideHud.renderRace({ race, standing: app.standing, status, layout: app.layout });
 }
 
 /**
@@ -4581,46 +4515,20 @@ function frame() {
     for (const callback of app.sceneRequests.splice(0)) callback(scene);
   }
 
-  // Only the canvases of the visible layout are drawn.
-  const layout = app.layout;
-  if (layout === "broadcast") {
-    drawProfile($("profile"), { route: app.route, riders, myId: app.riderId, colors });
-    drawMinimap($("minimap"), { route: app.route, riders, myId: app.riderId, colors });
-  } else if (layout === "cockpit" && me) {
-    drawUpcoming($("upcoming"), { route: app.route, distance: me.distance, ahead: 2000, colors });
-  } else if (layout === "race" && app.standing) {
-    drawRaceTimeline($("race-timeline"), { standing: app.standing, myId: app.riderId, colors });
-  }
-
   // A finished ride's workout stands still: its end would send the trainer a new target.
   if (!app.finished) renderWorkoutProgress(time);
   const target = app.training.targetWatts();
   const { power, cadence, heartRate } = app.session.latest;
-  const watts = Math.round(power || 0);
-  const hud = app.hud;
-  hud.set("power", watts);
-  hud.set("wkg", formatWkg(power || 0, app.profile.weightKg));
-  hud.set("zone", `Z${Math.max(1, powerZone(power || 0, app.profile.ftp))}`);
-  hud.set("target", target === null ? "–" : target);
-  hud.set("target-suffix", target === null ? "" : t("hud.target", { watts: target }));
-  hud.set("cadence", Number.isFinite(cadence) ? Math.round(cadence) : "–");
-  hud.set("hr", Number.isFinite(heartRate) ? Math.round(heartRate) : "–");
-  hud.set("speed", formatSpeed(me?.speed ?? 0));
-  hud.set("grade", `${me ? formatGrade(app.route.gradeAt(me.distance)) : formatGrade(0)} %`);
-  hud.set("distance", formatDistance(app.rideDistance));
+  const layout = app.layout;
   // The ride time stands still while paused.
   const clock = app.pausedFrom ?? time;
-  hud.set("avg-speed", averageSpeed(app.rideDistance, clock - app.rideStartedAt));
-  hud.set("time", formatDuration(clock - app.rideStartedAt));
-  hud.set("intensity", `${Math.round(app.training.intensity * 100)} %`);
-  if (layout === "cockpit") renderGauge(power || 0, target);
-  const trainingPower = $("training-power");
-  const onTarget = target !== null && Math.abs(watts - target) <= Math.max(10, target * 0.05);
-  trainingPower.classList.toggle("on-target", onTarget);
-  trainingPower.classList.toggle("off-target", target !== null && !onTarget);
+  app.rideHud.render(
+    { power, cadence, heartRate, me, route: app.route, rideDistanceM: app.rideDistance, elapsedS: clock - app.rideStartedAt, target, intensity: app.training.intensity, weightKg: app.profile.weightKg, ftp: app.profile.ftp },
+    { layout, riders, myId: app.riderId, standing: app.standing, colors },
+  );
+  const hud = app.hud;
 
   const marker = me ? nextMarker(app.route, me.distance, 3000) : null;
-  hud.set("next-marker", markerText(marker));
   const banner = $("marker-banner");
   const showBanner = layout === "race" && marker !== null && (marker.inside || marker.inM <= 1000);
   banner.hidden = !showBanner;

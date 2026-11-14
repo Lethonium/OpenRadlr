@@ -245,3 +245,5 @@ description.
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
 - The app icon is scaled up from the 512 px maskable icon, the largest master
   in the repo. A 1024 px original would look sharper on the App Store.
+
+For a Meta Quest display see [VR display](vr.md).

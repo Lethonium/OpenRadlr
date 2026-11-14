@@ -25,6 +25,7 @@ OPENRADLR_MAX_PLAYERS=50                   # trainer riders at the same time, al
 OPENRADLR_MAX_PADDLE_PLAYERS=20            # phone riders, in seats of their own
 OPENRADLR_MAX_VISIBLE_RIDERS=200           # riders per state message, humans first
 OPENRADLR_ALLOW_SIMULATED_TRAINER=false    # only real trainers on the start screen
+OPENRADLR_XR_PREVIEW=false                 # no headset-free stereo preview of the VR page
 OPENRADLR_ALLOW_PADDLE_MODE=true           # phone paddles (marked 📱, no Strava, no ride files)
 OPENRADLR_PRIVACY_URL=https://ride.example.org/privacy/  # your privacy policy, linked in the start menu
 OPENRADLR_ANALYTICS_DOMAIN=              # optional Plausible analytics, off when empty (see .env.example)

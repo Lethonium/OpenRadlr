@@ -329,6 +329,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         strava,
         allow_simulated_trainer: config.allow_simulated_trainer,
         allow_paddle_mode: config.allow_paddle_mode,
+        xr_preview: config.xr_preview,
         stats: stats.clone(),
         afk: AfkStats::default(),
         pair_codes: crate::pair_codes::PairCodes::new(),
