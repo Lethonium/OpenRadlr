@@ -1784,7 +1784,7 @@ async function joinRide(restored = null) {
         if (app.view3d) app.view3d.network = app.network;
       })
       .catch(() => {});
-    app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route) });
+    app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
   }
 
   const connection = new GameConnection({ url: defaultServerUrl() });
@@ -1865,7 +1865,7 @@ async function joinWorkout(profile, errors) {
   app.route = new RouteGeometry(app.routeFile);
   app.rideRoute = app.route;
   app.routes = new Map([[app.route.id, app.route]]);
-  app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route) });
+  app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
 
   const connection = new GameConnection({ url: defaultServerUrl() });
   wireConnection(connection);
@@ -2390,6 +2390,9 @@ function startWorkout() {
   };
   requestAnimationFrame(loop);
 }
+
+/** The smoother's lane delay: none for my own rider, so steering answers at once (#81). */
+const ownLaneNow = (rider) => (rider.id === app.riderId ? 0 : 0.25);
 
 /** Carries out what the workout session decided. */
 function runWorkoutActions(actions) {
@@ -3735,7 +3738,7 @@ function reconnected({ connection, riderId }, lost) {
     eventStartedAt: null,
     eventResults: null,
   });
-  if (!app.studio) app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route) });
+  if (!app.studio) app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
   notify(app.workout ? t("ride.backAtGym") : t("ride.backOnRoad", { ended }));
 }
 
