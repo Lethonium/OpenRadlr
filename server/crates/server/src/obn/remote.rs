@@ -74,6 +74,11 @@ impl Remotes {
         }
     }
 
+    /// The shared route these riders are on.
+    pub fn route(&self) -> &SharedRoute {
+        &self.route
+    }
+
     pub fn len(&self) -> usize {
         self.riders.len()
     }

@@ -207,7 +207,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             tracing::info!(route = %obn_route.id, "sharing the route through OpenBikeNet");
             spawn_link(
                 url.clone(),
-                obn_route,
+                vec![obn_route],
                 config.obn_backoff_unit,
                 config.obn_heartbeat,
                 receiver,

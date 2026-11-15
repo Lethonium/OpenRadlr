@@ -383,6 +383,7 @@ impl GameCore {
             .filter(|r| r.route == obn.route && r.off_route.is_none() && !r.is_bot() && !r.workout)
             .map(|r| LocalRider {
                 id: r.id,
+                route: obn.remotes.route().id.clone(),
                 name: r.name.clone(),
                 position: r.position,
                 speed: r.speed,

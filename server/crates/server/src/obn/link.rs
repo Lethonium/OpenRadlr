@@ -54,22 +54,23 @@ pub fn backoff(attempt: u32, unit: Duration) -> Duration {
     unit.saturating_mul(factor.min(MAX_BACKOFF_UNITS))
 }
 
-/// Starts the link to `url` for the shared `route`. It ends when the game stops.
+/// Starts the link to `url` for the shared `routes`, all on one connection. It ends
+/// when the game stops.
 pub fn spawn_link(
     url: String,
-    route: SharedRoute,
+    routes: Vec<SharedRoute>,
     backoff_unit: Duration,
     heartbeat: Heartbeat,
     mut frames: mpsc::Receiver<Vec<LocalRider>>,
     game: GameHandle,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let mut outbox = Outbox::new(route.clone());
+        let mut outbox = Outbox::new(routes);
         let mut attempt = 0u32;
         loop {
             // Frames queued while disconnected are stale: the next one tells the whole story.
             while frames.try_recv().is_ok() {}
-            let end = session(&url, &route.id, heartbeat, &mut outbox, &mut frames, &game).await;
+            let end = session(&url, heartbeat, &mut outbox, &mut frames, &game).await;
             if end.stopped {
                 return;
             }
@@ -122,7 +123,6 @@ fn text(message: &AppMessage) -> Message {
 /// One connection, from connecting to the first failure.
 async fn session(
     url: &str,
-    route: &str,
     heartbeat: Heartbeat,
     outbox: &mut Outbox,
     frames: &mut mpsc::Receiver<Vec<LocalRider>>,
@@ -146,11 +146,12 @@ async fn session(
     };
     tracing::info!("OpenBikeNet: connected");
     let (mut sink, mut stream) = socket.split();
-    let subscribe = AppMessage::Subscribe {
-        route: route.to_owned(),
+    let subscribes = outbox.routes().iter().map(|route| AppMessage::Subscribe {
+        route: route.id.clone(),
         room: OBN_ROOM.into(),
-    };
-    for message in [hello(), subscribe] {
+    });
+    let opening: Vec<AppMessage> = std::iter::once(hello()).chain(subscribes).collect();
+    for message in opening {
         if sink.send(text(&message)).await.is_err() {
             tracing::info!("OpenBikeNet: connection dropped");
             return end;
