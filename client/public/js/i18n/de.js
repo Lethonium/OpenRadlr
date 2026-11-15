@@ -232,6 +232,8 @@ export default {
   "route.cape-loop.description": "Entlang der Strände an der Südküste, über die niedrigen Klippen des südöstlichen Kaps und zurück durch das Tal und die westlichen Buchten.",
   "route.col-de-la-forge.description": "Über die Hügel zur Forge Hut auf dem Pass, dann eine lange, schnelle Abfahrt zurück ins Tal.",
   "route.forge-circuit.description": "Von der Forge Hut die Westseite hinunter, zurück über die Höhenstraße und wieder hinauf zum Pass.",
+  "route.herne-hill.description": "Die 450-m-Freiluftbahn des Herne Hill Velodrome in London, gegen den Uhrzeigersinn wie im Rennen; geteilt mit Fahrern aus anderen Apps, wenn dieser Server mit OpenBikeNet verbunden ist.",
+  "route.herne-hill-clockwise.description": "Herne Hill Velodrome andersherum, von derselben Start-/Ziellinie aus; geteilt mit Fahrern aus anderen Apps, wenn dieser Server mit OpenBikeNet verbunden ist.",
   "route.island-tour.description": "Der lange Weg rundherum: das Flusstal, der Pass von Westen, die Höhenstraße und zurück durch das westliche Tal.",
   "route.lanzarote-lava-180.description": "Eine 180-km-Runde um Lanzarote mit etwa 2.500 Höhenmetern, angelehnt an die Raddistanz des berühmten Langdistanz-Triathlons der Insel. Streckenreihenfolge unbestätigt: aus öffentlichen Führern zusammengestellt, wartet auf die Prüfung durch jemanden, der sie kennt.",
   "route.riverside-flats.description": "Schnell und flach das Flusstal entlang, wie gemacht fürs Windschattenfahren und für Sprints.",

@@ -213,10 +213,10 @@ async fn api_info_marks_the_route_shared() {
     let linked = serve(config(Some(url))).await;
     let info: Value = serde_json::from_str(&http_get(linked, "/api/info").await).unwrap();
     for route in info["routes"].as_array().unwrap() {
-        if route["id"] == "velodrome" {
-            assert_eq!(route["shared"], true);
+        if ["velodrome", "herne-hill", "herne-hill-clockwise"].contains(&route["id"].as_str().unwrap()) {
+            assert_eq!(route["shared"], true, "{route}");
         } else {
-            assert!(route.get("shared").is_none(), "only the velodrome is shared: {route}");
+            assert!(route.get("shared").is_none(), "only the tracks are shared: {route}");
         }
     }
 

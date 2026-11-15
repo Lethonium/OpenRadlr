@@ -40,6 +40,18 @@ ADR 0020 shares exactly one route, the velodrome, a world of its own:
   other routes are today. `route_riders.remote` counts those on the viewer's own route.
 - **Herne Hill's two directions are two OpenRadlr routes** on the same oval, the points reversed.
 
+## Place on the island
+
+- **Off the road network for now, with room for a junction later.** The tracks are plain routes
+  with `map` `valley`, not network edges, so bots and junction turns stay as they are. But each
+  oval stands on flat ground with its home straight, the one with the start/finish line,
+  facing a road 35–50 m away, at about the road's height. A short connector road from that
+  straight to the road can later be added as an edge with a junction at both ends, without
+  moving the track (the tracks would then become network edges too).
+- **Both on the flat strip south of `valley-west`** (about 35 m above sea level, more than 250 m
+  from the nearest café): Herne Hill's centre near (−480, −150), the 250 m oval's near
+  (−270, −120), long axes east–west, the north straight facing the road.
+
 ## Not in the server part
 
 The route files for Herne Hill and the place of the tracks on the island (with protocol#6

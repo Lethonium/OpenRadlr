@@ -19,5 +19,5 @@
 - [x] **3. One link for several routes** — `LocalRider.route`; `Outbox` keyed by rider with its route: leave and join on a change of route, leaves before joins; `spawn_link` takes the routes and their lengths and subscribes to each. Tests in `outbox.rs` and `tests/openbikenet.rs`.
 - [x] **4. Several shared routes in a world, seen by everyone** — `GameCore::with_openbikenet` takes the list; one `Remotes` per route with its own id range; frames carry every shared route's humans; `with_remotes` adds riders of other apps for every viewer, nearest first. `app.rs` wires all shared routes of a world to one link.
 - [x] **5. Docs for the server part** — ADR 0027 (amends 0020), `docs/routes.md` (`openbikenet_length`, several shared routes), `docs/architecture.md` if it describes the link.
-- [ ] **6. Herne Hill routes** (after protocol#6) — generator for the 450 m oval both ways, route files with `map` `valley`; the 250 m velodrome moves onto the island.
+- [x] **6. Herne Hill routes** (after protocol#6) — generator for the 450 m oval both ways, route files with `map` `valley`; the 250 m velodrome moves onto the island.
 - [ ] **7. Client** — tracks drawn on the island, start menu (one Herne Hill entry with a direction choice), i18n, screenshots.

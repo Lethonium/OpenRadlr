@@ -3096,6 +3096,11 @@ mod tests {
     /// A 1 km square a→b→c→d with a diagonal b→d. Route 0 rides the square,
     /// route 1 the triangle a→b→d→a. The diagonal climbs 14 m.
     pub(super) fn junction_world() -> World {
+        junction_world_with(vec![])
+    }
+
+    /// [`junction_world`] with `extra` routes after the square and the triangle.
+    fn junction_world_with(extra: Vec<Route>) -> World {
         use crate::network::{EdgeSpec, NodeSpec};
         let node = |id: &str, x: f64, y: f64| NodeSpec { id: id.into(), x, y };
         let edge = |id: &str, from: &str, to: &str, a: (f64, f64, f64), b: (f64, f64, f64)| EdgeSpec {
@@ -3162,7 +3167,7 @@ mod tests {
             ],
         );
         World::with_network(
-            vec![square, triangle],
+            [vec![square, triangle], extra].concat(),
             Some(network),
             SimConfig {
                 target_riders: 0,
@@ -3198,6 +3203,36 @@ mod tests {
         // Once the grade's window lies on it.
         cruise(&mut world, me, 4.0);
         assert!(world.grade_for(me).unwrap() > 0.9, "the diagonal climbs");
+    }
+
+    #[test]
+    fn a_track_off_the_network_is_ridden_round_and_round_without_turns() {
+        // An oval with no walk, like the velodromes beside the island's roads.
+        let track = Route::new(RouteSpec {
+            id: "track".into(),
+            name: "track".into(),
+            lanes: 4,
+            seed: 1,
+            points: vec![
+                Point::new(2000.0, 0.0, 0.0),
+                Point::new(2100.0, 0.0, 0.0),
+                Point::new(2100.0, 50.0, 0.0),
+                Point::new(2000.0, 50.0, 0.0),
+            ],
+            markers: vec![],
+            walk: vec![],
+        })
+        .unwrap();
+        let mut world = junction_world_with(vec![track]);
+        let me = world.join_human_on(2, "Me", 75.0).unwrap();
+        place(&mut world, me, 290.0, 10.0);
+        assert_eq!(world.next_road_of(world.rider(me).unwrap()), None);
+        assert_eq!(world.choose_turn(me, Some("ab")), Err(WorldError::NoSuchTurn));
+        cruise(&mut world, me, 2.0);
+        let rider = world.rider(me).unwrap();
+        assert_eq!((rider.route, rider.off_route), (2, None));
+        assert!(rider.position < 30.0, "round the lap: {}", rider.position);
+        assert_eq!(world.grade_for(me), Some(0.0));
     }
 
     #[test]

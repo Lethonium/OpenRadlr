@@ -232,6 +232,8 @@ export default {
   "route.cape-loop.description": "Along the beaches of the south coast, over the low cliffs of the south-eastern cape and back by the valley and the western bays.",
   "route.col-de-la-forge.description": "Over the hills to the Forge Hut on the col, then a long, fast descent back to the valley.",
   "route.forge-circuit.description": "From the Forge Hut down the west side, back along the high road and up to the col again.",
+  "route.herne-hill.description": "The 450 m outdoor track of Herne Hill Velodrome in London, ridden anticlockwise as in racing; shared with riders from other apps when this server is connected to OpenBikeNet.",
+  "route.herne-hill-clockwise.description": "Herne Hill Velodrome the other way round, from the same start/finish line; shared with riders from other apps when this server is connected to OpenBikeNet.",
   "route.island-tour.description": "The long way round: the river valley, the col from the west, the high road and back down the west valley.",
   "route.lanzarote-lava-180.description": "A 180 km loop around Lanzarote with about 2,500 m of climbing, in the spirit of the island's famous long-distance triathlon bike leg. Course order unconfirmed: built from public guides, pending a check by someone who knows it.",
   "route.riverside-flats.description": "Fast and flat down the river valley, made for drafting and sprints.",
