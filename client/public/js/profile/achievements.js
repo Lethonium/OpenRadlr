@@ -52,7 +52,8 @@ export function achievementFacts({ records = [], summits = [], lemons = 0, route
 }
 
 const anyRide = (test) => (f) => f.rides.some(test);
-const def = (id, check, secret = false) => Object.freeze({ id, secret, check });
+// `finalOnly`: decided by the saved ride only, never live (a ride's duration still grows).
+const def = (id, check, secret = false, finalOnly = false) => Object.freeze({ id, secret, finalOnly, check });
 
 export const ACHIEVEMENTS = Object.freeze([
   def("firstRide", (f) => f.rides.length > 0),
@@ -76,7 +77,7 @@ export const ACHIEVEMENTS = Object.freeze([
   def("watts1000", anyRide((r) => r.measured === true && num(r.maxPower) >= 1000)),
   def("nightOwl", anyRide((r) => hour(r) >= 22 || hour(r) < 4), true),
   def("earlyBird", anyRide((r) => hour(r) >= 4 && hour(r) < 6), true),
-  def("lunchBreak", anyRide((r) => local(r).getDay() % 6 !== 0 && hour(r) === 12 && num(r.durationS) >= 900 && num(r.durationS) < 3600), true),
+  def("lunchBreak", anyRide((r) => local(r).getDay() % 6 !== 0 && hour(r) === 12 && num(r.durationS) >= 900 && num(r.durationS) < 3600), true, true),
   def("cookieBurner", anyRide((r) => onDay(r, 11, [24, 25, 26])), true),
   def("newYear", anyRide((r) => onDay(r, 0, [1])), true),
   def("thumbWarrior", anyRide((r) => r.device === "paddle"), true),
@@ -115,26 +116,36 @@ export function saveAchievements(storage, state) {
 }
 
 /**
- * For each id that holds now, when it was earned: the start of the first record after
- * which it holds (summits and lemons carry no dates, so the scan leaves them out). Ones
- * only summits or lemons complete are dated by the newest record, or `nowMs` with none.
+ * For each of `ids` (default: those that hold now), when it was earned: the start of the
+ * first record after which it holds (summits and lemons carry no dates, so the search
+ * leaves them out). Ones only summits or lemons complete are dated by the newest record,
+ * or `nowMs` with none. Every check only grows with more records, so a binary search
+ * over the prefixes finds that record.
  */
-export function backdate(sources, nowMs) {
+export function backdate(sources, nowMs, ids = earnedNow(sources)) {
   const { rides, workouts } = achievementFacts(sources);
   const records = [...rides, ...workouts].sort((a, b) => a.startedAt - b.startedAt);
-  const pending = new Set(earnedNow(sources));
-  const dates = {};
-  for (let i = 0; i < records.length && pending.size > 0; i++) {
-    const facts = achievementFacts({ routes: sources.routes, records: records.slice(0, i + 1) });
-    for (const a of ACHIEVEMENTS) {
-      if (pending.has(a.id) && a.check(facts)) {
-        dates[a.id] = records[i].startedAt;
-        pending.delete(a.id);
-      }
-    }
-  }
+  const prefixes = new Map();
+  const factsOf = (n) => {
+    if (!prefixes.has(n)) prefixes.set(n, achievementFacts({ routes: sources.routes, records: records.slice(0, n) }));
+    return prefixes.get(n);
+  };
   const fallback = records.at(-1)?.startedAt ?? nowMs;
-  for (const id of pending) dates[id] = fallback;
+  const dates = {};
+  for (const a of ACHIEVEMENTS.filter((a) => ids.includes(a.id))) {
+    if (!a.check(factsOf(records.length))) {
+      dates[a.id] = fallback;
+      continue;
+    }
+    let low = 1;
+    let high = records.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (a.check(factsOf(mid))) high = mid;
+      else low = mid + 1;
+    }
+    dates[a.id] = records[low - 1].startedAt;
+  }
   return dates;
 }
 
@@ -142,7 +153,7 @@ export function backdate(sources, nowMs) {
 export function reconcile(state, sources, nowMs) {
   const fresh = earnedNow(sources).filter((id) => !(id in state.earned));
   if (fresh.length === 0) return state;
-  const dates = backdate(sources, nowMs);
+  const dates = backdate(sources, nowMs, fresh);
   return { earned: { ...state.earned, ...Object.fromEntries(fresh.map((id) => [id, dates[id]])) } };
 }
 
@@ -152,6 +163,8 @@ export function latch(state, ids, nowMs) {
   if (fresh.length === 0) return state;
   return { earned: { ...state.earned, ...Object.fromEntries(fresh.map((id) => [id, nowMs])) } };
 }
+
+const FINAL_ONLY = new Set(ACHIEVEMENTS.filter((a) => a.finalOnly).map((a) => a.id));
 
 /**
  * Watches a ride for achievements earned on it. Until the kept history is known it
@@ -180,7 +193,7 @@ export class AchievementWatch {
   /** The ids `liveRecord` newly earns, latched with `nowMs`; `extra` replaces the history's summits or lemons. */
   update(liveRecord, nowMs, extra = {}) {
     if (!this.#sources) return [];
-    const fresh = earnedNow({ ...this.#sources, ...extra, records: [...this.#sources.records, liveRecord] }).filter((id) => !(id in this.#state.earned));
+    const fresh = earnedNow({ ...this.#sources, ...extra, records: [...this.#sources.records, liveRecord] }).filter((id) => !(id in this.#state.earned) && !FINAL_ONLY.has(id));
     if (fresh.length === 0) return [];
     this.#state = latch(this.#state, fresh, nowMs);
     saveAchievements(this.#storage, this.#state);

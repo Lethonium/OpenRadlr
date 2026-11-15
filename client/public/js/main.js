@@ -3431,7 +3431,8 @@ function checkAchievements(summary) {
     device: deviceKind(app.trainer),
     measured: hasRealPowerSource(app.trainer),
     ftp: app.profile.ftp ?? null,
-    test: app.ftpTest?.testFlag ?? null,
+    // Only once the test has a result: not while the rider is still in the ramp.
+    test: app.ftpTest?.result?.ftp ? app.ftpTest.testFlag : null,
   };
   const extra = { summits: [...app.milestones.summits] };
   if (app.lemonHunt) extra.lemons = app.lemonHunt.total;

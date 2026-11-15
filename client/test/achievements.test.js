@@ -216,3 +216,19 @@ test("a refused save still shows the banner only once", () => {
   assert.deepEqual(watch.update(live(), NOW), ["firstRide"]);
   assert.deepEqual(watch.update(live(), NOW + 2000), []);
 });
+
+test("lunchBreak is never earned live: the ride may still run past the hour", () => {
+  const watch = watchWith([ride()]);
+  assert.deepEqual(watch.update(live({ startedAt: at(2026, 11, 10, 12, 10), durationS: 900 }), NOW), []);
+});
+
+test("backdate dates only the ids it is asked about", () => {
+  assert.deepEqual(Object.keys(backdate({ records: history }, NOW, ["century"])), ["century"]);
+});
+
+test("backdate on a long history stays well under a frame budget per ride", () => {
+  const records = Array.from({ length: 2000 }, (_, i) => ride({ startedAt: BASE + i * DAY, routeId: `r${i % 50}` }));
+  const start = performance.now();
+  backdate({ records, lemons: 10, summits: [] }, NOW);
+  assert.ok(performance.now() - start < 250, "2,000 rides backdate in under 250 ms");
+});
