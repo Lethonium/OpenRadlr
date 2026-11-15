@@ -17,6 +17,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftp
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
+import { achievementCards } from "./view/achievementsView.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
 import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
@@ -2855,8 +2856,11 @@ function openProfile(page) {
 
 /** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
 async function loadProfile(keep) {
-  const [records, bests, items] = await Promise.all([app.history.list(), app.ghosts.all(), inventory(dataSources())]);
-  app.profileData = { records, bests, items };
+  const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
+  // Achievements are latched before the data page counts them.
+  const achievements = reconcileAchievements(records);
+  const items = await inventory(dataSources());
+  app.profileData = { records, bests, items, achievements };
   app.goalData = { records, bests };
   loadGoalsState();
   if (keep !== "rides") app.profileRidesShown = RIDES_PAGE_SIZE;
@@ -2870,6 +2874,7 @@ function renderProfile() {
   if (!app.profileData) return;
   renderProfileGoals();
   renderProfileOverview();
+  renderProfileAchievements();
   renderProfileFtp();
   renderProfileRides();
   renderProfileData();
@@ -2889,6 +2894,25 @@ function renderProfileOverview() {
   $("profile-totals").replaceChildren(...lines.totals.flatMap(({ label, value }) => [textElement("dt", label), textElement("dd", value)]));
   $("profile-bests").replaceChildren(...lines.bests.map((line) => textElement("li", line)));
   $("profile-bests-none").hidden = lines.bests.length > 0;
+}
+
+function renderProfileAchievements() {
+  const { count, cards } = achievementCards(app.profileData.achievements, { locale: getLocale() });
+  $("profile-achievements-count").textContent = count;
+  $("profile-achievements").replaceChildren(
+    ...cards.map((card) => {
+      const item = document.createElement("li");
+      item.className = "achievement-card";
+      item.dataset.state = card.state;
+      const badge = textElement("span", "");
+      badge.className = "achievement-badge";
+      badge.setAttribute("aria-hidden", "true");
+      item.append(badge, textElement("strong", card.name));
+      if (card.hint) item.append(textElement("span", card.hint));
+      if (card.date) item.append(textElement("small", card.date));
+      return item;
+    }),
+  );
 }
 
 /** FTP over time: set and estimated, or a sentence while there is too little to chart. */

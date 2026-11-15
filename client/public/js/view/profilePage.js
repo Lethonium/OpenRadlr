@@ -9,7 +9,7 @@ import { formatDistanceWithUnit, formatDuration, formatElevation } from "../util
 import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
-export const PROFILE_PAGES = ["goals", "overview", "rides", "data"];
+export const PROFILE_PAGES = ["goals", "overview", "achievements", "rides", "data"];
 export const RIDES_PAGE_SIZE = 20;
 
 const CURVE_KEYS = [5, 60, 300, 1200];

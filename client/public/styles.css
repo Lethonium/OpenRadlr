@@ -3260,6 +3260,54 @@ body.riding {
   list-style: none;
 }
 
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achievement-card {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.achievement-card .achievement-badge {
+  margin: 0 0 4px;
+  font-size: 2rem;
+}
+
+.achievement-card[data-state="earned"] {
+  border-color: #f0a400;
+  background: rgba(240, 164, 0, 0.1);
+}
+
+.achievement-card:not([data-state="earned"]) {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.achievement-card:not([data-state="earned"]) .achievement-badge {
+  animation: none;
+}
+
+.achievement-card[data-state="secret"] .achievement-badge::after {
+  content: "?";
+}
+
+.achievement-card small {
+  opacity: 0.75;
+}
+
 .delete-confirm {
   position: fixed;
   inset: 0;
