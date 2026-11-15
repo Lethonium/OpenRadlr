@@ -16,6 +16,7 @@ import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
+import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
 import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
@@ -1988,6 +1989,7 @@ function endRide() {
     lemonTotal: 0,
     ghostLap: null,
     milestones: null,
+    achievements: null,
     rideClimbedM: 0,
     milestoneReadAt: 0,
     milestoneTimer: (clearTimeout(app.milestoneTimer), ($("milestone-banner").hidden = true), null),
@@ -2773,10 +2775,35 @@ function startMilestones() {
   }
   const watch = new MilestoneWatch({ totals: null, unitM: unitMetres(), summits: new Set(Array.isArray(summits) ? summits : []) });
   app.milestones = watch;
+  const achievements = new AchievementWatch({ storage: browserStorage(), nowMs: Date.now() });
+  app.achievements = achievements;
   const ride = app.ride;
   app.history.list().then((records) => {
-    if (app.milestones === watch && app.ride === ride) watch.totals = lifetimeTotals(records);
+    if (app.milestones !== watch || app.ride !== ride) return;
+    watch.totals = lifetimeTotals(records);
+    achievements.setHistory(achievementSources(records));
   });
+}
+
+/** What achievements are worked out from: the kept records, summits, lemons and the server's routes (null until known). */
+function achievementSources(records) {
+  let summits;
+  try {
+    summits = JSON.parse(readSetting(SUMMITS_KEY) ?? "[]");
+  } catch {
+    summits = [];
+  }
+  const routes = app.info ? routesOf(app.info).filter((route) => route.kind !== "studio" && route.kind !== "workout") : null;
+  return { records, summits: Array.isArray(summits) ? summits : [], lemons: Number.parseInt(readSetting(LEMONS_KEY) ?? "", 10) || 0, routes };
+}
+
+/** Latches what the kept rides earned, silently (backdated). */
+function reconcileAchievements(records) {
+  const storage = browserStorage();
+  const state = loadAchievements(storage);
+  const next = reconcile(state, achievementSources(records), Date.now());
+  if (next !== state) saveAchievements(storage, next);
+  return next;
 }
 
 // -------------------------------------------------------------- profile ---
@@ -3356,15 +3383,35 @@ function textElement(tag, text) {
 function checkMilestones(me, time) {
   if (!app.milestones || !app.recorder) return;
   // The ride's climbing comes from the recorder; reading it every frame would be wasteful.
+  let earned = [];
   if (time - app.milestoneReadAt >= 2) {
     app.milestoneReadAt = time;
-    app.rideClimbedM = app.recorder.summary().elevationGainM;
+    const summary = app.recorder.summary();
+    app.rideClimbedM = summary.elevationGainM;
+    earned = checkAchievements(summary);
   }
   const onRoute = me.route !== OFF_ROUTE_ID;
   const reached = app.milestones.update({ rideDistanceM: app.rideDistance, rideClimbedM: app.rideClimbedM, route: onRoute ? app.route : null, routeM: onRoute ? me.distance : null });
-  if (!reached.length) return;
   if (reached.some((m) => m.kind === "summit")) writeSetting(SUMMITS_KEY, JSON.stringify([...app.milestones.summits]));
-  showMilestone(reached.map(milestoneText).join(" · "));
+  if (reached.length || earned.length) showMilestone(reached.map(milestoneText).join(" · "), earned);
+}
+
+/** The achievements the ride so far newly earns. */
+function checkAchievements(summary) {
+  const first = app.recorder.samples[0];
+  if (!app.achievements || !first) return [];
+  const live = {
+    ...summary,
+    startedAt: first.t,
+    routeId: app.studio ? null : app.rideRoute.id,
+    device: deviceKind(app.trainer),
+    measured: hasRealPowerSource(app.trainer),
+    ftp: app.profile.ftp ?? null,
+    test: app.ftpTest?.testFlag ?? null,
+  };
+  const extra = { summits: [...app.milestones.summits] };
+  if (app.lemonHunt) extra.lemons = app.lemonHunt.total;
+  return app.achievements.update(live, Date.now(), extra);
 }
 
 function milestoneText(milestone) {
@@ -3373,10 +3420,17 @@ function milestoneText(milestone) {
   return t("milestone.summit", { route: milestone.route });
 }
 
-/** The banner across the top for a few seconds. */
-function showMilestone(text) {
+/** The banner across the top for a few seconds; earned achievements come after the milestones, each with a badge. */
+function showMilestone(text, achievementIds = []) {
   const banner = $("milestone-banner");
   banner.textContent = text;
+  for (const id of achievementIds) {
+    if (banner.childNodes.length) banner.append(" · ");
+    const badge = textElement("span", "");
+    badge.className = "achievement-badge";
+    badge.setAttribute("aria-hidden", "true");
+    banner.append(badge, t("achievement.banner", { name: t(`achievement.${id}.name`) }));
+  }
   banner.hidden = false;
   banner.classList.remove("show");
   void banner.offsetWidth;
@@ -3528,6 +3582,7 @@ function saveFinishedRide() {
     device: deviceKind(app.trainer),
   });
   app.historySave = app.history.save(record);
+  app.historySave.then(() => app.history.list()).then(reconcileAchievements).catch(() => {});
   return app.historySave.then(offerFtp).catch((error) => console.error("ride history:", error));
 }
 

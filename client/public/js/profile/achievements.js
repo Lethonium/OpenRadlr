@@ -152,3 +152,38 @@ export function latch(state, ids, nowMs) {
   if (fresh.length === 0) return state;
   return { earned: { ...state.earned, ...Object.fromEntries(fresh.map((id) => [id, nowMs])) } };
 }
+
+/**
+ * Watches a ride for achievements earned on it. Until the kept history is known it
+ * reports nothing, so a long-time rider never sees "first ride" while it loads.
+ */
+export class AchievementWatch {
+  #storage;
+  #nowMs;
+  #state;
+  #sources = null;
+
+  constructor({ storage, nowMs }) {
+    this.#storage = storage;
+    this.#nowMs = nowMs;
+    this.#state = loadAchievements(storage);
+  }
+
+  /** The kept records, summits, lemons and routes; what they already earned is latched silently. */
+  setHistory(sources) {
+    this.#sources = sources;
+    const next = reconcile(this.#state, sources, this.#nowMs);
+    if (next !== this.#state) saveAchievements(this.#storage, next);
+    this.#state = next;
+  }
+
+  /** The ids `liveRecord` newly earns, latched with `nowMs`; `extra` replaces the history's summits or lemons. */
+  update(liveRecord, nowMs, extra = {}) {
+    if (!this.#sources) return [];
+    const fresh = earnedNow({ ...this.#sources, ...extra, records: [...this.#sources.records, liveRecord] }).filter((id) => !(id in this.#state.earned));
+    if (fresh.length === 0) return [];
+    this.#state = latch(this.#state, fresh, nowMs);
+    saveAchievements(this.#storage, this.#state);
+    return fresh;
+  }
+}

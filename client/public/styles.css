@@ -1934,8 +1934,41 @@ body.riding {
   }
 }
 
+/* An achievement on the banner: a small gold medal that pops once. */
+.achievement-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.35em;
+  vertical-align: -0.15em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff6c2, #f0a400 60%, #b86e00);
+  box-shadow: 0 0 0 2px #1d1d20;
+  animation: achievement-pop 0.6s 0.3s ease-out both;
+}
+
+.achievement-badge::after {
+  content: "★";
+  font-size: 0.7em;
+  color: #fff;
+}
+
+@keyframes achievement-pop {
+  0% {
+    transform: scale(0) rotate(-90deg);
+  }
+  70% {
+    transform: scale(1.35) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .milestone-banner.show {
+  .milestone-banner.show,
+  .achievement-badge {
     animation: none;
   }
 }

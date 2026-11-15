@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
+import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
 
 // Tuesday 10 Nov 2026, 18:00 local: hits none of the time-based ones.
 const at = (y, m, d, h = 18, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -180,4 +180,39 @@ test("reconcile keeps a latch whose ride was deleted", () => {
 });
 test("latch adds new ids with now and keeps old dates", () => {
   assert.deepEqual(latch({ earned: { century: 5 } }, ["century", "tourist"], NOW).earned, { century: 5, tourist: NOW });
+});
+
+const live = (overrides) => ride({ startedAt: NOW, distanceM: 1500, ...overrides });
+const watchWith = (records, storage = memory()) => {
+  const watch = new AchievementWatch({ storage, nowMs: NOW });
+  if (records) watch.setHistory({ records, summits: [], lemons: 0, routes: null });
+  return watch;
+};
+
+test("nothing is newly earned before the history is known", () => assert.deepEqual(watchWith(null).update(live(), NOW), []));
+test("with no rides yet, the first live update earns firstRide", () => assert.deepEqual(watchWith([]).update(live(), NOW), ["firstRide"]));
+test("with rides kept, firstRide is latched silently and never reported", () => {
+  const storage = memory();
+  const watch = watchWith([ride()], storage);
+  assert.equal(loadAchievements(storage).earned.firstRide, BASE);
+  assert.deepEqual(watch.update(live(), NOW), []);
+});
+test("999 km kept plus 1.5 km ridden earns km1000", () => {
+  const watch = watchWith(many(9, { distanceM: 111_000 }));
+  assert.ok(watch.update(live(), NOW + 1).includes("km1000"));
+});
+test("the same achievement is reported once", () => {
+  const watch = watchWith([]);
+  watch.update(live(), NOW);
+  assert.deepEqual(watch.update(live(), NOW + 2000), []);
+});
+test("an earned one is saved with its date", () => {
+  const storage = memory();
+  watchWith([], storage).update(live(), NOW + 5);
+  assert.equal(loadAchievements(storage).earned.firstRide, NOW + 5);
+});
+test("a refused save still shows the banner only once", () => {
+  const watch = watchWith([], refusing());
+  assert.deepEqual(watch.update(live(), NOW), ["firstRide"]);
+  assert.deepEqual(watch.update(live(), NOW + 2000), []);
 });
