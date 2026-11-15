@@ -89,3 +89,66 @@ export function earnedNow(sources) {
   const facts = achievementFacts(sources);
   return ACHIEVEMENTS.filter((a) => a.check(facts)).map((a) => a.id);
 }
+
+export const ACHIEVEMENTS_KEY = "openradlr.achievements";
+const VERSION = 1;
+
+/** The stored earned dates; anything unreadable is empty. Unknown ids are kept. */
+export function loadAchievements(storage) {
+  try {
+    const data = JSON.parse(storage.getItem(ACHIEVEMENTS_KEY) ?? "null");
+    if (!data || data.version !== VERSION || typeof data.earned !== "object" || data.earned === null) return { earned: {} };
+    return { earned: Object.fromEntries(Object.entries(data.earned).filter(([, ms]) => Number.isFinite(ms))) };
+  } catch {
+    return { earned: {} };
+  }
+}
+
+/** False when the storage refuses. */
+export function saveAchievements(storage, state) {
+  try {
+    storage.setItem(ACHIEVEMENTS_KEY, JSON.stringify({ version: VERSION, earned: state.earned }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * For each id that holds now, when it was earned: the start of the first record after
+ * which it holds (summits and lemons carry no dates, so the scan leaves them out). Ones
+ * only summits or lemons complete are dated by the newest record, or `nowMs` with none.
+ */
+export function backdate(sources, nowMs) {
+  const { rides, workouts } = achievementFacts(sources);
+  const records = [...rides, ...workouts].sort((a, b) => a.startedAt - b.startedAt);
+  const pending = new Set(earnedNow(sources));
+  const dates = {};
+  for (let i = 0; i < records.length && pending.size > 0; i++) {
+    const facts = achievementFacts({ routes: sources.routes, records: records.slice(0, i + 1) });
+    for (const a of ACHIEVEMENTS) {
+      if (pending.has(a.id) && a.check(facts)) {
+        dates[a.id] = records[i].startedAt;
+        pending.delete(a.id);
+      }
+    }
+  }
+  const fallback = records.at(-1)?.startedAt ?? nowMs;
+  for (const id of pending) dates[id] = fallback;
+  return dates;
+}
+
+/** Latches what holds and isn't latched yet, with its backdated date; the same state when nothing is new. */
+export function reconcile(state, sources, nowMs) {
+  const fresh = earnedNow(sources).filter((id) => !(id in state.earned));
+  if (fresh.length === 0) return state;
+  const dates = backdate(sources, nowMs);
+  return { earned: { ...state.earned, ...Object.fromEntries(fresh.map((id) => [id, dates[id]])) } };
+}
+
+/** Latches `ids` with `nowMs`, leaving the ones already latched as they are. */
+export function latch(state, ids, nowMs) {
+  const fresh = ids.filter((id) => !(id in state.earned));
+  if (fresh.length === 0) return state;
+  return { earned: { ...state.earned, ...Object.fromEntries(fresh.map((id) => [id, nowMs])) } };
+}

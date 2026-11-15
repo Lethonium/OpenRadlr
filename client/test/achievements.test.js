@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, achievementFacts, earnedNow } from "../public/js/profile/achievements.js";
+import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
 
 // Tuesday 10 Nov 2026, 18:00 local: hits none of the time-based ones.
 const at = (y, m, d, h = 18, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -132,4 +132,52 @@ test("records without the newer fields earn nothing they can't prove", () => {
 test("facts sort the records oldest first", () => {
   const facts = achievementFacts({ records: [ride({ startedAt: BASE + DAY }), ride()], summits: [], lemons: 0, routes: null });
   assert.equal(facts.rides[0].startedAt, BASE);
+});
+
+const memory = (initial = {}) => {
+  const data = { ...initial };
+  return { getItem: (k) => data[k] ?? null, setItem: (k, v) => { data[k] = String(v); }, data };
+};
+const refusing = () => ({ getItem: () => null, setItem: () => { throw new Error("quota"); } });
+const NOW = at(2026, 11, 15, 9);
+
+test("load: nothing stored is empty", () => assert.deepEqual(loadAchievements(memory()), { earned: {} }));
+test("load: garbage is empty", () => assert.deepEqual(loadAchievements(memory({ [ACHIEVEMENTS_KEY]: "{nope" })), { earned: {} }));
+test("load: another version is empty", () => assert.deepEqual(loadAchievements(memory({ [ACHIEVEMENTS_KEY]: '{"version":2,"earned":{"century":1}}' })), { earned: {} }));
+test("load: a storage that throws is empty", () => assert.deepEqual(loadAchievements({ getItem: () => { throw new Error("denied"); } }), { earned: {} }));
+test("load: non-numeric dates are dropped", () => assert.deepEqual(loadAchievements(memory({ [ACHIEVEMENTS_KEY]: '{"version":1,"earned":{"century":"x","firstRide":5}}' })), { earned: { firstRide: 5 } }));
+
+test("save then load round-trips", () => {
+  const storage = memory();
+  assert.equal(saveAchievements(storage, { earned: { century: 7 } }), true);
+  assert.deepEqual(loadAchievements(storage), { earned: { century: 7 } });
+});
+test("save: a refusing storage is false", () => assert.equal(saveAchievements(refusing(), { earned: {} }), false));
+
+test("load keeps ids it doesn't know", () => assert.deepEqual(loadAchievements(memory({ [ACHIEVEMENTS_KEY]: '{"version":1,"earned":{"future":3}}' })), { earned: { future: 3 } }));
+test("reconcile keeps ids it doesn't know", () => assert.equal(reconcile({ earned: { future: 3 } }, { records: [ride()] }, NOW).earned.future, 3));
+
+const history = [ride({ startedAt: BASE - 2 * DAY }), ride({ startedAt: BASE - DAY, distanceM: 100_000 }), ride()];
+test("backdate dates century by the 100 km ride", () => assert.equal(backdate({ records: history }, NOW).century, BASE - DAY));
+test("backdate dates km1000 by the ride that crossed 1,000 km", () => {
+  const records = many(12, { distanceM: 100_000 });
+  assert.equal(backdate({ records }, NOW).km1000, records[9].startedAt);
+});
+test("backdate dates lemons10 by the newest ride", () => assert.equal(backdate({ records: history, lemons: 10 }, NOW).lemons10, BASE));
+test("backdate dates lemons10 by now without records", () => assert.equal(backdate({ records: [], lemons: 10 }, NOW).lemons10, NOW));
+
+test("reconcile latches backdated without reporting them as new", () => {
+  const state = { earned: { firstRide: 1 } };
+  const next = reconcile(state, { records: history }, NOW);
+  assert.deepEqual(next.earned, { firstRide: 1, marathon: BASE - DAY, century: BASE - DAY });
+});
+test("reconcile returns the same state when nothing changes", () => {
+  const state = reconcile({ earned: {} }, { records: history }, NOW);
+  assert.equal(reconcile(state, { records: history }, NOW), state);
+});
+test("reconcile keeps a latch whose ride was deleted", () => {
+  assert.equal(reconcile({ earned: { century: 5 } }, { records: [] }, NOW).earned.century, 5);
+});
+test("latch adds new ids with now and keeps old dates", () => {
+  assert.deepEqual(latch({ earned: { century: 5 } }, ["century", "tourist"], NOW).earned, { century: 5, tourist: NOW });
 });
