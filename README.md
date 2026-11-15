@@ -85,6 +85,9 @@ uploaded to Strava.
   menu and during the ride; ride photos and a summary image; ride summary with
   `.tcx`/`.gpx`/`.fit` download and Strava upload (as a virtual ride with its climbing), placed on the map in a virtual world off Mallorca;
   power-only trainers and power meters (no resistance control) are supported.
+- **Ride goals** — set a time, distance or climbing target before starting, or change it in *Menu → Overview*.
+  Progress appears in the HUD; reaching the goal lets you keep riding. Goals
+  follow your selected units and are restored with an unfinished ride.
 - **Spin studio** — stationary group classes next to the roads: a class starts
   every 30 minutes, riders sit side by side in rooms of 16 (bots fill the
   empty bikes), a coach calls the blocks, targets come from each rider's FTP
