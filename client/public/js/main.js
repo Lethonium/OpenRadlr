@@ -18,6 +18,7 @@ import { deleteItem, exportData, exportFileName, inventory, needsReload } from "
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
+import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
 import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
 import { viewControls } from "./view/viewControls.js";
@@ -2904,15 +2905,20 @@ function renderProfileAchievements() {
       const item = document.createElement("li");
       item.className = "achievement-card";
       item.dataset.state = card.state;
-      const badge = textElement("span", "");
-      badge.className = "achievement-badge";
-      badge.setAttribute("aria-hidden", "true");
-      item.append(badge, textElement("strong", card.name));
+      item.append(achievementBadge(card.id, { hidden: card.state === "secret" }), textElement("strong", card.name));
       if (card.hint) item.append(textElement("span", card.hint));
       if (card.date) item.append(textElement("small", card.date));
       return item;
     }),
   );
+}
+
+/** An achievement's pin (constant SVG from badges.js, no rider data). */
+function achievementBadge(id, options) {
+  const badge = document.createElement("span");
+  badge.className = "achievement-badge";
+  badge.innerHTML = badgeSvg(id, options);
+  return badge;
 }
 
 /** FTP over time: set and estimated, or a sentence while there is too little to chart. */
@@ -3453,10 +3459,7 @@ function showMilestone(text, achievementIds = []) {
     if (banner.childNodes.length) banner.append(" · ");
     const entry = textElement("span", t("achievement.banner", { name: t(`achievement.${id}.name`) }));
     entry.className = "achievement-entry";
-    const badge = textElement("span", "");
-    badge.className = "achievement-badge";
-    badge.setAttribute("aria-hidden", "true");
-    entry.prepend(badge);
+    entry.prepend(achievementBadge(id));
     banner.append(entry);
   }
   banner.hidden = false;

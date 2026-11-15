@@ -163,8 +163,11 @@ what is left (backdated, silent).
 
 ## Left to the builder
 
-- Badge visuals in the grid and the banner icon (CSS only, no images needed; follow existing styles,
-  no duplicate CSS rules).
+- Badge visuals: decided after a design round as enamel pins (`view/badges.js`, inline SVG, no image
+  files): a gold rim, enamel colour and shape per kind (round orange: distance and totals; teal shield:
+  climbing; blue hexagon: rhythm and form; green ticket: places; purple starburst: secret), and one
+  cartoon drawing per achievement. Locked pins are the same drawing greyed by CSS; secret locked ones a
+  blank starburst with "?".
 - Exact hint wording and the German names.
 - How the live record is assembled in main.js (reuse what `rideRecord` would produce where cheap).
 - Test layout, as long as each achievement's check has a test and backdating/latching are covered.
