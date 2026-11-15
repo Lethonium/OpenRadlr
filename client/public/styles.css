@@ -1934,7 +1934,11 @@ body.riding {
   }
 }
 
-/* An achievement on the banner: a small gold medal that pops once. */
+/* An achievement on the banner: a small gold medal that pops once, kept with its name when the banner wraps. */
+.achievement-entry {
+  display: inline-block;
+}
+
 .achievement-badge {
   display: inline-grid;
   place-items: center;
@@ -1949,7 +1953,7 @@ body.riding {
 }
 
 .achievement-badge::after {
-  content: "★";
+  content: "\2605";
   font-size: 0.7em;
   color: #fff;
 }
@@ -3258,6 +3262,10 @@ body.riding {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+[data-menu-nav="achievements"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3l2 6M16 3l-2 6'/><circle cx='12' cy='15' r='6'/><path d='M12 12.5v5'/></svg>");
 }
 
 .achievement-grid {

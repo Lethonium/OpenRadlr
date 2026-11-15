@@ -3450,10 +3450,13 @@ function showMilestone(text, achievementIds = []) {
   banner.textContent = text;
   for (const id of achievementIds) {
     if (banner.childNodes.length) banner.append(" · ");
+    const entry = textElement("span", t("achievement.banner", { name: t(`achievement.${id}.name`) }));
+    entry.className = "achievement-entry";
     const badge = textElement("span", "");
     badge.className = "achievement-badge";
     badge.setAttribute("aria-hidden", "true");
-    banner.append(badge, t("achievement.banner", { name: t(`achievement.${id}.name`) }));
+    entry.prepend(badge);
+    banner.append(entry);
   }
   banner.hidden = false;
   banner.classList.remove("show");
