@@ -179,23 +179,21 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             // The map's first route stands for the world: a route id clients can rejoin with.
             .with_vehicle_codes(vehicle_codes.clone(), route_ids[0].clone())
             .with_resume_tokens(resume_tokens.clone());
-        // The world with the OpenBikeNet route shares it, if a server is configured.
-        let shared_index = group
+        // The world's OpenBikeNet routes are shared, all on one link, if a server is configured.
+        let shared: Vec<(usize, SharedRoute)> = group
             .iter()
-            .position(|f| f.openbikenet.is_some())
-            .filter(|_| config.obn_url.is_some());
-        let obn_route = shared_index.map(|index| {
-            let file = &group[index];
-            SharedRoute::new(
-                file.openbikenet.clone().unwrap_or_default(),
-                file.openbikenet_length.unwrap_or_default(),
-                routes[index].length(),
-            )
-        });
+            .enumerate()
+            .filter(|_| config.obn_url.is_some())
+            .filter_map(|(index, file)| {
+                let id = file.openbikenet.clone()?;
+                let length = file.openbikenet_length.unwrap_or_default();
+                Some((index, SharedRoute::new(id, length, routes[index].length())))
+            })
+            .collect();
         let mut link_frames = None;
-        if let (Some(index), Some(obn_route)) = (shared_index, &obn_route) {
+        if !shared.is_empty() {
             let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
-            core = core.with_openbikenet(index, obn_route.clone(), frames);
+            core = core.with_openbikenet(shared.clone(), frames);
             link_frames = Some(receiver);
         }
         if let (Some(anchor), true) = (studio_anchor, config.studio && !studio_in_valley) {
@@ -203,11 +201,17 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             studio_in_valley = true;
         }
         let game = spawn_game(core);
-        if let (Some(obn_route), Some(receiver), Some(url)) = (obn_route, link_frames, &config.obn_url) {
-            tracing::info!(route = %obn_route.id, "sharing the route through OpenBikeNet");
+        if let (Some(receiver), Some(url)) = (link_frames, &config.obn_url) {
+            let shared_routes: Vec<SharedRoute> = shared.iter().map(|(_, route)| route.clone()).collect();
+            let ids = shared_routes
+                .iter()
+                .map(|r| r.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::info!(routes = %ids, "sharing routes through OpenBikeNet");
             spawn_link(
                 url.clone(),
-                vec![obn_route],
+                shared_routes,
                 config.obn_backoff_unit,
                 config.obn_heartbeat,
                 receiver,
@@ -224,7 +228,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         );
         for (position, (file, route)) in group.into_iter().zip(routes).enumerate() {
             entries.push(WorldEntry {
-                shared: shared_index == Some(position),
+                shared: shared.iter().any(|(index, _)| *index == position),
                 length_m: route.length(),
                 elevation_gain_m: file.elevation_gain_m(),
                 file: Arc::new(file),

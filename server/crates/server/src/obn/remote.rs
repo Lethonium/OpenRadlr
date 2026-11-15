@@ -14,6 +14,8 @@ use super::{SharedRoute, OBN_ROOM};
 
 /// Remote riders get ids from here upwards, far from the sim's own (which count up from 1).
 const FIRST_REMOTE_ID: RiderId = 0xF000_0000;
+/// Ids each shared route hands out, so that riders on two routes never share one.
+const IDS_PER_ROUTE: RiderId = 0x0100_0000;
 /// Longest time a position is extrapolated from the last update.
 const MAX_EXTRAPOLATION_S: f64 = 2.0;
 /// A rider without an update for longer than this is hidden until the next one.
@@ -66,10 +68,12 @@ pub struct Remotes {
 }
 
 impl Remotes {
-    pub fn new(route: SharedRoute) -> Self {
+    /// The riders on `route`, the `index`th shared route of the world (0 to 15): it
+    /// picks the range their ids come from.
+    pub fn new(route: SharedRoute, index: u32) -> Self {
         Self {
             route,
-            next_id: FIRST_REMOTE_ID,
+            next_id: FIRST_REMOTE_ID + index.min(15) * IDS_PER_ROUTE,
             riders: HashMap::new(),
         }
     }
@@ -252,7 +256,7 @@ mod tests {
     }
 
     fn remotes() -> Remotes {
-        Remotes::new(SharedRoute::new("velodrome-250", 250.0, 250.0))
+        Remotes::new(SharedRoute::new("velodrome-250", 250.0, 250.0), 0)
     }
 
     fn named<'a>(riders: &'a [RemoteRider], name: &str) -> &'a RemoteRider {
@@ -429,7 +433,7 @@ mod tests {
 
     #[test]
     fn distance_is_scaled_to_the_local_length() {
-        let mut r = Remotes::new(SharedRoute::new("velodrome-250", 250.0, 500.0));
+        let mut r = Remotes::new(SharedRoute::new("velodrome-250", 250.0, 500.0), 0);
         r.apply(joined(view("a", "Ann", 100.0, 0.0)), 0.0);
         assert_eq!(r.riders(0.0)[0].distance, 200.0);
     }
