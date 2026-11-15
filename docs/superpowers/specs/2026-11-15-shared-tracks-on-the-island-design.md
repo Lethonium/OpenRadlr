@@ -1,6 +1,6 @@
 # Shared tracks on the island — design
 
-Date: 2026-11-15 · Issue: #107 · Status: server part in progress
+Date: 2026-11-15 · Issue: #107 · Status: server part done; routes and client follow
 
 ## Goal
 

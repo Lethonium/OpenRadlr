@@ -1,6 +1,6 @@
 # 20. Sharing riders with OpenBikeNet
 
-Date: 2026-11-06 · Status: accepted
+Date: 2026-11-06 · Status: accepted, amended by [ADR 0027](0027-several-shared-tracks-in-one-world.md) (several shared tracks, bots per route)
 
 ## Context
 
