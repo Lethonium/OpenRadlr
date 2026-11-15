@@ -146,7 +146,7 @@ function dataCount({ id, count }) {
   }
 }
 
-const hasAny = (count) => (typeof count === "object" && count !== null ? count.summits + count.lemons > 0 : count > 0);
+const hasAny = (count) => (typeof count === "object" && count !== null ? count.summits + count.lemons + (count.achievements ?? 0) > 0 : count > 0);
 
 /** The "Your data" rows from `inventory` (profile/localData.js). */
 export function dataRows(items) {

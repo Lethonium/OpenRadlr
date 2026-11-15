@@ -5,6 +5,7 @@
  * `indexedDbStore`): `{history, ghosts, autosave}`.
  */
 
+import { ACHIEVEMENTS_KEY, loadAchievements } from "./achievements.js";
 import { GOALS_KEY, loadGoals } from "./seasonGoals.js";
 
 export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings"];
@@ -12,7 +13,7 @@ export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", 
 const PROFILE_KEY = "openride.profile.v1";
 const SUMMITS_KEY = "openradlr.summits";
 const LEMONS_KEY = "openradlr.lemons";
-const PROGRESS_KEYS = [SUMMITS_KEY, LEMONS_KEY];
+const PROGRESS_KEYS = [SUMMITS_KEY, LEMONS_KEY, ACHIEVEMENTS_KEY];
 // Pairing secrets stay out of the export: this device's key for its second
 // screens, and on a phone used as a cockpit, the tablet's key.
 const SECRET_KEYS = ["openradlr.screenKey", "openradlr.cockpit"];
@@ -42,7 +43,7 @@ function parseJson(text, fallback) {
 function progressOf(storage) {
   const summits = parseJson(storage.getItem(SUMMITS_KEY), []);
   const lemons = Number.parseInt(storage.getItem(LEMONS_KEY) ?? "", 10);
-  return { summits: Array.isArray(summits) ? summits : [], lemons: Number.isFinite(lemons) ? lemons : 0 };
+  return { summits: Array.isArray(summits) ? summits : [], lemons: Number.isFinite(lemons) ? lemons : 0, achievements: loadAchievements(storage).earned };
 }
 
 async function readable(act) {
@@ -62,8 +63,8 @@ const COUNTS = {
     return loadGoals({ getItem: () => text }).goals.length;
   },
   progress: ({ storage }) => {
-    const { summits, lemons } = progressOf(storage);
-    return { summits: summits.length, lemons };
+    const { summits, lemons, achievements } = progressOf(storage);
+    return { summits: summits.length, lemons, achievements: Object.keys(achievements).length };
   },
   unfinished: ({ stores }) => stores.autosave.keys().then((keys) => (keys.includes(UNFINISHED_KEY) ? 1 : 0)),
   settings: ({ storage }) => settingsKeys(storage).length,
@@ -71,7 +72,7 @@ const COUNTS = {
 
 /**
  * Each item with its count; an item whose storage can't be read is `readable: false`, never a throw.
- * @returns {Promise<{id: string, count: number | {summits: number, lemons: number} | null, readable: boolean}[]>}
+ * @returns {Promise<{id: string, count: number | {summits: number, lemons: number, achievements: number} | null, readable: boolean}[]>}
  */
 export function inventory(sources) {
   return Promise.all(DATA_ITEMS.map(async (id) => ({ id, ...(await readable(() => COUNTS[id](sources))) })));

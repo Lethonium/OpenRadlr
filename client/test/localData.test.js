@@ -35,6 +35,7 @@ const storage = () => fakeStorage({
   "openride.profile.v1": JSON.stringify({ name: "Ralf", privateKeyJwk: { d: "secret" }, publicKey: "pk" }),
   "openradlr.summits": '["a","b"]',
   "openradlr.lemons": "12",
+  "openradlr.achievements": JSON.stringify({ version: 1, earned: { firstRide: 1, century: 2 } }),
   "openradlr.devices": "[]",
   "openradlr.screenKey": "s3cret",
   "openradlr.cockpit": JSON.stringify({ key: "0123456789abcdef0123456789abcdef", url: "x" }),
@@ -52,7 +53,7 @@ test("inventory counts each item", async () => {
   assert.equal(by.profile.count, 1);
   assert.equal(by.rides.count, 2);
   assert.equal(by.bestLaps.count, 1);
-  assert.deepEqual(by.progress.count, { summits: 2, lemons: 12 });
+  assert.deepEqual(by.progress.count, { summits: 2, lemons: 12, achievements: 2 });
   assert.equal(by.unfinished.count, 0);
   assert.equal(by.settings.count, 3);
   assert.ok(Object.values(by).every((item) => item.readable));
@@ -81,8 +82,9 @@ test("inventory survives localStorage that throws", async () => {
 test("inventory: broken progress values count as nothing", async () => {
   const s = storage();
   s.setItem("openradlr.summits", "not json");
+  s.setItem("openradlr.achievements", "{broken");
   s.setItem("openradlr.lemons", "lots");
-  assert.deepEqual(byId(await inventory({ storage: s, stores: stores() })).progress.count, { summits: 0, lemons: 0 });
+  assert.deepEqual(byId(await inventory({ storage: s, stores: stores() })).progress.count, { summits: 0, lemons: 0, achievements: 0 });
 });
 
 test("export leaves out the private key and the screen key", async () => {
@@ -99,7 +101,7 @@ test("export leaves out the private key and the screen key", async () => {
   assert.equal(data.settings["other.app"], undefined);
   assert.deepEqual(data.rides.map((r) => r.id), ["1", "2"]);
   assert.equal(data.bestLaps.length, 1);
-  assert.deepEqual(data.progress, { summits: ["a", "b"], lemons: 12 });
+  assert.deepEqual(data.progress, { summits: ["a", "b"], lemons: 12, achievements: { firstRide: 1, century: 2 } });
   assert.equal(data.unfinished, null);
 });
 
@@ -128,6 +130,7 @@ test("deleteItem: settings keeps profile, progress and other apps' keys", async 
   assert.equal(s.getItem("openradlr.screenKey"), null);
   assert.notEqual(s.getItem("openride.profile.v1"), null);
   assert.equal(s.getItem("openradlr.lemons"), "12");
+  assert.notEqual(s.getItem("openradlr.achievements"), null);
   assert.equal(s.getItem("other.app"), "x");
 });
 
@@ -183,4 +186,16 @@ test("deleteItem: goals removes the goals only", async () => {
   assert.equal(await deleteItem("goals", { storage: s, stores: stores() }), true);
   assert.equal(s.getItem("openradlr.goals"), null);
   assert.equal(s.getItem("openradlr.devices"), "[]");
+});
+
+test("deleteItem: progress clears the achievements too", async () => {
+  const s = storage();
+  await deleteItem("progress", { storage: s, stores: stores() });
+  assert.equal(s.getItem("openradlr.achievements"), null);
+});
+
+test("deleteItem: rides keeps the achievements", async () => {
+  const s = storage();
+  await deleteItem("rides", { storage: s, stores: stores() });
+  assert.notEqual(s.getItem("openradlr.achievements"), null);
 });
