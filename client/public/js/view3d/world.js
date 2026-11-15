@@ -971,15 +971,17 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
+  // Every route of the map keeps its asphalt clear, whichever is ridden, so the world looks the same from all of them.
+  const mapRoutes = [route, ...others.filter((o) => o.id !== route.id)];
+  // Tracks (#107): routes of the map that aren't walks over its roads, drawn and levelled like them.
+  const tracks = network ? mapRoutes.filter((r) => !network.routes.some((w) => w.id === r.id)) : [];
   // Everything drawn as a road (the ridden route first), and what the shared
   // things are built along.
-  const routes = network ? [route, ...roads] : [route, ...others.filter((o) => o.id !== route.id)];
+  const routes = network ? [route, ...roads, ...tracks.filter((t) => t !== route)] : mapRoutes;
   const ordered = network ? roads : [...routes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const seed = network ? network.seed : mapSeed(route);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
-  // Every route of the map keeps its asphalt clear, whichever is ridden, so the world looks the same from all of them.
-  const mapRoutes = [route, ...others.filter((o) => o.id !== route.id)];
-  const base = network ? networkTerrain(network, roads, { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
+  const base = network ? networkTerrain(network, [...roads, ...tracks], { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
   const sea = waterLevel(base.index);
   const rivers = ordered.flatMap((r) => zonesOf.get(r).rivers.map((z) => ({ ...buildRiverPath(r, base, z.at, r.seed >>> 0, sea), route: r })));
   const terrain = rivers.length > 0 ? withRivers(base, rivers, sea - RIVER.mouthDepth) : { ...base, riverDistance: () => Infinity };

@@ -91,7 +91,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote, rideCards, cardIdOf, cardPick, directionsOf, renderDirections } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
@@ -1058,13 +1058,18 @@ function renderStartMenu() {
   const shared = sharedNote(selected);
   $("shared-note").hidden = !shared;
   $("shared-note").textContent = shared;
-  const cards = routesFor(activity, routes);
+  const cards = rideCards(routesFor(activity, routes));
   $("route-list").hidden = !showsCards(activity, cards);
-  renderRoutes($("route-list"), cards, selected?.id ?? null, (id) => {
+  const pick = (id) => {
     app.routeId = id;
     writeSetting(ROUTE_KEY, id);
     renderStartMenu();
-  });
+  };
+  renderRoutes($("route-list"), cards, cardIdOf(selected, routes), (id) => pick(cardPick(id, selected, routes)));
+  // A track ridden both ways round: which way, under its name.
+  const directions = activity === "events" ? [] : directionsOf(selected, routes);
+  $("route-directions").hidden = directions.length === 0;
+  renderDirections($("route-directions"), directions, pick);
   app.menu?.select(routes, selected?.id ?? null);
   renderEvents(events);
   renderUnfinished();

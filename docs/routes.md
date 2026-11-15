@@ -85,7 +85,11 @@ routes/<id>.json` writes them. Each carries `openbikenet` (`velodrome-250`,
 `herne-hill-450`, `herne-hill-450-clockwise`) and `openbikenet_length`, so it
 has no bots and is shared with riders from other apps when the server is
 connected to OpenBikeNet. A world can hold several shared tracks; one
-connection serves them all (ADR 0027).
+connection serves them all (ADR 0027). A route whose id is another's with
+`-clockwise` added is that track the other way round: the start menu shows the
+two as one card, with a choice of the way round. On a map with a road network,
+the client draws the map's routes that aren't walks over its roads (the
+tracks) along with the roads, and levels the ground under them.
 
 Every route starts at a bike café beside the road, 45 m after the start/finish
 line (on a road network: at its start café).

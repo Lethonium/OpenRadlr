@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction, routeDescription, sharedNote } from "../public/js/view/startMenu.js";
+import { pickRoute, routeCharacter, routeStats, routesOf, serverStatus, studioTagline, buildLabel, communityDistance, routeRiders, workoutRoute, workoutTagline, stageStats, stageHeadline, stageLede, devicesVisible, privacyUrl, serverName, activityOf, routesFor, pickForActivity, activityTabs, shownActivity, showsCards, routeCard, stravaLine, joinAction, routeDescription, sharedNote, rideCards, cardIdOf, cardPick, directionsOf } from "../public/js/view/startMenu.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 const routes = [
@@ -258,6 +258,38 @@ test("a shared route shows the shared badge and note", () => {
   const velodrome = { id: "velodrome", name: "Velodrome", length_m: 250, players: 0, shared: true };
   assert.equal(routeCard(velodrome).shared, true);
   assert.equal(sharedNote(velodrome), "Riders from other apps ride here too. Shared with them: your name, position, speed, power and cadence.");
+});
+
+const herneHill = { id: "herne-hill", name: "Herne Hill Velodrome", length_m: 450, players: 2, phone_players: 1, shared: true };
+const clockwise = { id: "herne-hill-clockwise", name: "Herne Hill Velodrome (clockwise)", length_m: 450, players: 1, shared: true };
+const withTrack = [routes[0], herneHill, clockwise];
+
+test("a track ridden both ways round is one card, with the riders of both", () => {
+  const cards = rideCards(withTrack);
+  assert.deepEqual(cards.map((r) => r.id), ["rolling-hills", "herne-hill"]);
+  assert.deepEqual([cards[1].players, cards[1].phone_players], [3, 1]);
+  assert.equal(cardIdOf(clockwise, withTrack), "herne-hill");
+  assert.equal(cardIdOf(herneHill, withTrack), "herne-hill");
+  assert.equal(cardIdOf(routes[0], withTrack), "rolling-hills");
+  assert.equal(cardIdOf(null, withTrack), null);
+  // A server that has only one way round shows it as it is.
+  assert.deepEqual(rideCards([clockwise]), [clockwise]);
+});
+
+test("picking the track's card keeps the way round already picked", () => {
+  assert.equal(cardPick("herne-hill", clockwise, withTrack), "herne-hill-clockwise");
+  assert.equal(cardPick("herne-hill", routes[0], withTrack), "herne-hill");
+  assert.equal(cardPick("rolling-hills", clockwise, withTrack), "rolling-hills");
+});
+
+test("the way round is a choice of its own, with the riders going each way", () => {
+  assert.deepEqual(directionsOf(clockwise, withTrack), [
+    { id: "herne-hill", label: "Anticlockwise", riders: "2 riders · 1 📱", picked: false },
+    { id: "herne-hill-clockwise", label: "Clockwise", riders: "1 rider", picked: true },
+  ]);
+  assert.deepEqual(directionsOf(routes[0], withTrack), []);
+  assert.deepEqual(directionsOf(clockwise, [clockwise]), []);
+  assert.deepEqual(directionsOf(null, withTrack), []);
 });
 
 test("other routes don't", () => {

@@ -1,6 +1,6 @@
 # Shared tracks on the island — design
 
-Date: 2026-11-15 · Issue: #107 · Status: server part done; routes and client follow
+Date: 2026-11-15 · Issue: #107 · Status: implemented
 
 ## Goal
 
@@ -50,17 +50,24 @@ ADR 0020 shares exactly one route, the velodrome, a world of its own:
   moving the track (the tracks would then become network edges too).
 - **Both on the flat strip south of `valley-west`** (about 35 m above sea level, more than 250 m
   from the nearest café): Herne Hill's centre near (−480, −150), the 250 m oval's near
-  (−270, −120), long axes east–west, the north straight facing the road.
+  (−210, −120), east of the river that crosses the strip, long axes east–west, the north
+  straight facing the road.
 
-## Not in the server part
+## Client
 
-The route files for Herne Hill and the place of the tracks on the island (with protocol#6
-merged), drawing them on the island (the client builds it from `routes/maps/valley.json`), the
-start menu, and the OpenBikeNet server's submodule bump and redeploy.
+- **Tracks drawn on the island.** With a road network, `buildWorld` draws the network's roads
+  only. The map's routes that aren't walks over them (the tracks) are drawn and levelled with
+  the roads, whichever route is ridden, so the world looks the same from all of them.
+- **One Herne Hill card.** A route whose id is another's with `-clockwise` added is that track
+  the other way round. The start menu shows one card with the riders of both, and under the
+  picked track's name a choice of the way round, with the riders going each way.
 
 ## Testing
 
 Unit tests in the sim (routes without bots), `route_file` (the new field), `obn::outbox` (several
 routes, a rider changing route), `obn::remote` (id ranges), `game` (bots stay on the roads,
 remote riders for viewers on other routes, frames per route), and the end-to-end
-`tests/openbikenet.rs` (one connection subscribes to two routes).
+`tests/openbikenet.rs` (one connection subscribes to two routes). A sim test rides a track
+without a walk on a map with a network. Client tests: the tracks are drawn and the ground is
+level under them, the world looks the same from a track, and the start menu's card and choice
+of the way round.

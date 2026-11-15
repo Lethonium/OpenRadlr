@@ -361,8 +361,32 @@ test("routes turn on curves where they change roads, never on a corner", () => {
 
 // Built once per ridden route: the full map is the most expensive part of the suite.
 const [flatsRoute, hillsRoute, colRoute] = valley;
+// The tracks beside the roads (#107): on the map, off the network.
+const tracks = ["velodrome", "herne-hill", "herne-hill-clockwise"].map(loadRoute);
 // As the client builds it: the map's network and its other routes.
-const mapWorld = buildWorld(hillsRoute, { network, others: valley });
+const mapWorld = buildWorld(hillsRoute, { network, others: [...valley, ...tracks] });
+
+/** Whether the road mesh of `world` has asphalt within 1.5 m of route coordinates (x, y) at height `elevation`. */
+const asphaltAt = (world, x, y, elevation) =>
+  world.chunks.road.some(({ mesh }) => {
+    const p = mesh.positions;
+    for (let i = 0; i < p.length; i += 3) {
+      if (Math.hypot(p[i] - x, p[i + 2] + y) < 1.5 && Math.abs(p[i + 1] - elevation) < 0.5) return true;
+    }
+    return false;
+  });
+
+test("the tracks beside the roads are drawn and the ground is level under them", () => {
+  for (const track of tracks) {
+    for (let d = 0; d < track.length; d += 37) {
+      const { x, y } = track.positionAt(d);
+      const elevation = track.elevationAt(d);
+      assert.ok(asphaltAt(mapWorld, x, y, elevation), `${track.id} at ${d} m is drawn`);
+      const ground = mapWorld.terrain.height(x, -y);
+      assert.ok(Math.abs(ground - (elevation - 0.35)) < 0.05, `${track.id} at ${d} m: ground ${ground.toFixed(2)} under ${elevation} m`);
+    }
+  }
+});
 test("where a route cuts a junction's corner off the network's roads, it still counts as road", () => {
   // Routes round their corners at places by up to about 8 m off the network's roads; that asphalt is drawn too.
   for (const r of valley) {
@@ -650,13 +674,14 @@ test("rivers run in valleys, not gorges", () => {
 });
 
 test("the map world looks the same whichever route you ride", () => {
-  const fromCol = buildWorld(colRoute, { network, others: valley });
+  // From a track, the other way round from the road the world was built from.
+  const fromTrack = buildWorld(tracks[1], { network, others: [...valley, ...tracks] });
   const vertices = (world, name) => world.chunks[name].reduce((sum, c) => sum + c.mesh.vertexCount, 0);
   // Grass and flowers are thinner along roads you don't ride; the rest is the same.
-  for (const name of ["terrain", "scenery"]) assert.equal(vertices(fromCol, name), vertices(mapWorld, name), name);
-  assert.deepEqual(fromCol.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
+  for (const name of ["terrain", "scenery"]) assert.equal(vertices(fromTrack, name), vertices(mapWorld, name), name);
+  assert.deepEqual(fromTrack.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
   // Only the ridden route has arches and spectators.
-  assert.notDeepEqual(fromCol.spectators.map((p) => p.position), mapWorld.spectators.map((p) => p.position));
+  assert.notDeepEqual(fromTrack.spectators.map((p) => p.position), mapWorld.spectators.map((p) => p.position));
 });
 
 test("one café at the shared start, however many routes start there", () => {
