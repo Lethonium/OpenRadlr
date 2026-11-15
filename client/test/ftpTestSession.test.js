@@ -96,6 +96,8 @@ test("happy path: warmup, settings, countdown, ramp to the best minute, result",
   assert.equal(session.result.ftp, Math.round(0.75 * session.result.bestMinuteW));
   assert.ok(session.result.bestMinuteW > 140);
   assert.ok(training.stopped >= 1);
+  session.reset();
+  assert.equal(session.testFtp, results[0].ftp, "a finished test's FTP stays for the ride record");
 });
 
 test("one sample per whole workout second, no duplicates or gaps", () => {
@@ -185,6 +187,15 @@ test("reset returns to idle but keeps the test flag", () => {
   ctx.session.reset();
   assert.equal(ctx.session.state, "idle");
   assert.equal(ctx.session.testFlag, "ramp");
+});
+
+test("testFtp: none for a ramp stopped too short", () => {
+  const ctx = setup();
+  toRamp(ctx);
+  ctx.session.done();
+  assert.deepEqual(ctx.session.result, { tooShort: true });
+  ctx.session.reset();
+  assert.equal(ctx.session.testFtp, null);
 });
 
 test("begin() frees the warmup: no workout, simulation mode", () => {

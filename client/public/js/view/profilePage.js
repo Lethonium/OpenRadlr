@@ -9,7 +9,7 @@ import { formatDistanceWithUnit, formatDuration, formatElevation } from "../util
 import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
-export const PROFILE_PAGES = ["goals", "overview", "rides", "data"];
+export const PROFILE_PAGES = ["goals", "overview", "achievements", "rides", "data"];
 export const RIDES_PAGE_SIZE = 20;
 
 const CURVE_KEYS = [5, 60, 300, 1200];
@@ -146,7 +146,7 @@ function dataCount({ id, count }) {
   }
 }
 
-const hasAny = (count) => (typeof count === "object" && count !== null ? count.summits + count.lemons > 0 : count > 0);
+const hasAny = (count) => (typeof count === "object" && count !== null ? count.summits + count.lemons + (count.achievements ?? 0) > 0 : count > 0);
 
 /** The "Your data" rows from `inventory` (profile/localData.js). */
 export function dataRows(items) {

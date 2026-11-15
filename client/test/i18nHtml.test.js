@@ -11,7 +11,7 @@ const PAGES = ["index.html", "cockpit.html"];
 const htmls = PAGES.map((page) => readFileSync(new URL(`../public/${page}`, import.meta.url), "utf8"));
 
 // en keys neither HTML nor a JS string literal uses (keys built at run time, test seeds).
-const PENDING_KEY_PREFIXES = ["route.", "cockpit.tile."]; // looked up as route.<id>.description, cockpit.tile.<id>
+const PENDING_KEY_PREFIXES = ["route.", "cockpit.tile.", "achievement."]; // looked up as route.<id>.description, cockpit.tile.<id>, achievement.<id>.name
 const JS_ROOT = new URL("../public/js/", import.meta.url).pathname;
 function jsSource(dir) {
   return readdirSync(dir).map((name) => {

@@ -57,6 +57,8 @@ test("rideRecord v2: power curve, weighted power and load", () => {
   assert.ok(Math.abs(r.load - 33.3) < 0.1);
   assert.equal(r.test, null);
   assert.equal(ride(1200, 200, { test: "ramp" }).test, "ramp");
+  assert.equal(r.testFtp, null);
+  assert.equal(ride(1200, 200, { test: "ramp", testFtp: 240 }).testFtp, 240);
 });
 
 test("rideRecord v2: a ride without power has a zero curve and no load", () => {

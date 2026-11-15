@@ -6,8 +6,8 @@ const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftp
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
 const noRides = { week: zero, month: zero, all: zero };
 
-test("the profile has four pages, goals first", () => {
-  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "rides", "data"]);
+test("the profile has five pages, goals first", () => {
+  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "achievements", "rides", "data"]);
 });
 
 test("routeName: server name, Studio for null, id when unknown", () => {
@@ -101,7 +101,7 @@ const items = [
   { id: "profile", count: 1, readable: true },
   { id: "rides", count: 42, readable: true },
   { id: "bestLaps", count: 0, readable: true },
-  { id: "progress", count: { summits: 7, lemons: 12 }, readable: true },
+  { id: "progress", count: { summits: 7, lemons: 12, achievements: 3 }, readable: true },
   { id: "unfinished", count: 0, readable: true },
   { id: "settings", count: null, readable: false },
 ];
@@ -112,7 +112,7 @@ test("dataRows: one row per item with its count in words", () => {
   const by = Object.fromEntries(rows.map((row) => [row.id, row]));
   assert.equal(by.rides.name, "Rides");
   assert.equal(by.rides.count, "42 rides");
-  assert.equal(by.progress.count, "7 summits · 12 golden lemons");
+  assert.equal(by.progress.count, "7 summits · 12 golden lemons · 3 achievements");
   assert.equal(by.unfinished.count, "None");
   assert.ok(by.rides.detail.length > 0);
 });
@@ -200,4 +200,9 @@ test("dataRows: season goals are an item of their own", () => {
   assert.equal(row.name, "Season goals");
   assert.equal(row.count, "2 goals");
   assert.equal(row.canDelete, true);
+});
+
+test("data rows: progress with only achievements can be deleted", () => {
+  const rows = dataRows([{ id: "progress", count: { summits: 0, lemons: 0, achievements: 1 }, readable: true }]);
+  assert.equal(rows[0].canDelete, true);
 });

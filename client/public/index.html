@@ -38,6 +38,7 @@
     <link rel="modulepreload" href="js/net/screenPairing.js" />
     <link rel="modulepreload" href="js/net/strava.js" />
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
+    <link rel="modulepreload" href="js/profile/achievements.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
@@ -75,6 +76,8 @@
     <link rel="modulepreload" href="js/studio/studioSession.js" />
     <link rel="modulepreload" href="js/util/format.js" />
     <link rel="modulepreload" href="js/util/wakeLock.js" />
+    <link rel="modulepreload" href="js/view/achievementsView.js" />
+    <link rel="modulepreload" href="js/view/badges.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
     <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
@@ -470,6 +473,7 @@
               <nav class="menu-nav" aria-label="Profile pages" data-i18n-attr="aria-label:profilePage.pages">
                 <button type="button" id="profile-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span class="menu-nav-title" data-i18n="goals.page">Goals</span></button>
                 <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
+                <button type="button" id="profile-nav-achievements" class="menu-nav-item" data-menu-nav="achievements"><span class="menu-nav-title" data-i18n="profilePage.achievements">Achievements</span></button>
                 <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
                 <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
               </nav>
@@ -542,6 +546,13 @@
                     <h3 data-i18n="profilePage.bestLaps">Best laps</h3>
                     <ul id="profile-bests" class="profile-list"></ul>
                     <p id="profile-bests-none" class="field-hint" hidden data-i18n="profilePage.bestLaps.none">No best laps yet. Ride a full lap of a loop route to set one.</p>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="achievements" role="region" aria-labelledby="profile-nav-achievements" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.achievements">Achievements</h2>
+                    <p id="profile-achievements-count" class="muted"></p>
+                    <ul id="profile-achievements" class="achievement-grid"></ul>
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="rides" role="region" aria-labelledby="profile-nav-rides" hidden>

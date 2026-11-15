@@ -12,9 +12,9 @@ const PREFIX = "ride:";
 
 /**
  * The record of a ride.
- * @param {{recorder: import("./rideRecorder.js").RideRecorder, splits: object[], splitMode: string, routeId: ?string, measured: boolean, profile: {ftp?: number, weightKg?: number}, test?: ?string, device?: ?string}} ride
+ * @param {{recorder: import("./rideRecorder.js").RideRecorder, splits: object[], splitMode: string, routeId: ?string, measured: boolean, profile: {ftp?: number, weightKg?: number}, test?: ?string, testFtp?: ?number, device?: ?string}} ride
  */
-export function rideRecord({ recorder, splits, splitMode, routeId, measured, profile, test = null, device = null }) {
+export function rideRecord({ recorder, splits, splitMode, routeId, measured, profile, test = null, testFtp = null, device = null }) {
   const first = recorder.samples[0];
   const last = recorder.samples.at(-1);
   const summary = recorder.summary();
@@ -35,6 +35,8 @@ export function rideRecord({ recorder, splits, splitMode, routeId, measured, pro
     weightedPower: weighted,
     load: rideLoad({ weightedPower: weighted, durationS: summary.durationS, ftp: profile.ftp }),
     test,
+    // The FTP a finished test found; null when the ramp stopped too short or on older records.
+    testFtp,
     splitMode,
     splits,
   };
