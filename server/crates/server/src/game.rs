@@ -8,6 +8,7 @@
 
 use crate::obn::outbox::LocalRider;
 use crate::obn::remote::{RemoteEvent, RemoteRider, Remotes};
+use crate::obn::SharedRoute;
 use crate::protocol::{
     event_info, event_message, event_notice_message, event_state, nearest_riders, state_message, DeviceKind,
     EventInfoWire, EventState, Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage, Side,
@@ -346,10 +347,10 @@ impl GameCore {
     pub fn with_openbikenet(
         mut self,
         route: RouteIndex,
-        shared_route: &str,
+        shared_route: SharedRoute,
         frames: mpsc::Sender<Vec<LocalRider>>,
     ) -> Self {
-        let remotes = Remotes::new(shared_route, self.world.route(route).length());
+        let remotes = Remotes::new(shared_route);
         self.obn = Some(Obn {
             route,
             frames,
@@ -2835,7 +2836,11 @@ mod tests {
     fn obn_game(target_riders: usize, capacity: usize) -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
         let (frames, receiver) = mpsc::channel(capacity);
         (
-            game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames),
+            {
+                let game = game(target_riders, 10);
+                let length = game.world().route(0).length();
+                game.with_openbikenet(0, SharedRoute::new("velodrome-250", 250.0, length), frames)
+            },
             receiver,
         )
     }

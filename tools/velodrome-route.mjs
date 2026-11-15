@@ -52,6 +52,7 @@ const route = {
   lanes: 4,
   seed: 250,
   openbikenet: "velodrome-250",
+  openbikenet_length: 250,
   markers: [{ type: "start_finish", distance: 0 }],
   zones: [],
   points: scaled,

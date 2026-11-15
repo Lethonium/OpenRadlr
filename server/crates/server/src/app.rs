@@ -9,6 +9,7 @@ use crate::guard::Slots;
 use crate::http::{router, AppState, Protection};
 use crate::map_file::load_maps;
 use crate::obn::link::spawn_link;
+use crate::obn::SharedRoute;
 use crate::resume::ResumeTokens;
 use crate::route_file::{load_routes, RouteFile};
 use crate::runtime::spawn_game;
@@ -183,11 +184,18 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             .iter()
             .position(|f| f.openbikenet.is_some())
             .filter(|_| config.obn_url.is_some());
-        let obn_route = shared_index.map(|index| group[index].openbikenet.clone().unwrap_or_default());
+        let obn_route = shared_index.map(|index| {
+            let file = &group[index];
+            SharedRoute::new(
+                file.openbikenet.clone().unwrap_or_default(),
+                file.openbikenet_length.unwrap_or_default(),
+                routes[index].length(),
+            )
+        });
         let mut link_frames = None;
         if let (Some(index), Some(obn_route)) = (shared_index, &obn_route) {
             let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
-            core = core.with_openbikenet(index, obn_route, frames);
+            core = core.with_openbikenet(index, obn_route.clone(), frames);
             link_frames = Some(receiver);
         }
         if let (Some(anchor), true) = (studio_anchor, config.studio && !studio_in_valley) {
@@ -195,14 +203,11 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             studio_in_valley = true;
         }
         let game = spawn_game(core);
-        if let (Some(index), Some(obn_route), Some(receiver), Some(url)) =
-            (shared_index, obn_route, link_frames, &config.obn_url)
-        {
-            tracing::info!(route = %obn_route, "sharing the route through OpenBikeNet");
+        if let (Some(obn_route), Some(receiver), Some(url)) = (obn_route, link_frames, &config.obn_url) {
+            tracing::info!(route = %obn_route.id, "sharing the route through OpenBikeNet");
             spawn_link(
                 url.clone(),
                 obn_route,
-                routes[index].length(),
                 config.obn_backoff_unit,
                 config.obn_heartbeat,
                 receiver,

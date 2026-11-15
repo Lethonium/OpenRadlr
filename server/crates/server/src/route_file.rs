@@ -30,9 +30,13 @@ pub struct RouteFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zones: Option<Vec<ZoneFile>>,
     /// The id of the OpenBikeNet track this route is shared on: riders of
-    /// other apps ride it too, so the world has no bots. Passed through unchanged.
+    /// other apps ride it too, so it has no bots. Passed through unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openbikenet: Option<String>,
+    /// The length of that track as OpenBikeNet publishes it, in metres; required
+    /// with `openbikenet`. Positions are scaled between it and this route's length.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openbikenet_length: Option<f64>,
     /// The shared map this route belongs to: clients draw all routes with the
     /// same map id as one world (ADR 0010, stage 1). Passed through unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -115,6 +119,8 @@ pub enum RouteFileError {
     Io(std::io::Error),
     Json(serde_json::Error),
     Invalid(RouteError),
+    /// `openbikenet` without a positive `openbikenet_length`.
+    SharedLength,
 }
 
 impl fmt::Display for RouteFileError {
@@ -123,6 +129,9 @@ impl fmt::Display for RouteFileError {
             RouteFileError::Io(e) => write!(f, "could not read route file: {e}"),
             RouteFileError::Json(e) => write!(f, "route file is not valid JSON: {e}"),
             RouteFileError::Invalid(e) => write!(f, "route is invalid: {e}"),
+            RouteFileError::SharedLength => {
+                write!(f, "a route with openbikenet needs a positive openbikenet_length")
+            }
         }
     }
 }
@@ -131,7 +140,12 @@ impl std::error::Error for RouteFileError {}
 
 impl RouteFile {
     pub fn parse(json: &str) -> Result<Self, RouteFileError> {
-        serde_json::from_str(json).map_err(RouteFileError::Json)
+        let file: Self = serde_json::from_str(json).map_err(RouteFileError::Json)?;
+        let length_ok = file.openbikenet_length.is_some_and(|m| m.is_finite() && m > 0.0);
+        if file.openbikenet.is_some() && !length_ok {
+            return Err(RouteFileError::SharedLength);
+        }
+        Ok(file)
     }
 
     pub fn load(path: &Path) -> Result<Self, RouteFileError> {
@@ -298,10 +312,26 @@ mod tests {
     }
 
     #[test]
+    fn a_shared_route_needs_the_length_of_the_track_it_is_shared_on() {
+        let base = r#""id":"x","name":"x","lanes":2,"seed":1,"points":[[0,0,0],[9,0,0]],"openbikenet":"track-9""#;
+        assert!(matches!(
+            RouteFile::parse(&format!("{{{base}}}")),
+            Err(RouteFileError::SharedLength)
+        ));
+        assert!(matches!(
+            RouteFile::parse(&format!(r#"{{{base},"openbikenet_length":0}}"#)),
+            Err(RouteFileError::SharedLength)
+        ));
+        let file = RouteFile::parse(&format!(r#"{{{base},"openbikenet_length":9}}"#)).unwrap();
+        assert_eq!(file.openbikenet_length, Some(9.0));
+    }
+
+    #[test]
     fn velodrome_is_250_m_and_shared() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes/velodrome.json");
         let file = RouteFile::load(Path::new(path)).unwrap();
         assert_eq!(file.openbikenet.as_deref(), Some("velodrome-250"));
+        assert_eq!(file.openbikenet_length, Some(250.0));
         let route = file.to_route().unwrap();
         assert!((route.length() - 250.0).abs() < 0.01, "{}", route.length());
     }

@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::Message;
 use super::outbox::{LocalRider, Outbox};
 use super::remote::RemoteEvent;
 use super::wire::{AppInfo, AppMessage, ServerMessage};
-use super::OBN_ROOM;
+use super::{SharedRoute, OBN_ROOM};
 use crate::runtime::{Command, GameHandle};
 
 /// Longest pause between connection attempts, in units.
@@ -57,20 +57,19 @@ pub fn backoff(attempt: u32, unit: Duration) -> Duration {
 /// Starts the link to `url` for the shared `route`. It ends when the game stops.
 pub fn spawn_link(
     url: String,
-    route: String,
-    route_length_m: f64,
+    route: SharedRoute,
     backoff_unit: Duration,
     heartbeat: Heartbeat,
     mut frames: mpsc::Receiver<Vec<LocalRider>>,
     game: GameHandle,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let mut outbox = Outbox::new(route.clone(), route_length_m);
+        let mut outbox = Outbox::new(route.clone());
         let mut attempt = 0u32;
         loop {
             // Frames queued while disconnected are stale: the next one tells the whole story.
             while frames.try_recv().is_ok() {}
-            let end = session(&url, &route, heartbeat, &mut outbox, &mut frames, &game).await;
+            let end = session(&url, &route.id, heartbeat, &mut outbox, &mut frames, &game).await;
             if end.stopped {
                 return;
             }

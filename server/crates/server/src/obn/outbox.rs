@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use openradlr_sim::RiderId;
 
 use super::wire::{AppMessage, RiderEntry, RiderState};
-use super::{OBN_LENGTH_M, OBN_ROOM};
+use super::{SharedRoute, OBN_ROOM};
 
 /// One of this server's riders, as the game loop sees it.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,16 +33,14 @@ struct Joined {
 /// Messages for one OpenBikeNet route, built frame by frame.
 #[derive(Debug)]
 pub struct Outbox {
-    route: String,
-    route_length_m: f64,
+    route: SharedRoute,
     joined: BTreeMap<RiderId, Joined>,
 }
 
 impl Outbox {
-    pub fn new(route: String, route_length_m: f64) -> Self {
+    pub fn new(route: SharedRoute) -> Self {
         Self {
             route,
-            route_length_m,
             joined: BTreeMap::new(),
         }
     }
@@ -57,13 +55,13 @@ impl Outbox {
             match self.joined.get_mut(&rider.id) {
                 Some(joined) => {
                     // Positions wrap at the start line: a big step back is a crossing.
-                    if joined.last_position - rider.position > self.route_length_m / 2.0 {
+                    if joined.last_position - rider.position > self.route.local_length_m / 2.0 {
                         joined.lap += 1;
                     }
                     joined.last_position = rider.position;
                     entries.push(RiderEntry {
                         rider: rider_key(rider.id),
-                        state: state_of(joined.lap, rider, self.route_length_m),
+                        state: state_of(joined.lap, rider, &self.route),
                     });
                 }
                 None => {
@@ -78,10 +76,10 @@ impl Outbox {
                     // frame would be rate limited (the server counts the join as one).
                     joins.push(AppMessage::Join {
                         rider: rider_key(rider.id),
-                        route: self.route.clone(),
+                        route: self.route.id.clone(),
                         room: OBN_ROOM.into(),
                         name: rider.name.clone(),
-                        state: state_of(0, rider, self.route_length_m),
+                        state: state_of(0, rider, &self.route),
                     });
                 }
             }
@@ -115,21 +113,16 @@ fn rider_key(id: RiderId) -> String {
     format!("r{id}")
 }
 
-fn state_of(lap: u32, rider: &LocalRider, route_length_m: f64) -> RiderState {
+fn state_of(lap: u32, rider: &LocalRider, route: &SharedRoute) -> RiderState {
     RiderState {
         lap,
-        distance: distance_m(rider.position, route_length_m),
+        distance: route.shared_distance(rider.position),
         speed: speed_m_s(rider.speed),
         power: Some(finite_or_zero(rider.power).round().clamp(0.0, 3000.0) as u32),
         cadence: rider
             .cadence
             .map(|cadence| finite_or_zero(cadence).round().clamp(0.0, 250.0) as u32),
     }
-}
-
-/// Position scaled onto the shared route, kept below its length (spec 6.4).
-fn distance_m(position: f64, route_length_m: f64) -> f64 {
-    (finite_or_zero(position) * OBN_LENGTH_M / route_length_m).clamp(0.0, 249.99)
 }
 
 /// Speed in m/s, rounded to centimetres per second and within 0 to 30 (spec 6.4).
@@ -165,7 +158,7 @@ mod tests {
     }
 
     fn outbox() -> Outbox {
-        Outbox::new("velodrome-250".into(), LENGTH)
+        Outbox::new(SharedRoute::new("velodrome-250", 250.0, LENGTH))
     }
 
     fn kinds(messages: &[AppMessage]) -> Vec<&'static str> {
@@ -261,7 +254,7 @@ mod tests {
 
     #[test]
     fn distance_stays_below_length() {
-        let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
+        let mut outbox = Outbox::new(SharedRoute::new("velodrome-250", 250.0, 250.004));
         outbox.frame(&[rider(7, 1.0)]);
         let at_end = update_entries(&outbox.frame(&[rider(7, 250.004)]));
         assert!(at_end[0].state.distance < 250.0);
@@ -270,7 +263,7 @@ mod tests {
         let beyond = update_entries(&outbox.frame(&[rider(7, 251.0)]));
         assert!(beyond[0].state.distance < 250.0);
 
-        let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
+        let mut outbox = Outbox::new(SharedRoute::new("velodrome-250", 250.0, 250.004));
         outbox.frame(&[rider(7, 1.0)]);
         let halfway = update_entries(&outbox.frame(&[rider(7, 125.002)]));
         assert!((halfway[0].state.distance - 125.0).abs() < 0.01);

@@ -6,6 +6,7 @@
   "lanes": 4,
   "seed": 250,
   "openbikenet": "velodrome-250",
+  "openbikenet_length": 250,
   "zones": [],
   "markers": [
     {"type":"start_finish","distance":0}
