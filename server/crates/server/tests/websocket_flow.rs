@@ -204,15 +204,19 @@ async fn info_lists_every_route_with_the_default_first() {
     assert_eq!(routes[0]["id"], "rolling-hills");
     assert_eq!(info["route"]["id"], "rolling-hills");
     assert_eq!(info["players"], 0);
-    // The velodrome is a 250 m oval; every other bundled route is a road route.
+    // The tracks are short ovals; every other bundled route is a road route.
+    let length = |r: &&Value| r["length_m"].as_f64().unwrap();
+    let mut tracks: Vec<&str> = routes
+        .iter()
+        .filter(|r| length(r) < 1000.0)
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    tracks.sort_unstable();
+    assert_eq!(tracks, ["herne-hill", "herne-hill-clockwise", "velodrome"]);
     assert!(routes
         .iter()
-        .filter(|r| r["id"] != "velodrome")
-        .all(|r| r["length_m"].as_f64().unwrap() > 3000.0));
-    assert!(
-        routes.iter().any(|r| r["id"] == "velodrome"),
-        "the velodrome is bundled"
-    );
+        .filter(|r| length(r) >= 1000.0)
+        .all(|r| length(&r) > 3000.0));
 
     let other = routes[1]["id"].as_str().unwrap();
     let (status, body) = http_get(addr, &format!("/api/route?id={other}")).await;

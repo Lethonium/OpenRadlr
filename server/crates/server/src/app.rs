@@ -9,6 +9,7 @@ use crate::guard::Slots;
 use crate::http::{router, AppState, Protection};
 use crate::map_file::load_maps;
 use crate::obn::link::spawn_link;
+use crate::obn::SharedRoute;
 use crate::resume::ResumeTokens;
 use crate::route_file::{load_routes, RouteFile};
 use crate::runtime::spawn_game;
@@ -40,14 +41,17 @@ const STATS_SAVE_EVERY: Duration = Duration::from_secs(60);
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-/// The simulation settings of one world. A world with a route shared through
-/// OpenBikeNet has no bots: its riders come from other apps.
+/// The simulation settings of one world. Routes shared through OpenBikeNet get
+/// no bots: their riders are humans, of this app or of others.
 fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
-    let mut sim = config.sim_config();
-    if group.iter().any(|file| file.openbikenet.is_some()) {
-        sim.target_riders = 0;
+    SimConfig {
+        routes_without_bots: group
+            .iter()
+            .filter(|file| file.openbikenet.is_some())
+            .map(|file| file.id.clone())
+            .collect(),
+        ..config.sim_config()
     }
-    sim
 }
 
 /// Builds the application. Must be called inside a Tokio runtime because it
@@ -175,16 +179,21 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             // The map's first route stands for the world: a route id clients can rejoin with.
             .with_vehicle_codes(vehicle_codes.clone(), route_ids[0].clone())
             .with_resume_tokens(resume_tokens.clone());
-        // The world with the OpenBikeNet route shares it, if a server is configured.
-        let shared_index = group
+        // The world's OpenBikeNet routes are shared, all on one link, if a server is configured.
+        let shared: Vec<(usize, SharedRoute)> = group
             .iter()
-            .position(|f| f.openbikenet.is_some())
-            .filter(|_| config.obn_url.is_some());
-        let obn_route = shared_index.map(|index| group[index].openbikenet.clone().unwrap_or_default());
+            .enumerate()
+            .filter(|_| config.obn_url.is_some())
+            .filter_map(|(index, file)| {
+                let id = file.openbikenet.clone()?;
+                let length = file.openbikenet_length.unwrap_or_default();
+                Some((index, SharedRoute::new(id, length, routes[index].length())))
+            })
+            .collect();
         let mut link_frames = None;
-        if let (Some(index), Some(obn_route)) = (shared_index, &obn_route) {
+        if !shared.is_empty() {
             let (frames, receiver) = tokio::sync::mpsc::channel(OBN_FRAME_BACKLOG);
-            core = core.with_openbikenet(index, obn_route, frames);
+            core = core.with_openbikenet(shared.clone(), frames);
             link_frames = Some(receiver);
         }
         if let (Some(anchor), true) = (studio_anchor, config.studio && !studio_in_valley) {
@@ -192,14 +201,17 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
             studio_in_valley = true;
         }
         let game = spawn_game(core);
-        if let (Some(index), Some(obn_route), Some(receiver), Some(url)) =
-            (shared_index, obn_route, link_frames, &config.obn_url)
-        {
-            tracing::info!(route = %obn_route, "sharing the route through OpenBikeNet");
+        if let (Some(receiver), Some(url)) = (link_frames, &config.obn_url) {
+            let shared_routes: Vec<SharedRoute> = shared.iter().map(|(_, route)| route.clone()).collect();
+            let ids = shared_routes
+                .iter()
+                .map(|r| r.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::info!(routes = %ids, "sharing routes through OpenBikeNet");
             spawn_link(
                 url.clone(),
-                obn_route,
-                routes[index].length(),
+                shared_routes,
                 config.obn_backoff_unit,
                 config.obn_heartbeat,
                 receiver,
@@ -216,7 +228,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         );
         for (position, (file, route)) in group.into_iter().zip(routes).enumerate() {
             entries.push(WorldEntry {
-                shared: shared_index == Some(position),
+                shared: shared.iter().any(|(index, _)| *index == position),
                 length_m: route.length(),
                 elevation_gain_m: file.elevation_gain_m(),
                 file: Arc::new(file),
@@ -379,26 +391,28 @@ mod tests {
 
     const ROUTES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes");
 
-    fn world_of(config: &Config, id: &str) -> World {
-        let file = RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap();
-        let route = file.to_route().unwrap();
-        let sim = sim_config_for(config, std::slice::from_ref(&file));
-        World::new(route, sim, Box::new(SplitMix64::new(1)))
+    fn world_of(config: &Config, ids: &[&str]) -> World {
+        let files: Vec<RouteFile> = ids
+            .iter()
+            .map(|id| RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap())
+            .collect();
+        let routes = files.iter().map(|f| f.to_route().unwrap()).collect();
+        let sim = sim_config_for(config, &files);
+        World::with_network(routes, None, sim, Box::new(SplitMix64::new(1)))
     }
 
     #[test]
-    fn shared_route_world_has_no_bots() {
+    fn shared_routes_have_no_bots_and_the_other_routes_of_their_world_do() {
         let config = Config {
             target_riders: 3,
             ..Config::default()
         };
-        let mut velodrome = world_of(&config, "velodrome");
-        let mut other = world_of(&config, "rolling-hills");
+        let mut world = world_of(&config, &["rolling-hills", "velodrome"]);
         for _ in 0..20 {
-            velodrome.tick(0.1);
-            other.tick(0.1);
+            world.tick(0.1);
         }
-        assert_eq!(velodrome.bot_count(), 0);
-        assert_eq!(other.bot_count(), 3);
+        let bots_on = |route| world.riders().filter(|r| r.route == route && r.is_bot()).count();
+        assert_eq!(bots_on(0), 3);
+        assert_eq!(bots_on(1), 0);
     }
 }

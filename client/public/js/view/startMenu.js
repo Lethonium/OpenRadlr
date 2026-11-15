@@ -161,7 +161,7 @@ const activityLabels = () => ({ ride: t("menu.tab.ride"), studio: t("menu.tab.st
  */
 export function activityTabs(routes, events) {
   const tabs = ["ride", "studio", "workout"]
-    .map((id) => ({ id, label: activityLabels()[id], count: routesFor(id, routes).length, live: false }))
+    .map((id) => ({ id, label: activityLabels()[id], count: rideCards(routesFor(id, routes)).length, live: false }))
     .filter((tab) => tab.count > 0);
   if (events.length) tabs.push({ id: "events", label: activityLabels().events, count: events.length, live: events.some((row) => row.joinable || row.countdown === t("events.running")) });
   return tabs;
@@ -229,6 +229,68 @@ export function routeDescription(route) {
 /** What the start menu says about a route shared with other apps (OpenBikeNet); nothing for any other. */
 export function sharedNote(route) {
   return route?.shared === true ? t("menu.shared.note") : "";
+}
+
+/** `herne-hill-clockwise` is `herne-hill` ridden the other way round (docs/routes.md). */
+const CLOCKWISE = "-clockwise";
+const baseId = (id) => (id.endsWith(CLOCKWISE) ? id.slice(0, -CLOCKWISE.length) : id);
+
+/** A track and its other way round, both served, or null. */
+function waysRound(route, routes) {
+  if (!route?.id) return null;
+  const id = baseId(route.id);
+  const anticlockwise = routes.find((r) => r.id === id);
+  const clockwise = routes.find((r) => r.id === `${id}${CLOCKWISE}`);
+  return anticlockwise && clockwise ? [anticlockwise, clockwise] : null;
+}
+
+/** The cards: a track ridden both ways round is one, with the riders of both. */
+export function rideCards(routes) {
+  return routes.flatMap((route) => {
+    const pair = waysRound(route, routes);
+    if (!pair) return [route];
+    if (route === pair[1]) return [];
+    const [a, b] = pair;
+    return [{ ...a, players: (a.players ?? 0) + (b.players ?? 0), phone_players: (a.phone_players ?? 0) + (b.phone_players ?? 0) }];
+  });
+}
+
+/** The card a route is on. */
+export function cardIdOf(route, routes) {
+  return route ? (waysRound(route, routes)?.[0].id ?? route.id) : null;
+}
+
+/** The route a click on a card picks: the track's card keeps the way round already picked. */
+export function cardPick(cardId, selected, routes) {
+  return selected && cardIdOf(selected, routes) === cardId ? selected.id : cardId;
+}
+
+/** The ways round the picked track, to choose from under its name; none for any other route. */
+export function directionsOf(route, routes) {
+  const pair = waysRound(route, routes);
+  if (!pair) return [];
+  return pair.map((r, i) => ({ id: r.id, label: t(i === 0 ? "menu.direction.anticlockwise" : "menu.direction.clockwise"), riders: routeRiders(r), picked: r.id === route.id }));
+}
+
+/**
+ * Renders the ways round as chips, the picked one pressed.
+ * @param {HTMLElement} list
+ * @param {{id: string, label: string, riders: string, picked: boolean}[]} directions from `directionsOf`
+ * @param {(id: string) => void} onSelect
+ */
+export function renderDirections(list, directions, onSelect) {
+  drawWhenChanged(list, JSON.stringify(directions), onSelect, (select) =>
+    list.replaceChildren(
+      ...directions.map((direction) => {
+        const button = element("button", "figure-chip");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(direction.picked));
+        button.append(element("strong", null, direction.label), element("span", "muted", direction.riders));
+        button.addEventListener("click", () => select(direction.id));
+        return button;
+      }),
+    ),
+  );
 }
 
 /** What a route card shows. */

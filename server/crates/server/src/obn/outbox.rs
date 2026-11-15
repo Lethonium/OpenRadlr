@@ -9,12 +9,14 @@ use std::collections::BTreeMap;
 use openradlr_sim::RiderId;
 
 use super::wire::{AppMessage, RiderEntry, RiderState};
-use super::{OBN_LENGTH_M, OBN_ROOM};
+use super::{SharedRoute, OBN_ROOM};
 
 /// One of this server's riders, as the game loop sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalRider {
     pub id: RiderId,
+    /// The OpenBikeNet id of the shared route the rider is on.
+    pub route: String,
     pub name: String,
     /// Metres along the route from its start line.
     pub position: f64,
@@ -23,90 +25,103 @@ pub struct LocalRider {
     pub cadence: Option<f64>,
 }
 
-/// A rider this outbox has joined, with its lap count since joining.
-#[derive(Debug, Clone, Copy)]
+/// A rider this outbox has joined, on which route, with its lap count since joining.
+#[derive(Debug, Clone)]
 struct Joined {
+    route: String,
     lap: u32,
     last_position: f64,
 }
 
-/// Messages for one OpenBikeNet route, built frame by frame.
+/// Messages for the OpenBikeNet routes of one connection, built frame by frame.
 #[derive(Debug)]
 pub struct Outbox {
-    route: String,
-    route_length_m: f64,
+    routes: Vec<SharedRoute>,
     joined: BTreeMap<RiderId, Joined>,
 }
 
 impl Outbox {
-    pub fn new(route: String, route_length_m: f64) -> Self {
+    pub fn new(routes: Vec<SharedRoute>) -> Self {
         Self {
-            route,
-            route_length_m,
+            routes,
             joined: BTreeMap::new(),
         }
     }
 
-    /// The messages for one frame: joins for new riders, one `update` for the
-    /// riders that joined earlier, and leaves for riders that are gone. Empty when there is
+    /// The messages for one frame: leaves for riders that are gone or moved to another
+    /// route (rider keys are unique per connection, so the leave goes first), joins for
+    /// new riders, and one `update` for the riders that joined earlier, on any route.
+    /// Riders on routes this outbox doesn't share are left out. Empty when there is
     /// nothing to say.
     pub fn frame(&mut self, riders: &[LocalRider]) -> Vec<AppMessage> {
-        let mut joins = Vec::new();
+        let riders: Vec<(&LocalRider, &SharedRoute)> = riders
+            .iter()
+            .filter_map(|rider| {
+                let route = self.routes.iter().find(|route| route.id == rider.route)?;
+                Some((rider, route))
+            })
+            .collect();
+
+        let mut messages = Vec::new();
+        self.joined.retain(|id, joined| {
+            let stays = riders
+                .iter()
+                .any(|(rider, _)| rider.id == *id && rider.route == joined.route);
+            if !stays {
+                messages.push(AppMessage::Leave { rider: rider_key(*id) });
+            }
+            stays
+        });
+
         let mut entries = Vec::new();
-        for rider in riders {
+        for (rider, route) in riders {
             match self.joined.get_mut(&rider.id) {
                 Some(joined) => {
                     // Positions wrap at the start line: a big step back is a crossing.
-                    if joined.last_position - rider.position > self.route_length_m / 2.0 {
+                    if joined.last_position - rider.position > route.local_length_m / 2.0 {
                         joined.lap += 1;
                     }
                     joined.last_position = rider.position;
                     entries.push(RiderEntry {
                         rider: rider_key(rider.id),
-                        state: state_of(joined.lap, rider, self.route_length_m),
+                        state: state_of(joined.lap, rider, route),
                     });
                 }
                 None => {
                     self.joined.insert(
                         rider.id,
                         Joined {
+                            route: route.id.clone(),
                             lap: 0,
                             last_position: rider.position,
                         },
                     );
                     // The join carries the starting state; an update in the same
                     // frame would be rate limited (the server counts the join as one).
-                    joins.push(AppMessage::Join {
+                    messages.push(AppMessage::Join {
                         rider: rider_key(rider.id),
-                        route: self.route.clone(),
+                        route: route.id.clone(),
                         room: OBN_ROOM.into(),
                         name: rider.name.clone(),
-                        state: state_of(0, rider, self.route_length_m),
+                        state: state_of(0, rider, route),
                     });
                 }
             }
         }
-
-        let mut leaves = Vec::new();
-        self.joined.retain(|id, _| {
-            let present = riders.iter().any(|rider| rider.id == *id);
-            if !present {
-                leaves.push(AppMessage::Leave { rider: rider_key(*id) });
-            }
-            present
-        });
-
-        let mut messages = joins;
         if !entries.is_empty() {
             messages.push(AppMessage::Update { riders: entries });
         }
-        messages.extend(leaves);
         messages
     }
 
     /// Forgets every joined rider. The next frame joins them all again from lap 0.
     pub fn reset(&mut self) {
         self.joined.clear();
+    }
+
+    /// The routes this outbox shares, to subscribe to.
+    pub fn routes(&self) -> &[SharedRoute] {
+        &self.routes
     }
 }
 
@@ -115,21 +130,16 @@ fn rider_key(id: RiderId) -> String {
     format!("r{id}")
 }
 
-fn state_of(lap: u32, rider: &LocalRider, route_length_m: f64) -> RiderState {
+fn state_of(lap: u32, rider: &LocalRider, route: &SharedRoute) -> RiderState {
     RiderState {
         lap,
-        distance: distance_m(rider.position, route_length_m),
+        distance: route.shared_distance(rider.position),
         speed: speed_m_s(rider.speed),
         power: Some(finite_or_zero(rider.power).round().clamp(0.0, 3000.0) as u32),
         cadence: rider
             .cadence
             .map(|cadence| finite_or_zero(cadence).round().clamp(0.0, 250.0) as u32),
     }
-}
-
-/// Position scaled onto the shared route, kept below its length (spec 6.4).
-fn distance_m(position: f64, route_length_m: f64) -> f64 {
-    (finite_or_zero(position) * OBN_LENGTH_M / route_length_m).clamp(0.0, 249.99)
 }
 
 /// Speed in m/s, rounded to centimetres per second and within 0 to 30 (spec 6.4).
@@ -154,8 +164,13 @@ mod tests {
     const LENGTH: f64 = 250.0;
 
     fn rider(id: RiderId, position: f64) -> LocalRider {
+        rider_on(id, "velodrome-250", position)
+    }
+
+    fn rider_on(id: RiderId, route: &str, position: f64) -> LocalRider {
         LocalRider {
             id,
+            route: route.into(),
             name: format!("rider {id}"),
             position,
             speed: 10.0,
@@ -165,7 +180,14 @@ mod tests {
     }
 
     fn outbox() -> Outbox {
-        Outbox::new("velodrome-250".into(), LENGTH)
+        Outbox::new(vec![SharedRoute::new("velodrome-250", 250.0, LENGTH)])
+    }
+
+    fn two_tracks() -> Outbox {
+        Outbox::new(vec![
+            SharedRoute::new("velodrome-250", 250.0, 250.0),
+            SharedRoute::new("herne-hill-450", 450.0, 450.0),
+        ])
     }
 
     fn kinds(messages: &[AppMessage]) -> Vec<&'static str> {
@@ -218,6 +240,44 @@ mod tests {
     }
 
     #[test]
+    fn riders_on_two_tracks_join_their_own_and_share_one_update() {
+        let mut outbox = two_tracks();
+        let first = outbox.frame(&[rider_on(7, "velodrome-250", 10.0), rider_on(8, "herne-hill-450", 400.0)]);
+        assert_eq!(kinds(&first), ["join", "join"]);
+        let joins: Vec<(&str, f64)> = first
+            .iter()
+            .map(|m| match m {
+                AppMessage::Join { route, state, .. } => (route.as_str(), state.distance),
+                other => panic!("expected a join, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(joins, [("velodrome-250", 10.0), ("herne-hill-450", 400.0)]);
+
+        let second = outbox.frame(&[rider_on(7, "velodrome-250", 20.0), rider_on(8, "herne-hill-450", 410.0)]);
+        assert_eq!(kinds(&second), ["update"]);
+        assert_eq!(update_entries(&second).len(), 2);
+    }
+
+    #[test]
+    fn a_rider_who_changes_track_leaves_before_joining_the_other() {
+        let mut outbox = two_tracks();
+        outbox.frame(&[rider_on(7, "velodrome-250", 240.0)]);
+        outbox.frame(&[rider_on(7, "velodrome-250", 0.5)]); // lap 1
+
+        let moved = outbox.frame(&[rider_on(7, "herne-hill-450", 5.0)]);
+        assert_eq!(kinds(&moved), ["leave", "join"]);
+        assert!(
+            matches!(&moved[1], AppMessage::Join { route, state, .. } if route == "herne-hill-450" && state.lap == 0)
+        );
+    }
+
+    #[test]
+    fn riders_on_routes_that_are_not_shared_are_left_out() {
+        let mut outbox = two_tracks();
+        assert!(outbox.frame(&[rider_on(7, "rolling-hills", 10.0)]).is_empty());
+    }
+
+    #[test]
     fn missing_rider_leaves() {
         let mut outbox = outbox();
         outbox.frame(&[rider(7, 10.0)]);
@@ -261,7 +321,7 @@ mod tests {
 
     #[test]
     fn distance_stays_below_length() {
-        let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
+        let mut outbox = Outbox::new(vec![SharedRoute::new("velodrome-250", 250.0, 250.004)]);
         outbox.frame(&[rider(7, 1.0)]);
         let at_end = update_entries(&outbox.frame(&[rider(7, 250.004)]));
         assert!(at_end[0].state.distance < 250.0);
@@ -270,7 +330,7 @@ mod tests {
         let beyond = update_entries(&outbox.frame(&[rider(7, 251.0)]));
         assert!(beyond[0].state.distance < 250.0);
 
-        let mut outbox = Outbox::new("velodrome-250".into(), 250.004);
+        let mut outbox = Outbox::new(vec![SharedRoute::new("velodrome-250", 250.0, 250.004)]);
         outbox.frame(&[rider(7, 1.0)]);
         let halfway = update_entries(&outbox.frame(&[rider(7, 125.002)]));
         assert!((halfway[0].state.distance - 125.0).abs() < 0.01);
@@ -282,6 +342,7 @@ mod tests {
         let mut sample = |speed: f64, power: f64, cadence: Option<f64>| {
             let local = LocalRider {
                 id: 7,
+                route: "velodrome-250".into(),
                 name: "Anna".into(),
                 position: 10.0,
                 speed,

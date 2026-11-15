@@ -503,6 +503,10 @@ kbd {
   display: none;
 }
 
+.route-directions {
+  margin: 0 0 8px;
+}
+
 .stage-head .lede {
   margin: 0;
   max-width: 62ch;

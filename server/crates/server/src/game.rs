@@ -8,6 +8,7 @@
 
 use crate::obn::outbox::LocalRider;
 use crate::obn::remote::{RemoteEvent, RemoteRider, Remotes};
+use crate::obn::SharedRoute;
 use crate::protocol::{
     event_info, event_message, event_notice_message, event_state, nearest_riders, state_message, DeviceKind,
     EventInfoWire, EventState, Exercise, InputAction, PhysicsWire, RiderState, RiderTags, ServerMessage, Side,
@@ -208,7 +209,7 @@ pub struct GameCore {
     departed: HashMap<RiderId, String>,
     /// Resume tokens and who is detached (#73).
     attachments: Attachments,
-    /// The shared OpenBikeNet route, if this world has one.
+    /// The routes shared through OpenBikeNet, if this world has any.
     obn: Option<Obn>,
     /// The link to the spin studio building, if this world has one.
     studio: Option<StudioLink>,
@@ -244,10 +245,15 @@ impl StudioLink {
     }
 }
 
-/// What a world with an OpenBikeNet route needs: where it is, the way out and the riders in.
+/// What a world with OpenBikeNet routes needs: the way out and, per route, the riders in.
 struct Obn {
-    route: RouteIndex,
     frames: mpsc::Sender<Vec<LocalRider>>,
+    tracks: Vec<SharedTrack>,
+}
+
+/// One route of the world shared through OpenBikeNet.
+struct SharedTrack {
+    route: RouteIndex,
     remotes: Remotes,
     /// The remote riders as of the last tick, shared by all viewers.
     shown: Vec<RemoteRider>,
@@ -340,22 +346,25 @@ impl GameCore {
         self
     }
 
-    /// Shares `route` with other apps through OpenBikeNet as `shared_route`: once a second the humans on it go
-    /// out as a frame on `frames` (dropped if the link is behind), and riders coming back
-    /// arrive through [`GameCore::remote`].
+    /// Shares each route of `routes` with other apps through OpenBikeNet as its
+    /// [`SharedRoute`]: once a second the humans on them go out as one frame on `frames`
+    /// (dropped if the link is behind), and riders coming back arrive through
+    /// [`GameCore::remote`]. Everybody in the world sees them.
     pub fn with_openbikenet(
         mut self,
-        route: RouteIndex,
-        shared_route: &str,
+        routes: Vec<(RouteIndex, SharedRoute)>,
         frames: mpsc::Sender<Vec<LocalRider>>,
     ) -> Self {
-        let remotes = Remotes::new(shared_route, self.world.route(route).length());
-        self.obn = Some(Obn {
-            route,
-            frames,
-            remotes,
-            shown: Vec::new(),
-        });
+        let tracks = routes
+            .into_iter()
+            .enumerate()
+            .map(|(index, (route, shared))| SharedTrack {
+                route,
+                remotes: Remotes::new(shared, index as u32),
+                shown: Vec::new(),
+            })
+            .collect();
+        self.obn = Some(Obn { frames, tracks });
         self
     }
 
@@ -363,12 +372,15 @@ impl GameCore {
     pub fn remote(&mut self, event: RemoteEvent) {
         let now = self.clock_s();
         if let Some(obn) = &mut self.obn {
-            obn.remotes.apply(event, now);
-            obn.shown = obn.remotes.riders(now);
+            // Each track takes the messages about its own route.
+            for track in &mut obn.tracks {
+                track.remotes.apply(event.clone(), now);
+                track.shown = track.remotes.riders(now);
+            }
         }
     }
 
-    /// Hands this second's humans on the shared route to the link, without waiting for it.
+    /// Hands this second's humans on the shared routes to the link, without waiting for it.
     fn send_obn_frame(&self) {
         let Some(obn) = &self.obn else {
             return;
@@ -379,14 +391,18 @@ impl GameCore {
         let frame = self
             .world
             .riders()
-            .filter(|r| r.route == obn.route && r.off_route.is_none() && !r.is_bot() && !r.workout)
-            .map(|r| LocalRider {
-                id: r.id,
-                name: r.name.clone(),
-                position: r.position,
-                speed: r.speed,
-                power: r.power,
-                cadence: r.cadence,
+            .filter(|r| r.off_route.is_none() && !r.is_bot() && !r.workout)
+            .filter_map(|r| {
+                let track = obn.tracks.iter().find(|t| t.route == r.route)?;
+                Some(LocalRider {
+                    id: r.id,
+                    route: track.remotes.route().id.clone(),
+                    name: r.name.clone(),
+                    position: r.position,
+                    speed: r.speed,
+                    power: r.power,
+                    cadence: r.cadence,
+                })
             })
             .collect();
         // A full or closed channel loses the frame; the next one supersedes it.
@@ -429,12 +445,12 @@ impl GameCore {
         self.with_studio(viewer, self.with_remotes(viewer, state))
     }
 
-    /// `state` with the riders of other apps added, if it is for a rider on the shared route.
+    /// `state` with the riders of other apps added, nearest first, wherever `viewer` rides.
     fn with_remotes(&self, viewer: RiderId, state: ServerMessage) -> ServerMessage {
         let (Some(obn), Some(me)) = (&self.obn, self.world.rider(viewer)) else {
             return state;
         };
-        if me.route != obn.route || obn.shown.is_empty() {
+        if obn.tracks.iter().all(|t| t.shown.is_empty()) {
             return state;
         }
         let ServerMessage::State {
@@ -448,15 +464,27 @@ impl GameCore {
         else {
             return state;
         };
-        let route = self.world.route(obn.route);
+        let (x, y) = self.world.rider_xy(me);
+        let mut remotes: Vec<(f64, RiderState)> = obn
+            .tracks
+            .iter()
+            .flat_map(|track| {
+                let route = self.world.route(track.route);
+                track.shown.iter().map(move |r| {
+                    let (rx, ry) = route.position_at(r.distance);
+                    ((rx - x).hypot(ry - y), RiderState::remote(r, route.id(), route.lanes()))
+                })
+            })
+            .collect();
+        remotes.sort_by(|a, b| a.0.total_cmp(&b.0));
         let room = self.settings.max_visible_riders.saturating_sub(riders.len());
-        riders.extend(
-            obn.shown
-                .iter()
-                .take(room)
-                .map(|r| RiderState::remote(r, route.id(), route.lanes())),
-        );
-        route_riders.remote = obn.shown.len();
+        riders.extend(remotes.into_iter().take(room).map(|(_, rider)| rider));
+        route_riders.remote = obn
+            .tracks
+            .iter()
+            .filter(|t| t.route == me.route)
+            .map(|t| t.shown.len())
+            .sum();
         ServerMessage::State {
             tick,
             riders,
@@ -1011,7 +1039,9 @@ impl GameCore {
         let now = self.clock_s();
         if let Some(obn) = &mut self.obn {
             // Once per tick for everybody, not per viewer.
-            obn.shown = obn.remotes.riders(now);
+            for track in &mut obn.tracks {
+                track.shown = track.remotes.riders(now);
+            }
         }
         self.send_obn_frame();
 
@@ -2835,9 +2865,164 @@ mod tests {
     fn obn_game(target_riders: usize, capacity: usize) -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
         let (frames, receiver) = mpsc::channel(capacity);
         (
-            game(target_riders, 10).with_openbikenet(0, "velodrome-250", frames),
+            {
+                let game = game(target_riders, 10);
+                let length = game.world().route(0).length();
+                game.with_openbikenet(vec![(0, SharedRoute::new("velodrome-250", 250.0, length))], frames)
+            },
             receiver,
         )
+    }
+
+    /// A square track of `side` metres a side, its corner at `(x, 0)`.
+    fn track(id: &str, x: f64, side: f64) -> Route {
+        Route::new(RouteSpec {
+            id: id.into(),
+            name: id.into(),
+            lanes: 4,
+            seed: 1,
+            points: vec![
+                Point::new(x, 0.0, 0.0),
+                Point::new(x + side, 0.0, 0.0),
+                Point::new(x + side, side, 0.0),
+                Point::new(x, side, 0.0),
+            ],
+            markers: vec![],
+            walk: vec![],
+        })
+        .unwrap()
+    }
+
+    /// A world of the road `test` and two shared tracks, `small` (velodrome-250)
+    /// and `big` (herne-hill-450), the road keeping 2 bots.
+    fn island_game() -> (GameCore, mpsc::Receiver<Vec<LocalRider>>) {
+        let world = World::with_network(
+            vec![hilly_route(), track("small", 600.0, 62.5), track("big", 800.0, 112.5)],
+            None,
+            SimConfig {
+                target_riders: 2,
+                routes_without_bots: vec!["small".into(), "big".into()],
+                ..SimConfig::default()
+            },
+            Box::new(SplitMix64::new(1)),
+        );
+        let (frames, receiver) = mpsc::channel(4);
+        let game = GameCore::new(world, GameSettings::default()).with_openbikenet(
+            vec![
+                (1, SharedRoute::new("velodrome-250", 250.0, 250.0)),
+                (2, SharedRoute::new("herne-hill-450", 450.0, 450.0)),
+            ],
+            frames,
+        );
+        (game, receiver)
+    }
+
+    fn snapshot_on(route: &str, id: &str, name: &str) -> RemoteEvent {
+        RemoteEvent::Message(crate::obn::wire::ServerMessage::Snapshot {
+            route: route.into(),
+            room: "public".into(),
+            riders: vec![crate::obn::wire::RemoteView {
+                id: id.into(),
+                app: "velopopuli".into(),
+                name: name.into(),
+                lap: 0,
+                distance: 10.0,
+                speed: 0.0,
+                power: Some(180.0),
+                cadence: None,
+            }],
+        })
+    }
+
+    /// The last state message `sink` got after a broadcast.
+    fn state_after_broadcast(game: &mut GameCore, sink: &RecordingSink) -> ServerMessage {
+        sink.take();
+        for _ in 0..game.settings().broadcast_every() {
+            game.tick();
+        }
+        sink.take()
+            .into_iter()
+            .rev()
+            .find(|m| matches!(m, ServerMessage::State { .. }))
+            .expect("a state message")
+    }
+
+    #[test]
+    fn riders_of_other_apps_on_every_track_are_seen_from_the_road() {
+        let (mut game, _frames) = island_game();
+        let (_, sink) = join(&mut game, "Anna");
+        game.remote(snapshot_on("velodrome-250", "a", "Cleo"));
+        game.remote(snapshot_on("herne-hill-450", "a", "Dan"));
+        let ServerMessage::State {
+            riders, route_riders, ..
+        } = state_after_broadcast(&mut game, &sink)
+        else {
+            unreachable!()
+        };
+        let cleo = riders.iter().find(|r| r.name == "Cleo").expect("Cleo is shown");
+        let dan = riders.iter().find(|r| r.name == "Dan").expect("Dan is shown");
+        assert_eq!(cleo.route.as_deref(), Some("small"));
+        assert_eq!(dan.route.as_deref(), Some("big"));
+        assert!((dan.distance - 10.0).abs() < 0.01);
+        assert_ne!(cleo.id, dan.id, "the same remote id on two tracks is two riders");
+        assert_eq!(route_riders.remote, 0, "none of them is on Anna's road");
+    }
+
+    #[test]
+    fn route_riders_count_the_riders_of_other_apps_on_my_track() {
+        let (mut game, _frames) = island_game();
+        let sink = RecordingSink::default();
+        game.join("Anna", 70.0, None, None, Some("big"), None, Box::new(sink.clone()))
+            .unwrap();
+        game.remote(snapshot_on("velodrome-250", "a", "Cleo"));
+        game.remote(snapshot_on("herne-hill-450", "b", "Dan"));
+        let ServerMessage::State { route_riders, .. } = state_after_broadcast(&mut game, &sink) else {
+            unreachable!()
+        };
+        assert_eq!(route_riders.remote, 1);
+    }
+
+    #[test]
+    fn frames_carry_the_humans_of_every_track_and_no_one_else() {
+        let (mut game, mut frames) = island_game();
+        let (road, _) = join(&mut game, "Anna");
+        let small = game
+            .join(
+                "Ben",
+                70.0,
+                None,
+                None,
+                Some("small"),
+                None,
+                Box::new(RecordingSink::default()),
+            )
+            .unwrap();
+        let big = game
+            .join(
+                "Cleo",
+                70.0,
+                None,
+                None,
+                Some("big"),
+                None,
+                Box::new(RecordingSink::default()),
+            )
+            .unwrap();
+        for _ in 0..game.settings().tick_hz {
+            game.tick();
+        }
+        let mut frame: Vec<(RiderId, String)> = frames
+            .try_recv()
+            .expect("one frame after a second")
+            .into_iter()
+            .map(|r| (r.id, r.route))
+            .collect();
+        frame.sort();
+        assert_eq!(frame, [(small, "velodrome-250".into()), (big, "herne-hill-450".into())]);
+        assert!(game
+            .world()
+            .riders()
+            .all(|r| r.id == road || !r.is_bot() || r.route == 0));
     }
 
     fn snapshot_of_ben() -> RemoteEvent {

@@ -213,10 +213,10 @@ async fn api_info_marks_the_route_shared() {
     let linked = serve(config(Some(url))).await;
     let info: Value = serde_json::from_str(&http_get(linked, "/api/info").await).unwrap();
     for route in info["routes"].as_array().unwrap() {
-        if route["id"] == "velodrome" {
-            assert_eq!(route["shared"], true);
+        if ["velodrome", "herne-hill", "herne-hill-clockwise"].contains(&route["id"].as_str().unwrap()) {
+            assert_eq!(route["shared"], true, "{route}");
         } else {
-            assert!(route.get("shared").is_none(), "only the velodrome is shared: {route}");
+            assert!(route.get("shared").is_none(), "only the tracks are shared: {route}");
         }
     }
 
@@ -315,4 +315,48 @@ async fn a_pong_keeps_the_connection() {
     }
     let again = tokio::time::timeout(Duration::from_millis(300), listener.accept()).await;
     assert!(again.is_err(), "the app reconnected although the server answered");
+}
+
+/// Two shared tracks on one map, in a fresh directory: the bundled velodrome and a
+/// copy of it shared as `herne-hill-450`.
+fn two_tracks_dir() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("openradlr-two-tracks-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let velodrome = std::fs::read_to_string(PathBuf::from(ROUTES_DIR).join("velodrome.json")).unwrap();
+    let mut small: Value = serde_json::from_str(&velodrome).unwrap();
+    small["map"] = serde_json::json!({ "id": "tracks", "seed": 1 });
+    let mut big = small.clone();
+    big["id"] = "big".into();
+    big["openbikenet"] = "herne-hill-450".into();
+    big["openbikenet_length"] = 450.into();
+    std::fs::write(dir.join("velodrome.json"), small.to_string()).unwrap();
+    std::fs::write(dir.join("big.json"), big.to_string()).unwrap();
+    dir
+}
+
+#[tokio::test]
+async fn one_connection_subscribes_to_every_shared_track_of_a_world() {
+    let dir = two_tracks_dir();
+    let (listener, url) = fake_server().await;
+    let _addr = serve(Config {
+        route_file: dir.join("velodrome.json"),
+        routes_dir: Some(dir.clone()),
+        ..velodrome_config(Some(url))
+    })
+    .await;
+    let mut fake = accept(&listener).await;
+    assert_eq!(recv(&mut fake).await["type"], "hello");
+    let mut routes = Vec::new();
+    for _ in 0..2 {
+        let subscribe = recv(&mut fake).await;
+        assert_eq!(subscribe["type"], "subscribe");
+        routes.push(subscribe["route"].as_str().unwrap().to_owned());
+    }
+    routes.sort();
+    assert_eq!(routes, ["herne-hill-450", "velodrome-250"]);
+    // No second connection: both tracks share this one.
+    assert!(tokio::time::timeout(Duration::from_millis(300), listener.accept())
+        .await
+        .is_err());
+    std::fs::remove_dir_all(dir).ok();
 }

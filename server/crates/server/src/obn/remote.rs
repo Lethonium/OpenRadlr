@@ -10,10 +10,12 @@ use openradlr_sim::RiderId;
 use crate::game::clean_foreign_name;
 
 use super::wire::{RemoteUpdate, RemoteView, ServerMessage};
-use super::{OBN_LENGTH_M, OBN_ROOM};
+use super::{SharedRoute, OBN_ROOM};
 
 /// Remote riders get ids from here upwards, far from the sim's own (which count up from 1).
 const FIRST_REMOTE_ID: RiderId = 0xF000_0000;
+/// Ids each shared route hands out, so that riders on two routes never share one.
+const IDS_PER_ROUTE: RiderId = 0x0100_0000;
 /// Longest time a position is extrapolated from the last update.
 const MAX_EXTRAPOLATION_S: f64 = 2.0;
 /// A rider without an update for longer than this is hidden until the next one.
@@ -60,22 +62,25 @@ struct Known {
 #[derive(Debug)]
 pub struct Remotes {
     /// The shared route subscribed to; messages about any other route or room are ignored.
-    route: String,
-    route_length_m: f64,
+    route: SharedRoute,
     next_id: RiderId,
     riders: HashMap<String, Known>,
 }
 
 impl Remotes {
-    /// `route` is the shared route's id, `route_length_m` the length of the local route
-    /// it is drawn onto.
-    pub fn new(route: impl Into<String>, route_length_m: f64) -> Self {
+    /// The riders on `route`, the `index`th shared route of the world (0 to 15): it
+    /// picks the range their ids come from.
+    pub fn new(route: SharedRoute, index: u32) -> Self {
         Self {
-            route: route.into(),
-            route_length_m,
-            next_id: FIRST_REMOTE_ID,
+            route,
+            next_id: FIRST_REMOTE_ID + index.min(15) * IDS_PER_ROUTE,
             riders: HashMap::new(),
         }
+    }
+
+    /// The shared route these riders are on.
+    pub fn route(&self) -> &SharedRoute {
+        &self.route
     }
 
     pub fn len(&self) -> usize {
@@ -125,7 +130,7 @@ impl Remotes {
     pub fn riders(&mut self, now_s: f64) -> Vec<RemoteRider> {
         self.riders
             .retain(|_, known| now_s - known.heard_at_s <= FORGET_AFTER_S);
-        let length = self.route_length_m;
+        let length = self.route.local_length_m;
         let mut out: Vec<RemoteRider> = self
             .riders
             .values()
@@ -154,7 +159,7 @@ impl Remotes {
             ServerMessage::Snapshot { route, room, .. }
             | ServerMessage::Joined { route, room, .. }
             | ServerMessage::Updated { route, room, .. }
-            | ServerMessage::Left { route, room, .. } => *route == self.route && room == OBN_ROOM,
+            | ServerMessage::Left { route, room, .. } => *route == self.route.id && room == OBN_ROOM,
             _ => true,
         }
     }
@@ -165,11 +170,6 @@ impl Remotes {
         id
     }
 
-    /// Metres on the shared route to metres on the local one.
-    fn local(&self, distance: f64) -> f64 {
-        distance * self.route_length_m / OBN_LENGTH_M
-    }
-
     fn insert(&mut self, id: RiderId, view: RemoteView, now_s: f64) {
         // Names and app ids come from strangers: same filter as local names.
         let app = clean_foreign_name(&view.app).unwrap_or_else(|| "?".into());
@@ -178,7 +178,7 @@ impl Remotes {
             id,
             app,
             name,
-            distance: self.local(view.distance),
+            distance: self.route.local_distance(view.distance),
             speed: view.speed,
             power: view.power.unwrap_or(0.0),
             cadence: view.cadence,
@@ -188,7 +188,7 @@ impl Remotes {
     }
 
     fn update(&mut self, update: RemoteUpdate, now_s: f64) {
-        let distance = self.local(update.distance);
+        let distance = self.route.local_distance(update.distance);
         if let Some(known) = self.riders.get_mut(&update.id) {
             known.distance = distance;
             known.speed = update.speed;
@@ -256,7 +256,7 @@ mod tests {
     }
 
     fn remotes() -> Remotes {
-        Remotes::new("velodrome-250", 250.0)
+        Remotes::new(SharedRoute::new("velodrome-250", 250.0, 250.0), 0)
     }
 
     fn named<'a>(riders: &'a [RemoteRider], name: &str) -> &'a RemoteRider {
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn distance_is_scaled_to_the_local_length() {
-        let mut r = Remotes::new("velodrome-250", 500.0);
+        let mut r = Remotes::new(SharedRoute::new("velodrome-250", 250.0, 500.0), 0);
         r.apply(joined(view("a", "Ann", 100.0, 0.0)), 0.0);
         assert_eq!(r.riders(0.0)[0].distance, 200.0);
     }
