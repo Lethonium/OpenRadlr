@@ -40,14 +40,17 @@ const STATS_SAVE_EVERY: Duration = Duration::from_secs(60);
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-/// The simulation settings of one world. A world with a route shared through
-/// OpenBikeNet has no bots: its riders come from other apps.
+/// The simulation settings of one world. Routes shared through OpenBikeNet get
+/// no bots: their riders are humans, of this app or of others.
 fn sim_config_for(config: &Config, group: &[RouteFile]) -> SimConfig {
-    let mut sim = config.sim_config();
-    if group.iter().any(|file| file.openbikenet.is_some()) {
-        sim.target_riders = 0;
+    SimConfig {
+        routes_without_bots: group
+            .iter()
+            .filter(|file| file.openbikenet.is_some())
+            .map(|file| file.id.clone())
+            .collect(),
+        ..config.sim_config()
     }
-    sim
 }
 
 /// Builds the application. Must be called inside a Tokio runtime because it
@@ -379,26 +382,28 @@ mod tests {
 
     const ROUTES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../routes");
 
-    fn world_of(config: &Config, id: &str) -> World {
-        let file = RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap();
-        let route = file.to_route().unwrap();
-        let sim = sim_config_for(config, std::slice::from_ref(&file));
-        World::new(route, sim, Box::new(SplitMix64::new(1)))
+    fn world_of(config: &Config, ids: &[&str]) -> World {
+        let files: Vec<RouteFile> = ids
+            .iter()
+            .map(|id| RouteFile::load(&Path::new(ROUTES_DIR).join(format!("{id}.json"))).unwrap())
+            .collect();
+        let routes = files.iter().map(|f| f.to_route().unwrap()).collect();
+        let sim = sim_config_for(config, &files);
+        World::with_network(routes, None, sim, Box::new(SplitMix64::new(1)))
     }
 
     #[test]
-    fn shared_route_world_has_no_bots() {
+    fn shared_routes_have_no_bots_and_the_other_routes_of_their_world_do() {
         let config = Config {
             target_riders: 3,
             ..Config::default()
         };
-        let mut velodrome = world_of(&config, "velodrome");
-        let mut other = world_of(&config, "rolling-hills");
+        let mut world = world_of(&config, &["rolling-hills", "velodrome"]);
         for _ in 0..20 {
-            velodrome.tick(0.1);
-            other.tick(0.1);
+            world.tick(0.1);
         }
-        assert_eq!(velodrome.bot_count(), 0);
-        assert_eq!(other.bot_count(), 3);
+        let bots_on = |route| world.riders().filter(|r| r.route == route && r.is_bot()).count();
+        assert_eq!(bots_on(0), 3);
+        assert_eq!(bots_on(1), 0);
     }
 }

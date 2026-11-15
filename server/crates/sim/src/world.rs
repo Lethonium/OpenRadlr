@@ -44,6 +44,9 @@ pub struct SimConfig {
     /// Humans plus bots the world keeps riding on every route
     /// (`OPENRADLR_TARGET_RIDERS`; 0: no bots at all).
     pub target_riders: usize,
+    /// Ids of routes that never get bots, not even for events (tracks shared
+    /// with other apps): their riders are humans only.
+    pub routes_without_bots: Vec<String>,
     /// Bots every human riding a route keeps around them: up to
     /// `company_radius_m` ahead or `company_behind_m` behind. They come out
     /// of the route's `target_riders`: far bots make room, the count stays.
@@ -87,6 +90,7 @@ impl Default for SimConfig {
     fn default() -> Self {
         Self {
             target_riders: 12,
+            routes_without_bots: Vec::new(),
             bots_near_human: 6,
             company_radius_m: 1500.0,
             company_behind_m: 400.0,
@@ -1248,7 +1252,7 @@ impl World {
     /// Spawns `count` bots on `route` matched to `levels_wkg` (they stay while
     /// entered or in a group ride). Returns their ids.
     pub fn spawn_event_bots(&mut self, route: RouteIndex, count: usize, levels_wkg: &[f64]) -> Vec<RiderId> {
-        if route >= self.routes.len() {
+        if route >= self.routes.len() || !self.has_bots(route) {
             return Vec::new();
         }
         (0..count).map(|_| self.spawn_bot_matched(route, levels_wkg)).collect()
@@ -1316,12 +1320,22 @@ impl World {
             && !self.seat_of.contains_key(&r.id)
     }
 
+    /// Whether `route` may have bots (see [`SimConfig::routes_without_bots`]).
+    fn has_bots(&self, route: RouteIndex) -> bool {
+        let id = self.routes[route].id();
+        !self.config.routes_without_bots.iter().any(|r| r == id)
+    }
+
     /// Keeps every route at `target_riders`: company for its humans first
     /// (far bots making room), then groups where the route is emptiest;
     /// surplus bots leave once no human is nearby.
     fn balance_population(&mut self) {
-        let target = self.config.target_riders;
         for route in 0..self.routes.len() {
+            let target = if self.has_bots(route) {
+                self.config.target_riders
+            } else {
+                0
+            };
             self.keep_company(route, target);
             while self.population(route) < target {
                 let room = target - self.population(route);
@@ -2080,6 +2094,28 @@ mod tests {
         }
         let after: f64 = world.riders().map(|r| r.odometer).sum();
         assert!(after > before + 100.0);
+    }
+
+    #[test]
+    fn routes_without_bots_stay_free_of_them_while_the_others_fill_up() {
+        let config = SimConfig {
+            target_riders: 3,
+            routes_without_bots: vec!["flat".into()],
+            ..SimConfig::default()
+        };
+        let mut world = World::with_network(
+            vec![square_loop(), flat_loop(250.0)],
+            None,
+            config,
+            Box::new(SplitMix64::new(7)),
+        );
+        let me = world.join_human_on(1, "Anna", 70.0).unwrap();
+        world.spawn_event_bots(1, 4, &[]);
+        ride(&mut world, 5.0, &[(me, 200.0)]);
+        let bots_on = |route| world.riders().filter(|r| r.route == route && r.is_bot()).count();
+        assert_eq!(bots_on(0), 3);
+        assert_eq!(bots_on(1), 0);
+        assert_eq!(world.rider(me).unwrap().route, 1);
     }
 
     #[test]
