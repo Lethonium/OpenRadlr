@@ -72,7 +72,8 @@ export const ACHIEVEMENTS = Object.freeze([
   def("lavaFeet", anyRide((r) => r.routeId === "lanzarote-lava-180" && num(r.distanceM) >= 180_000)),
   def("lemons10", (f) => f.lemons >= 10),
   def("summits10", (f) => f.summits.size >= 10),
-  def("knowThyself", anyRide((r) => Boolean(r.test))),
+  // A finished test only: `test` alone is also set by a ramp stopped too short, so older records without `testFtp` don't count.
+  def("knowThyself", anyRide((r) => num(r.testFtp) > 0)),
   def("stronger", (f) => f.firstFtp !== null && f.rides.some((r) => num(r.ftp) * 10 >= f.firstFtp * 11)),
   def("watts1000", anyRide((r) => r.measured === true && num(r.maxPower) >= 1000)),
   def("nightOwl", anyRide((r) => hour(r) >= 22 || hour(r) < 4), true),

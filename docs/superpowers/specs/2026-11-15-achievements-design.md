@@ -45,7 +45,7 @@ are deliberately funny and secret.
 - Client only, plain ES modules, no build step. UI text in `js/i18n/en.js` and `de.js` (ADR 0017).
 - Pure logic with storage and clock injected (CONTRIBUTING.md); tests in plain node.
 - Data available: ride records (`ride/rideHistory.js`: `startedAt`, `endedAt`, `routeId`, `device`,
-  `measured`, `ftp`, `durationS`, `distanceM`, `elevationGainM`, `kilojoules`, `maxPower`, `curve`, `test`;
+  `measured`, `ftp`, `durationS`, `distanceM`, `elevationGainM`, `kilojoules`, `maxPower`, `curve`, `test`, `testFtp`;
   older records miss some fields, treat missing as unknown), workout records (`kind: "workout"`, `planId`),
   summits (`openradlr.summits`, a list of "routeId:metres", no dates), golden lemons (`openradlr.lemons`,
   a count, no dates), best laps (ghost store).
@@ -84,7 +84,7 @@ are deliberately funny and secret.
 | lavaFeet | Lava Feet | one ride on `lanzarote-lava-180` ≥ 180 km | |
 | lemons10 | When Life Gives You Lemons | ≥ 10 golden lemons | |
 | summits10 | Summit Collector | ≥ 10 different summits | |
-| knowThyself | Know Thyself | a ride with an FTP test (`test` set) | |
+| knowThyself | Know Thyself | a ride with a finished FTP test (`testFtp` set; `test` alone is also set by a ramp stopped too short, so older records without `testFtp` don't count) | |
 | stronger | Getting Stronger | a ride's `ftp` ≥ 1.1 × the first ride's known `ftp` | |
 | watts1000 | The 1,000 W Club | a measured ride with `maxPower` ≥ 1,000 | |
 | nightOwl | Night Owl | a ride starting 22:00–03:59 local | yes |
@@ -124,7 +124,7 @@ Thresholds in metres and kJ, independent of the rider's unit setting. Only the h
 
 - **The live record** has the `rideRecord` fields that matter: `startedAt`, `routeId`, `device`, `measured`,
   `ftp` (the profile's current FTP, so `stronger` can fire live), `durationS`, `distanceM`, `elevationGainM`,
-  `kilojoules`, `maxPower`, `test` (once the test has a result). It counts like any other ride, including for
+  `kilojoules`, `maxPower`, `testFtp` (once a test has a result). It counts like any other ride, including for
   the week-based ones (`weeks4`, `weeks12`, `crossTrainer`).
 - **Routes for `local`:** reconcile and the live check pass the route list when it has loaded and `null`
   otherwise; `local` is simply checked again at the next reconcile. Latched means latched: a route added
@@ -133,7 +133,7 @@ Thresholds in metres and kJ, independent of the rider's unit setting. Only the h
   ids that hold on the stored data but aren't latched get latched with their backdated date, silently.
 - **During a road ride** (not the studio, not workouts, same places as milestones): at the milestone check's
   pace (every ~2 s), evaluate with the history plus a live record of the ride so far (distance, climbing,
-  kJ, duration, max power, route, device, measured, start time, test flag once the test has a result).
+  kJ, duration, max power, route, device, measured, start time, the FTP of a finished test).
   Ids newly true and not latched → latch with `nowMs`, save, show on the banner.
 - Until the history has loaded during a ride, achievements are not checked (no false "first ride").
 - **After the ride is saved:** reconcile once more (catches anything that only holds on the final record).

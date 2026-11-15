@@ -88,7 +88,13 @@ test("lemons10: 9 don't", () => no("lemons10", [], { lemons: 9 }));
 test("summits10: 10 different summits earn it", () => yes("summits10", [], { summits: [...Array(10).keys()].map((i) => `r:${i}`) }));
 test("summits10: 9 different ones twice don't", () => no("summits10", [], { summits: [...Array(9).keys(), 0].map((i) => `r:${i}`) }));
 
-test("knowThyself: an FTP test earns it", () => yes("knowThyself", [ride({ test: { kind: "ramp" } })]));
+test("knowThyself: a finished FTP test earns it", () => yes("knowThyself", [ride({ test: "ramp", testFtp: 240 })]));
+test("knowThyself: a ramp stopped before a result doesn't", () => no("knowThyself", [ride({ test: "ramp", testFtp: null })]));
+test("knowThyself: an older record with only the ramp flag doesn't (it can't tell a finished test)", () => no("knowThyself", [ride({ test: "ramp" })]));
+test("knowThyself: reconcile doesn't latch it from a saved early-stopped ramp", () => {
+  const state = reconcile({ earned: {} }, { records: [ride({ test: "ramp", testFtp: null, durationS: 30 })] }, 0);
+  assert.equal("knowThyself" in state.earned, false);
+});
 test("knowThyself: no test doesn't", () => no("knowThyself", [ride()]));
 
 test("stronger: a later FTP 10% over the first earns it", () => yes("stronger", [ride({ ftp: 200 }), ride({ startedAt: BASE + DAY, ftp: 220 })]));

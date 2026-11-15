@@ -24,6 +24,8 @@ export class FtpTestSession extends Emitter {
   result = null;
   /** "ramp" once a ramp has started, so the ride record can be flagged. */
   testFlag = null;
+  /** The FTP of a finished test (not one stopped too short); like the flag, it stays for the ride. */
+  testFtp = null;
   #samples = [];
   #warmupFrom = 0;
   #countdownFrom = 0;
@@ -148,6 +150,7 @@ export class FtpTestSession extends Emitter {
     this.state = "result";
     this.training.stopWorkout();
     this.result = rampResult(this.#samples) ?? { tooShort: true };
+    if (this.result.ftp) this.testFtp = this.result.ftp;
     this.emit("change");
     this.emit("result", this.result);
   }
