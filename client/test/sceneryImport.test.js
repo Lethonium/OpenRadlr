@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
-import { importGlb, importObj, primitiveOf } from "../../tools/scenery/import.mjs";
+import { importGlb, importObj, linearToSrgb, primitiveOf } from "../../tools/scenery/import.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUAD = readFileSync(join(HERE, "../../tools/scenery/fixtures/quad.glb"));
@@ -212,7 +212,8 @@ test("an untextured OBJ takes its colours from the material", () => {
   const mtl = ["newmtl bark", "Kd 0.38 0.27 0.18"].join("\n");
   const model = importObj(obj, { name: "tree", mtl });
   assert.equal(model.triangles.length, 3);
-  assert.deepEqual(model.triangles[0].slice(3), [0.38, 0.27, 0.18]);
+  // The material's linear colour, in the sRGB the world draws in, to two places.
+  assert.deepEqual(model.triangles[0].slice(3), [0.38, 0.27, 0.18].map((v) => Math.round(linearToSrgb(v) * 100) / 100));
   assert.equal(model.textured, false);
 });
 
@@ -232,6 +233,31 @@ test("positions are quantised, so a kit stays small in the repository", () => {
       assert.equal(value, Math.round(value * 100) / 100);
     }
   }
+});
+
+test("an OBJ that names a material it was not given is refused, not imported white", () => {
+  // The importer used to look for the MTL beside the OBJ under the wrong name,
+  // so every OBJ with materials imported all white and nothing said so.
+  const obj = ["v 0 0 0", "v 1 0 0", "v 0 1 0", "usemtl Green", "f 1 2 3"].join("\n");
+  assert.throws(() => importObj(obj, { name: "tree" }), /tree.*Green/is);
+});
+
+test("an OBJ takes the colour its material defines, when it is given the MTL", () => {
+  const obj = ["v 0 0 0", "v 1 0 0", "v 0 1 0", "usemtl Green", "f 1 2 3"].join("\n");
+  const mtl = ["newmtl Green", "Kd 0.2 0.6 0.3"].join("\n");
+  const model = importObj(obj, { name: "tree", mtl });
+  // `Kd` is linear; the world draws in sRGB, so it is converted on the way in
+  // and quantised to the two places a model file keeps.
+  const expected = [0.2, 0.6, 0.3].map((v) => Math.round(linearToSrgb(v) * 100) / 100);
+  assert.deepEqual(model.triangles[0].slice(3), expected);
+});
+
+test("a material's linear colour becomes a leaf green, not near-black", () => {
+  // Quaternius authors its leaves at Kd 0.07 0.12 0.05, which is a believable
+  // green once converted and almost black if taken as sRGB.
+  const srgb = [0.07, 0.122, 0.048].map(linearToSrgb);
+  assert.ok(srgb[1] > 0.35, `green channel ${srgb[1].toFixed(2)}`);
+  assert.ok(srgb[1] > srgb[0] && srgb[1] > srgb[2], "and it is still green");
 });
 
 test("a GLB with no triangles is refused with its name", () => {

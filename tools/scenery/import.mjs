@@ -249,8 +249,23 @@ const paeth = (a, b, c) => {
 // ------------------------------------------------------------------- OBJ ---
 
 /**
+ * The same colour in the space the world draws in: the standard sRGB transfer
+ * function, so `Kd 0.07 0.12 0.05` becomes a leaf green rather than near-black.
+ */
+export function linearToSrgb(value) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value <= 0.0031308 ? value * 12.92 : 1.055 * Math.pow(value, 1 / 2.4) - 0.055;
+}
+
+/**
  * A model from an OBJ file and, when the pack has one, its MTL: colours come
  * from each `usemtl` block's `Kd`.
+ *
+ * `Kd` is a linear colour, the way a renderer multiplies it against light. The
+ * world draws in sRGB — its own palette is given as hex — so a pack's linear
+ * colours are converted on the way in, or a tree authored for a lit engine
+ * arrives nearly black.
  */
 export function importObj(text, { name = "model", mtl = "", scale = 1 } = {}) {
   const materials = new Map();
@@ -261,18 +276,21 @@ export function importObj(text, { name = "model", mtl = "", scale = 1 } = {}) {
       current = line.slice(7).trim();
       materials.set(current, [1, 1, 1]);
     } else if (current && line.startsWith("Kd ")) {
-      materials.set(current, line.slice(3).trim().split(/\s+/).map(Number).slice(0, 3));
+      materials.set(current, line.slice(3).trim().split(/\s+/).map(Number).slice(0, 3).map(linearToSrgb));
     }
   }
   const vertices = [];
   let colour = [1, 1, 1];
   const triangles = [];
+  const missing = new Set();
   for (const raw of text.split("\n")) {
     const line = raw.trim();
     if (line.startsWith("v ")) {
       vertices.push(line.slice(2).trim().split(/\s+/).map(Number).slice(0, 3));
     } else if (line.startsWith("usemtl ")) {
-      colour = materials.get(line.slice(7).trim()) ?? [1, 1, 1];
+      const asked = line.slice(7).trim();
+      if (!materials.has(asked)) missing.add(asked);
+      colour = materials.get(asked) ?? [1, 1, 1];
     } else if (line.startsWith("f ")) {
       // "f 1 2 3", "f 1/1/1 2/2/2 3/3/3" and negative indices all appear in packs.
       const corners = line.slice(2).trim().split(/\s+/).map((part) => {
@@ -283,6 +301,11 @@ export function importObj(text, { name = "model", mtl = "", scale = 1 } = {}) {
         for (const corner of [corners[0], corners[i], corners[i + 1]]) triangles.push([...vertices[corner], ...colour]);
       }
     }
+  }
+  // A model that names materials it was not given would import all white, and
+  // a whole kit of white shapes is the kind of mistake that ships. Say so.
+  if (missing.size > 0) {
+    throw new Error(`${name}: the OBJ names ${[...missing].join(", ")}, which ${mtl ? "the MTL does not define" : "no MTL was given"}`);
   }
   return finish(triangles, { name, scale, textured: false });
 }
@@ -345,9 +368,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const scale = Number(flag("scale", 1));
   const out = join(flag("out", "client/public/assets/scenery"), kit);
   const isGlb = extname(source).toLowerCase() === ".glb";
+  // A pack's MTL sits beside its OBJ with the same stem: `tree.obj` → `tree.mtl`.
+  // Some packs name it `model.mtl` for every model instead.
+  const mtlBeside = `${source.slice(0, source.length - extname(source).length)}.mtl`;
+  const mtlFile = existsSync(mtlBeside) ? mtlBeside : existsSync(join(dirname(source), "model.mtl")) ? join(dirname(source), "model.mtl") : null;
   const model = isGlb
     ? importGlb(readFileSync(source), { name, scale, baseDir: dirname(source) })
-    : importObj(readFileSync(source, "utf8"), { name, scale, mtl: existsSync(`${source}m`) ? readFileSync(`${source}m`, "utf8") : existsSync(join(dirname(source), "model.mtl")) ? readFileSync(join(dirname(source), "model.mtl"), "utf8") : "" });
+    : importObj(readFileSync(source, "utf8"), { name, scale, mtl: mtlFile ? readFileSync(mtlFile, "utf8") : "" });
   writeModel(model, join(out, `${name}.geo.json`));
   console.log(`${kit}/${name}: ${model.vertices / 3} triangles, ${model.textured ? "textured (colours baked)" : "untextured"}`);
 }
