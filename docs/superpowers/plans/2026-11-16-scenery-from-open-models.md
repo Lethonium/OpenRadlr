@@ -162,3 +162,75 @@ Modified: `view3d/world.js` (`buildScenery` `flora` option), `worldScene.js`,
 - Placement is identical to today's for the same seed when the same stands
   are picked, so a bug shows up as a moved tree, not a mystery (Task 4).
 - The FPS read-out never writes to the DOM more than twice a second (Task 6).
+
+---
+
+## Status and handoff (2026-11-16, end of session)
+
+Direction chosen by the user: **keep Kenney** (Nature Kit trees, no KayKit or
+Quaternius), **build full villages** from Kenney's Fantasy Town Kit, and
+**carry on with the woods/fields noise** (`land/land.js`). PR #119 stays a
+draft.
+
+### Done (committed on `feat/scenery-kit`)
+
+- `14d7c82` importer keeps glTF node transforms and, with `origin: "keep"`,
+  a modular part's place on its tile. This was why the first cottages came
+  out as scattered walls.
+- `d2c9ee5` `tools/scenery/assemble.mjs` builds the `fantasy-town` kit:
+  8 cottages, church, windmill (each with a 14-face far twin) + fountain,
+  stalls, bench, lantern, fence, hedge, cart. Rebuild with
+  `node tools/scenery/assemble.mjs "<pack>/Models/GLB format" client/public/assets/scenery/fantasy-town`
+  (pack zip: kenney.nl/assets/fantasy-town-kit; copy its License.txt in).
+- `66e6679` the Models level loads `nature` + `fantasy-town`; kits merge by
+  role with prefixed file names; far twins are downloaded.
+- `3f12682` full villages (`view3d/scenery/village.js`, `furnishVillage` in
+  `features.js`): street front with gardens and fences/hedges, back lane with
+  garden trees, paved square (fountain, benches, stalls, lanterns, cart),
+  church on the square, windmill outside. Buildings near/far split at 350 m
+  (`view3d/lod.js`, groups `village`/`villageFar`). Scenery off is unchanged.
+- `cbec402` `buildCanopy` in `world.js`: cheap crowns filling woods 60–420 m
+  from roads. **Tested, not wired in yet.**
+
+`make check` client side: 1,856 tests green, lint clean, scenery-check passes.
+
+### Findings that drive the next steps
+
+- Woods read as an orchard: ~2,400 trees spread over woods of km scale
+  (`WOOD_SCALE` 720 m) is about one tree per 2,000 m². Modelled trees
+  (~100 faces) cannot fill that; hence the canopy.
+- The patchy quilt on the ground is the biome's own `terrainColor`
+  (`valueNoise(x/85)` over `FIELDS`), not the land's woods/fields. The ground
+  ignores where the woods are.
+- Wall colours look grey-blue on the shaded side: scene ambient, not a bug
+  (normals checked, file colours correct).
+- The procedural (scenery off) village never builds its front row: lots at
+  9.5 m are always within `avoid`'s road margin. Left as is for parity; the
+  kit village has its own layout.
+
+### Next
+
+1. Wire `buildCanopy` into `buildWorld` when scenery is on (once over the
+   island box, into its own chunk group or `scenery`), measure vertices, look.
+2. Land-aware ground colour: pass `land` to `buildTerrain` → temperate
+   `terrainColor` uses dark forest floor under woods, calm crop colours in
+   fields, plain meadow elsewhere instead of the 85 m quilt. Keep the
+   user's earlier rule: not patchy, farmland about a third, calm greens.
+3. Possibly more modelled trees in the belt along the road inside woods.
+4. Re-shoot screenshots (drone/street/square/forest), update PR #119 body
+   (the Kenney-vs-better-packs question is answered: Kenney).
+5. Real-hardware frame rate; triangle cost of a village (cottages are
+   1–3k faces, mostly timber detail; church ~5k).
+
+### How to look at it
+
+- Worktree: `/root/.local/share/opencode/worktree/984c27/feat/scenery-kit`
+  (opencode's). A server from it may still run on :8080; it serves
+  `client/public` live, so client changes need only a reload.
+- Village 2 of `rolling-hills` is at 7397–7727 m (square ~7562), the forest
+  zone at 5946–6648. Shots: join with `?at=<m>`, scenery `models`, pause the
+  ride right after joining (software GL needs ~45 s, the rider drifts
+  ~500 m otherwise). Helper scripts used this session are in
+  `/tmp/claude-ft/scripts/` (`shot.sh`, `shot.cjs`, `render.cjs`); they patch
+  the drone camera via request interception to get aerial views. /tmp may
+  not survive; recreate from this description if needed.
