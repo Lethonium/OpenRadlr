@@ -9,6 +9,7 @@ export default {
   "menu.build.reload": "Reload",
   "menu.build.later": "Later",
   "menu.privacy": "Privacy",
+  "menu.discord": "Join our Discord",
   "menu.routes.title": "Where do you want to ride?",
   "unfinished.continue": "Continue",
   "unfinished.save": "Save",

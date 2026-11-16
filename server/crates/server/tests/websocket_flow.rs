@@ -1314,3 +1314,23 @@ async fn request_metrics_group_app_releases_without_counting_health_or_scrape_re
     );
     assert!(first.contains("openradlr_client_requests_total{client=\"browser\",app_version=\"\",app_build=\"\"} 1\n"));
 }
+
+#[tokio::test]
+async fn info_omits_discord_when_unconfigured() {
+    let addr = start_server(0).await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert!(info.get("discord_url").is_none());
+}
+
+#[tokio::test]
+async fn info_links_the_configured_discord_community() {
+    let addr = start_server_with(Config {
+        discord_url: Some("https://community.example.org/join".into()),
+        ..test_config(0)
+    })
+    .await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(info["discord_url"], "https://community.example.org/join");
+}

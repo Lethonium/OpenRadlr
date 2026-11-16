@@ -135,6 +135,9 @@ pub struct InfoResponse {
     /// The operator's privacy policy; absent unless set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub privacy_url: Option<String>,
+    /// Optional community invite, absent unless configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discord_url: Option<String>,
     /// Metres ridden on this server since the counters began, by device (#65).
     /// The device is the client's own claim, so this is a vanity counter.
     pub distance_m: DistanceInfo,
@@ -471,6 +474,7 @@ async fn info(State(state): State<AppState>) -> Json<InfoResponse> {
         paddle_mode: state.allow_paddle_mode,
         analytics: state.info.analytics.clone(),
         privacy_url: state.info.privacy_url.clone(),
+        discord_url: state.info.discord_url.clone(),
         distance_m: {
             let totals = state.stats.snapshot();
             // Whole metres: the exact fraction is noise.

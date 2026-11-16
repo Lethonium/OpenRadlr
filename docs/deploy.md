@@ -109,12 +109,20 @@ don't want a landing page leave this out; nothing changes for them.
    OPENRADLR_LANDING_DOMAIN=openradlr.com, www.openradlr.com
    OPENRADLR_LANDING_URL=https://openradlr.com
    OPENRADLR_LANDING_PLAUSIBLE_DOMAIN=openradlr.com   # optional, cookie-free analytics
+   # OPENRADLR_DISCORD_URL=https://discord.gg/your-invite  # optional, community link in app + landing
    # OPENRADLR_PRIVACY_URL=https://...                # optional, privacy link (start menu + landing footer)
    # OPENRADLR_LANDING_IMPRINT_URL=https://...        # optional, imprint link in the footer
    ```
 
 3. `make up`. The bundled Caddy serves the landing page on the bare domain,
    redirects `www.` to it and proxies the app subdomain as before.
+   Set `OPENRADLR_DISCORD_URL` to your community's invite, configured in Discord
+   to **never expire** with **unlimited uses**. The same setting supplies the app
+   start menu (through `/api/info`) and the landing page (`PUBLIC_DISCORD_URL`).
+   Leave it empty to hide the app link and show the landing page's GitHub fallback.
+   Changing it requires recreating the server container and rebuilding the static
+   landing page, not a source change or release: `make up` applies both.
+
 4. **Strava:** the *Authorization Callback Domain* in the Strava API settings
    must be the app subdomain (`app.openradlr.com`). Change it when moving the
    app, then check *Connect with Strava* once.
