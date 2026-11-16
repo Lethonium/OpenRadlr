@@ -288,6 +288,7 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         allow_paddle_mode: config.allow_paddle_mode,
         analytics: config.analytics.clone(),
         privacy_url: config.privacy_url.clone(),
+        discord_url: config.discord_url.clone(),
         grace_s: config.grace_s,
     });
 
