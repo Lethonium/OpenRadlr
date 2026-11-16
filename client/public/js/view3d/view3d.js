@@ -53,7 +53,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
+  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -326,6 +326,8 @@ export class View3D {
   sideView = null;
   /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
   #sideAhead = null;
+  /** Beyond this distance the far scenery is drawn instead of the near copy; `null` for one level (#117). */
+  #nearRange = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
   #highlights = [];
@@ -385,6 +387,9 @@ export class View3D {
     this.chunks = Object.fromEntries(
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
+    // Where the far scenery takes over from the near copy, in metres: `null`
+    // when the kit has one level of detail (#117).
+    this.#nearRange = this.chunks.sceneryFar?.length ? (world.sceneryNearRange ?? 260) : null;
     this.clouds = this.renderer.upload(world.clouds);
     this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
     this.water = this.renderer.upload(world.water);
@@ -909,9 +914,16 @@ export class View3D {
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
       if (group === "detail" && !high) continue;
+      // Trees are drawn twice: properly up close, and from a cheaper copy
+      // beyond. Each copy is drawn only on its own side of the split (#117).
+      const nearScenery = this.#nearRange;
+      if (group === "sceneryFar" && nearScenery === null) continue;
       // Seen from the drone, small things reach a little further, not as far as the haze.
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
       for (const chunk of chunks) {
+        const distance = Math.hypot(chunk.center[0] - eye[0], chunk.center[1] - eye[1], chunk.center[2] - eye[2]) - chunk.radius;
+        if (group === "scenery" && nearScenery !== null && distance > nearScenery) continue;
+        if (group === "sceneryFar" && distance <= nearScenery) continue;
         if (!chunkVisible(chunk, eye, forward, range)) continue;
         if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
         else this.renderer.draw(chunk.handle, this.identity);

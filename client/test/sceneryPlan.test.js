@@ -148,6 +148,44 @@ test("without a season colour, a model keeps every colour it was made with", () 
   assert.deepEqual(recolour(leaf, {}), leaf);
 });
 
+test("a kit with a cheap twin draws it beyond the near range, in the same place", () => {
+  // The far copy is the same wood: same seeds, same spots, same sizes. Only the
+  // model drawn differs, so swapping one for the other as a chunk passes the
+  // near range never makes a tree move (#117).
+  const withFar = {
+    ...KIT,
+    models: { pine: { role: "firs", file: "pine", far: "pine-far", height: 3, sizes: [1, 1] } },
+  };
+  const nearModel = { ...MODEL, name: "pine" };
+  const farModel = { ...MODEL, name: "pine-far", triangles: MODEL.triangles.slice(0, 3), bounds: MODEL.bounds };
+  const readModelFile = (id) => (id === "pine-far" ? farModel : nearModel);
+  const flora = planFlora(indexKit(withFar), { readModelFile });
+
+  const near = new MeshBuilder();
+  const far = new MeshBuilder();
+  const seed = () => {
+    let s = 0.25;
+    return () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  };
+  const spots = [[12, 3, -4], [-40, 8, 21], [0, 0, 0]];
+  for (const [x, y, z] of spots) {
+    flora.tree({ mesh: near, x, y, z, kind: 0.5, random: seed() });
+    flora.far().tree({ mesh: far, x, y, z, kind: 0.5, random: seed() });
+  }
+  // The far twin is one triangle per tree, the near model two.
+  assert.equal(near.vertexCount, spots.length * 6);
+  assert.equal(far.vertexCount, spots.length * 3, "the far copy drew the cheap twin");
+  // Both copies of a tree start at the same point.
+  const firstVertex = (mesh, corner) => Array.from(mesh.positions.data.slice(corner * 3, corner * 3 + 3));
+  assert.deepEqual(firstVertex(far, 0), firstVertex(near, 0), "the far tree stands where the near one does");
+});
+
+test("a kit without a cheap twin draws no far wood at all", () => {
+  // One level of detail means the near wood is the only wood: drawing a second
+  // copy in the same place would double the cost and z-fight.
+  assert.equal(floraOf().far(), null);
+});
+
 test("a scaled model stands where it was placed, not at its distance times its size", () => {
   // The placement matrix already holds the spot in 12..14. Scaling those too
   // moved every tree to `size` times its distance from the origin — a wood at

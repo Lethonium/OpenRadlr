@@ -23,12 +23,11 @@ export function indexKit(manifest, { name = manifest?.name ?? "kit" } = {}) {
   const models = {};
   const declared = manifest.models ?? {};
   for (const [id, model] of Object.entries(declared)) {
-    // `near`/`far` name other models of the kit (a cheaper level of detail);
-    // `file` is a file name, checked by the loader instead.
-    for (const variant of [model.near, model.far]) {
-      if (variant !== undefined && !(variant in declared)) {
-        throw new Error(`${name}: model "${id}" uses "${variant}", which the kit does not hold`);
-      }
+    // `near` names another model of the kit (a cheaper level of detail drawn
+    // from that model). `file` and `far` are file names, checked by the loader,
+    // so a manifest can point straight at the cheap twin `decimate.mjs` writes.
+    if (model.near !== undefined && !(model.near in declared)) {
+      throw new Error(`${name}: model "${id}" uses "${model.near}", which the kit does not hold`);
     }
     if (fileOf(model) === undefined) throw new Error(`${name}: model "${id}" names no file to draw`);
     models[id] = model;
@@ -49,7 +48,9 @@ export function pickLod(model, distance, nearRange) {
 /**
  * The file holding a model. A manifest names it `near` (with an optional `far`
  * for distance), or plainly `file` when the kit has only one level of detail.
+ * `far` asks for the cheap twin, falling back to the model itself when the kit
+ * ships none (#117).
  */
-export function fileOf(model) {
-  return model.near ?? model.file;
+export function fileOf(model, far = false) {
+  return far && model.far !== undefined ? model.far : model.near ?? model.file;
 }

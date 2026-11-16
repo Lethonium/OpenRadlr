@@ -25,6 +25,8 @@ export function floraOf(scenes, biome = null) {
   const own = resolveBiome(biome)?.flora ?? null;
   return planFlora(kit, {
     fallback: own,
+    // Beyond this distance the world draws the cheap twins instead (#117).
+    nearRange: scenes.nearRange ?? null,
     // The season's colours for each role, so a pack's own palette is painted to
     // the island's.
     painted: own?.scenery ?? null,

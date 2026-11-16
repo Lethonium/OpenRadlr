@@ -346,6 +346,19 @@ function finish(triangles, { name, scale = 1, textured = false }) {
 const q3 = (value) => Math.round(value * 100) / 100;
 
 /** Writes one model as a `.geo.json` file. */
+/**
+ * A model from an OBJ file beside its MTL, named by the file's stem. Packs name
+ * the MTL after the model (`tree.obj` → `tree.mtl`) or as one `model.mtl` for
+ * every model.
+ */
+export function readObj(source, { name = basename(source, extname(source)), scale = 1 } = {}) {
+  const stem = source.slice(0, source.length - extname(source).length);
+  const beside = `${stem}.mtl`;
+  const shared = join(dirname(source), "model.mtl");
+  const mtl = existsSync(beside) ? beside : existsSync(shared) ? shared : null;
+  return importObj(readFileSync(source, "utf8"), { name, scale, mtl: mtl ? readFileSync(mtl, "utf8") : "" });
+}
+
 export function writeModel(model, file) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(model)}\n`);
@@ -368,13 +381,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const scale = Number(flag("scale", 1));
   const out = join(flag("out", "client/public/assets/scenery"), kit);
   const isGlb = extname(source).toLowerCase() === ".glb";
-  // A pack's MTL sits beside its OBJ with the same stem: `tree.obj` → `tree.mtl`.
-  // Some packs name it `model.mtl` for every model instead.
-  const mtlBeside = `${source.slice(0, source.length - extname(source).length)}.mtl`;
-  const mtlFile = existsSync(mtlBeside) ? mtlBeside : existsSync(join(dirname(source), "model.mtl")) ? join(dirname(source), "model.mtl") : null;
   const model = isGlb
     ? importGlb(readFileSync(source), { name, scale, baseDir: dirname(source) })
-    : importObj(readFileSync(source, "utf8"), { name, scale, mtl: mtlFile ? readFileSync(mtlFile, "utf8") : "" });
+    : readObj(source, { name, scale });
   writeModel(model, join(out, `${name}.geo.json`));
   console.log(`${kit}/${name}: ${model.vertices / 3} triangles, ${model.textured ? "textured (colours baked)" : "untextured"}`);
 }

@@ -101,14 +101,14 @@ function scaled(matrix, size) {
 }
 
 /** The meshes of a kit, built once and shared by every instance. */
-function meshesOf(kit, readModelFile, painted = null) {
-  // A painted mesh differs by role, so the cache is keyed by both: the same
-  // model may be drawn as a fir and as a bush with different colours.
+function meshesOf(kit, readModelFile, painted = null, far = false) {
+  // A painted mesh differs by role, and a far one by level of detail, so the
+  // cache is keyed by both.
   kit.meshes ??= {};
-  const key = painted ? JSON.stringify(painted) : "own";
+  const key = `${painted ? JSON.stringify(painted) : "own"}|${far ? "far" : "near"}`;
   const byKey = (kit.meshes[key] ??= {});
   for (const [id, model] of Object.entries(kit.models)) {
-    const file = fileOf(model);
+    const file = fileOf(model, far);
     if (byKey[file]) continue;
     const paint = rolePalette(kit, model, painted);
     byKey[file] = buildMesh(readModelFile(file), id, { painted: paint ? (a) => recolour([a[3], a[4], a[5]], paint) : null }).build();
@@ -130,7 +130,7 @@ function rolePalette(kit, model, painted) {
  * to it, so a kit is never expected to cover everything: a pack with trees but
  * no flowers gives modelled trees and procedural flowers rather than bare ground.
  */
-export function planFlora(kit, { readModelFile, fallback = null, painted = null } = {}) {
+export function planFlora(kit, { readModelFile, fallback = null, painted = null, far = false, nearRange = null } = {}) {
   /** Draws one model of `role` at a point, or hands the spot to the biome. */
   const draw = (mesh, x, y, z, random, role, fallbackAt) => {
     const ids = kit.byRole[role];
@@ -146,7 +146,11 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null 
     const yaw = random() * Math.PI * 2;
     const [minSize = 1, maxSize = minSize] = model.sizes ?? [1];
     const size = (minSize + random() * (maxSize - minSize)) * (model.height ?? 1);
-    mesh.append(meshesOf(kit, readModelFile, painted)[fileOf(model)], scaled(placement([x, y, z], yaw, 0), size));
+    // The same tree, drawn from its cheap twin when the caller asked for far
+    // ones: the random draws above are taken either way, so a wood and its far
+    // copy put every tree in the same spot.
+    const mesh0 = meshesOf(kit, readModelFile, painted, far)[fileOf(model, far)];
+    mesh.append(mesh0, scaled(placement([x, y, z], yaw, 0), size));
   };
 
   return {
@@ -154,6 +158,16 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null 
     roles: kit.roles,
     /** How much of the ground detail to ask for, against the biome's own. */
     detailDensity: DENSE_DETAIL_DENSITY,
+    /** Beyond this distance the world draws `far()` instead (#117). */
+    nearRange,
+    /**
+     * The same flora, drawing each model's cheap twin where the kit has one
+     * (#117). Empty when it has none, since the near wood already covers them.
+     */
+    far() {
+      const hasFar = Object.values(kit.models).some((model) => model.far);
+      return hasFar ? planFlora(kit, { readModelFile, fallback, painted, far: true, nearRange }) : null;
+    },
     /**
      * A tree, as the kind the world asked for. An explicit `role` overrides the
      * kind, which is how the studio and the tests draw one particular model.

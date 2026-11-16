@@ -8,12 +8,13 @@
  * in the project's own format, not a model dropped in beside it.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
-import { importGlb, importObj, linearToSrgb, primitiveOf } from "../../tools/scenery/import.mjs";
+import { importGlb, importObj, linearToSrgb, primitiveOf, readObj } from "../../tools/scenery/import.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUAD = readFileSync(join(HERE, "../../tools/scenery/fixtures/quad.glb"));
@@ -258,6 +259,22 @@ test("a material's linear colour becomes a leaf green, not near-black", () => {
   const srgb = [0.07, 0.122, 0.048].map(linearToSrgb);
   assert.ok(srgb[1] > 0.35, `green channel ${srgb[1].toFixed(2)}`);
   assert.ok(srgb[1] > srgb[0] && srgb[1] > srgb[2], "and it is still green");
+});
+
+test("a model read from disk finds the MTL beside it, named for the file", () => {
+  // The importer used to look for `tree.objm`, so every OBJ with materials
+  // imported white. This exercises the file path, which the unit tests above
+  // bypass by passing the MTL in by hand.
+  const dir = mkdtempSync(join(tmpdir(), "scenery-"));
+  try {
+    writeFileSync(join(dir, "tree.obj"), ["v 0 0 0", "v 1 0 0", "v 0 1 0", "usemtl Green", "f 1 2 3"].join("\n"));
+    writeFileSync(join(dir, "tree.mtl"), ["newmtl Green", "Kd 0.2 0.6 0.3"].join("\n"));
+    const model = readObj(join(dir, "tree.obj"));
+    const expected = Math.round(linearToSrgb(0.6) * 100) / 100;
+    assert.equal(model.triangles[0][4], expected, "the material's colour, converted");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a GLB with no triangles is refused with its name", () => {
