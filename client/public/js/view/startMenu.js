@@ -4,6 +4,7 @@
  * the DOM with textContent only, because route names come from the server.
  */
 
+import { webUrl } from "./externalLink.js";
 import { PRESETS } from "../workout/presets.js";
 import { planDuration } from "../workout/plan.js";
 import { distanceUnit, formatDistance, formatDistanceWithUnit, formatDuration, formatElevation } from "../util/format.js";
@@ -60,13 +61,12 @@ export function communityDistance(info) {
   return t("menu.community", { trainers: amount(totals.trainer), phones: amount(totals.paddle) });
 }
 
-/** The routes a server offers (older servers only report one), then its spin studio and the workout. */
 /** The server's privacy policy link (/api/info), or null; only http(s) addresses. */
 export function privacyUrl(info) {
-  const url = info?.privacy_url;
-  return typeof url === "string" && /^https?:\/\//.test(url) ? url : null;
+  return webUrl(info?.privacy_url);
 }
 
+/** The routes a server offers (older servers only report one), then its spin studio and the workout. */
 export function routesOf(info) {
   if (!info) return [];
   const studio = info.studio ? [{ ...info.studio, kind: "studio" }] : [];

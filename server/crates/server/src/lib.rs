@@ -99,6 +99,8 @@ pub struct ServerInfo {
     pub analytics: Option<config::Analytics>,
     /// The operator's privacy policy, if they set one.
     pub privacy_url: Option<String>,
+    /// Optional community invite, absent unless configured.
+    pub discord_url: Option<String>,
     /// Seconds a rider lingers after their socket dies before being removed.
     pub grace_s: f64,
 }

@@ -639,6 +639,7 @@ kbd {
   margin: 32px auto 0;
   padding: 16px 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: center;
   justify-content: flex-start;
@@ -656,6 +657,19 @@ kbd {
 
 .build-label:hover {
   color: var(--text, inherit);
+}
+
+.community-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-underline-offset: 3px;
+}
+
+.community-link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 /* New version: a pill at the bottom, above the phone's Ride bar. */

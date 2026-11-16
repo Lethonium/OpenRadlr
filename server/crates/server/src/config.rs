@@ -103,6 +103,8 @@ pub struct Config {
     pub analytics: Option<Analytics>,
     /// The operator's privacy policy, linked from the start menu (`OPENRADLR_PRIVACY_URL`).
     pub privacy_url: Option<String>,
+    /// Optional community invite (`OPENRADLR_DISCORD_URL`); unset hides the link.
+    pub discord_url: Option<String>,
     /// The OpenBikeNet server to share the velodrome with (`OPENRADLR_OBN_URL`); `None` = not connected.
     pub obn_url: Option<String>,
     /// Base of the reconnect delay to OpenBikeNet (no environment variable; for tests).
@@ -382,18 +384,8 @@ impl Config {
             }
         };
 
-        let privacy_url = reader
-            .raw("OPENRADLR_PRIVACY_URL")
-            .map(|url| url.trim().to_owned())
-            .filter(|url| !url.is_empty());
-        if let Some(url) = &privacy_url {
-            reader.check(
-                "OPENRADLR_PRIVACY_URL",
-                url,
-                url.starts_with("https://") || url.starts_with("http://"),
-                "must be an http:// or https:// URL",
-            )?;
-        }
+        let privacy_url = reader.web_url("OPENRADLR_PRIVACY_URL")?;
+        let discord_url = reader.web_url("OPENRADLR_DISCORD_URL")?;
 
         let obn_url = reader.raw("OPENRADLR_OBN_URL").filter(|url| !url.is_empty());
         if let Some(url) = &obn_url {
@@ -450,6 +442,7 @@ impl Config {
             event_lobby_s,
             analytics,
             privacy_url,
+            discord_url,
             obn_url,
             obn_backoff_unit: Duration::from_secs(1),
             obn_heartbeat: Heartbeat::default(),
@@ -486,6 +479,17 @@ struct Reader<'a> {
 impl Reader<'_> {
     fn raw(&self, key: &str) -> Option<String> {
         (self.lookup)(key).map(|v| v.trim().to_owned())
+    }
+
+    /// Optional operator-provided links share validation and blank-value handling.
+    fn web_url(&self, key: &'static str) -> Result<Option<String>, ConfigError> {
+        let value = self.raw(key).filter(|value| !value.is_empty());
+        if let Some(value) = &value {
+            let valid = reqwest::Url::parse(value)
+                .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some());
+            self.check(key, value, valid, "must be an http:// or https:// URL with a host")?;
+        }
+        Ok(value)
     }
 
     fn parse<T: FromStr>(&self, key: &'static str, default: T) -> Result<T, ConfigError> {
@@ -680,6 +684,35 @@ mod tests {
         assert_eq!(c.privacy_url.as_deref(), Some("https://example.org/privacy/"));
         let err = config(&[("OPENRADLR_PRIVACY_URL", "javascript:alert(1)")]).unwrap_err();
         assert_eq!(err.key, "OPENRADLR_PRIVACY_URL");
+    }
+
+    #[test]
+    fn discord_url_is_absent_by_default() {
+        assert_eq!(config(&[]).unwrap().discord_url, None);
+    }
+
+    #[test]
+    fn blank_discord_url_disables_the_link() {
+        assert_eq!(config(&[("OPENRADLR_DISCORD_URL", "  ")]).unwrap().discord_url, None);
+    }
+
+    #[test]
+    fn discord_url_is_trimmed_and_allows_custom_community_hosts() {
+        let c = config(&[("OPENRADLR_DISCORD_URL", "  https://community.example.org/join  ")]).unwrap();
+        assert_eq!(c.discord_url.as_deref(), Some("https://community.example.org/join"));
+    }
+
+    #[test]
+    fn discord_url_rejects_invalid_web_addresses() {
+        for url in [
+            "javascript:alert(1)",
+            "https://",
+            "https://bad host/invite",
+            "//discord.gg/invite",
+        ] {
+            let err = config(&[("OPENRADLR_DISCORD_URL", url)]).unwrap_err();
+            assert_eq!(err.key, "OPENRADLR_DISCORD_URL");
+        }
     }
 
     #[test]

@@ -9,7 +9,7 @@ export const site = {
   url: env.PUBLIC_SITE_URL || "https://openradlr.com",
   appUrl: env.PUBLIC_APP_URL || "https://app.openradlr.com",
   githubUrl: "https://github.com/Lethonium/OpenRadlr",
-  // Empty until the community server exists (#44); the page then links GitHub only.
+  // Operator-provided invite; empty means the page links GitHub only.
   discordUrl: env.PUBLIC_DISCORD_URL || "",
   // The operator's privacy policy and imprint (legal notice), linked in the
   // footer. E.g. a page generated with online-impressum.de; empty = no link,

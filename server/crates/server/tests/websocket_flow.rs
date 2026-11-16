@@ -1249,3 +1249,23 @@ async fn an_unknown_pair_code_is_refused() {
     let error = expect_type(&mut phone, "error").await;
     assert_eq!(error["code"], "pair_code_invalid");
 }
+
+#[tokio::test]
+async fn info_omits_discord_when_unconfigured() {
+    let addr = start_server(0).await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert!(info.get("discord_url").is_none());
+}
+
+#[tokio::test]
+async fn info_links_the_configured_discord_community() {
+    let addr = start_server_with(Config {
+        discord_url: Some("https://community.example.org/join".into()),
+        ..test_config(0)
+    })
+    .await;
+    let (_, body) = http_get(addr, "/api/info").await;
+    let info: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(info["discord_url"], "https://community.example.org/join");
+}

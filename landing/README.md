@@ -35,7 +35,7 @@ npm run build     # static files in dist/
 | --- | --- | --- |
 | `PUBLIC_SITE_URL` | `https://openradlr.com` | canonical links, sitemap, Open Graph |
 | `PUBLIC_APP_URL` | `https://app.openradlr.com` | every *Ride now* button |
-| `PUBLIC_DISCORD_URL` | – | Discord link; without it the page points to GitHub issues |
+| `PUBLIC_DISCORD_URL` | – | Discord invite (the app's `OPENRADLR_DISCORD_URL`); use never-expiring invites with unlimited uses; without it the page points to GitHub issues |
 | `PUBLIC_PRIVACY_URL` | – | privacy policy link in the footer (the app's `OPENRADLR_PRIVACY_URL`); without it no link is shown |
 | `PUBLIC_IMPRINT_URL` | – | imprint (legal notice) link in the footer, e.g. a page from online-impressum.de; without it no link is shown |
 | `PUBLIC_PLAUSIBLE_DOMAIN` | – | cookie-free Plausible analytics; without it no script is loaded |

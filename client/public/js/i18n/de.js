@@ -9,6 +9,7 @@ export default {
   "menu.build.reload": "Neu laden",
   "menu.build.later": "Später",
   "menu.privacy": "Datenschutz",
+  "menu.discord": "Tritt unserem Discord bei",
   "menu.routes.title": "Wo willst du fahren?",
   "unfinished.continue": "Weiterfahren",
   "unfinished.save": "Speichern",
