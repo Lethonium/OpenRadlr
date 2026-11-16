@@ -339,15 +339,19 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
 }
 
 async fn count_client_request(State(stats): State<ClientRequests>, request: Request, next: Next) -> Response {
-    if !matches!(request.uri().path(), "/healthz" | "/internal/metrics") {
-        stats.record(
-            request
-                .headers()
-                .get(header::USER_AGENT)
-                .and_then(|value| value.to_str().ok()),
-        );
+    if request.method() != axum::http::Method::GET || request.uri().path() != "/api/info" {
+        return next.run(request).await;
     }
-    next.run(request).await
+    let user_agent = request
+        .headers()
+        .get(header::USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let response = next.run(request).await;
+    if response.status().is_success() {
+        stats.record(user_agent.as_deref());
+    }
+    response
 }
 
 async fn healthz() -> &'static str {

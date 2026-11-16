@@ -325,7 +325,8 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
     };
 
     let state = AppState {
-        client_requests: crate::client_requests::ClientRequests::default(),
+        client_requests: crate::client_requests::ClientRequests::with_releases(&config.app_metric_releases)
+            .expect("validated app release allowlist"),
         worlds: Arc::new(worlds),
         maps: Arc::new(maps),
         info,

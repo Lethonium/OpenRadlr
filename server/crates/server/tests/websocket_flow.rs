@@ -1280,6 +1280,20 @@ async fn request_metrics_group_app_releases_without_counting_health_or_scrape_re
         .unwrap()
         .error_for_status()
         .unwrap();
+    for path in ["/styles.css", "/js/main.js", "/scanner-missing"] {
+        client
+            .get(format!("http://{addr}{path}"))
+            .header("user-agent", app_agent)
+            .send()
+            .await
+            .unwrap();
+    }
+    client
+        .post(format!("http://{addr}/api/info"))
+        .header("user-agent", app_agent)
+        .send()
+        .await
+        .unwrap();
     let scrape = || {
         client
             .get(format!("http://{addr}/internal/metrics"))

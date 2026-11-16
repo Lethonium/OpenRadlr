@@ -127,6 +127,10 @@ import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
+function setNativeImmersive(enabled) {
+  nativeApp?.setImmersive?.(enabled).catch((error) => console.warn("System bars:", error));
+}
+setNativeImmersive(false);
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
 /** How often a ride is written to the browser while it goes on (#73). */
@@ -2043,6 +2047,7 @@ function endRide() {
   initBiomePicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
+  setNativeImmersive(false);
   delete $("join").dataset.busy;
   // A join that failed never left the menu: it is only paused.
   if (app.menu) {
@@ -2139,6 +2144,7 @@ function startRide() {
   setDifficultyInputs(app.profile.difficulty);
   $("setup").hidden = true;
   $("ride").hidden = false;
+  setNativeImmersive(true);
   clearInterval(app.infoTimer);
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();

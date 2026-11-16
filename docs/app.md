@@ -47,6 +47,32 @@ end a ride or a workout without asking:
 iOS has no back button, and in a browser the back button still leaves the
 page.
 
+## Fullscreen on Android
+
+The Android start screen keeps the clock and system icons visible over the island
+background, which extends behind the transparent status bar. During a ride, the
+status and navigation bars are hidden to give the road more room. Swipe from the screen edge to reveal Android's controls
+temporarily; returning to the start screen shows the bars again. The keyboard
+still opens normally for names, chat and other text fields.
+
+Deploy the web client together with the shell update: it switches the native
+SystemBars API when entering and leaving the ride screen.
+
+Device regression checks (with an Android emulator or phone attached):
+
+```bash
+cd app/android
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.openradlr.app.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The device tests check status-bar visibility, content extending underneath it,
+and light icons, including visibility after backgrounding and in landscape.
+Client tests cover entering and leaving immersive mode. With more than one
+device attached, select one with `adb -s`.
+
 ## Strava sign-in
 
 Google and Apple don't allow sign-in inside an embedded web view. So in the
@@ -264,16 +290,21 @@ server. A client can forge a user agent, so it is not an authentication signal.
 The server exports `openradlr_client_requests_total` on its existing
 `/internal/metrics` endpoint, grouped by `client` (`android`, `ios`, or `browser`),
 `app_version` and `app_build`. The `browser` bucket also includes older app builds
-without the marker and requests with an invalid marker. Health checks and metrics
-scrapes are excluded. WebSocket upgrades count as HTTP requests; individual
-WebSocket messages do not.
+without the marker and requests with an invalid marker. Only successful `GET /api/info` responses are counted: the start menu requests
+this endpoint when it loads and while it remains open. Static files, failures,
+health checks, scrapes and WebSocket messages do not contribute. This measures
+menu-load and refresh activity, not unique users, installations or ride sessions.
 
-These are request totals, not unique users, installations or sessions. The
-counter keeps no raw user agents, IP addresses, device identifiers, rider names,
-request paths or individual request records. It lives in memory and resets when
-the server restarts. At most 32 app release combinations have separate counters;
-additional combinations share an `other` version/build bucket per platform, so
-untrusted headers cannot create unlimited metric series. Keep the endpoint on
+The counter keeps no raw user agents, IP addresses, device identifiers, rider
+names, request paths or individual request records. It lives in memory and resets
+when the server restarts. Separate release labels come only from an operator
+allowlist, never from request-controlled allocation. The default is
+`android/0.1.0/3,ios/1.0/1`; override `OPENRADLR_APP_METRIC_RELEASES` with a
+comma-separated `platform/version/build` list (at most 32 entries, empty disables
+release detail). Include the releases you still support when adding a new one.
+Unknown valid releases use `other` version/build buckets per platform. iOS build
+numbers may contain dot-separated numeric components. All counters are atomic;
+no global request lock is needed. Keep the endpoint on
 the host's private monitoring network as described in [Deployment](deploy.md).
 
 Example PromQL for a dashboard connected to the endpoint:
@@ -282,7 +313,7 @@ Example PromQL for a dashboard connected to the endpoint:
 sum by (client) (rate(openradlr_client_requests_total[5m]))
 ```
 
-Requests by Android release over the last day:
+Start-menu requests by Android release over the last day:
 
 ```promql
 sum by (app_version, app_build) (
