@@ -847,6 +847,55 @@ export function buildScenery(
 }
 
 /**
+ * The woods' canopy (#117): the modelled trees cost a hundred faces each, too
+ * many to fill a wood a kilometre across, so beyond the belt along the road a
+ * wood is filled with cheap crowns instead — a five-sided cone for a fir, a
+ * small blob for a leafy tree, in the season's own greens. From the saddle
+ * and the drone that reads as a wood, where a scatter of models reads as an
+ * orchard.
+ *
+ * Crowns stand on a jittered grid of `step` metres wherever the land says
+ * wood, between `reach[0]` and `reach[1]` metres from the nearest road. A
+ * season without scenery colours (`flora.scenery`) grows none.
+ */
+export function buildCanopy(terrain, box, { land, water = -Infinity, biome = temperate, into = null, blocked = () => false, step = 16, reach = [60, 420], seed = 0 } = {}) {
+  const { mesh, own } = target(into);
+  const colours = biome.flora?.scenery;
+  const positions = [];
+  if (!colours?.firs || !colours?.leafy || !land) return { mesh: own ? mesh.build() : mesh, count: 0, positions };
+  const random = seededRandom((seed >>> 0) ^ 0xca70);
+  const [near, far] = reach;
+  for (let gx = Math.floor(box.x0 / step); gx * step < box.x1; gx += 1) {
+    for (let gz = Math.floor(box.z0 / step); gz * step < box.z1; gz += 1) {
+      // Every cell draws the same numbers whether or not it grows a crown, so
+      // one cell's answer never moves another's tree.
+      const jx = random();
+      const jz = random();
+      const pick = random();
+      const size = random();
+      const x = (gx + jx) * step;
+      const z = (gz + jz) * step;
+      const wood = land.forestAt(x, z);
+      if (wood < 0.55 || pick > wood) continue;
+      const road = terrain.distanceToRoad(x, z);
+      if (road < near || road > far) continue;
+      const ground = terrain.height(x, z);
+      if (ground < water + 2.5 || blocked(x, z)) continue;
+      const y = ground - 0.3;
+      positions.push([x, y, z]);
+      if (pick < 0.55 * wood) {
+        const height = 9 + size * 7;
+        mesh.cone([x, y + height * 0.15, z], height * 0.3, height * 0.85, colours.firs.foliage, 5, size * Math.PI);
+      } else {
+        const crown = 3.2 + size * 2.4;
+        mesh.ellipsoid([x, y + crown * 1.3, z], [crown, crown * 0.9, crown], colours.leafy.foliage, 3, 5, size * Math.PI);
+      }
+    }
+  }
+  return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
+}
+
+/**
  * Grass tufts and wildflowers next to the road, where the camera sees them
  * up close. Three thin blades per tuft; flowers are a stem with a small head.
  */
