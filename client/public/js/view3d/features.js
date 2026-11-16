@@ -12,6 +12,7 @@ import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.j
 import { villageLots, villageShape } from "../land/land.js";
 import { fbm, seededRandom } from "./noise.js";
 import { temperate } from "./biomes/index.js";
+import { VILLAGE_ROLES, layVillage } from "./scenery/village.js";
 import { VERGE, roadFrame, roadHalfWidth } from "./world.js";
 
 export const RIVER = Object.freeze({ halfWidth: 9, bank: 26, belowRoad: 9, length: 2400, step: 15, rise: 0.05, mouthDepth: 2.5 });
@@ -449,7 +450,7 @@ export function housesOnLots(route, terrain, lots, { structures, occupancy, seed
  * village has a square to gather on (#117 follow-up). Their places come from
  * the map's seed, not from the order the world happens to build them in.
  */
-export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate, clearOfRoad = () => true }) {
+export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate, clearOfRoad = () => true, kit = null, into = null, dry = () => true }) {
   const half = roadHalfWidth(route.lanes);
   const m = sharedModels(biome);
   const palette = biome.palette;
@@ -472,27 +473,32 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
     }
   }
 
-  // The green in the middle, with the church on its far side facing the road.
-  const { center, radius } = villageShape(zone);
-  const cf = roadFrame(route, center);
-  const churchPos = add(cf.center, scale(cf.right, half + PAVEMENT + radius * 0.55));
-  if (!avoid(churchPos[0], churchPos[2], 16)) {
-    const yaw = yawFor(scale(cf.right, -1));
-    const y = groundUnder(terrain, churchPos, yaw, 10, 22);
-    structures.append(m.church, placement([churchPos[0], y, churchPos[2]], yaw));
-    occupancy.add(churchPos[0], churchPos[2], 18);
-    houses.push(churchPos);
-  }
+  if (kit?.has?.(VILLAGE_ROLES.houses) && into) {
+    // A town kit builds the whole village: street front, lane, square (#117).
+    houses.push(...furnishVillage(route, terrain, zone, { kit, into, structures, palette, occupancy, seed, dry }));
+  } else {
+    // The green in the middle, with the church on its far side facing the road.
+    const { center, radius } = villageShape(zone);
+    const cf = roadFrame(route, center);
+    const churchPos = add(cf.center, scale(cf.right, half + PAVEMENT + radius * 0.55));
+    if (!avoid(churchPos[0], churchPos[2], 16)) {
+      const yaw = yawFor(scale(cf.right, -1));
+      const y = groundUnder(terrain, churchPos, yaw, 10, 22);
+      structures.append(m.church, placement([churchPos[0], y, churchPos[2]], yaw));
+      occupancy.add(churchPos[0], churchPos[2], 18);
+      houses.push(churchPos);
+    }
 
-  // The lots the land module lays out, built up where the ground allows it.
-  const lots = villageLots(zone, {
-    buildable: (lot) => {
-      const f = roadFrame(route, lot.position);
-      const pos = add(f.center, scale(f.right, lot.side));
-      return !avoid(pos[0], pos[2], 7);
-    },
-  });
-  houses.push(...housesOnLots(route, terrain, lots, { structures, occupancy, seed, biome, villagePlaces: clearOfRoad }).map((house) => house.position));
+    // The lots the land module lays out, built up where the ground allows it.
+    const lots = villageLots(zone, {
+      buildable: (lot) => {
+        const f = roadFrame(route, lot.position);
+        const pos = add(f.center, scale(f.right, lot.side));
+        return !avoid(pos[0], pos[2], 7);
+      },
+    });
+    houses.push(...housesOnLots(route, terrain, lots, { structures, occupancy, seed, biome, villagePlaces: clearOfRoad }).map((house) => house.position));
+  }
 
   // Street lamps on alternating sides; heads go into the "bright" mesh.
   let lampSide = 1;
@@ -514,6 +520,114 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
     bright.append(m.villageSign.face, model);
   }
   return { houses };
+}
+
+/** Roles drawn as buildings: modelled up close, their cheap twin from afar. */
+const BUILDING_ROLES = new Set([VILLAGE_ROLES.houses, VILLAGE_ROLES.church, VILLAGE_ROLES.windmills]);
+
+/**
+ * A village built from a town kit (#117): `layVillage` decides what stands
+ * where along the road, and this puts it on the ground. Buildings go into
+ * `into.near` and their twins into `into.far`, garden trees into the scenery,
+ * and the small things into `into.near` only, since nobody sees a lantern
+ * from half a kilometre.
+ *
+ * Nothing here enters `occupancy` until the whole village is laid out: the
+ * layout keeps its own houses apart, and `fits` only has to keep them off
+ * what was there before — a river, another road, the café. Our own road is
+ * the nearest one to anything the village puts up, so a fence may stand at
+ * the back of the pavement while a house keeps off a road running past it.
+ *
+ * @returns {number[][]} where the buildings stand, for the trees to keep clear of
+ */
+function furnishVillage(route, terrain, zone, { kit, into, structures, palette, occupancy, seed, dry }) {
+  const edge = roadHalfWidth(route.lanes) + PAVEMENT;
+  const { center } = villageShape(zone);
+  const at = (d, s) => {
+    const f = roadFrame(route, route.wrap(d));
+    return { f, pos: add(f.center, scale(f.right, s)) };
+  };
+  const pick = (role, random) => {
+    if (role === VILLAGE_ROLES.trees) return kit.has(role) ? { width: 4, depth: 4 } : null;
+    const model = kit.model(role, random);
+    if (!model) return null;
+    const { min, max } = model.bounds;
+    return { ...model, width: max[0] - min[0], depth: max[2] - min[2] };
+  };
+  const ours = (x, z, s) => terrain.distanceToRoad(x, z) >= Math.abs(s) - 1.5;
+  const fits = (d, s, radius) => {
+    const { f, pos } = at(d, s);
+    const back = add(f.center, scale(f.right, s + Math.sign(s) * radius));
+    return ours(pos[0], pos[2], s) && ours(back[0], back[2], Math.abs(s) + radius) && dry(pos[0], pos[2], radius) && !occupancy.blocked(pos[0], pos[2], radius);
+  };
+  const random = seededRandom((seed ^ Math.imul(Math.round(zone.from) + 1, 0x9e37)) >>> 0);
+  const { placed, square } = layVillage({ from: zone.from, to: zone.to, center, edge, random, pick, fits });
+  paveSquare(route, terrain, square, { structures, colour: palette.pavement });
+  const buildings = [];
+  // On the inside of a bend a row closes up: a house that would stand in its
+  // neighbour is left out, and its garden with it.
+  const standing = new Occupancy(20);
+  const dropped = new Set();
+  for (const p of placed) {
+    const { f, pos } = at(p.d, p.s);
+    const yaw = yawFor(add(scale(f.forward, p.face[0]), scale(f.right, p.face[1])));
+    if (p.of && dropped.has(p.of)) {
+      dropped.add(p);
+      continue;
+    }
+    if (BUILDING_ROLES.has(p.role)) {
+      const reach = Math.min(p.item.width, p.item.depth) / 2;
+      if (standing.blocked(pos[0], pos[2], reach)) {
+        dropped.add(p);
+        continue;
+      }
+      standing.add(pos[0], pos[2], reach);
+    }
+    if (p.role === VILLAGE_ROLES.trees) {
+      kit.tree({ mesh: into.trees, x: pos[0], y: terrain.height(pos[0], pos[2]), z: pos[2], kind: 0.9, random, role: VILLAGE_ROLES.trees });
+      continue;
+    }
+    const building = BUILDING_ROLES.has(p.role);
+    // A building sits on the lowest ground under it so it never floats; a
+    // fence or a stall on the ground where it stands.
+    const y = building ? groundUnder(terrain, pos, yaw, p.item.width, p.item.depth) : terrain.height(pos[0], pos[2]);
+    const model = placement([pos[0], y, pos[2]], yaw);
+    into.near.append(p.item.near, model);
+    if (p.item.far) into.far.append(p.item.far, model);
+    if (building) buildings.push([pos[0], y, pos[2]]);
+  }
+  for (const p of placed) {
+    if (dropped.has(p)) continue;
+    const { pos } = at(p.d, p.s);
+    occupancy.add(pos[0], pos[2], p.radius);
+  }
+  return buildings;
+}
+
+/**
+ * The square's paving: a grid laid over the ground from the back of the
+ * pavement out, in the pavement's colour.
+ */
+function paveSquare(route, terrain, { from, to, side, near, far }, { structures, colour, step = 3 }) {
+  // The terrain's own mesh is coarser than this grid and bulges between its
+  // corners, so the paving rides a little higher than the pavement does.
+  const corner = (d, s) => {
+    const f = roadFrame(route, route.wrap(d));
+    const p = add(f.center, scale(f.right, side * s));
+    return [p[0], terrain.height(p[0], p[2]) + 0.25, p[2]];
+  };
+  for (let d = from; d < to; d += step) {
+    const d1 = Math.min(to, d + step);
+    for (let s = near; s < far; s += step) {
+      const s1 = Math.min(far, s + step);
+      const a = corner(d, s);
+      const b = corner(d1, s);
+      const c = corner(d1, s1);
+      const e = corner(d, s1);
+      structures.triangleFacing(a, b, c, colour, [0, 1, 0]);
+      structures.triangleFacing(a, c, e, colour, [0, 1, 0]);
+    }
+  }
 }
 
 // ------------------------------------------------------------------- farms ---

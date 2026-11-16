@@ -1049,6 +1049,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     sceneryFar: new ChunkedMesh(),
     structures: new ChunkedMesh(),
     bright: new ChunkedMesh(),
+    // A town kit's village: its buildings up close, and their cheap twins
+    // beyond (#117). Only there when a kit builds the village, so a world
+    // without scenery holds the groups it always did.
+    ...(scenery?.has?.("houses") ? { village: new ChunkedMesh(), villageFar: new ChunkedMesh() } : {}),
   };
 
   const long = route.length > LONG_ROUTE_M;
@@ -1103,6 +1107,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
         avoid: (x, z, radius) => avoid(x, z, radius),
         biome,
         clearOfRoad: (x, z) => terrain.distanceToRoad(x, z) > half + 4,
+        kit: scenery,
+        into: chunks.village ? { near: chunks.village, far: chunks.villageFar, trees: chunks.scenery } : null,
+        dry: (x, z, radius) => !nearRiver(x, z, radius) && terrain.height(x, z) >= ground.water + 2.5,
       });
     }
   }
