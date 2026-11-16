@@ -186,6 +186,17 @@ test("a kit without a cheap twin draws no far wood at all", () => {
   assert.equal(floraOf().far(), null);
 });
 
+test("a building's cheap twin does not duplicate an otherwise single-LOD wood", () => {
+  const townAndTrees = {
+    ...KIT,
+    models: {
+      ...KIT.models,
+      cottage: { role: "houses", near: "cottage", far: "cottage-far" },
+    },
+  };
+  assert.equal(floraOf(townAndTrees).far(), null);
+});
+
 test("a scaled model stands where it was placed, not at its distance times its size", () => {
   // The placement matrix already holds the spot in 12..14. Scaling those too
   // moved every tree to `size` times its distance from the origin — a wood at

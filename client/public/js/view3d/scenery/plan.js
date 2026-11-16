@@ -167,7 +167,9 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
      * (#117). Empty when it has none, since the near wood already covers them.
      */
     far() {
-      const hasFar = Object.values(kit.models).some((model) => model.far);
+      // A town's cheap houses do not justify drawing the whole wood a second
+      // time. Only the roles this wood actually plants take part in this LOD.
+      const hasFar = Object.values(ROLES_BY_KIND).some((role) => (kit.byRole[role] ?? []).some((id) => kit.models[id].far !== undefined));
       return hasFar ? planFlora(kit, { readModelFile, fallback, painted, far: true, nearRange }) : null;
     },
     /**
