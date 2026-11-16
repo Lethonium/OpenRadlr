@@ -9,6 +9,7 @@
 import { CROWD } from "./crowd.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
+import { villageLots, villageShape } from "../land/land.js";
 import { fbm, seededRandom } from "./noise.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "./world.js";
@@ -410,11 +411,45 @@ function groundUnder(terrain, center, yaw, w, d) {
 }
 
 /**
+ * Places the houses of a `villageLots` layout on the ground. Each lot says how
+ * far along the road and to which side its house stands; the house is turned to
+ * face the road and sits on the lowest ground under it, so it never floats.
+ *
+ * The caller decides what goes on a lot: gardens keep a tree or a shed, the
+ * square gets the church.
+ */
+export function housesOnLots(route, terrain, lots, { structures, occupancy, seed, biome = temperate, villagePlaces = [] }) {
+  const random = seededRandom(seed ^ 0x40e5);
+  const placed = [];
+  for (const lot of lots) {
+    if (lot.square) continue;
+    const frame = roadFrame(route, route.wrap(lot.position));
+    const pos = add(frame.center, scale(frame.right, lot.side));
+    // Face the road, not the compass: the house's front is its local +z. It
+    // sits on the lowest ground under it, so it never floats.
+    const yaw = yawFor(scale(frame.right, -Math.sign(lot.side)));
+    const y = groundUnder(terrain, pos, yaw, 11, 10);
+    // A road elsewhere in the map may run past this lot: no house over an asphalt.
+    if (!villagePlaces(pos[0], pos[2])) continue;
+    if (occupancy.blocked(pos[0], pos[2], 5)) continue;
+    const variant = Math.floor(random() * HOUSE_VARIANTS);
+    structures.append(houseVariant(biome, variant), placement([pos[0], y, pos[2]], yaw));
+    occupancy.add(pos[0], pos[2], 7);
+    placed.push({ position: [pos[0], y, pos[2]], lot });
+  }
+  return placed;
+}
+
+/**
  * A village along `zone`: pavements, houses on both sides facing the road,
  * a church, street lamps and name boards at both ends.
+ *
+ * The houses stand on the lots `villageLots` lays out — rows along the street,
+ * a lane behind them, and a green in the middle kept clear of houses so the
+ * village has a square to gather on (#117 follow-up). Their places come from
+ * the map's seed, not from the order the world happens to build them in.
  */
-export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate }) {
-  const random = seededRandom(seed ^ Math.round(zone.from * 7));
+export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate, clearOfRoad = () => true }) {
   const half = roadHalfWidth(route.lanes);
   const m = sharedModels(biome);
   const palette = biome.palette;
@@ -437,37 +472,27 @@ export function buildVillage(route, terrain, zone, { structures, bright, occupan
     }
   }
 
-  // Church in the middle on the right.
-  const middle = (zone.from + zone.to) / 2;
-  const cf = roadFrame(route, middle);
-  const churchPos = add(cf.center, scale(cf.right, half + PAVEMENT + 15));
+  // The green in the middle, with the church on its far side facing the road.
+  const { center, radius } = villageShape(zone);
+  const cf = roadFrame(route, center);
+  const churchPos = add(cf.center, scale(cf.right, half + PAVEMENT + radius * 0.55));
   if (!avoid(churchPos[0], churchPos[2], 16)) {
     const yaw = yawFor(scale(cf.right, -1));
     const y = groundUnder(terrain, churchPos, yaw, 10, 22);
     structures.append(m.church, placement([churchPos[0], y, churchPos[2]], yaw));
     occupancy.add(churchPos[0], churchPos[2], 18);
+    houses.push(churchPos);
   }
 
-  // Houses on both sides.
-  for (const side of [-1, 1]) {
-    let d = zone.from + 8 + random() * 6;
-    while (d < zone.to - 6) {
-      const f = roadFrame(route, d);
-      const variant = Math.floor(random() * HOUSE_VARIANTS);
-      const depth = 9;
-      const setback = half + PAVEMENT + 2.5 + random() * 3.5 + depth / 2;
-      const pos = add(f.center, scale(f.right, side * setback));
-      const nearChurch = side > 0 && Math.abs(d - middle) < 17;
-      if (!nearChurch && random() < 0.88 && !avoid(pos[0], pos[2], 7) && !occupancy.blocked(pos[0], pos[2], 5)) {
-        const yaw = yawFor(scale(f.right, -side));
-        const y = groundUnder(terrain, pos, yaw, 11, 10);
-        structures.append(houseVariant(biome, variant), placement([pos[0], y, pos[2]], yaw));
-        occupancy.add(pos[0], pos[2], 7);
-        houses.push(pos);
-      }
-      d += 13 + random() * 7;
-    }
-  }
+  // The lots the land module lays out, built up where the ground allows it.
+  const lots = villageLots(zone, {
+    buildable: (lot) => {
+      const f = roadFrame(route, lot.position);
+      const pos = add(f.center, scale(f.right, lot.side));
+      return !avoid(pos[0], pos[2], 7);
+    },
+  });
+  houses.push(...housesOnLots(route, terrain, lots, { structures, occupancy, seed, biome, villagePlaces: clearOfRoad }).map((house) => house.position));
 
   // Street lamps on alternating sides; heads go into the "bright" mesh.
   let lampSide = 1;

@@ -34,6 +34,7 @@ import { COAST, SEA_LEVEL, coastHeight, islandShape } from "./island.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
 import { add, cellKey, normalize, placement, scale } from "./math.js";
+import { fieldAt, forestAt, kindAt, treeFactor } from "../land/land.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -740,15 +741,37 @@ export function buildArches(route, { biome = temperate } = {}) {
 }
 
 /**
+ * The land of a map as the scenery builder asks about it: how much of a wood
+ * a point is in, seeded by the map, so every client grows the same woods
+ * (`land/land.js`).
+ */
+export const landOf = (seed) =>
+  Object.freeze({
+    seed,
+    forestAt: (x, z) => forestAt(x, z, seed),
+    fieldAt: (x, z) => fieldAt(x, z, seed),
+    kindAt: (x, z) => kindAt(x, z, seed),
+    treeFactor: (x, z) => treeFactor(x, z, seed),
+  });
+
+/** How far out from the road trees are scattered, in metres, where the land allows. */
+const DENSE_REACH = 260;
+
+/**
  * Trees (firs and leafy), bushes and rocks scattered deterministically:
  * denser near the road, clustered into small woods, never on the road and
  * never in the sea. Shadows come from the renderer's shadow map.
+ *
+ * The wood is not an even scatter. `land` (see `land/land.js`) says how much
+ * of a wood a point is in, so the trees gather into real woods — four times
+ * the open rate, so trunks hide the country beyond them — and thin out to
+ * hedges in the fields (#117 follow-up).
  */
 export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null, land = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -756,13 +779,36 @@ export function buildScenery(
   const { mesh, own } = target(into);
   const positions = [];
   let attempts = 0;
-  while (positions.length < count && attempts < count * 8) {
+  // `count` is the open land's scatter. A wood gathers trees at four times that
+  // rate, so the loop keeps asking until the woods have filled and the open
+  // land has its scatter; `wanted` is the ceiling that keeps a whole island of
+  // woods from costing more than a few times the old wood.
+  const wanted = count * (land ? 2.2 : 1);
+  while (positions.length < wanted && attempts < wanted * 6) {
     attempts += 1;
     let x;
     let z;
     let inForest = false;
     const mode = random();
-    if (forests.length > 0 && mode < 0.25) {
+    if (land) {
+      // A wood is dense where it is a wood and a field is mown: the trees
+      // gather into the woods, most of them within sight of the road.
+      const frame = roadFrame(route, random() * route.length);
+      const side = random() < 0.5 ? -1 : 1;
+      const offset = halfWidth + 4 + Math.pow(random(), 1.7) * DENSE_REACH;
+      [x, , z] = add(frame.center, scale(frame.right, side * offset));
+      // Some places come from anywhere in the island, so even the country
+      // away from the road has trees to gather into a wood.
+      if (random() < 0.4) {
+        x = bounds.x0 + random() * (bounds.x1 - bounds.x0);
+        z = bounds.z0 + random() * (bounds.z1 - bounds.z0);
+      }
+      // Nearly every place in a wood gets a tree, and the few that do not are
+      // its clearings; a field keeps only a hedge at its edge.
+      const density = Math.max(land.forestAt(x, z), 0.05);
+      if (random() < land.fieldAt(x, z)) continue;
+      if (random() > density * 0.7) continue;
+    } else if (forests.length > 0 && mode < 0.25) {
       // Forest stretches: trees close to the road, ignoring the woods noise.
       const stretch = forests[Math.floor(random() * forests.length)];
       const frame = roadFrame(route, stretch.from + random() * (stretch.to - stretch.from));
@@ -778,16 +824,22 @@ export function buildScenery(
       x = bounds.x0 + random() * (bounds.x1 - bounds.x0);
       z = bounds.z0 + random() * (bounds.z1 - bounds.z0);
     }
-    // Woods: keep most trees where a slow noise says "forest".
-    const forest = valueNoise(x / 160, z / 160, seed + 99);
-    if (!inForest && forest < 0.42 && random() < 0.75) continue;
+    if (!land) {
+      // Woods: keep most trees where a slow noise says "forest".
+      const forest = valueNoise(x / 160, z / 160, seed + 99);
+      if (!inForest && forest < 0.42 && random() < 0.75) continue;
+    }
     if (terrain.distanceToRoad(x, z) < halfWidth + 3 || blocked(x, z)) continue;
     const ground = terrain.height(x, z);
     if (ground < water + 2.5) continue; // no trees in the sea or on the beach
     const y = ground - 0.3;
     positions.push([x, y, z]);
 
-    const kind = inForest ? 0.28 + random() * 0.72 : random();
+    // In a wood the trees are mostly tall firs and leafies; in the open there
+    // is room for rocks and bushes too.
+    const wood = inForest || (land ? land.forestAt(x, z) > 0.5 : false);
+    // A wood is trees, with the odd bush or fallen rock under them.
+    const kind = wood ? 0.28 + random() * 0.72 : random();
     // A kit draws its own models; without one the biome keeps drawing cones.
     (flora ?? biome.flora).tree({ mesh, x, y, z, kind, random });
   }
@@ -1041,7 +1093,17 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   for (const river of rivers) buildBridge(river.route, terrain, river, chunks.structures, biome);
   for (const r of ordered) {
     for (const village of zonesOf.get(r).villages) {
-      buildVillage(r, terrain, village, { structures: chunks.structures, bright: chunks.bright, occupancy, seed: r.seed >>> 0, avoid, biome });
+      buildVillage(r, terrain, village, {
+        structures: chunks.structures,
+        bright: chunks.bright,
+        occupancy,
+        seed,
+        // The woods and fields are the map's, and a house gets its place from
+        // that layout, so a village stands the same on every client.
+        avoid: (x, z, radius) => avoid(x, z, radius),
+        biome,
+        clearOfRoad: (x, z) => terrain.distanceToRoad(x, z) > half + 4,
+      });
     }
   }
   // The bike café where rides start, before anything else claims the spot
@@ -1116,13 +1178,15 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const margin = 450;
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    const count = Math.round(density.trees * km * (long ? LONG.trees : 1));
+    const land = landOf(seed);
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land });
     // The same wood again with each model's cheap twin, so trees far from the
     // camera cost a fraction of what they do up close (#117). The far pass runs
     // the same seed, so the trees land in the same spots at the same sizes.
     const far = scenery?.far?.() ?? null;
     if (far) {
-      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land });
     }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
