@@ -4,7 +4,8 @@ import { buildSceneNow, transferList } from "./worldScene.js";
 
 self.onmessage = ({ data }) => {
   try {
-    const scene = buildSceneNow(data.route, data.others ?? [], data.network ?? null, data.biome ?? "temperate", floraOf(data.scenes));
+    const biome = data.biome ?? "temperate";
+    const scene = buildSceneNow(data.route, data.others ?? [], data.network ?? null, biome, floraOf(data.scenes, biome));
     self.postMessage({ scene }, transferList(scene));
   } catch (error) {
     self.postMessage({ error: String(error?.message ?? error) });

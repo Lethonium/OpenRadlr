@@ -12,7 +12,7 @@ import test from "node:test";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { indexKit, pickLod } from "../public/js/view3d/scenery/kits.js";
 import { buildMesh } from "../public/js/view3d/scenery/models.js";
-import { paletteColour, planFlora } from "../public/js/view3d/scenery/plan.js";
+import { kindOf, paletteColour, planFlora, recolour } from "../public/js/view3d/scenery/plan.js";
 
 /** A two-triangle model, the smallest thing a kit can hold. */
 const MODEL = {
@@ -33,9 +33,9 @@ const MODEL = {
 const KIT = {
   name: "nature",
   licence: "CC0-1.0",
-  provenance: { pack: "https://quaternius.com/packs/ultimatenature.html", licence: "https://creativecommons.org/publicdomain/zero/1.0/", taken: "2026-11-16" },
+  provenance: { pack: "https://kenney.nl/assets/nature-kit", licence: "https://creativecommons.org/publicdomain/zero/1.0/", taken: "2026-11-16" },
   models: {
-    pine: { role: "trees", height: 1, near: "pine" },
+    pine: { role: "firs", height: 1, near: "pine" },
   },
 };
 
@@ -43,7 +43,7 @@ const KIT = {
 const fixed = (value) => () => value;
 
 /** A kit read from memory: the world reads these from the imported files. */
-const floraOf = (kit = KIT, options = {}) => planFlora(indexKit(kit), { nearRange: 150, readModelFile: () => MODEL, ...options });
+const floraOf = (kit = KIT, options = {}) => planFlora(indexKit(kit), { readModelFile: () => MODEL, ...options });
 
 test("a model reads back into a MeshBuilder", () => {
   const mesh = buildMesh(MODEL);
@@ -56,8 +56,8 @@ test("a model reads back into a MeshBuilder", () => {
 
 test("a kit indexes its models by role", () => {
   const kit = indexKit(KIT);
-  assert.deepEqual(kit.roles, ["trees"]);
-  assert.equal(kit.byRole.trees.length, 1);
+  assert.deepEqual(kit.roles, ["firs"]);
+  assert.equal(kit.byRole.firs.length, 1);
 });
 
 test("a kit that is not CC0 is refused, with its name", () => {
@@ -66,7 +66,7 @@ test("a kit that is not CC0 is refused, with its name", () => {
 });
 
 test("a model naming a variant the kit does not hold is refused", () => {
-  const bad = { ...KIT, models: { pine: { role: "trees", near: "gone" } } };
+  const bad = { ...KIT, models: { pine: { role: "firs", near: "gone" } } };
   assert.throws(() => indexKit(bad), /gone/);
 });
 
@@ -95,7 +95,7 @@ test("the flora draws the model where it is asked to, from the random it is give
 });
 
 test("the flora asks the random for its size, so instances differ", () => {
-  const flora = floraOf({ ...KIT, models: { pine: { role: "trees", near: "pine", sizes: [1, 3] } } });
+  const flora = floraOf({ ...KIT, models: { pine: { role: "firs", near: "pine", sizes: [1, 3] } } });
   const heightWith = (r) => {
     const mesh = new MeshBuilder();
     flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(r) });
@@ -114,17 +114,77 @@ test("a kit with no model for the asked role draws nothing rather than crashing"
   assert.equal(mesh.vertexCount, 0);
 });
 
-test("trees are drawn by the trees role, not whichever role the kit happens to list first", () => {
-  // A kit holds fences and flags beside its trees; the scenery builder asks for
-  // trees, and must get trees even though "hedges" sorts before "trees".
+test("a role the kit does not hold is left to the biome, so a kit need not cover everything", () => {
+  // A pack with trees but no flowers should not turn every verge bare.
+  const drawn = [];
+  const fallback = { flower: (spot) => drawn.push(spot.x), tree: () => {}, tuft: () => {} };
+  const flora = planFlora(indexKit(KIT), { readModelFile: () => MODEL, fallback });
+  flora.flower({ mesh: new MeshBuilder(), x: 7, y: 0, z: 0, random: fixed(0.5) });
+  assert.deepEqual(drawn, [7]);
+});
+
+test("a leaf colour takes the season's green, whether the pack made it green or teal", () => {
+  // Kenney gives leaves as a teal and bark as a bright orange; both would look
+  // like another island beside our own trees, so both are painted.
+  const painted = { foliage: [0.16, 0.37, 0.22], bark: [0.38, 0.27, 0.18] };
+  for (const leaf of [[0.169, 0.651, 0.671], [0.161, 0.788, 0.671]]) {
+    const out = recolour(leaf, painted);
+    assert.ok(out[1] > out[0] && out[1] > out[2], `the leaf is green, got ${out.map((v) => v.toFixed(2))}`);
+  }
+  const bark = recolour([0.886, 0.514, 0.341], painted);
+  assert.ok(bark[0] > bark[1] && bark[1] > bark[2], "bark stays a warm brown");
+  assert.ok(bark[0] < 0.5, `bark is the season's darker brown, got ${bark[0].toFixed(2)}`);
+});
+
+test("a colour that is neither leaf nor bark is left as the model made it", () => {
+  const painted = { foliage: [0.16, 0.37, 0.22], bark: [0.38, 0.27, 0.18] };
+  const stone = [0.5, 0.5, 0.5];
+  assert.deepEqual(recolour(stone, painted), stone, "grey stone keeps its colour");
+});
+
+test("without a season colour, a model keeps every colour it was made with", () => {
+  const leaf = [0.169, 0.651, 0.671];
+  assert.deepEqual(recolour(leaf, null), leaf);
+  assert.deepEqual(recolour(leaf, {}), leaf);
+});
+
+test("a scaled model stands where it was placed, not at its distance times its size", () => {
+  // The placement matrix already holds the spot in 12..14. Scaling those too
+  // moved every tree to `size` times its distance from the origin — a wood at
+  // 800 m with a 9× model landed 7 km out to sea, and 96% of the scenery
+  // vertices were drawn far outside the island.
+  const flora = floraOf({ ...KIT, models: { pine: { role: "firs", near: "pine", height: 9 } } });
+  const mesh = new MeshBuilder();
+  flora.tree({ mesh, x: 800, y: 120, z: -300, kind: 0.5, random: fixed(0.5) });
+  const p = Array.from(mesh.positions.data.slice(0, mesh.positions.length));
+  const xs = p.filter((_, i) => i % 3 === 0);
+  const ys = p.filter((_, i) => i % 3 === 1);
+  // The pine is ±1 wide and 4 tall at 9×: within 9 of the spot it was given.
+  assert.ok(Math.max(...xs) < 800 + 9.1 && Math.min(...xs) > 800 - 9.1, `x stayed near 800, got ${Math.min(...xs)}..${Math.max(...xs)}`);
+  assert.ok(Math.min(...ys) >= 120 && Math.max(...ys) <= 120 + 36.1, `the tree stands on the ground at 120, got ${Math.min(...ys)}..${Math.max(...ys)}`);
+  assert.ok(p.filter((_, i) => i % 3 === 2).every((z) => z > -300 - 9.1 && z < -300 + 9.1), "z stayed near -300");
+});
+
+test("the kinds the world asks for are drawn as the roles the kit names", () => {
+  // `plantTree` draws rocks below 0.1, bushes below 0.28, firs below 0.62 and
+  // leafies above; a kit keeps that mix rather than a wood of one model.
+  assert.equal(kindOf(0.05), "rock");
+  assert.equal(kindOf(0.2), "bush");
+  assert.equal(kindOf(0.5), "fir");
+  assert.equal(kindOf(0.9), "leafy");
+});
+
+test("trees are drawn by the role their kind names, not whichever role the kit lists first", () => {
+  // A kit holds fences and bushes beside its firs; a fir must be a fir even
+  // though "bushes" sorts before "firs".
   const kit = indexKit({
     ...KIT,
     models: {
-      fence: { role: "hedges", near: "pine" },
-      pine: { role: "trees", near: "pine" },
+      fence: { role: "bushes", near: "pine" },
+      pine: { role: "firs", near: "pine" },
     },
   });
-  const flora = planFlora(kit, { nearRange: 150, readModelFile: () => MODEL });
+  const flora = planFlora(kit, { readModelFile: () => MODEL });
   const mesh = new MeshBuilder();
   flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(0.5) });
   // The pine stands 4 tall; a fence-shaped answer would not.

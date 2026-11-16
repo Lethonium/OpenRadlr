@@ -801,7 +801,7 @@ export function buildScenery(
 export function buildGroundDetail(
   route,
   terrain,
-  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate } = {},
+  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate, flora = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x6a55);
   const halfWidth = roadHalfWidth(route.lanes) + VERGE;
@@ -821,13 +821,13 @@ export function buildGroundDetail(
     const p = spot();
     if (!p) continue;
     placed += 1;
-    biome.flora.tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
+    (flora ?? biome.flora).tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   for (let i = 0; i < flowers; i += 1) {
     const p = spot();
     if (!p) continue;
     placed += 1;
-    biome.flora.flower({ mesh, x: p[0], y: p[1], z: p[2], random });
+    (flora ?? biome.flora).flower({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   return { mesh: own ? mesh.build() : mesh, count: placed };
 }
@@ -1117,13 +1117,16 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
+    // A kit's tufts and flowers cost more each, so its flora asks for fewer.
+    const perKit = scenery?.detailDensity ?? {};
     buildGroundDetail(r, terrain, {
       biome,
       water: ground.water,
       into: chunks.detail,
-      tufts: Math.round(density.tufts * km * detail),
-      flowers: Math.round(density.flowers * km * detail),
+      tufts: Math.round(density.tufts * km * detail * (perKit.tufts ?? 1)),
+      flowers: Math.round(density.flowers * km * detail * (perKit.flowers ?? 1)),
       blocked: detailBlocked,
+      flora: scenery,
     });
   }
 

@@ -12,8 +12,12 @@
 /** Where the kits are served from. */
 const KITS_PATH = "assets/scenery";
 
-/** The kits a scenery level uses. `off` uses none. */
-export const KITS_OF = Object.freeze({ off: [], normal: ["racing"] });
+/**
+ * The kits a scenery level uses. `off` uses none; `models` is the modelled
+ * world; `racing` keeps Kenney's Racing Kit beside it, since a racing island
+ * with barriers and flags on the verges is a different look worth trying.
+ */
+export const KITS_OF = Object.freeze({ off: [], models: ["nature"], racing: ["racing"] });
 
 /** What the worker needs: manifests with their models inlined, since functions cannot travel. */
 let loaded = null;

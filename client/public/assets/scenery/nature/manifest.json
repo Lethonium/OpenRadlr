@@ -1,0 +1,272 @@
+{
+  "name": "nature",
+  "licence": "CC0-1.0",
+  "provenance": {
+    "pack": "https://kenney.nl/assets/nature-kit",
+    "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "taken": "2026-11-16",
+    "note": "Nature Kit 2.1 by Kenney. Its own License.txt, shipped inside the pack, says CC0 (Creative Commons Zero) 1.0."
+  },
+  "models": {
+    "pineTallD": {
+      "role": "firs",
+      "file": "tree_pineTallD",
+      "height": 6.25,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 98
+    },
+    "pineTallB": {
+      "role": "firs",
+      "file": "tree_pineTallB",
+      "height": 6.74,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 78
+    },
+    "pineTallC": {
+      "role": "firs",
+      "file": "tree_pineTallC",
+      "height": 7.78,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 98
+    },
+    "pineDefaultA": {
+      "role": "firs",
+      "file": "tree_pineDefaultA",
+      "height": 8.39,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 230
+    },
+    "pineTallA": {
+      "role": "firs",
+      "file": "tree_pineTallA",
+      "height": 8.5,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 78
+    },
+    "pineSimple": {
+      "role": "firs",
+      "file": "tree_simple",
+      "height": 8.55,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 62
+    },
+    "pineCone": {
+      "role": "firs",
+      "file": "tree_cone",
+      "height": 9.09,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 132
+    },
+    "pineRoundA": {
+      "role": "firs",
+      "file": "tree_pineRoundA",
+      "height": 9.49,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 204
+    },
+    "pineRoundC": {
+      "role": "firs",
+      "file": "tree_pineRoundC",
+      "height": 10.4,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 206
+    },
+    "pineSmallA": {
+      "role": "firs",
+      "file": "tree_pineSmallA",
+      "height": 8.04,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 164
+    },
+    "pineSmallC": {
+      "role": "firs",
+      "file": "tree_pineSmallC",
+      "height": 6.96,
+      "sizes": [
+        0.46,
+        1.0
+      ],
+      "triangles": 54
+    },
+    "leafyDefault": {
+      "role": "leafy",
+      "file": "tree_default",
+      "height": 5.85,
+      "sizes": [
+        0.5,
+        1.0
+      ],
+      "triangles": 114
+    },
+    "leafyTall": {
+      "role": "leafy",
+      "file": "tree_tall",
+      "height": 5.92,
+      "sizes": [
+        0.5,
+        1.0
+      ],
+      "triangles": 72
+    },
+    "leafyOak": {
+      "role": "leafy",
+      "file": "tree_oak",
+      "height": 8.13,
+      "sizes": [
+        0.5,
+        1.0
+      ],
+      "triangles": 196
+    },
+    "leafyDetailed": {
+      "role": "leafy",
+      "file": "tree_detailed",
+      "height": 7.52,
+      "sizes": [
+        0.5,
+        1.0
+      ],
+      "triangles": 402
+    },
+    "leafyBlocks": {
+      "role": "leafy",
+      "file": "tree_blocks",
+      "height": 8.4,
+      "sizes": [
+        0.5,
+        1.0
+      ],
+      "triangles": 132
+    },
+    "bush": {
+      "role": "bushes",
+      "file": "plant_bushDetailed",
+      "height": 5.83,
+      "sizes": [
+        0.43,
+        1.0
+      ],
+      "triangles": 104
+    },
+    "bushLarge": {
+      "role": "bushes",
+      "file": "plant_bushLarge",
+      "height": 8.75,
+      "sizes": [
+        0.43,
+        1.0
+      ],
+      "triangles": 60
+    },
+    "bushTriangle": {
+      "role": "bushes",
+      "file": "plant_bushTriangle",
+      "height": 7.0,
+      "sizes": [
+        0.43,
+        1.0
+      ],
+      "triangles": 30
+    },
+    "rock": {
+      "role": "rocks",
+      "file": "rock_largeD",
+      "height": 4.91,
+      "sizes": [
+        0.29,
+        1.0
+      ],
+      "triangles": 80
+    },
+    "rockFlat": {
+      "role": "rocks",
+      "file": "rock_largeB",
+      "height": 6.51,
+      "sizes": [
+        0.29,
+        1.0
+      ],
+      "triangles": 85
+    },
+    "stump": {
+      "role": "rocks",
+      "file": "stump_round",
+      "height": 8.0,
+      "sizes": [
+        0.29,
+        1.0
+      ],
+      "triangles": 56
+    },
+    "grass": {
+      "role": "tufts",
+      "file": "grass_leafs",
+      "height": 2.29,
+      "sizes": [
+        0.8,
+        1.2
+      ],
+      "triangles": 36
+    },
+    "flowerRed": {
+      "role": "flowers",
+      "file": "flower_redA",
+      "height": 1.55,
+      "sizes": [
+        0.8,
+        1.2
+      ],
+      "triangles": 76
+    },
+    "flowerYellow": {
+      "role": "flowers",
+      "file": "flower_yellowA",
+      "height": 2.37,
+      "sizes": [
+        0.8,
+        1.2
+      ],
+      "triangles": 76
+    },
+    "flowerPurple": {
+      "role": "flowers",
+      "file": "flower_purpleB",
+      "height": 2.14,
+      "sizes": [
+        0.8,
+        1.2
+      ],
+      "triangles": 98
+    }
+  }
+}

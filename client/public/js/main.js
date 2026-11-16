@@ -21,7 +21,7 @@ import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
 import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
-import { viewControls } from "./view/viewControls.js";
+import { SCENERY_LEVELS, viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
 import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
@@ -171,6 +171,18 @@ const writeSetting = (key, value) => {
 };
 
 /**
+ * Where to join the route, from `?at=<metres>`: a distance along the road, so a
+ * screenshot can be taken at a chosen spot without riding there first. Returns
+ * `null` when the address does not ask for one, or asks for something unusable.
+ */
+function joinedAtMetres() {
+  const param = new URLSearchParams(location.search).get("at");
+  if (param === null) return null;
+  const metres = Number(param);
+  return Number.isFinite(metres) && metres >= 0 ? metres : null;
+}
+
+/**
  * The biome to draw: `?biome=winter` previews one (not saved), else the
  * rider's saved pick, else the default.
  */
@@ -250,6 +262,8 @@ function buildRideWorld() {
   if (!ride || !routeFile) return;
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
+  // Diagnostics for screenshots: `?scenery_debug` reports which level the build used.
+  if (new URLSearchParams(location.search).has("scenery_debug")) document.documentElement.dataset.sceneryBuild = String(app.scenery);
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
     .then(([others, network]) => Promise.all([others, network, loadScenery(app.scenery)]))
     .then(([others, network, scenes]) => buildScene(routeFile, others, { network, biome, scenes }))
@@ -433,7 +447,7 @@ const app = {
   /** When the read-out was last written, so it updates twice a second, not every frame. */
   fpsWrittenAt: 0,
   /** How the island's scenery is drawn: "off" for the biome's own, "normal" for imported models (#117). */
-  scenery: readSetting(SCENERY_KEY) === "normal" ? "normal" : "off",
+  scenery: SCENERY_LEVELS.includes(readSetting(SCENERY_KEY)) ? readSetting(SCENERY_KEY) : "off",
   layoutChoice: "auto",
   layout: "cockpit",
   standing: null,
@@ -906,6 +920,8 @@ function initMenuStage() {
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
+    // The menu's world becomes the ride's, so it is built with the scenery the rider picked.
+    scenery: () => loadScenery(app.scenery),
     biome: () => app.biome,
     createView: use3d
       ? (route, scene) => {
@@ -1792,6 +1808,12 @@ async function joinRide(restored = null) {
   } else {
     app.routeFile = await fetchRouteFile(route?.id);
     app.route = new RouteGeometry(app.routeFile);
+    // `?at=<metres>` joins the ride part-way along the route instead of
+    // pedalling there first: the server places the rider, so a screenshot can be
+    // taken at a chosen spot on the island in one page load.
+    if (joinedAtMetres() !== null) {
+      app.rideAt = { routeId: app.route.id, distanceM: joinedAtMetres() };
+    }
     // The map's routes: its riders all ride one world (#14), each on their own route.
     app.rideRoute = app.route;
     app.routes = new Map([[app.route.id, app.route]]);
@@ -1822,7 +1844,7 @@ async function joinRide(restored = null) {
     screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
-    resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
+    resume: joinedAtMetres() !== null && route?.kind !== "studio" ? app.rideAt : restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
   });
   const studio = route?.kind === "studio";
   closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
@@ -4992,7 +5014,7 @@ function setQuality(quality) {
 
 /** Picks how the island is drawn, and builds the world again to show it. */
 function setScenery(level) {
-  const next = level === "normal" ? "normal" : "off";
+  const next = SCENERY_LEVELS.includes(level) ? level : "off";
   if (next === app.scenery) return;
   app.scenery = next;
   writeSetting(SCENERY_KEY, next);

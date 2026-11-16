@@ -79,13 +79,13 @@ test("the worker turns posted kit data into a flora, since functions do not trav
         name: "nature",
         licence: "CC0-1.0",
         provenance: { pack: "https://example.org", licence: "https://creativecommons.org/publicdomain/zero/1.0/", taken: "2026-11-16" },
-        models: { pine: { role: "trees", near: "pine" } },
+        models: { pine: { role: "firs", near: "pine" } },
         files: { pine: MODEL_FILE },
       },
     ],
   };
   const flora = floraOf(scenes);
-  assert.deepEqual(flora.roles, ["trees"]);
+  assert.deepEqual(flora.roles, ["firs"]);
   const mesh = new MeshBuilder();
   flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: () => 0.5 });
   assert.equal(mesh.vertexCount, 3);

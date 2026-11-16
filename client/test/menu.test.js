@@ -441,6 +441,40 @@ const land = (log) => {
   for (let i = 0; i < 100 && log.views[0].camera.flying; i += 1) log.views[0].camera.update(0.05);
 };
 
+test("the stage builds its world with the scenery the ride will draw (#117)", async () => {
+  // The menu's world becomes the ride's, so building it without the picked
+  // scenery meant the whole ride showed the biome's own trees.
+  const { stage, log } = fakeStage();
+  const kits = { kits: [{ name: "nature", licence: "CC0-1.0", models: {}, files: {} }] };
+  let asked = 0;
+  stage.deps.scenery = async () => {
+    asked += 1;
+    return kits;
+  };
+  const seen = [];
+  stage.deps.buildScene = (routeFile, others, options) =>
+    new Promise((resolve) => {
+      seen.push(options.scenes);
+      log.builds.push({ id: routeFile.id, resolve: () => resolve({ overview: overview(), id: routeFile.id }) });
+    });
+  await stage.select(listed, "rolling-hills");
+  await settle();
+  assert.equal(asked, 1, "the stage asked for the scenery");
+  assert.equal(seen[0], kits, "and built the world with it");
+});
+
+test("the stage still builds when the scenery cannot be loaded", async () => {
+  // Scenery is an extra: a kit that will not load must not cost the rider the world.
+  const { stage, log } = fakeStage();
+  stage.deps.scenery = async () => {
+    throw new Error("offline");
+  };
+  await stage.select(listed, "rolling-hills");
+  await settle();
+  assert.equal(log.builds.length, 1);
+  assert.equal(log.builds[0].id, "rolling-hills");
+});
+
 test("the stage shows the pick at once and builds its world in the background", async () => {
   const { stage, log } = fakeStage();
   await stage.select(listed, "rolling-hills");

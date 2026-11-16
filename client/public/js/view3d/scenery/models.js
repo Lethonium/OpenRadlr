@@ -23,13 +23,14 @@ export function readModel(model, name = model?.name ?? "model") {
  * the winding (`MeshBuilder.triangle`), which is how a flat-shaded face gets
  * its own normal and the model keeps the look it was modelled with.
  */
-export function buildMesh(model, name = model?.name ?? "model") {
+export function buildMesh(model, name = model?.name ?? "model", { painted = null } = {}) {
   const source = readModel(model, name);
   const mesh = new MeshBuilder();
   const t = source.triangles;
   for (let i = 0; i < t.length; i += 3) {
     const [a, b, c] = [t[i], t[i + 1], t[i + 2]];
-    mesh.triangle([a[0], a[1], a[2]], [b[0], b[1], b[2]], [c[0], c[1], c[2]], [a[3], a[4], a[5], 0]);
+    const colour = painted ? painted(t[i], t[i + 1], t[i + 2]) : [a[3], a[4], a[5]];
+    mesh.triangle([a[0], a[1], a[2]], [b[0], b[1], b[2]], [c[0], c[1], c[2]], [colour[0], colour[1], colour[2], 0]);
   }
   return mesh;
 }

@@ -9,7 +9,7 @@
   },
   "models": {
     "treeLarge": {
-      "role": "trees",
+      "role": "firs",
       "file": "treeLarge",
       "height": 5.6,
       "sizes": [
@@ -18,7 +18,7 @@
       ]
     },
     "treeSmall": {
-      "role": "trees",
+      "role": "firs",
       "file": "treeSmall",
       "height": 3.4,
       "sizes": [

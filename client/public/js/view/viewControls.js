@@ -10,7 +10,10 @@ const CAMERA_KEYS = {
   chase: "camera.chase", close: "camera.close", drone: "camera.drone", side: "camera.side",
   seat: "camera.seat", pov: "camera.pov", wide: "camera.wide", coach: "camera.coach",
 };
-const SCENERY_KEYS = { off: "scenery.off", normal: "scenery.normal" };
+/** The scenery levels, in the order the popover offers them. */
+export const SCENERY_LEVELS = Object.freeze(["off", "models", "racing"]);
+
+const SCENERY_KEYS = { off: "scenery.off", models: "scenery.models", racing: "scenery.racing" };
 const TIME_KEYS = { auto: "viewPopover.timeAuto", day: "drawer.timeDay", golden: "drawer.timeGolden", dusk: "drawer.timeDusk" };
 
 const option = (id, label) => ({ id, label });
@@ -29,6 +32,6 @@ export function viewControls({ studio }) {
     times: studio ? [] : TIME_MODES.map((id) => option(id, t(TIME_KEYS[id]))),
     // Scenery from imported models (#117): off by default, since it is a look
     // worth choosing rather than the world everyone expects.
-    scenaries: studio ? [] : ["off", "normal"].map((id) => option(id, t(SCENERY_KEYS[id]))),
+    scenaries: studio ? [] : SCENERY_LEVELS.map((id) => option(id, t(SCENERY_KEYS[id]))),
   };
 }

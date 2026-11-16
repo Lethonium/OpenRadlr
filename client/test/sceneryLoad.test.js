@@ -10,9 +10,9 @@ import test from "node:test";
 import { KITS_OF, forgetScenery, loadKit, loadScenery } from "../public/js/view3d/scenery/load.js";
 
 const MANIFEST = {
-  name: "racing",
+  name: "nature",
   licence: "CC0-1.0",
-  models: { treeLarge: { role: "trees", file: "treeLarge" }, treeSmall: { role: "trees", file: "treeSmall" } },
+  models: { treeLarge: { role: "firs", file: "treeLarge" }, treeSmall: { role: "leafy", file: "treeSmall" } },
 };
 const MODEL = { name: "treeLarge", triangles: [[0, 0, 0, 1, 1, 1], [1, 0, 0, 1, 1, 1], [0, 1, 0, 1, 1, 1]] };
 
@@ -29,12 +29,12 @@ function fakeFetch(files) {
 
 test("a kit arrives with its models inlined for the worker", async () => {
   const { fetchJson } = fakeFetch({
-    "assets/scenery/racing/manifest.json": MANIFEST,
-    "assets/scenery/racing/treeLarge.geo.json": MODEL,
-    "assets/scenery/racing/treeSmall.geo.json": MODEL,
+    "assets/scenery/nature/manifest.json": MANIFEST,
+    "assets/scenery/nature/treeLarge.geo.json": MODEL,
+    "assets/scenery/nature/treeSmall.geo.json": MODEL,
   });
-  const kit = await loadKit("racing", { fetchJson });
-  assert.equal(kit.name, "racing");
+  const kit = await loadKit("nature", { fetchJson });
+  assert.equal(kit.name, "nature");
   assert.deepEqual(Object.keys(kit.files).sort(), ["treeLarge", "treeSmall"]);
   assert.equal(kit.files.treeLarge.triangles.length, 3);
 });
@@ -47,24 +47,25 @@ test("scenery off asks for nothing at all", async () => {
 
 test("a level names the kits it wants", () => {
   assert.deepEqual(KITS_OF.off, []);
-  assert.ok(KITS_OF.normal.length > 0);
+  assert.deepEqual(KITS_OF.models, ["nature"]);
+  assert.deepEqual(KITS_OF.racing, ["racing"]);
 });
 
 test("a kit that cannot be loaded gives no scenery, rather than a broken world", async () => {
   const { fetchJson } = fakeFetch({}); // everything 404s
-  assert.equal(await loadScenery("normal", { fetchJson }), null);
+  assert.equal(await loadScenery("models", { fetchJson }), null);
 });
 
 test("a kit is downloaded once and reused", async () => {
   forgetScenery();
   const { fetchJson, asked } = fakeFetch({
-    "assets/scenery/racing/manifest.json": MANIFEST,
-    "assets/scenery/racing/treeLarge.geo.json": MODEL,
-    "assets/scenery/racing/treeSmall.geo.json": MODEL,
+    "assets/scenery/nature/manifest.json": MANIFEST,
+    "assets/scenery/nature/treeLarge.geo.json": MODEL,
+    "assets/scenery/nature/treeSmall.geo.json": MODEL,
   });
-  const first = await loadScenery("normal", { fetchJson });
+  const first = await loadScenery("models", { fetchJson });
   const before = asked.length;
-  const second = await loadScenery("normal", { fetchJson });
+  const second = await loadScenery("models", { fetchJson });
   assert.ok(first && second);
   assert.equal(asked.length, before, "nothing was fetched again");
   assert.equal(second.kits, first.kits, "and the same kits are handed over");

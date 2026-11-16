@@ -76,7 +76,8 @@ export class MenuStage {
    * @param {object} deps
    * @param {(id: string) => Promise<object>} deps.fetchRouteFile
    * @param {(mapId: string) => Promise<object>} [deps.fetchNetwork] a map's road network file (#26)
-   * @param {(file: object, others: object[], options: {network: object | null, biome?: string}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
+   * @param {(file: object, others: object[], options: {network: object | null, biome?: string, scenes?: object | null}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
+   * @param {() => Promise<object | null>} [deps.scenery] what the world is built with (#117); without it, the biome's own
    * @param {() => string} [deps.biome] the rider's biome, when the world is built
    * @param {(route: RouteGeometry, scene: object) => object} [deps.createView] a View3D on the menu canvas
    * @param {(viewKind: "island" | "route" | "gym" | "studio", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
@@ -309,7 +310,11 @@ export class MenuStage {
     this.#buildingKey = key;
     let scene;
     try {
-      scene = await this.deps.buildScene(file, others, { network, biome });
+      // The menu's world is the one the ride goes on to use, so it is built with
+      // whatever the ride will draw: scenery included, or the rider would see the
+      // biome's trees all the way from the menu (#117).
+      const scenes = this.deps.scenery ? await this.deps.scenery().catch(() => null) : null;
+      scene = await this.deps.buildScene(file, others, { network, biome, scenes });
     } catch (error) {
       console.warn("Menu world unavailable:", error);
       scene = null;
