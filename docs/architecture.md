@@ -175,6 +175,37 @@ the ride already shows the 2D view. <kbd>V</kbd> toggles 3D and 2D, <kbd>C</kbd>
 cycles cameras, <kbd>T</kbd> cycles the time of day; *Graphics: Low* turns off the
 shadow map and grass for weaker GPUs. Devices without WebGL 2 fall back to 2D.
 
+### Scenery and renderer benchmarks
+
+Two complementary benchmarks make renderer changes measurable. From the repository
+root, `scene-bench` builds one route without neighbours or a map network and
+reports build time, memory, expanded geometry, actual scene uploads and a CPU
+profile:
+
+```sh
+node --expose-gc tools/scene-bench.mjs routes/rolling-hills.json --scenery off
+node --expose-gc tools/scene-bench.mjs routes/rolling-hills.json --scenery models --top 14
+```
+
+`--biome` selects a season and `--scenery` accepts `off`, `models` or `racing`.
+Keep the same options when comparing commits. Use the real app (`make dev`) for
+the fixed-camera browser benchmark, which builds the served map in its worker,
+renders with the real WebGL renderer and emits JSON:
+
+```sh
+cd client
+node sceneryBench.mjs --route rolling-hills --at 6490 --camera chase --scenery models
+node sceneryBench.mjs --route rolling-hills --at 7562 --camera drone --scenery models --out village.png
+```
+
+The browser report separates worker build, upload submission, scene statistics,
+opaque/shadow draw calls and submitted vertices, and steady-state frame pacing.
+`--frames` (2–300), `--warmup`, `--width`, `--height`, `--quality`, `--biome` and
+`--scenery` control the scenario. Save screenshots under `~/.cache/openradlr/`,
+not in the repository. Headless software WebGL verifies correctness, but frame
+rate must be compared on the target laptop or phone with identical settings.
+These are ad-hoc hardware tools, not part of `make check`.
+
 ### 2D view
 
 `view/rideMapView.js` draws the alternative view: a top-down map around the
