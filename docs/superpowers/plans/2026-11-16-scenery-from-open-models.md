@@ -234,3 +234,12 @@ draft.
   `/tmp/claude-ft/scripts/` (`shot.sh`, `shot.cjs`, `render.cjs`); they patch
   the drone camera via request interception to get aerial views. /tmp may
   not survive; recreate from this description if needed.
+
+### Style reference (from the user, 2026-11-16)
+
+- [Cykelapp v0.1.0](https://github.com/noslemaus/Cykelapp/releases/tag/v0.1.0)
+  (noslemaus/Cykelapp). The user finds its world much denser, fuller and more
+  varied than ours. Use it, and other examples like it, as a reference for
+  better styling. The user says it is MIT licensed, so code or assets may be
+  reused. Check the licence file in the repo before copying anything, and
+  credit it as MIT asks (keep the copyright and licence notice).
