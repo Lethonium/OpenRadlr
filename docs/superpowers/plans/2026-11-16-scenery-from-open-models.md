@@ -243,3 +243,75 @@ draft.
   better styling. The user says it is MIT licensed, so code or assets may be
   reused. Check the licence file in the repo before copying anything, and
   credit it as MIT asks (keep the copyright and licence notice).
+
+### Brief for the next session (written 2026-11-16, reviewed with the user on 2026-11-17)
+
+The user hands this to a new opencode session. Reviewed afterwards in Claude Code.
+One PR (#119, stays draft), ordered commits, `make check` green at every commit.
+
+#### 1. Rendering first: make a full world affordable
+
+A world full of life must not crash or slow down. Today's renderer is not built
+for that. What the code shows (`view3d/renderer.js`, `chunks.js`, `scenery/plan.js`):
+
+- **No instancing.** Every tree, house or tuft is copied, vertex by vertex, into a
+  300 m chunk mesh (`ChunkedMesh.append(mesh, matrix)`). A thousand trees of one
+  model are stored and uploaded a thousand times.
+- **No index buffers.** Everything is `gl.drawArrays(gl.TRIANGLES)`: three corners
+  per face, shared corners repeated.
+- **Fat vertices.** Position, normal and RGBA colour are all float32, 40 bytes a
+  corner. Flat shading would allow far less (packed normal, 8-bit colour).
+- **Measured cost:** the Kenney woods are ~2.3× the old geometry. A village
+  cottage is 1–3k faces, the church ~5k. Quaternius Ultimate Nature at full
+  detail was 10.7M vertices for one route's near wood, and headless Chromium
+  died building it.
+
+Investigate, measure, then fix, roughly in this order:
+1. **A benchmark first:** vertex count, upload size and frame time for a fixed
+   camera path (the FPS read-out exists, `openradlr.showFps`). Numbers before
+   and after every step. Real-hardware numbers from the user's laptop and phone.
+2. **GPU instancing** (WebGL2 `drawArraysInstanced` / `vertexAttribDivisor`):
+   one copy of each model, a per-instance matrix (or position + yaw + scale)
+   and an optional tint, grouped per chunk for culling. This is the big one for
+   trees, tufts, houses, fences and props.
+3. **Distance levels** that work with instancing: model near, cheap twin far
+   (houses already have 14-face twins), a canopy or billboard band beyond.
+   `view3d/lod.js` holds the split rule.
+4. **Smaller vertices / indexed meshes** where the gain shows in the benchmark.
+5. **World build time:** it runs in a worker. Check that building a full world
+   does not block for seconds, and that it does not run out of memory on a phone.
+6. **The shadow pass** draws `scenery`, `structures` and `village` near the
+   rider. Check its cost once the world is full.
+
+Keep: flat shading, one style, deterministic placement from the seed, scenery
+off = the world as it is today. An ADR in `docs/adr/` for the renderer change.
+
+#### 2. Asset sources
+
+- Kenney stays: Nature Kit (trees), Fantasy Town Kit (villages, see
+  `tools/scenery/assemble.mjs`), Racing Kit.
+- The user still likes these Quaternius packs. Their itch.io pages state CC0.
+  Rule unchanged: take a pack only if its own page/zip shows CC0, never one
+  showing the Quaternius Asset License; record the evidence in the manifest
+  and in ASSETS-LICENSE.md.
+  - https://quaternius.itch.io/150-lowpoly-nature-models (trees, much nicer,
+    but 1.4–2.9k faces per tree: needs instancing + decimated twins first)
+  - https://quaternius.itch.io/lowpoly-farm-buildings (farms, barns, silos)
+  - https://quaternius.itch.io/downtown-city-megakit (maybe for a city)
+- Cykelapp (above): MIT, style reference, reusable.
+
+#### 3. More variety than woods, fields and villages
+
+The land today knows forest, field, village and open. The user wants more.
+Ideas to choose from (each a kind in `land/land.js`, chosen from the seed):
+farmsteads with barns and animals (Quaternius farm pack), orchards and
+vineyards in rows, meadows with wildflowers, lakes and ponds with reeds, rocky
+heath and outcrops on the hills, hedgerows and stone walls along field edges,
+a small town or city quarter (Quaternius downtown kit), a harbour on the
+coast, lone chapels, ruins, picnic spots, sheep on the hills. Keep the user's
+earlier rules: not patchy, farmland about a third, calm greens. Brainstorm the
+list with the user before building.
+
+#### 4. Then the open items from "Next" above
+
+Canopy wiring, land-aware ground colour, screenshots, PR body.
