@@ -48,6 +48,8 @@ pub struct Config {
     /// Directory with the browser client. `None` disables static hosting.
     pub static_dir: Option<PathBuf>,
     pub server_name: String,
+    /// Native releases allowed separate aggregate counters (platform/version/build).
+    pub app_metric_releases: String,
     pub tick_hz: u32,
     pub broadcast_hz: u32,
     pub max_players: usize,
@@ -397,6 +399,15 @@ impl Config {
             )?;
         }
 
+        let app_metric_releases = reader
+            .raw("OPENRADLR_APP_METRIC_RELEASES")
+            .unwrap_or_else(|| crate::client_requests::DEFAULT_RELEASES.into());
+        crate::client_requests::ClientRequests::with_releases(&app_metric_releases).map_err(|reason| ConfigError {
+            key: "OPENRADLR_APP_METRIC_RELEASES",
+            value: app_metric_releases.clone(),
+            reason: reason.into(),
+        })?;
+
         Ok(Self {
             bind_addr: reader.parse("OPENRADLR_BIND", SocketAddr::from(([0, 0, 0, 0], 8080)))?,
             route_file: reader
@@ -411,6 +422,7 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .map(PathBuf::from),
             server_name,
+            app_metric_releases,
             tick_hz,
             broadcast_hz,
             max_players,
@@ -542,6 +554,15 @@ mod tests {
     fn config(vars: &[(&str, &str)]) -> Result<Config, ConfigError> {
         let map: HashMap<String, String> = vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         Config::from_lookup(|key| map.get(key).cloned())
+    }
+
+    #[test]
+    fn app_metric_allowlist_is_validated_before_startup() {
+        let parsed = config(&[("OPENRADLR_APP_METRIC_RELEASES", "ios/2.0/1.0.3")]).unwrap();
+        assert_eq!(parsed.app_metric_releases, "ios/2.0/1.0.3");
+        let error = config(&[("OPENRADLR_APP_METRIC_RELEASES", "bad")]).unwrap_err();
+        assert_eq!(error.key, "OPENRADLR_APP_METRIC_RELEASES");
+        assert!(config(&[("OPENRADLR_APP_METRIC_RELEASES", "")]).is_ok());
     }
 
     #[test]

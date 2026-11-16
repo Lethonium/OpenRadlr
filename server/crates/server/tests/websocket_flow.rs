@@ -1251,6 +1251,71 @@ async fn an_unknown_pair_code_is_refused() {
 }
 
 #[tokio::test]
+async fn request_metrics_group_app_releases_without_counting_health_or_scrape_requests() {
+    let addr = start_server(0).await;
+    let client = reqwest::Client::new();
+    let app_agent = "Mozilla/5.0 OpenRadlr/0.1.0 (android; build/3)";
+    for _ in 0..2 {
+        client
+            .get(format!("http://{addr}/api/info"))
+            .header("user-agent", app_agent)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+    }
+    client
+        .get(format!("http://{addr}/api/info"))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    client
+        .get(format!("http://{addr}/healthz"))
+        .header("user-agent", app_agent)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    for path in ["/styles.css", "/js/main.js", "/scanner-missing"] {
+        client
+            .get(format!("http://{addr}{path}"))
+            .header("user-agent", app_agent)
+            .send()
+            .await
+            .unwrap();
+    }
+    client
+        .post(format!("http://{addr}/api/info"))
+        .header("user-agent", app_agent)
+        .send()
+        .await
+        .unwrap();
+    let scrape = || {
+        client
+            .get(format!("http://{addr}/internal/metrics"))
+            .header("user-agent", app_agent)
+            .send()
+    };
+    let first = scrape().await.unwrap().text().await.unwrap();
+    let second = scrape().await.unwrap().text().await.unwrap();
+    let client_rows = |body: &str| {
+        body.lines()
+            .filter(|line| line.starts_with("openradlr_client_requests_total{"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(client_rows(&first), client_rows(&second));
+    assert!(
+        first.contains("openradlr_client_requests_total{client=\"android\",app_version=\"0.1.0\",app_build=\"3\"} 2\n")
+    );
+    assert!(first.contains("openradlr_client_requests_total{client=\"browser\",app_version=\"\",app_build=\"\"} 1\n"));
+}
+
+#[tokio::test]
 async fn info_omits_discord_when_unconfigured() {
     let addr = start_server(0).await;
     let (_, body) = http_get(addr, "/api/info").await;

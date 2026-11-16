@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Match the splash while the first page loads. -->
+        <item name="android:windowBackground">@color/splashBackground</item>
     </style>
 
 

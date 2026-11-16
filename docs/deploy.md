@@ -255,3 +255,14 @@ read-only, so a new file only needs `make restart`. See [routes](routes.md).
 For a server without a reverse proxy, the bundled Caddy can handle TLS:
 `COMPOSE_PROFILES=tls` and `OPENRADLR_DOMAIN=ride.example.org` in `.env`
 (ports 80 and 443 must be reachable).
+
+### Requests by native app release
+
+The private `/internal/metrics` endpoint also exports
+`openradlr_client_requests_total{client,app_version,app_build}`. This aggregate
+counter helps compare native app releases and diagnose release-specific issues.
+It counts successful `GET /api/info` responses, excluding static assets, health
+checks and scrapes; menu refreshes count again. It does not estimate unique
+people or sessions. Set `OPENRADLR_APP_METRIC_RELEASES` to a comma-separated
+allowlist such as `android/0.1.0/3,ios/1.0/1` when supporting additional releases. See [App release information](app.md#app-release-information-on-requests)
+for label limits, compatibility with older app builds and example PromQL.

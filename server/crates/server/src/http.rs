@@ -14,6 +14,7 @@
 use crate::afk::{AfkCounts, AfkStats};
 use crate::app::unix_now_s;
 use crate::auth::{self, Strava};
+use crate::client_requests::ClientRequests;
 use crate::connection;
 use crate::guard::{client_ip, origin_allowed, ConnectionLimits, Slots};
 use crate::map_file::Maps;
@@ -25,8 +26,10 @@ use crate::worlds::{StudioEntry, WorldEntry, Worlds};
 use crate::ServerInfo;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::WebSocketUpgrade;
+use axum::extract::Request;
 use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::{header, Extensions, HeaderMap, HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -71,6 +74,8 @@ impl Protection {
 
 #[derive(Clone)]
 pub struct AppState {
+    /// Aggregate HTTP counts by client platform and native app release.
+    pub client_requests: ClientRequests,
     pub worlds: Arc<Worlds>,
     /// Road network files by map id (ADR 0010).
     pub maps: Arc<Maps>,
@@ -292,6 +297,7 @@ pub struct RouteQuery {
 
 /// `headers` (see [`crate::headers`]) go on every response that doesn't set them itself.
 pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::HeaderName, String)]) -> Router {
+    let client_requests = state.client_requests.clone();
     let router = Router::new()
         .route("/healthz", get(healthz))
         .route("/internal/metrics", get(metrics))
@@ -332,6 +338,23 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
     router
         .layer(CompressionLayer::new().br(true).gzip(true))
         .layer(TraceLayer::new_for_http())
+        .layer(middleware::from_fn_with_state(client_requests, count_client_request))
+}
+
+async fn count_client_request(State(stats): State<ClientRequests>, request: Request, next: Next) -> Response {
+    if request.method() != axum::http::Method::GET || request.uri().path() != "/api/info" {
+        return next.run(request).await;
+    }
+    let user_agent = request
+        .headers()
+        .get(header::USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let response = next.run(request).await;
+    if response.status().is_success() {
+        stats.record(user_agent.as_deref());
+    }
+    response
 }
 
 async fn healthz() -> &'static str {
@@ -339,11 +362,11 @@ async fn healthz() -> &'static str {
 }
 
 // This endpoint is intended for the host's private Prometheus network. It only
-// exports aggregate counters already exposed by /api/info; never rider data,
-// names, IDs, credentials, or request details.
+// exports aggregate operational counters; never rider data, names, IDs,
+// credentials, or individual request records.
 async fn metrics(State(state): State<AppState>) -> ([(header::HeaderName, &'static str); 1], String) {
     let distance = state.stats.snapshot();
-    let body = metrics_body(
+    let mut body = metrics_body(
         state.worlds.player_count(),
         state.worlds.phone_count(),
         state.max_players,
@@ -352,6 +375,7 @@ async fn metrics(State(state): State<AppState>) -> ([(header::HeaderName, &'stat
         distance.paddle_m,
         state.afk.snapshot(),
     );
+    body.push_str(&state.client_requests.metrics());
     (
         [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
         body,
