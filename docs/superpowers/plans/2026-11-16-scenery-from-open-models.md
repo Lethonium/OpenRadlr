@@ -286,6 +286,19 @@ Investigate, measure, then fix, roughly in this order:
 Keep: flat shading, one style, deterministic placement from the seed, scenery
 off = the world as it is today. An ADR in `docs/adr/` for the renderer change.
 
+**Progress (2026-11-16):** the Node and fixed-camera browser benchmarks are in
+place (`tools/scene-bench.mjs`, `client/sceneryBench.mjs`). Village-only far
+twins no longer cause a second full-detail tree wood. ADR 0028 records the
+mixed baked/instanced scene representation and its draw/shader paths. On the
+route-only scene, the expanded triangles stay at 1.357M while build/upload data
+falls from 155.35 MiB and 2.41 s (baked, after the far-copy fix) to 21.02 MiB
+and 1.01 s. In the full-map software-WebGL smoke scenario, the original
+baseline's 1,167 MB raw uploads and 14.53 s build became 92 MB and 3.45 s after
+both fixes. Draw calls rose from 533 to 1,163 with submitted visible vertices
+essentially unchanged (2.095M to 2.132M). Real-hardware frame measurements and
+the remaining optimization decisions are still open; headless FPS is not used
+as a performance verdict.
+
 #### 2. Asset sources
 
 - Kenney stays: Nature Kit (trees), Fantasy Town Kit (villages, see

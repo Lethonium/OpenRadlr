@@ -161,10 +161,11 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 | `banners.js`, `pixelFont.js` | Names on the arches and banners over the road (1 km and 500 m to a climb's top, halfway), in a 5 × 7 pixel font made of geometry |
 | `structures.js` | Low-poly models placed by `features.js` (houses, church, barn, silo, bales, lamps, signs, turbines, cows, sheep, spectators, flags) |
 | `crowd.js` | How much of the crowd is out for the riders online, and how each spectator cheers a rider coming by |
-| `chunks.js` | Splits the static world into 300 m tiles; only tiles in view are drawn and only tiles near the rider cast shadows |
+| `chunks.js` | Splits the static world into 300 m tiles; only tiles in view are drawn and only tiles near the rider cast shadows. Imported models remain shared meshes with per-instance transforms in an `InstanceCatalog`; procedural and fallback triangles stay baked ([ADR 0028](adr/0028-instance-repeated-scenery.md)) |
+| `sceneStats.js` | Pure scene geometry and upload-size accounting used by the scenery benchmarks; keeps expanded visual workload separate from shared-model storage |
 | `lighting.js` | Time-of-day presets (day, golden hour, dusk, auto by local clock) and the sun's shadow frustum |
 | `chaseCamera.js` | Road-anchored cameras: chase, close, drone and TV side, with blended switching |
-| `renderer.js` | Shadow-map pass (depth from the sun), sky pass (gradient + sun glow), lit pass (PCF-filtered sun shadows, hemisphere light, rim light, distance and height fog, tone mapping), blended pass (water, contact shadows) |
+| `renderer.js` | Shadow-map pass (depth from the sun), sky pass (gradient + sun glow), lit pass (PCF-filtered sun shadows, hemisphere light, rim light, distance and height fog, tone mapping), blended pass (water, contact shadows); separate lazily compiled instanced colour/depth programs share repeated model buffers |
 | `view3d.js` | Puts it together per frame; HTML name labels over the canvas |
 
 The 3D view consumes exactly the same smoothed rider list as the 2D views, so

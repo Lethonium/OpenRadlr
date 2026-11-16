@@ -7,7 +7,7 @@
  * objects (turbine rotors, spectators) that the view animates per frame.
  */
 import { CROWD } from "./crowd.js";
-import { MeshBuilder } from "./meshBuilder.js";
+import { appendInstance, MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
 import { villageLots, villageShape } from "../land/land.js";
 import { fbm, seededRandom } from "./noise.js";
@@ -592,8 +592,8 @@ function furnishVillage(route, terrain, zone, { kit, into, structures, palette, 
     // fence or a stall on the ground where it stands.
     const y = building ? groundUnder(terrain, pos, yaw, p.item.width, p.item.depth) : terrain.height(pos[0], pos[2]);
     const model = placement([pos[0], y, pos[2]], yaw);
-    into.near.append(p.item.near, model);
-    if (p.item.far) into.far.append(p.item.far, model);
+    appendInstance(into.near, p.item.near, model);
+    if (p.item.far) appendInstance(into.far, p.item.far, model);
     if (building) buildings.push([pos[0], y, pos[2]]);
   }
   for (const p of placed) {

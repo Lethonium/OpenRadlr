@@ -229,3 +229,9 @@ export class MeshBuilder {
     };
   }
 }
+
+/** Places a shared model when the target supports instancing, or bakes it for a plain builder. */
+export function appendInstance(target, mesh, matrix) {
+  if (typeof target.instance === "function") target.instance(mesh, matrix);
+  else target.append(mesh, matrix);
+}

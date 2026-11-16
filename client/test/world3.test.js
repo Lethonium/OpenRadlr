@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { ChunkedMesh, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
+import { ChunkedMesh, InstanceCatalog, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
 import { BRIDGE_HALF_LENGTH, Occupancy, RIVER, buildRiverPath, buildRoadside } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
@@ -96,6 +96,43 @@ test("chunked meshes split by tile and keep every triangle", () => {
   assert.equal(chunks.length, 3);
   assert.equal(chunks.reduce((sum, c) => sum + c.mesh.vertexCount, 0), plain.build().vertexCount);
   for (const c of chunks) assert.equal(c.mesh.colors.length, c.mesh.vertexCount * 4);
+});
+
+test("instanced chunks keep one model and one transform per placement", () => {
+  const catalog = new InstanceCatalog();
+  const chunked = new ChunkedMesh(100, catalog);
+  const model = new MeshBuilder();
+  model.box([0, 1, 0], [2, 2, 2], [1, 0, 0]);
+  const source = model.build();
+  const placed = [[10, 0, 10], [30, 0, 10], [250, 0, 10]];
+  for (const at of placed) chunked.instance(source, placement(at, 0.4));
+
+  const chunks = chunked.build();
+  const models = catalog.build();
+  assert.equal(models.length, 1, "the source model is registered once");
+  assert.equal(chunks.length, 2, "instance-only chunks are retained");
+  assert.equal(chunks[0].batches.length, 1);
+  assert.equal(chunks[0].batches[0].model, 0);
+  assert.equal(chunks[0].batches[0].matrices.length, 32);
+  assert.equal(chunks[0].batches[1], undefined);
+  assert.equal(chunks[1].batches[0].matrices.length, 16);
+  assert.deepEqual(Array.from(chunks[0].batches[0].matrices.slice(12, 15)), placed[0]);
+  assert.deepEqual(Array.from(chunks[1].batches[0].matrices.slice(12, 15)), placed[2]);
+  assert.ok(chunks.every((chunk) => Number.isFinite(chunk.radius) && chunk.center[1] === 1), "the model's height is in its bounds");
+  assert.equal(chunked.vertexCount, placed.length * source.vertexCount, "logical geometry still counts every placement");
+});
+
+test("mixed procedural and instanced geometry share conservative chunk bounds", () => {
+  const catalog = new InstanceCatalog();
+  const chunked = new ChunkedMesh(100, catalog);
+  const model = new MeshBuilder();
+  model.box([0, 4, 0], [2, 8, 2], [1, 0, 0]);
+  chunked.triangle([0, 20, 0], [2, 20, 0], [0, 22, 0], [1, 1, 1]);
+  chunked.instance(model.build(), placement([10, 0, 10], Math.PI / 2));
+  const [chunk] = chunked.build();
+  assert.ok(chunk.center[1] > 10, "the procedural triangle above the model is included");
+  assert.ok(Number.isFinite(chunk.radius) && chunk.radius > 10);
+  assert.ok(chunk.mesh.vertexCount === 3 && chunk.batches.length === 1);
 });
 
 test("chunk visibility: distance, behind the camera, inside the chunk", () => {
@@ -709,6 +746,15 @@ test("the scene is plain data whose buffers can be handed to the main thread", (
   assert.doesNotThrow(() => structuredClone(scene), "no functions in the scene");
 });
 
+test("the scenery LOD split and shared instance data survive the scene boundary", () => {
+  const scene = sceneOf({ ...world, sceneryNearRange: 150, instanceModels: [{ mesh: world.clouds }] });
+  assert.equal(scene.sceneryNearRange, 150);
+  assert.equal(scene.instanceModels[0].mesh, world.clouds);
+  const buffers = transferList(scene);
+  assert.equal(new Set(buffers).size, buffers.length);
+  assert.doesNotThrow(() => structuredClone(scene));
+});
+
 test("without workers the scene is built in place, and a failing worker falls back too", async () => {
   const inPlace = await buildScene(tinyFile, [], { createWorker: () => null });
   assert.ok(inPlace.chunks.terrain.length > 0);
@@ -731,6 +777,21 @@ test("without workers the scene is built in place, and a failing worker falls ba
   } finally {
     console.warn = original;
   }
+});
+
+test("an in-place build keeps posted scenery kits and their LOD split", async () => {
+  const model = {
+    triangles: [[0, 0, 0, 0.2, 0.5, 0.2], [1, 0, 0, 0.2, 0.5, 0.2], [0, 1, 0, 0.2, 0.5, 0.2]],
+    bounds: { min: [0, 0, 0], max: [1, 1, 0] },
+  };
+  const scenes = {
+    nearRange: 150,
+    kits: [{ name: "fixture", licence: "CC0-1.0", models: { tuft: { role: "tufts", file: "tuft" } }, files: { tuft: model } }],
+  };
+  const scene = await buildScene(tinyFile, [], { scenes, createWorker: () => null });
+  assert.equal(scene.sceneryNearRange, 150);
+  assert.equal(scene.instanceModels.length, 1);
+  assert.ok(scene.chunks.detail.some((chunk) => chunk.batches?.length > 0));
 });
 
 test("a worker's scene is used as it arrives", async () => {

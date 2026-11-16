@@ -332,9 +332,21 @@ test("grass and flowers grow beside the road, not on it", () => {
 /** A renderer that draws nothing and remembers every draw call. */
 class StubRenderer {
   draws = [];
+  uploads = [];
+  uploadedInstances = [];
   upload(mesh) {
+    this.uploads.push(mesh);
     return { mesh };
   }
+  uploadInstances(model, matrices) {
+    const handle = { model, matrices };
+    this.uploadedInstances.push(handle);
+    return handle;
+  }
+  drawInstanced(handle, model, tint) {
+    this.draws.push({ handle, model, tint, instanced: true });
+  }
+  drawShadowCasterInstanced() {}
   dispose() {}
   createShadowMap() {
     return false;
@@ -373,7 +385,7 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined) {
+function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined, extra = {}) {
   const route = squareRoute();
   const world = {
     biome,
@@ -387,6 +399,7 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
     spectators: [],
     gyms,
     studio,
+    ...extra,
   };
   const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
   return { view, renderer };
@@ -565,7 +578,7 @@ class RecordingRenderer extends StubRenderer {
   brights = [];
   disposed = [];
   upload(mesh) {
-    return { mesh };
+    return super.upload(mesh);
   }
   dispose(handle) {
     this.disposed.push(handle);
@@ -578,10 +591,55 @@ class RecordingRenderer extends StubRenderer {
   drawShadowCaster(handle, model) {
     this.casters.push({ handle, model });
   }
+  drawShadowCasterInstanced(handle, model) {
+    this.casters.push({ handle, model, instanced: true });
+  }
   drawBright(handle, model, glow) {
     this.brights.push({ handle, model, glow });
   }
 }
+
+function sceneryInstanceView() {
+  const renderer = new RecordingRenderer();
+  const mesh = { positions: new Float32Array(9), normals: new Float32Array(9), colors: new Float32Array(12), vertexCount: 3 };
+  const matrices = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const baked = emptyMesh();
+  const { view } = gymView([], "temperate", null, renderer, undefined, {
+    instanceModels: [{ mesh }],
+    chunks: { scenery: [{ mesh: baked, center: [0, 0, 0], radius: 20, batches: [{ model: 0, matrices }] }], structures: [] },
+  });
+  view.camera.eye = [0, 2, 50];
+  view.camera.target = [0, 2, 0];
+  return { view, renderer, baked, batch: renderer.uploadedInstances[0] };
+}
+
+test("the view uploads one shared model and draws its visible batch", () => {
+  const { view, renderer, baked, batch } = sceneryInstanceView();
+  assert.ok(batch, "the instance batch was uploaded");
+  assert.equal(renderer.uploads.includes(baked), false, "an instance-only chunk has no empty baked upload");
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const draws = renderer.draws.filter((draw) => draw.instanced);
+  assert.equal(draws.length, 1);
+  assert.equal(draws[0].handle, batch);
+  assert.equal(batch.model.mesh.vertexCount, 3);
+});
+
+test("an instanced scenery batch casts shadows through the existing chunk rule", () => {
+  const { view, renderer, batch } = sceneryInstanceView();
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const casts = renderer.casters.filter((draw) => draw.instanced);
+  assert.equal(casts.length, 1);
+  assert.equal(casts[0].handle, batch);
+});
+
+test("disposing a view releases batch buffers before their shared model", () => {
+  const { view, renderer, batch } = sceneryInstanceView();
+  view.dispose();
+  const batchAt = renderer.disposed.indexOf(batch);
+  const modelAt = renderer.disposed.indexOf(batch.model);
+  assert.ok(batchAt >= 0 && modelAt > batchAt, "batch released first, shared model released once afterwards");
+  assert.equal(renderer.disposed.filter((handle) => handle === batch.model).length, 1);
+});
 
 function statueView() {
   const gym = { ...testGym(), cafeId: "valley-cafe", statueRow: { position: [100, 100.4, 38], yaw: 0 } };

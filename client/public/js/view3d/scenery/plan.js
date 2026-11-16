@@ -8,6 +8,7 @@
  * changes: the wood is in the same places, each tree is just modelled.
  */
 import { placement } from "../math.js";
+import { appendInstance } from "../meshBuilder.js";
 import { cheapestWithin, ROLE_BUDGET } from "./budget.js";
 import { fileOf } from "./kits.js";
 import { buildMesh } from "./models.js";
@@ -102,10 +103,11 @@ function scaled(matrix, size) {
 
 /** The meshes of a kit, built once and shared by every instance. */
 function meshesOf(kit, readModelFile, painted = null, far = false) {
-  // A painted mesh differs by role, and a far one by level of detail, so the
-  // cache is keyed by both.
+  // Paint changes geometry colours; the file id already distinguishes a near
+  // model from its far twin. Sharing this cache also deduplicates a far fallback
+  // that resolves to the near file.
   kit.meshes ??= {};
-  const key = `${painted ? JSON.stringify(painted) : "own"}|${far ? "far" : "near"}`;
+  const key = painted ? JSON.stringify(painted) : "own";
   const byKey = (kit.meshes[key] ??= {});
   for (const [id, model] of Object.entries(kit.models)) {
     const file = fileOf(model, far);
@@ -150,7 +152,7 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
     // ones: the random draws above are taken either way, so a wood and its far
     // copy put every tree in the same spot.
     const mesh0 = meshesOf(kit, readModelFile, painted, far)[fileOf(model, far)];
-    mesh.append(mesh0, scaled(placement([x, y, z], yaw, 0), size));
+    appendInstance(mesh, mesh0, scaled(placement([x, y, z], yaw, 0), size));
   };
 
   return {

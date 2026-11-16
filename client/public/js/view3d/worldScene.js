@@ -8,11 +8,15 @@
 import { RouteGeometry } from "../route/geometry.js";
 import { roadNetworkOf } from "../route/worldMap.js";
 import { buildWorld } from "./world.js";
+import { floraOf } from "./scenery/flora.js";
 
 /** What the view draws: meshes, chunks, the animated objects and the gyms' spots and the studio's site (no functions). */
 export function sceneOf(world) {
   const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio } = world;
-  return { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio };
+  const scene = { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio };
+  if (world.instanceModels) scene.instanceModels = world.instanceModels;
+  if (world.sceneryNearRange !== null && world.sceneryNearRange !== undefined) scene.sceneryNearRange = world.sceneryNearRange;
+  return scene;
 }
 
 /** Every typed array buffer in `value`, for a zero-copy postMessage. */
@@ -46,7 +50,7 @@ export function buildScene(routeFile, others = [], { network = null, biome = "te
     const fallback = (reason) => {
       worker?.terminate();
       if (reason) console.warn("Building the 3D world in place:", reason);
-      resolve(buildSceneNow(routeFile, others, network, biomeId, scenes?.flora ?? null));
+      resolve(buildSceneNow(routeFile, others, network, biomeId, scenes?.flora ?? floraOf(scenes, biomeId)));
     };
     try {
       worker = createWorker();

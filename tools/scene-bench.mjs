@@ -53,8 +53,9 @@ profile.samples.forEach((id, i) => {
   const key = `${functionName || "(anon)"} ${url.split("/").slice(-2).join("/")}:${lineNumber + 1}`;
   self.set(key, (self.get(key) ?? 0) + dt[i] / 1000);
 });
-console.log(`${file.id} (route-only, ${biome}, scenery ${sceneryLevel}): build ${(ms / 1000).toFixed(2)} s, heap +${((rss.heapUsed - heap0) / 1e6).toFixed(0)} MB, rss ${(rss.rss / 1e6).toFixed(0)} MB, peak ${(process.resourceUsage().maxRSS / 1e3).toFixed(0)} MB, ${compact(stats.total.triangles)} mesh triangles, ${mib(stats.total.bytes)} mesh upload`);
+console.log(`${file.id} (route-only, ${biome}, scenery ${sceneryLevel}): build ${(ms / 1000).toFixed(2)} s, heap +${((rss.heapUsed - heap0) / 1e6).toFixed(0)} MB, rss ${(rss.rss / 1e6).toFixed(0)} MB, peak ${(process.resourceUsage().maxRSS / 1e3).toFixed(0)} MB, ${compact(stats.total.triangles)} expanded mesh triangles, ${mib(stats.uploadBytes)} scene upload`);
 console.log(`per group: ${perKind.join(", ")}`);
+if (stats.instances.models) console.log(`instances: ${stats.instances.placements} placements / ${stats.instances.models} shared models / ${mib(stats.instances.transformBytes)} transforms`);
 console.log(`weather: ${compact(stats.weather.vertices)} vertices / ${mib(stats.weather.bytes)}`);
 for (const [key, t] of [...self].sort((a, b) => b[1] - a[1]).slice(0, top)) console.log(`${(t / 1000).toFixed(2).padStart(7)} s  ${key}`);
 process.exit(0);

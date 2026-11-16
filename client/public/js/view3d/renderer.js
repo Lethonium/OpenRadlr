@@ -31,6 +31,29 @@ void main() {
   gl_Position = u_viewProjection * world;
 }`;
 
+const INSTANCED_MESH_VERTEX = `#version 300 es
+in vec3 a_position;
+in vec3 a_normal;
+in vec4 a_color;
+in mat4 a_instanceModel;
+uniform mat4 u_viewProjection;
+uniform mat4 u_model;
+uniform mat4 u_lightViewProjection;
+uniform vec3 u_tint;
+out vec3 v_normal;
+out vec3 v_color;
+out vec3 v_world;
+out vec4 v_shadow;
+void main() {
+  mat4 model = u_model * a_instanceModel;
+  vec4 world = model * vec4(a_position, 1.0);
+  v_world = world.xyz;
+  v_normal = mat3(model) * a_normal;
+  v_color = mix(a_color.rgb, u_tint, a_color.a);
+  v_shadow = u_lightViewProjection * vec4(world.xyz + normalize(v_normal) * 0.06, 1.0);
+  gl_Position = u_viewProjection * world;
+}`;
+
 const MESH_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp sampler2DShadow;
@@ -99,6 +122,15 @@ uniform mat4 u_lightViewProjection;
 uniform mat4 u_model;
 void main() {
   gl_Position = u_lightViewProjection * u_model * vec4(a_position, 1.0);
+}`;
+
+const INSTANCED_DEPTH_VERTEX = `#version 300 es
+in vec3 a_position;
+in mat4 a_instanceModel;
+uniform mat4 u_lightViewProjection;
+uniform mat4 u_model;
+void main() {
+  gl_Position = u_lightViewProjection * u_model * a_instanceModel * vec4(a_position, 1.0);
 }`;
 
 const DEPTH_FRAGMENT = `#version 300 es
@@ -175,6 +207,26 @@ export function createContext(canvas) {
   return canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance" });
 }
 
+const MESH_UNIFORMS = Object.freeze([
+  "u_viewProjection",
+  "u_model",
+  "u_tint",
+  "u_sunDirection",
+  "u_sunColor",
+  "u_skyColor",
+  "u_groundColor",
+  "u_cameraPosition",
+  "u_fogColor",
+  "u_fogRange",
+  "u_alpha",
+  "u_unlit",
+  "u_fogScale",
+  "u_lightViewProjection",
+  "u_shadowMap",
+  "u_shadowStrength",
+  "u_shadowTexel",
+]);
+
 export class Renderer {
   /** Occlusion queries by key: `{query, pending, seen}`. */
   #queries = new Map();
@@ -201,25 +253,8 @@ export class Renderer {
       normal: gl.getAttribLocation(this.program, "a_normal"),
       color: gl.getAttribLocation(this.program, "a_color"),
     };
-    this.uniforms = uniforms(gl, this.program, [
-      "u_viewProjection",
-      "u_model",
-      "u_tint",
-      "u_sunDirection",
-      "u_sunColor",
-      "u_skyColor",
-      "u_groundColor",
-      "u_cameraPosition",
-      "u_fogColor",
-      "u_fogRange",
-      "u_alpha",
-      "u_unlit",
-      "u_fogScale",
-      "u_lightViewProjection",
-      "u_shadowMap",
-      "u_shadowStrength",
-      "u_shadowTexel",
-    ]);
+    this.uniforms = uniforms(gl, this.program, MESH_UNIFORMS);
+    this.instancePipeline = null;
     this.depthUniforms = uniforms(gl, this.depthProgram, ["u_lightViewProjection", "u_model"]);
     this.weatherAttributes = {
       corner: gl.getAttribLocation(this.weatherProgram, "a_corner"),
@@ -250,6 +285,25 @@ export class Renderer {
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+
+  /** Shader programs used only when a world actually has repeated imported models. */
+  instancePrograms() {
+    if (this.instancePipeline) return this.instancePipeline;
+    const gl = this.gl;
+    const bindings = { a_position: 0, a_normal: 1, a_color: 2, a_instanceModel: 3 };
+    const program = link(gl, compile(gl, gl.VERTEX_SHADER, INSTANCED_MESH_VERTEX), compile(gl, gl.FRAGMENT_SHADER, MESH_FRAGMENT), bindings);
+    const depthProgram = link(gl, compile(gl, gl.VERTEX_SHADER, INSTANCED_DEPTH_VERTEX), compile(gl, gl.FRAGMENT_SHADER, DEPTH_FRAGMENT), {
+      a_position: 0,
+      a_instanceModel: 3,
+    });
+    this.instancePipeline = {
+      program,
+      depthProgram,
+      uniforms: uniforms(gl, program, MESH_UNIFORMS),
+      depthUniforms: uniforms(gl, depthProgram, ["u_lightViewProjection", "u_model"]),
+    };
+    return this.instancePipeline;
   }
 
   /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
@@ -288,6 +342,11 @@ export class Renderer {
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.depthProgram);
     gl.uniformMatrix4fv(this.depthUniforms.u_lightViewProjection, false, lightViewProjection);
+    if (this.instancePipeline) {
+      gl.useProgram(this.instancePipeline.depthProgram);
+      gl.uniformMatrix4fv(this.instancePipeline.depthUniforms.u_lightViewProjection, false, lightViewProjection);
+      gl.useProgram(this.depthProgram);
+    }
     gl.enable(gl.POLYGON_OFFSET_FILL);
     gl.polygonOffset(1.5, 3);
     return true;
@@ -295,9 +354,19 @@ export class Renderer {
 
   drawShadowCaster(handle, model) {
     const gl = this.gl;
+    gl.useProgram(this.depthProgram);
     gl.uniformMatrix4fv(this.depthUniforms.u_model, false, model);
     gl.bindVertexArray(handle.vao);
     gl.drawArrays(gl.TRIANGLES, 0, handle.count);
+  }
+
+  drawShadowCasterInstanced(handle, model) {
+    const gl = this.gl;
+    const pipeline = this.instancePrograms();
+    gl.useProgram(pipeline.depthProgram);
+    gl.uniformMatrix4fv(pipeline.depthUniforms.u_model, false, model);
+    gl.bindVertexArray(handle.vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, handle.count, handle.instances);
   }
 
   endShadows() {
@@ -326,6 +395,33 @@ export class Renderer {
     attribute(this.attributes.color, mesh.colors, 4);
     gl.bindVertexArray(null);
     return { vao, buffers, count: mesh.vertexCount };
+  }
+
+  /**
+   * A batch VAO sharing a model's three VBOs and owning only its mat4 instance
+   * buffer. `model` must stay alive until every batch has been disposed.
+   */
+  uploadInstances(model, matrices) {
+    const gl = this.gl;
+    this.instancePrograms();
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    [this.attributes.position, this.attributes.normal, this.attributes.color].forEach((location, i) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, model.buffers[i]);
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, i === 2 ? 4 : 3, gl.FLOAT, false, 0, 0);
+    });
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.STATIC_DRAW);
+    for (let column = 0; column < 4; column += 1) {
+      const location = 3 + column;
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, 4, gl.FLOAT, false, 64, column * 16);
+      gl.vertexAttribDivisor(location, 1);
+    }
+    gl.bindVertexArray(null);
+    return { vao, buffers: [buffer], count: model.count, instances: matrices.length / 16 };
   }
 
   /** Uploads camera-local weather particles: six vertices per flake, six floats each. */
@@ -425,30 +521,35 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.depthMask(true);
 
-    gl.useProgram(this.program);
-    const u = this.uniforms;
-    gl.uniformMatrix4fv(u.u_viewProjection, false, viewProjection);
-    gl.uniform3fv(u.u_cameraPosition, camera);
-    gl.uniform3fv(u.u_sunDirection, sun);
-    gl.uniform3fv(u.u_sunColor, sunColor);
-    gl.uniform3fv(u.u_skyColor, zenith);
-    gl.uniform3fv(u.u_groundColor, ground);
-    gl.uniform3fv(u.u_fogColor, horizon);
-    gl.uniform2fv(u.u_fogRange, fog);
-    gl.uniform1f(u.u_alpha, 1);
-    gl.uniform1f(u.u_unlit, 0);
-    gl.uniform1f(u.u_fogScale, 1);
+    const programs = [{ program: this.program, values: this.uniforms }];
+    if (this.instancePipeline) programs.push({ program: this.instancePipeline.program, values: this.instancePipeline.uniforms });
     const shadow = this.shadow;
+    for (const { program, values: u } of programs) {
+      gl.useProgram(program);
+      gl.uniformMatrix4fv(u.u_viewProjection, false, viewProjection);
+      gl.uniform3fv(u.u_cameraPosition, camera);
+      gl.uniform3fv(u.u_sunDirection, sun);
+      gl.uniform3fv(u.u_sunColor, sunColor);
+      gl.uniform3fv(u.u_skyColor, zenith);
+      gl.uniform3fv(u.u_groundColor, ground);
+      gl.uniform3fv(u.u_fogColor, horizon);
+      gl.uniform2fv(u.u_fogRange, fog);
+      gl.uniform1f(u.u_alpha, 1);
+      gl.uniform1f(u.u_unlit, 0);
+      gl.uniform1f(u.u_fogScale, 1);
+      gl.uniform1i(u.u_shadowMap, 0);
+      gl.uniform1f(u.u_shadowStrength, shadow?.lightViewProjection ? shadowStrength : 0);
+      gl.uniform1f(u.u_shadowTexel, shadow ? 1 / shadow.size : 0);
+      gl.uniformMatrix4fv(u.u_lightViewProjection, false, shadow?.lightViewProjection ?? IDENTITY);
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, shadow?.texture ?? null);
-    gl.uniform1i(u.u_shadowMap, 0);
-    gl.uniform1f(u.u_shadowStrength, shadow?.lightViewProjection ? shadowStrength : 0);
-    gl.uniform1f(u.u_shadowTexel, shadow ? 1 / shadow.size : 0);
-    gl.uniformMatrix4fv(u.u_lightViewProjection, false, shadow?.lightViewProjection ?? IDENTITY);
+    gl.useProgram(this.program);
   }
 
   /** Draws with partial self-illumination (signage that should read in shade). */
   drawBright(handle, model, unlit = 0.45) {
+    this.gl.useProgram(this.program);
     this.gl.uniform1f(this.uniforms.u_unlit, unlit);
     this.draw(handle, model);
     this.gl.uniform1f(this.uniforms.u_unlit, 0);
@@ -456,15 +557,27 @@ export class Renderer {
 
   draw(handle, model, tint = [1, 1, 1]) {
     const gl = this.gl;
+    gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uniforms.u_model, false, model);
     gl.uniform3fv(this.uniforms.u_tint, tint);
     gl.bindVertexArray(handle.vao);
     gl.drawArrays(gl.TRIANGLES, 0, handle.count);
   }
 
+  drawInstanced(handle, model, tint = [1, 1, 1]) {
+    const gl = this.gl;
+    const pipeline = this.instancePrograms();
+    gl.useProgram(pipeline.program);
+    gl.uniformMatrix4fv(pipeline.uniforms.u_model, false, model);
+    gl.uniform3fv(pipeline.uniforms.u_tint, tint);
+    gl.bindVertexArray(handle.vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, handle.count, handle.instances);
+  }
+
   /** Clouds: bright, softly lit and only lightly fogged so they stay visible far away. */
   drawCloudLayer(handle, model, tint = [1, 1, 1]) {
     const gl = this.gl;
+    gl.useProgram(this.program);
     gl.uniform1f(this.uniforms.u_fogScale, 0.35);
     gl.uniform1f(this.uniforms.u_unlit, 0.8);
     this.draw(handle, model, tint);
@@ -521,6 +634,7 @@ export class Renderer {
    */
   drawTransparent(handle, model, { alpha, unlit = 0, tint = [1, 1, 1] }) {
     const gl = this.gl;
+    gl.useProgram(this.program);
     gl.enable(gl.BLEND);
     gl.depthMask(false);
     gl.enable(gl.POLYGON_OFFSET_FILL);

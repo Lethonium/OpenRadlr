@@ -94,6 +94,15 @@ test("the flora draws the model where it is asked to, from the random it is give
   assert.equal(Math.max(...ys), 7);
 });
 
+test("an instanced target receives the shared model and its untouched placement transform", () => {
+  const placed = [];
+  const mesh = { instance(model, matrix) { placed.push({ model, matrix }); } };
+  floraOf().tree({ mesh, x: 12, y: 3, z: -4, kind: 0.5, random: fixed(0.5) });
+  assert.equal(placed.length, 1);
+  assert.equal(placed[0].model.vertexCount, 6);
+  assert.deepEqual(Array.from(placed[0].matrix.slice(12, 15)), [12, 3, -4]);
+});
+
 test("the flora asks the random for its size, so instances differ", () => {
   const flora = floraOf({ ...KIT, models: { pine: { role: "firs", near: "pine", sizes: [1, 3] } } });
   const heightWith = (r) => {

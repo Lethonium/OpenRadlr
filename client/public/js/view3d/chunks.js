@@ -1,33 +1,63 @@
 /**
  * Chunked meshes: the static world split into square tiles so that only
  * tiles near the camera are drawn, and only tiles near the rider cast
- * shadows. `ChunkedMesh` is a drop-in MeshBuilder — every primitive ends up
- * in `triangle()`, which routes the triangle into the tile of its centroid.
+ * shadows. Procedural triangles are baked as before. Repeated imported models
+ * can instead stay as one shared mesh plus a transform per instance (#117).
  */
 import { MeshBuilder } from "./meshBuilder.js";
+import { transformPoint } from "./math.js";
 
 export const CHUNK_SIZE = 300;
+
+/** The unique meshes shared by every instanced chunk group in one world. */
+export class InstanceCatalog {
+  #ids = new Map();
+  #models = [];
+
+  /** Returns a stable numeric id and registers the model at most once. */
+  register(mesh) {
+    if (this.#ids.has(mesh)) return this.#ids.get(mesh);
+    const id = this.#models.length;
+    this.#ids.set(mesh, id);
+    this.#models.push({ mesh, bounds: boxOf(mesh.positions) });
+    return id;
+  }
+
+  model(id) {
+    return this.#models[id];
+  }
+
+  get length() {
+    return this.#models.length;
+  }
+
+  /** Plain transferable data: the model mesh and its local bounding box. */
+  build() {
+    return this.#models;
+  }
+}
 
 export class ChunkedMesh extends MeshBuilder {
   #chunks = new Map();
 
-  constructor(size = CHUNK_SIZE) {
+  constructor(size = CHUNK_SIZE, catalog = new InstanceCatalog()) {
     super();
     this.size = size;
+    this.catalog = catalog;
   }
 
-  #builder(x, z) {
+  #entry(x, z) {
     const key = `${Math.floor(x / this.size)},${Math.floor(z / this.size)}`;
-    let builder = this.#chunks.get(key);
-    if (!builder) {
-      builder = new MeshBuilder();
-      this.#chunks.set(key, builder);
+    let entry = this.#chunks.get(key);
+    if (!entry) {
+      entry = { builder: new MeshBuilder(), batches: new Map(), min: null, max: null };
+      this.#chunks.set(key, entry);
     }
-    return builder;
+    return entry;
   }
 
   triangle(a, b, c, color) {
-    this.#builder((a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3).triangle(a, b, c, color);
+    this.#entry((a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3).builder.triangle(a, b, c, color);
   }
 
   append(mesh, matrix) {
@@ -38,31 +68,79 @@ export class ChunkedMesh extends MeshBuilder {
     const colors = placed.colors.data;
     for (let v = 0; v < placed.vertexCount; v += 3) {
       const p = v * 3;
-      const target = this.#builder((positions[p] + positions[p + 3] + positions[p + 6]) / 3, (positions[p + 2] + positions[p + 5] + positions[p + 8]) / 3);
+      const target = this.#entry((positions[p] + positions[p + 3] + positions[p + 6]) / 3, (positions[p + 2] + positions[p + 5] + positions[p + 8]) / 3).builder;
       target.positions.pushRange(positions, p, p + 9);
       target.normals.pushRange(normals, p, p + 9);
       target.colors.pushRange(colors, v * 4, v * 4 + 12);
     }
   }
 
+  /**
+   * Places a shared model without expanding its vertices. The instance's
+   * translation owns the chunk, while its transformed bounds keep conservative
+   * culling even where the model reaches across a tile boundary.
+   */
+  instance(mesh, matrix) {
+    const model = this.catalog.register(mesh);
+    const entry = this.#entry(matrix[12], matrix[14]);
+    let batch = entry.batches.get(model);
+    if (!batch) {
+      batch = { model, matrices: [] };
+      entry.batches.set(model, batch);
+    }
+    for (const value of matrix) batch.matrices.push(value);
+
+    const { min, max } = this.catalog.model(model).bounds;
+    for (const x of [min[0], max[0]]) {
+      for (const y of [min[1], max[1]]) {
+        for (const z of [min[2], max[2]]) {
+          const p = transformPoint(matrix, [x, y, z]);
+          if (!entry.min) {
+            entry.min = p.slice(0, 3);
+            entry.max = p.slice(0, 3);
+          } else {
+            for (let k = 0; k < 3; k += 1) {
+              entry.min[k] = Math.min(entry.min[k], p[k]);
+              entry.max[k] = Math.max(entry.max[k], p[k]);
+            }
+          }
+        }
+      }
+    }
+  }
+
   get vertexCount() {
     let count = 0;
-    for (const builder of this.#chunks.values()) count += builder.vertexCount;
+    for (const entry of this.#chunks.values()) {
+      count += entry.builder.vertexCount;
+      for (const batch of entry.batches.values()) {
+        count += this.catalog.model(batch.model).mesh.vertexCount * batch.matrices.length / 16;
+      }
+    }
     return count;
   }
 
-  /** @returns {{mesh: object, center: number[], radius: number}[]} */
+  /** @returns {{mesh: object, batches?: object[], center: number[], radius: number}[]} */
   build() {
-    return [...this.#chunks.values()].filter((b) => b.vertexCount > 0).map((builder) => {
-      const mesh = builder.build();
-      builder.release();
-      return { mesh, ...bounds(mesh.positions) };
-    });
+    const chunks = [];
+    for (const entry of this.#chunks.values()) {
+      const hasBatches = entry.batches.size > 0;
+      if (entry.builder.vertexCount === 0 && !hasBatches) continue;
+      const mesh = entry.builder.build();
+      entry.builder.release();
+      let box = mesh.vertexCount ? boxOf(mesh.positions) : null;
+      if (entry.min) box = box ? mergeBoxes(box, { min: entry.min, max: entry.max }) : { min: entry.min, max: entry.max };
+      const chunk = { mesh, ...sphereOfBox(box) };
+      if (hasBatches) {
+        chunk.batches = [...entry.batches.values()].map((batch) => ({ model: batch.model, matrices: Float32Array.from(batch.matrices) }));
+      }
+      chunks.push(chunk);
+    }
+    return chunks;
   }
 }
 
-/** Bounding sphere (centre of the box, radius to its farthest corner). */
-export function bounds(positions) {
+function boxOf(positions) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < positions.length; i += 3) {
@@ -71,9 +149,22 @@ export function bounds(positions) {
       max[k] = Math.max(max[k], positions[i + k]);
     }
   }
-  const center = [0, 1, 2].map((k) => (min[k] + max[k]) / 2);
+  return { min, max };
+}
+
+function mergeBoxes(a, b) {
+  return { min: a.min.map((v, i) => Math.min(v, b.min[i])), max: a.max.map((v, i) => Math.max(v, b.max[i])) };
+}
+
+function sphereOfBox({ min, max }) {
+  const center = min.map((v, i) => (v + max[i]) / 2);
   const radius = Math.hypot(max[0] - center[0], max[1] - center[1], max[2] - center[2]);
   return { center, radius };
+}
+
+/** Bounding sphere (centre of the box, radius to its farthest corner). */
+export function bounds(positions) {
+  return sphereOfBox(boxOf(positions));
 }
 
 /**

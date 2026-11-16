@@ -392,8 +392,14 @@ export class View3D {
     this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
 
     this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
+    this.instanceMeshes = (world.instanceModels ?? []).map(({ mesh }) => this.renderer.upload(mesh));
     this.chunks = Object.fromEntries(
-      Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
+      Object.entries(world.chunks).map(([name, list]) => [name, list.map(({ batches = [], ...chunk }) => ({
+        ...chunk,
+        handle: chunk.mesh.vertexCount ? this.renderer.upload(chunk.mesh) : null,
+        mesh: null,
+        instanceHandles: batches.map(({ model, matrices }) => this.renderer.uploadInstances(this.instanceMeshes[model], matrices)),
+      }))]),
     );
     // Where the far scenery takes over from the near copy, in metres: `null`
     // when the kit has one level of detail (#117).
@@ -835,7 +841,10 @@ export class View3D {
       this.renderer.beginShadows(lightMatrix);
       for (const group of ["scenery", "structures", "village"]) {
         for (const chunk of this.chunks[group] ?? []) {
-          if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
+          if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) {
+            if (chunk.handle) this.renderer.drawShadowCaster(chunk.handle, this.identity);
+            for (const handle of chunk.instanceHandles) this.renderer.drawShadowCasterInstanced(handle, this.identity);
+          }
         }
       }
       this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
@@ -934,8 +943,11 @@ export class View3D {
         const distance = Math.hypot(chunk.center[0] - eye[0], chunk.center[1] - eye[1], chunk.center[2] - eye[2]) - chunk.radius;
         if (!drawnAt(group, distance, splits)) continue;
         if (!chunkVisible(chunk, eye, forward, range)) continue;
-        if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
-        else this.renderer.draw(chunk.handle, this.identity);
+        if (chunk.handle) {
+          if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
+          else this.renderer.draw(chunk.handle, this.identity);
+        }
+        for (const handle of chunk.instanceHandles) this.renderer.drawInstanced(handle, this.identity);
       }
     }
     this.renderer.drawBright(this.meshes.arches, this.identity);
@@ -1072,8 +1084,9 @@ export class View3D {
 
   dispose() {
     this.#studio?.dispose();
-    const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const instanceHandles = Object.values(this.chunks).flatMap((list) => list.flatMap((chunk) => chunk.instanceHandles));
+    const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle).filter(Boolean));
+    const handles = [...instanceHandles, ...Object.values(this.meshes), ...chunkHandles, ...this.instanceMeshes, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

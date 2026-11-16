@@ -11,7 +11,7 @@
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
 import { buildBanners, letterArch } from "./banners.js";
-import { ChunkedMesh } from "./chunks.js";
+import { CHUNK_SIZE, ChunkedMesh, InstanceCatalog } from "./chunks.js";
 import {
   BRIDGE_HALF_LENGTH,
   Occupancy,
@@ -1089,19 +1089,21 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const terrain = rivers.length > 0 ? withRivers(base, rivers, sea - RIVER.mouthDepth) : { ...base, riverDistance: () => Infinity };
   const half = roadHalfWidth(route.lanes) + VERGE;
 
+  const instances = new InstanceCatalog();
+  const instancedChunk = () => new ChunkedMesh(CHUNK_SIZE, instances);
   const chunks = {
     terrain: new ChunkedMesh(),
     road: new ChunkedMesh(),
-    detail: new ChunkedMesh(),
-    scenery: new ChunkedMesh(),
+    detail: instancedChunk(),
+    scenery: instancedChunk(),
     /** The same trees at a cheaper level of detail, drawn beyond `flora.nearRange` (#117). */
-    sceneryFar: new ChunkedMesh(),
+    sceneryFar: instancedChunk(),
     structures: new ChunkedMesh(),
     bright: new ChunkedMesh(),
     // A town kit's village: its buildings up close, and their cheap twins
     // beyond (#117). Only there when a kit builds the village, so a world
     // without scenery holds the groups it always did.
-    ...(scenery?.has?.("houses") ? { village: new ChunkedMesh(), villageFar: new ChunkedMesh() } : {}),
+    ...(scenery?.has?.("houses") ? { village: instancedChunk(), villageFar: instancedChunk() } : {}),
   };
 
   const long = route.length > LONG_ROUTE_M;
@@ -1273,6 +1275,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     waterLevel: ground.water,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
+    // One canonical mesh per repeated imported model, shared by every group.
+    ...(instances.length ? { instanceModels: instances.build() } : {}),
     // Beyond this the far trees are drawn instead of the near ones (#117).
     sceneryNearRange: scenery?.nearRange ?? null,
     meshes: {

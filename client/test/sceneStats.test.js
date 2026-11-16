@@ -37,6 +37,19 @@ test("scene stats count every drawable mesh once", () => {
   assert.deepEqual(stats.groups.spectatorMeshes, { meshes: 2, vertices: 3, triangles: 1, bytes: 120 });
   assert.deepEqual(stats.total, { meshes: 8, vertices: 18, triangles: 6, bytes: 720 });
   assert.deepEqual(stats.weather, { vertices: 2, bytes: 48 });
+  assert.equal(stats.uploadBytes, 768, "mesh and weather uploads");
+  assert.deepEqual(stats.instances, { models: 0, placements: 0, vertices: 0, bytes: 0, transformBytes: 0 });
+});
+
+test("instance stats keep expanded geometry separate from the actual upload", () => {
+  const stats = sceneStats({
+    chunks: { scenery: [{ mesh: empty, batches: [{ model: 0, matrices: new Float32Array(32) }] }] },
+    instanceModels: [{ mesh: triangle }],
+  });
+
+  assert.deepEqual(stats.groups.scenery, { meshes: 1, vertices: 6, triangles: 2, bytes: 240 });
+  assert.deepEqual(stats.instances, { models: 1, placements: 2, vertices: 3, bytes: 120, transformBytes: 128 });
+  assert.equal(stats.uploadBytes, 248, "128 matrix bytes + 120 shared-model bytes; no second model copy");
 });
 
 test("an empty scene reports zeroes rather than inventing groups", () => {
