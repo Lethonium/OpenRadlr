@@ -110,6 +110,7 @@ import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { FpsMeter } from "./view/fpsMeter.js";
+import { forgetScenery, loadScenery } from "./view3d/scenery/load.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
@@ -139,6 +140,8 @@ const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 /** Whether the frame rate is shown on the ride screen (#117). */
 const FPS_KEY = "openradlr.showFps";
+/** Whether the island is drawn with imported models (#117). */
+const SCENERY_KEY = "openradlr.scenery";
 const BIOME_KEY = "openride.biome";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
@@ -248,7 +251,8 @@ function buildRideWorld() {
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then(([others, network]) => Promise.all([others, network, loadScenery(app.scenery)]))
+    .then(([others, network, scenes]) => buildScene(routeFile, others, { network, biome, scenes }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
       // The season changed while this was building: build the picked one instead.
@@ -428,6 +432,8 @@ const app = {
   showFps: false,
   /** When the read-out was last written, so it updates twice a second, not every frame. */
   fpsWrittenAt: 0,
+  /** How the island's scenery is drawn: "off" for the biome's own, "normal" for imported models (#117). */
+  scenery: readSetting(SCENERY_KEY) === "normal" ? "normal" : "off",
   layoutChoice: "auto",
   layout: "cockpit",
   standing: null,
@@ -4250,6 +4256,7 @@ function initViewPopover() {
       layout: app.layoutChoice,
       mode: app.viewMode,
       time: $("time-mode").value,
+      scenery: app.scenery,
       has3d: Boolean(app.view3d),
     }),
     onPick: (kind, id) => {
@@ -4257,6 +4264,7 @@ function initViewPopover() {
       else if (kind === "layout") setLayoutChoice(id);
       else if (kind === "mode") setViewMode(id);
       else if (kind === "time") setTimeMode(id);
+      else if (kind === "scenery") setScenery(id);
     },
   });
 }
@@ -4980,6 +4988,17 @@ function setQuality(quality) {
   app.view3d.setQuality(quality);
   $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
   writeSetting(QUALITY_KEY, quality);
+}
+
+/** Picks how the island is drawn, and builds the world again to show it. */
+function setScenery(level) {
+  const next = level === "normal" ? "normal" : "off";
+  if (next === app.scenery) return;
+  app.scenery = next;
+  writeSetting(SCENERY_KEY, next);
+  forgetScenery();
+  app.viewPopover?.refresh();
+  buildRideWorld();
 }
 
 /** Shows or hides the frame-rate read-out, and remembers the choice. */

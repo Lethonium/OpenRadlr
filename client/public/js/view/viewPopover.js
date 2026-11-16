@@ -26,6 +26,7 @@ const ROWS = [
   { kind: "layout", heading: "viewPopover.layout", items: (c) => c.layouts ?? [] },
   { kind: "mode", heading: "viewPopover.mode", items: (c) => c.modes },
   { kind: "time", heading: "drawer.timeOfDay", items: (c) => (c.showTime ? c.times : []) },
+  { kind: "scenery", heading: "scenery.heading", items: (c) => c.scenaries ?? [] },
 ];
 
 export function createViewPopover({
