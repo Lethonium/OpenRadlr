@@ -3137,6 +3137,60 @@ body.riding {
   padding: 0;
 }
 
+/* Who is riding on this device: the active rider and, opened, the others and "Add rider". */
+.rider-switcher {
+  display: grid;
+  gap: 8px;
+}
+
+.rider-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.rider-initial {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rider-switch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-picker {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rider-picker button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.rider-picker button[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
 .profile-totals {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

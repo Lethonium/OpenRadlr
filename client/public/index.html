@@ -102,6 +102,7 @@
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
+    <link rel="modulepreload" href="js/view/riderSwitcher.js" />
     <link rel="modulepreload" href="js/view/screensDialog.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
@@ -276,6 +277,14 @@
                 <span data-i18n="rider.title">Rider</span>
                 <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
               </legend>
+              <!-- Who is riding on this device: the active rider, and the list to switch or add one -->
+              <div id="rider-switcher" class="rider-switcher">
+                <button type="button" id="rider-switch" class="secondary rider-switch" aria-expanded="false" aria-controls="rider-picker" aria-label="Who's riding" data-i18n-attr="aria-label:riders.switch">
+                  <span id="rider-switch-initial" class="rider-initial" aria-hidden="true">?</span>
+                  <span id="rider-switch-name" class="rider-switch-name"></span>
+                </button>
+                <ul id="rider-picker" class="rider-picker" hidden></ul>
+              </div>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">

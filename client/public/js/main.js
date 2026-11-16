@@ -36,7 +36,8 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { loadRiders } from "./profile/riders.js";
+import { addRider, loadRiders, saveRiders, setActive } from "./profile/riders.js";
+import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
 import { draftInfo } from "./ride/draft.js";
@@ -278,7 +279,7 @@ const rawStorage = (() => {
  * The roster: `{active, ids}`. Module-level rather than on `app`, because the `app` literal
  * itself reads rider storage (`profiles.load()`) before `app` exists.
  */
-const riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
+let riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
 const activeRider = () => riders.active;
 /** Everything that belongs to the active rider; device keys go through `rawStorage`. */
 const riderStore = riderStorage(rawStorage, activeRider);
@@ -295,6 +296,8 @@ const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 const app = {
   /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
   updateDismissed: false,
+  /** Counts rider switches: a read that started for an earlier rider must not draw its result (#112). */
+  riderGeneration: 0,
   profile: profiles.load(),
   /** The season goals as stored, and the rides and best laps their weeks are computed from. */
   goals: { rhythmStartMs: null, goals: [] },
@@ -651,23 +654,32 @@ async function offerFtp() {
   prompt.hidden = false;
 }
 
-function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
-  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
+/** Fills the start menu's rider fields from `app.profile`; again after the rider changes. */
+function fillSetupFields() {
   setUnits(app.profile.units);
   $("name").value = app.profile.name;
   $("weight").value = kgToDisplay(app.profile.weightKg);
   renderUnits();
-  // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-units]");
-    if (button) setUnitSystem(button.dataset.units);
-  });
   refreshFtpFields();
   $("split-mode").value = SPLIT_SETTINGS.includes(app.profile.splitMode) ? app.profile.splitMode : "auto";
   $("auto-pause").checked = Boolean(app.profile.autoPause);
   showLevel();
   setDifficultyInputs(app.profile.difficulty);
+  $("virtual-shifting").checked = app.profile.virtualShifting;
+  $("chainring").value = app.profile.chainring;
+  $("cog").value = app.profile.cog;
+  fillWorkoutSetup();
+}
+
+function initSetup() {
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
+  fillSetupFields();
+  // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-units]");
+    if (button) setUnitSystem(button.dataset.units);
+  });
   initWorkoutSetup();
 
   if (!isBluetoothAvailable()) {
@@ -681,9 +693,6 @@ function initSetup() {
   initKnownDevices();
 
   $("difficulty").addEventListener("input", (e) => setDifficultyInputs(e.target.value / 100));
-  $("virtual-shifting").checked = app.profile.virtualShifting;
-  $("chainring").value = app.profile.chainring;
-  $("cog").value = app.profile.cog;
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", showShiftingSettings);
@@ -723,6 +732,7 @@ function initSetup() {
   initScreens();
   initStartVehicle();
   initStartMenu();
+  initRiderSwitcher();
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -739,12 +749,16 @@ function initSetup() {
 
 /** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
 function initWorkoutSetup() {
-  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
-  app.workoutFigure = null;
-  $("workout-cues").checked = app.profile.workoutCues !== false;
   $("workout-cards").addEventListener("keydown", (event) => {
     if (event.key === "Escape" /* i18n-ok */ && app.workoutFigure !== null) pickWorkoutFigure(app.workoutPick, null);
   });
+}
+
+/** The saved plan and cue choice of the rider; the cards are drawn from them. */
+function fillWorkoutSetup() {
+  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutFigure = null;
+  $("workout-cues").checked = app.profile.workoutCues !== false;
   renderWorkoutPick();
   $("workout-hint").textContent = t("workout.figureHint");
 }
@@ -1009,6 +1023,131 @@ async function loadStravaAccount() {
   renderStartMenu();
   if (app.finished) setupFinishUpload();
   if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
+}
+
+// -------------------------------------------------------- rider switcher ---
+
+/** The name a rider has in their own profile (the active rider's included). */
+function nameOf(id) {
+  return new ProfileStore({ storage: riderStorage(rawStorage, () => id) }).load().name;
+}
+
+/** The start menu's rider button, and the list under it while it is open. */
+function renderRiderSwitcher() {
+  const rows = riderRows(riders, nameOf);
+  const current = rows.find((row) => row.active) ?? rows[0];
+  $("rider-switch-initial").textContent = current.initial;
+  $("rider-switch-name").textContent = current.name;
+  const open = !$("rider-picker").hidden;
+  $("rider-switch").setAttribute("aria-expanded", String(open));
+  const choice = (label, initial, onClick, checked) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    if (checked !== undefined) {
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-checked", String(checked));
+    }
+    const mark = document.createElement("span");
+    mark.className = "rider-initial";
+    mark.setAttribute("aria-hidden", "true");
+    mark.textContent = initial;
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.append(mark, text);
+    button.addEventListener("click", onClick);
+    item.append(button);
+    return item;
+  };
+  $("rider-picker").setAttribute("role", "radiogroup");
+  $("rider-picker").setAttribute("aria-label", t("riders.switch"));
+  $("rider-picker").replaceChildren(
+    ...rows.map((row) => choice(row.name, row.initial, () => switchRider(row.id), row.active)),
+    choice(t("riders.add"), "+", () => addNewRider()),
+  );
+}
+
+function toggleRiderPicker(open = $("rider-picker").hidden) {
+  $("rider-picker").hidden = !open;
+  renderRiderSwitcher();
+}
+
+function initRiderSwitcher() {
+  $("rider-switch").addEventListener("click", () => toggleRiderPicker());
+  relocaliseHooks.push(renderRiderSwitcher);
+  renderRiderSwitcher();
+}
+
+/** Riders change only from the start menu: not mid-ride, and not with a dialog open. */
+const canSwitchRider = () => !app.ride && !panels.isOpen && !$("setup").hidden;
+
+/**
+ * Makes `roster`'s active rider the one the page shows: every rider's data is read again from the
+ * rider-scoped storage, without a reload, so Bluetooth devices stay connected.
+ */
+function applyRoster(roster) {
+  riders = roster;
+  saveRiders(rawStorage, riders);
+  // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
+  app.riderGeneration += 1;
+  app.profile = profiles.load();
+  // Progress: the season goals, and what the profile and goals pages read from the history.
+  loadGoalsState();
+  app.profileData = null;
+  app.goalData = null;
+  app.lemonHunt = null;
+  app.lemonTotal = 0;
+  app.milestones = null;
+  // Settings of the rider (the view, camera, layout and quality are read when a ride starts).
+  const time = readSetting(TIME_KEY);
+  app.timeMode = TIME_MODES.includes(time) ? time : "day";
+  $("time-mode").value = app.timeMode;
+  app.routeId = readSetting(ROUTE_KEY);
+  app.rideRouteId = app.routeId;
+  app.rideMode = readSetting(RIDE_MODE_KEY);
+  app.coachVoice = readSetting(COACH_VOICE_KEY) === "on";
+  const biome = app.biome;
+  app.biome = biomeSetting();
+  // The rider's own language wins over the browser's; the text is drawn again like after changeLanguage.
+  initLocale({ storage: browserStorage(), languages: navigator.languages });
+  fillSetupFields();
+  toggleRiderPicker(false);
+  // The hooks draw the start menu, the pickers and the units; then the parts that read stores.
+  relocalise();
+  if (app.biome !== biome) app.menu?.biomeChanged();
+  else app.redrawStage?.();
+  renderRideModes();
+  app.unfinished = null;
+  renderUnfinished();
+  refreshUnfinished();
+}
+
+/** Switches to rider `id` in place; false when a ride or a dialog is open or the rider is unknown. */
+function switchRider(id) {
+  if (!canSwitchRider() || !riders.ids.includes(id)) return false;
+  if (id !== riders.active) applyRoster(setActive(riders, id));
+  else toggleRiderPicker(false);
+  $("rider-switch").focus();
+  return true;
+}
+
+/** Adds a rider with the current language and defaults, switches to them and asks for their name. */
+async function addNewRider() {
+  if (!canSwitchRider()) return;
+  const locale = getLocale();
+  const { roster, id } = addRider(riders);
+  riders = roster;
+  saveLocale(locale, browserStorage());
+  applyRoster(roster);
+  // Like a fresh install: stored defaults and a key pair, written for this rider even if the rider switches meanwhile.
+  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id) });
+  const generation = app.riderGeneration;
+  const profile = await own.ensureKeys(own.save(own.load()));
+  if (generation !== app.riderGeneration) return;
+  app.profile = profile;
+  $("name").focus();
+  $("name").select();
 }
 
 function renderAccount() {
@@ -1739,6 +1878,8 @@ function keepFormEdits() {
   if (app.ride) return;
   app.profile = profiles.save(keepValid(app.profile, formProfile()));
   $("ftp-source").textContent = ftpProvenance(app.profile, { locale: getLocale() });
+  // The rider button shows the name just typed.
+  renderRiderSwitcher();
 }
 
 /** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
@@ -2873,10 +3014,13 @@ function openProfile(page) {
 
 /** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
 async function loadProfile(keep) {
+  const generation = app.riderGeneration;
   const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
+  if (generation !== app.riderGeneration) return;
   // Achievements are latched before the data page counts them.
   const achievements = reconcileAchievements(records);
   const items = await inventory(dataSources());
+  if (generation !== app.riderGeneration) return;
   app.profileData = { records, bests, items, achievements };
   app.goalData = { records, bests };
   loadGoalsState();
@@ -3951,7 +4095,10 @@ async function refreshUnfinished() {
   const clearing = app.autosaveClearing;
   app.autosaveClearing = null;
   await clearing?.catch(() => {});
-  app.unfinished = await app.autosave.load();
+  const generation = app.riderGeneration;
+  const saved = await app.autosave.load();
+  if (generation !== app.riderGeneration) return;
+  app.unfinished = saved;
   renderUnfinished();
 }
 
