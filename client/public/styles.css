@@ -1363,8 +1363,10 @@ button.small {
   display: none;
 }
 
+/* Not fully opaque: an opaque sticky bar in the scrolling panel makes Chrome paint a stray dark
+   rectangle above the panel. At 0.97 it looks the same, and the panel behind it is solid. */
 .start.world-ready .dock-actions {
-  background: rgb(21, 25, 31);
+  background: rgba(21, 25, 31, 0.97);
 }
 
 /* One column (tablets, phones): Ride is a bar along the bottom of the screen, whatever is scrolled into view. */
