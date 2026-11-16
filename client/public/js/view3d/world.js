@@ -748,7 +748,7 @@ export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -788,7 +788,8 @@ export function buildScenery(
     positions.push([x, y, z]);
 
     const kind = inForest ? 0.28 + random() * 0.72 : random();
-    biome.flora.tree({ mesh, x, y, z, kind, random });
+    // A kit draws its own models; without one the biome keeps drawing cones.
+    (flora ?? biome.flora).tree({ mesh, x, y, z, kind, random });
   }
   return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
 }
@@ -967,7 +968,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, scenery = null } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -1113,7 +1114,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const margin = 450;
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
     buildGroundDetail(r, terrain, {
