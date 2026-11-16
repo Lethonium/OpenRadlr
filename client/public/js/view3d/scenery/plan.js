@@ -156,6 +156,8 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
   return {
     /** The roles this kit can draw, so a caller knows what to ask for. */
     roles: kit.roles,
+    /** The indexed kit, for callers that ask for a model by role (a village's houses). */
+    kit,
     /** How much of the ground detail to ask for, against the biome's own. */
     detailDensity: DENSE_DETAIL_DENSITY,
     /** Beyond this distance the world draws `far()` instead (#117). */
@@ -181,6 +183,27 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
     },
     flower({ mesh, x, y, z, random }) {
       draw(mesh, x, y, z, random, FLOWER_ROLE, (m, cx, cy, cz, r) => fallback?.flower({ mesh: m, x: cx, y: cy, z: cz, random: r }));
+    },
+    /**
+     * A building or a prop of `role`, picked by one draw of `random` so a
+     * village is furnished the same way on every client (#117). `near` is the
+     * model, `far` its cheap twin or null when the kit ships none, and
+     * `bounds` its size in metres. Null when no kit holds the role, so the
+     * world keeps its own.
+     */
+    model(role, random) {
+      const ids = kit.byRole[role];
+      if (!ids || ids.length === 0) return null;
+      const model = kit.models[ids[Math.min(ids.length - 1, Math.floor(random() * ids.length))]];
+      return {
+        near: meshesOf(kit, readModelFile, painted, false)[fileOf(model)],
+        far: model.far === undefined ? null : meshesOf(kit, readModelFile, painted, true)[fileOf(model, true)],
+        bounds: readModelFile(fileOf(model)).bounds,
+      };
+    },
+    /** Whether a kit holds `role`. */
+    has(role) {
+      return (kit.byRole[role]?.length ?? 0) > 0;
     },
   };
 }

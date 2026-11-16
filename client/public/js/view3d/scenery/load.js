@@ -14,10 +14,11 @@ const KITS_PATH = "assets/scenery";
 
 /**
  * The kits a scenery level uses. `off` uses none; `models` is the modelled
- * world; `racing` keeps Kenney's Racing Kit beside it, since a racing island
- * with barriers and flags on the verges is a different look worth trying.
+ * world: Kenney's nature kit in the woods, and villages built from its town
+ * kit. `racing` keeps Kenney's Racing Kit instead, since a racing island with
+ * barriers and flags on the verges is a different look worth trying.
  */
-export const KITS_OF = Object.freeze({ off: [], models: ["nature"], racing: ["racing"] });
+export const KITS_OF = Object.freeze({ off: [], models: ["nature", "fantasy-town"], racing: ["racing"] });
 
 /** What the worker needs: manifests with their models inlined, since functions cannot travel. */
 let loaded = null;
@@ -26,11 +27,9 @@ let loaded = null;
 export async function loadKit(name, { fetchJson = defaultFetchJson } = {}) {
   const manifest = await fetchJson(`${KITS_PATH}/${name}/manifest.json`);
   const files = {};
-  for (const model of Object.values(manifest.models ?? {})) {
-    const id = model.file ?? model.near;
-    if (!id || files[id]) continue;
-    files[id] = await fetchJson(`${KITS_PATH}/${name}/${id}.geo.json`);
-  }
+  // A model's cheap twin is a file of its own, drawn beyond the near range.
+  const ids = new Set(Object.values(manifest.models ?? {}).flatMap((model) => [model.file ?? model.near, model.far]).filter(Boolean));
+  for (const id of ids) files[id] = await fetchJson(`${KITS_PATH}/${name}/${id}.geo.json`);
   return { ...manifest, name, files };
 }
 
@@ -48,7 +47,19 @@ export async function loadScenery(level, { fetchJson = defaultFetchJson, nearRan
     return { kits, nearRange };
   } catch (error) {
     console.warn("Scenery could not be loaded, keeping the woods as they are:", error);
-    return null;
+    // A level made of several kits may lose a part of itself: the cottages
+    // are worth keeping the trees without, rather than the trees without.
+    const kept = [];
+    for (const name of names) {
+      try {
+        kept.push(await loadKit(name, { fetchJson }));
+      } catch {
+        console.warn(`The ${name} scenery kit could not be loaded; the rest is drawn without it.`);
+      }
+    }
+    if (kept.length === 0) return null;
+    loaded = { level, kits: kept };
+    return { kits: kept, nearRange };
   }
 }
 
