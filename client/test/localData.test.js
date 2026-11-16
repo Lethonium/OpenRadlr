@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DATA_ITEMS, deleteItem, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
+import { deviceStorage, riderStorage } from "../public/js/profile/riderStorage.js";
+import { DATA_ITEMS, deleteItem, deleteRider, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
 
 function fakeStorage(entries) {
   const map = new Map(Object.entries(entries));
@@ -45,7 +46,7 @@ const storage = () => fakeStorage({
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
 
 test("the data items, in order", () => {
-  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings"]);
+  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings", "device"]);
 });
 
 test("inventory counts each item", async () => {
@@ -198,4 +199,80 @@ test("deleteItem: rides keeps the achievements", async () => {
   const s = storage();
   await deleteItem("rides", { storage: s, stores: stores() });
   assert.notEqual(s.getItem("openradlr.achievements"), null);
+});
+
+const deviceKeys = () => ({
+  "openradlr.riders": JSON.stringify({ active: "main", ids: ["main", "k3x9q2ab"] }),
+  "openradlr.devices": "[]",
+  "openradlr.screenKey": "s3cret",
+  "openride.quality": "high",
+  "openradlr.strava-upload.1": "x",
+});
+const shared = () => fakeStorage({ ...deviceKeys(), "openride.profile.v1": "{}", "openradlr.lemons": "3", "openradlr.rider.k3x9q2ab.openradlr.lemons": "9", "other.app": "x" });
+
+test("inventory counts the device keys but not the roster", async () => {
+  const raw = shared();
+  const by = byId(await inventory({ storage: riderStorage(raw, () => "main"), deviceStorage: deviceStorage(raw), stores: stores() }));
+  assert.equal(by.device.count, 4);
+  assert.equal(by.settings.count, 0);
+});
+
+test("deleteItem: device removes the device keys but not the roster or any rider key", async () => {
+  const raw = shared();
+  const sources = { storage: riderStorage(raw, () => "main"), deviceStorage: deviceStorage(raw), stores: stores() };
+  assert.equal(await deleteItem("device", sources), true);
+  assert.equal(raw.getItem("openradlr.devices"), null);
+  assert.equal(raw.getItem("openride.quality"), null);
+  assert.equal(raw.getItem("openradlr.strava-upload.1"), null);
+  assert.notEqual(raw.getItem("openradlr.riders"), null);
+  assert.equal(raw.getItem("openradlr.lemons"), "3");
+  assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openradlr.lemons"), "9");
+});
+
+test("deleteItem: everything leaves the device keys alone", async () => {
+  const raw = shared();
+  await deleteItem("everything", { storage: riderStorage(raw, () => "main"), deviceStorage: deviceStorage(raw), stores: stores() });
+  assert.equal(raw.getItem("openradlr.devices"), "[]");
+  assert.equal(raw.getItem("openradlr.screenKey"), "s3cret");
+  assert.equal(raw.getItem("openride.profile.v1"), null);
+  assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openradlr.lemons"), "9");
+});
+
+test("export never has the device keys", async () => {
+  const raw = shared();
+  const data = await exportData({ storage: riderStorage(raw, () => "main"), stores: stores(), now: 1 });
+  assert.deepEqual(data.settings, {});
+});
+
+test("needsReload: the device row redraws instead", () => {
+  assert.equal(needsReload("device"), false);
+});
+
+test("deleteRider removes the rider's keys and its three databases", async () => {
+  const raw = shared();
+  raw.setItem("openradlr.rider.k3x9q2ab.openride.profile.v1", "{}");
+  const names = [];
+  const ok = await deleteRider({ storage: riderStorage(raw, () => "k3x9q2ab"), dbNames: ["a.k3x9q2ab", "b.k3x9q2ab", "c.k3x9q2ab"], deleteDb: async (name) => void names.push(name) });
+  assert.equal(ok, true);
+  assert.deepEqual(names, ["a.k3x9q2ab", "b.k3x9q2ab", "c.k3x9q2ab"]);
+  assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openradlr.lemons"), null);
+  assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openride.profile.v1"), null);
+  assert.equal(raw.getItem("openradlr.lemons"), "3");
+  assert.equal(raw.getItem("openradlr.devices"), "[]");
+});
+
+test("deleteRider goes on past a database that fails and says false", async () => {
+  const raw = shared();
+  const names = [];
+  const ok = await deleteRider({
+    storage: riderStorage(raw, () => "k3x9q2ab"),
+    dbNames: ["a", "b", "c"],
+    deleteDb: async (name) => {
+      names.push(name);
+      if (name === "a") throw new Error("blocked");
+    },
+  });
+  assert.equal(ok, false);
+  assert.deepEqual(names, ["a", "b", "c"]);
+  assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openradlr.lemons"), null);
 });

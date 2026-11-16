@@ -2,13 +2,15 @@
  * What this browser keeps for OpenRadlr, for the profile's "Your data" page:
  * counts per item, an export file and deletes. Pure over the injected
  * localStorage and the raw IndexedDB key-value stores (ride/rideAutosave.js
- * `indexedDbStore`): `{history, ghosts, autosave}`.
+ * `indexedDbStore`): `{history, ghosts, autosave}`. `storage` is the active
+ * rider's; `deviceStorage` (profile/riderStorage.js) is the device's own keys.
  */
 
 import { ACHIEVEMENTS_KEY, loadAchievements } from "./achievements.js";
 import { GOALS_KEY, loadGoals } from "./seasonGoals.js";
+import { RIDERS_KEY } from "./riders.js";
 
-export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings"];
+export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings", "device"];
 
 const PROFILE_KEY = "openride.profile.v1";
 const SUMMITS_KEY = "openradlr.summits";
@@ -31,6 +33,9 @@ function storageKeys(storage) {
 
 /** Every other key of ours: devices, pairings, cockpit, language, Strava receipts, view settings. */
 const settingsKeys = (storage) => storageKeys(storage).filter((key) => key !== PROFILE_KEY && key !== GOALS_KEY && !PROGRESS_KEYS.includes(key));
+
+/** The device's keys except the roster, which belongs to no row. */
+const deviceKeys = (deviceStorage) => (deviceStorage ? storageKeys(deviceStorage).filter((key) => key !== RIDERS_KEY) : []);
 
 function parseJson(text, fallback) {
   try {
@@ -68,6 +73,7 @@ const COUNTS = {
   },
   unfinished: ({ stores }) => stores.autosave.keys().then((keys) => (keys.includes(UNFINISHED_KEY) ? 1 : 0)),
   settings: ({ storage }) => settingsKeys(storage).length,
+  device: ({ deviceStorage }) => deviceKeys(deviceStorage).length,
 };
 
 /**
@@ -118,15 +124,41 @@ const DELETES = {
   goals: ({ storage }) => storage.removeItem(GOALS_KEY),
   progress: ({ storage }) => PROGRESS_KEYS.forEach((key) => storage.removeItem(key)),
   settings: ({ storage }) => settingsKeys(storage).forEach((key) => storage.removeItem(key)),
+  device: ({ deviceStorage }) => deviceKeys(deviceStorage).forEach((key) => deviceStorage.removeItem(key)),
 };
 
-/** Deletes one item, or "everything" (going on past an item that fails); false when the storage refused any. */
-export async function deleteItem(id, { storage, stores }) {
+/**
+ * Deletes one item, or "everything" of the rider (going on past an item that fails; the
+ * device's keys are not the rider's); false when the storage refused any.
+ */
+export async function deleteItem(id, { storage, stores, deviceStorage }) {
   let ok = true;
-  for (const item of id === "everything" ? DATA_ITEMS : [id]) {
+  for (const item of id === "everything" ? DATA_ITEMS.filter((name) => name !== "device") : [id]) {
     try {
       if (STORE_OF[item]) await clearStore(stores[STORE_OF[item]]);
-      else DELETES[item]({ storage });
+      else DELETES[item]({ storage, deviceStorage });
+    } catch {
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+/**
+ * Removes a rider: every key their storage view lists, then each database by name.
+ * Goes on past a failure; false when anything failed.
+ * @param {{storage: Storage, dbNames: string[], deleteDb: (name: string) => Promise<void>}} options
+ */
+export async function deleteRider({ storage, dbNames, deleteDb }) {
+  let ok = true;
+  try {
+    storageKeys(storage).forEach((key) => storage.removeItem(key));
+  } catch {
+    ok = false;
+  }
+  for (const name of dbNames) {
+    try {
+      await deleteDb(name);
     } catch {
       ok = false;
     }
