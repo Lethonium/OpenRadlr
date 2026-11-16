@@ -109,6 +109,7 @@ import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
+import { FpsMeter } from "./view/fpsMeter.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
@@ -136,6 +137,8 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+/** Whether the frame rate is shown on the ride screen (#117). */
+const FPS_KEY = "openradlr.showFps";
 const BIOME_KEY = "openride.biome";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
@@ -420,6 +423,11 @@ const app = {
   /** The selected time of day, also used by the 2D map when there is no 3D view. */
   timeMode: TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day",
   hud: null,
+  /** The frame-rate read-out, when the rider asks for it (#117). */
+  fps: new FpsMeter(),
+  showFps: false,
+  /** When the read-out was last written, so it updates twice a second, not every frame. */
+  fpsWrittenAt: 0,
   layoutChoice: "auto",
   layout: "cockpit",
   standing: null,
@@ -2205,7 +2213,9 @@ function startRide() {
   const loop = () => {
     if (app.ride !== ride) return;
     requestAnimationFrame(loop);
+    const at = now();
     draw();
+    measureFrame(at);
     renderAfkPrompt();
   };
   requestAnimationFrame(loop);
@@ -4833,6 +4843,7 @@ function initViews() {
   $("view-2d").addEventListener("click", () => setViewMode("2d"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
   $("quality-mode").addEventListener("click", () => setQuality(app.view3d.quality === "high" ? "low" : "high"));
+  $("fps-mode").addEventListener("click", () => setShowFps(!app.showFps));
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
   setViewMode("2d", { remember: false });
@@ -4900,6 +4911,7 @@ function show3d(scene, view = null) {
   renderCameraButton();
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
   setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+  setShowFps(readSetting(FPS_KEY) === "on");
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
   // Each gym's statues (also on a view taken over from the menu, which had its own rows).
   // A workout whose café this route does not start at shows its figures at the gym here.
@@ -4968,6 +4980,46 @@ function setQuality(quality) {
   app.view3d.setQuality(quality);
   $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
   writeSetting(QUALITY_KEY, quality);
+}
+
+/** Shows or hides the frame-rate read-out, and remembers the choice. */
+function setShowFps(on) {
+  app.showFps = Boolean(on);
+  const button = $("fps-mode");
+  if (button) {
+    button.setAttribute("aria-pressed", String(app.showFps));
+    button.textContent = t(app.showFps ? "drawer.fpsOn" : "drawer.fpsOff");
+  }
+  const readout = $("hud-fps");
+  if (readout) {
+    readout.hidden = !app.showFps;
+    readout.textContent = "";
+    readout.title = t("hud.fpsTitle");
+  }
+  app.fps.reset();
+  app.fpsWrittenAt = 0;
+  writeSetting(FPS_KEY, app.showFps ? "on" : "off");
+}
+
+/**
+ * Feeds the read-out one frame. It only measures the 3D view: a 2D map that
+ * costs microseconds would flatter the numbers into meaninglessness.
+ */
+function measureFrame(time, mode = app.viewMode) {
+  if (!app.showFps) return;
+  if (mode !== "3d") {
+    app.fps.reset();
+    return;
+  }
+  app.fps.frame(time);
+  if (time - app.fpsWrittenAt < 0.5) return;
+  const reading = app.fps.read();
+  if (!reading) return;
+  app.fpsWrittenAt = time;
+  const readout = $("hud-fps");
+  if (!readout) return;
+  readout.textContent = t("hud.fps", { fps: Math.round(reading.fps), low: Math.round(reading.low) });
+  readout.hidden = false;
 }
 
 function setTimeMode(mode) {
