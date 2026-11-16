@@ -1117,6 +1117,7 @@ export default {
   "profilePage.data.lede": "Was OpenRadlr in diesem Browser speichert. Es bleibt auf diesem Gerät.",
   "profilePage.data.export": "Als Datei exportieren",
   "profilePage.data.deleteAll": "Alles auf diesem Gerät löschen",
+  "profilePage.data.deleteRider": "Diesen Fahrer löschen",
   "profilePage.data.exportFailed": "Export ging nicht: Dieser Browser hat OpenRadlr seinen Speicher nicht lesen lassen.",
   "profilePage.data.note": "Was dieses Gerät verlässt: Während du fährst, bekommt der Server deinen Namen, dein Gewicht, dein Fahrniveau und deinen Fahrer-Schlüssel sowie deine laufende Fahrt. Zu Strava geht eine Fahrt nur, wenn du sie hochlädst. Alles andere bleibt hier.",
   "profilePage.ftp.title": "FTP im Verlauf",

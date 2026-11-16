@@ -14,7 +14,7 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
-import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
+import { deleteItem, deleteRider, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
@@ -36,7 +36,7 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { addRider, loadRiders, saveRiders, setActive } from "./profile/riders.js";
+import { addRider, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -51,7 +51,7 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
-import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
+import { RideAutosave, continueAllowed, deleteIndexedDb, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { BotCalls } from "./ride/botCalls.js";
@@ -2995,6 +2995,7 @@ function initProfile() {
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
+  $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
   initGoalForm();
   $("profile-goals-link").addEventListener("click", () => app.profileDialog.open("goals"));
   $("profile-rides-more").addEventListener("click", () => {
@@ -3518,6 +3519,7 @@ function renderProfileData() {
   const anyReadable = items.some((entry) => entry.readable);
   $("profile-export").disabled = !anyReadable;
   $("profile-delete-all").disabled = !items.every((entry) => entry.readable);
+  $("profile-delete-rider").hidden = riders.ids.length < 2;
 }
 
 /** Downloads everything as one file; false (with the error on the page) when the storage couldn't be read. */
@@ -3560,8 +3562,43 @@ async function deleteProfileData(id) {
   if (!tried) return;
   // The profile and settings in memory would be written back: start fresh instead.
   if (needsReload(id)) return location.reload();
+  // The device's own keys changed: the device lines and graphics quality read them again.
+  if (id === "device") renderDeviceLines();
   await loadProfile();
   $("profile-export").focus();
+}
+
+/**
+ * Deletes the active rider with everything they kept here. The card only asks; the rider is
+ * switched away from first (a switch needs the dialogs closed), then their keys and databases go.
+ */
+async function deleteActiveRider() {
+  const id = riders.active;
+  const next = removeRider(riders, id);
+  if (!next) return;
+  const name = nameOf(id);
+  // The wrapper is pinned to this rider: it must not follow the active rider once that changes.
+  const own = riderStorage(rawStorage, () => id);
+  const confirmed = await app.deleteConfirm.ask({
+    texts: deleteTexts("rider", { name }),
+    onConfirm: async () => true,
+    onExport: exportProfileData,
+  });
+  if (!confirmed) return;
+  app.profileDialog.close();
+  if (!switchRider(next.active)) return;
+  const ok = await deleteRider({
+    storage: own,
+    dbNames: ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id)),
+    deleteDb: deleteIndexedDb,
+  });
+  riders = next;
+  saveRiders(rawStorage, riders);
+  renderRiderSwitcher();
+  if (ok) return;
+  await openProfile("data");
+  $("profile-data-error").textContent = t("profilePage.delete.failed");
+  $("profile-data-error").hidden = false;
 }
 
 function textElement(tag, text) {

@@ -1117,6 +1117,7 @@ export default {
   "profilePage.data.lede": "What OpenRadlr keeps in this browser. It stays on this device.",
   "profilePage.data.export": "Export as a file",
   "profilePage.data.deleteAll": "Delete everything on this device",
+  "profilePage.data.deleteRider": "Delete this rider",
   "profilePage.data.exportFailed": "Couldn't export: this browser didn't let OpenRadlr read its storage.",
   "profilePage.data.note": "What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.",
   "profilePage.ftp.title": "FTP over time",
