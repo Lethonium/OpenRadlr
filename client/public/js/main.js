@@ -21,7 +21,7 @@ import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
 import { finishGoalLine, goalCard, goalsSummary, hudGoal, hudGoalLines, imageGoalLine, parseGoalForm, rotatingGoal } from "./view/goalsView.js";
-import { viewControls } from "./view/viewControls.js";
+import { SCENERY_LEVELS, viewControls } from "./view/viewControls.js";
 import { createViewPopover } from "./view/viewPopover.js";
 import { createOverviewView, drawPowerChart, liveReading, overviewMode } from "./view/overviewView.js";
 import { pageStatus, pageTitle, visiblePages } from "./view/menuPages.js";
@@ -109,6 +109,8 @@ import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
+import { FpsMeter } from "./view/fpsMeter.js";
+import { forgetScenery, loadScenery } from "./view3d/scenery/load.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
@@ -136,6 +138,10 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+/** Whether the frame rate is shown on the ride screen (#117). */
+const FPS_KEY = "openradlr.showFps";
+/** Whether the island is drawn with imported models (#117). */
+const SCENERY_KEY = "openradlr.scenery";
 const BIOME_KEY = "openride.biome";
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
@@ -163,6 +169,18 @@ const writeSetting = (key, value) => {
     // Settings are a convenience; ignore unavailable storage.
   }
 };
+
+/**
+ * Where to join the route, from `?at=<metres>`: a distance along the road, so a
+ * screenshot can be taken at a chosen spot without riding there first. Returns
+ * `null` when the address does not ask for one, or asks for something unusable.
+ */
+function joinedAtMetres() {
+  const param = new URLSearchParams(location.search).get("at");
+  if (param === null) return null;
+  const metres = Number(param);
+  return Number.isFinite(metres) && metres >= 0 ? metres : null;
+}
 
 /**
  * The biome to draw: `?biome=winter` previews one (not saved), else the
@@ -244,8 +262,11 @@ function buildRideWorld() {
   if (!ride || !routeFile) return;
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
+  // Diagnostics for screenshots: `?scenery_debug` reports which level the build used.
+  if (new URLSearchParams(location.search).has("scenery_debug")) document.documentElement.dataset.sceneryBuild = String(app.scenery);
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then(([others, network]) => Promise.all([others, network, loadScenery(app.scenery)]))
+    .then(([others, network, scenes]) => buildScene(routeFile, others, { network, biome, scenes }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
       // The season changed while this was building: build the picked one instead.
@@ -420,6 +441,13 @@ const app = {
   /** The selected time of day, also used by the 2D map when there is no 3D view. */
   timeMode: TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day",
   hud: null,
+  /** The frame-rate read-out, when the rider asks for it (#117). */
+  fps: new FpsMeter(),
+  showFps: false,
+  /** When the read-out was last written, so it updates twice a second, not every frame. */
+  fpsWrittenAt: 0,
+  /** How the island's scenery is drawn: "off" for the biome's own, "normal" for imported models (#117). */
+  scenery: SCENERY_LEVELS.includes(readSetting(SCENERY_KEY)) ? readSetting(SCENERY_KEY) : "off",
   layoutChoice: "auto",
   layout: "cockpit",
   standing: null,
@@ -892,6 +920,8 @@ function initMenuStage() {
     fetchRouteFile,
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
+    // The menu's world becomes the ride's, so it is built with the scenery the rider picked.
+    scenery: () => loadScenery(app.scenery),
     biome: () => app.biome,
     createView: use3d
       ? (route, scene) => {
@@ -1778,6 +1808,12 @@ async function joinRide(restored = null) {
   } else {
     app.routeFile = await fetchRouteFile(route?.id);
     app.route = new RouteGeometry(app.routeFile);
+    // `?at=<metres>` joins the ride part-way along the route instead of
+    // pedalling there first: the server places the rider, so a screenshot can be
+    // taken at a chosen spot on the island in one page load.
+    if (joinedAtMetres() !== null) {
+      app.rideAt = { routeId: app.route.id, distanceM: joinedAtMetres() };
+    }
     // The map's routes: its riders all ride one world (#14), each on their own route.
     app.rideRoute = app.route;
     app.routes = new Map([[app.route.id, app.route]]);
@@ -1808,7 +1844,7 @@ async function joinRide(restored = null) {
     screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
-    resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
+    resume: joinedAtMetres() !== null && route?.kind !== "studio" ? app.rideAt : restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
   });
   const studio = route?.kind === "studio";
   closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
@@ -2205,7 +2241,9 @@ function startRide() {
   const loop = () => {
     if (app.ride !== ride) return;
     requestAnimationFrame(loop);
+    const at = now();
     draw();
+    measureFrame(at);
     renderAfkPrompt();
   };
   requestAnimationFrame(loop);
@@ -4240,6 +4278,7 @@ function initViewPopover() {
       layout: app.layoutChoice,
       mode: app.viewMode,
       time: $("time-mode").value,
+      scenery: app.scenery,
       has3d: Boolean(app.view3d),
     }),
     onPick: (kind, id) => {
@@ -4247,6 +4286,7 @@ function initViewPopover() {
       else if (kind === "layout") setLayoutChoice(id);
       else if (kind === "mode") setViewMode(id);
       else if (kind === "time") setTimeMode(id);
+      else if (kind === "scenery") setScenery(id);
     },
   });
 }
@@ -4833,6 +4873,7 @@ function initViews() {
   $("view-2d").addEventListener("click", () => setViewMode("2d"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
   $("quality-mode").addEventListener("click", () => setQuality(app.view3d.quality === "high" ? "low" : "high"));
+  $("fps-mode").addEventListener("click", () => setShowFps(!app.showFps));
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
   setViewMode("2d", { remember: false });
@@ -4900,6 +4941,7 @@ function show3d(scene, view = null) {
   renderCameraButton();
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
   setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+  setShowFps(readSetting(FPS_KEY) === "on");
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
   // Each gym's statues (also on a view taken over from the menu, which had its own rows).
   // A workout whose café this route does not start at shows its figures at the gym here.
@@ -4968,6 +5010,57 @@ function setQuality(quality) {
   app.view3d.setQuality(quality);
   $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
   writeSetting(QUALITY_KEY, quality);
+}
+
+/** Picks how the island is drawn, and builds the world again to show it. */
+function setScenery(level) {
+  const next = SCENERY_LEVELS.includes(level) ? level : "off";
+  if (next === app.scenery) return;
+  app.scenery = next;
+  writeSetting(SCENERY_KEY, next);
+  forgetScenery();
+  app.viewPopover?.refresh();
+  buildRideWorld();
+}
+
+/** Shows or hides the frame-rate read-out, and remembers the choice. */
+function setShowFps(on) {
+  app.showFps = Boolean(on);
+  const button = $("fps-mode");
+  if (button) {
+    button.setAttribute("aria-pressed", String(app.showFps));
+    button.textContent = t(app.showFps ? "drawer.fpsOn" : "drawer.fpsOff");
+  }
+  const readout = $("hud-fps");
+  if (readout) {
+    readout.hidden = !app.showFps;
+    readout.textContent = "";
+    readout.title = t("hud.fpsTitle");
+  }
+  app.fps.reset();
+  app.fpsWrittenAt = 0;
+  writeSetting(FPS_KEY, app.showFps ? "on" : "off");
+}
+
+/**
+ * Feeds the read-out one frame. It only measures the 3D view: a 2D map that
+ * costs microseconds would flatter the numbers into meaninglessness.
+ */
+function measureFrame(time, mode = app.viewMode) {
+  if (!app.showFps) return;
+  if (mode !== "3d") {
+    app.fps.reset();
+    return;
+  }
+  app.fps.frame(time);
+  if (time - app.fpsWrittenAt < 0.5) return;
+  const reading = app.fps.read();
+  if (!reading) return;
+  app.fpsWrittenAt = time;
+  const readout = $("hud-fps");
+  if (!readout) return;
+  readout.textContent = t("hud.fps", { fps: Math.round(reading.fps), low: Math.round(reading.low) });
+  readout.hidden = false;
 }
 
 function setTimeMode(mode) {

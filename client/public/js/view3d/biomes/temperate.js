@@ -281,6 +281,24 @@ export const temperate = Object.freeze({
   flora: Object.freeze({
     /** Scenery per kilometre of road, so every route gets the same density. */
     density: Object.freeze({ trees: 270, tufts: 1450, flowers: 190, elsewhere: 0.4 }),
+    /**
+     * What a kit's colours are painted to (#117). A low-poly pack is authored
+     * in its own palette — Kenney's nature kit uses a tropical teal for leaves,
+     * which reads as the wrong island here — so each role keeps its shape and
+     * takes the colour this world gives trees: firs, leafies and bushes the
+     * biome's greens, trunks and rocks their own browns and greys.
+     *
+     * Values are the biome's own `COLORS`, so a kit and the procedural trees
+     * stand side by side and look like the same island.
+     */
+    scenery: Object.freeze({
+      firs: Object.freeze({ foliage: COLORS.firs[1], bark: COLORS.trunk }),
+      leafy: Object.freeze({ foliage: COLORS.leaves[1], bark: COLORS.trunk }),
+      bushes: Object.freeze({ foliage: COLORS.bush }),
+      rocks: Object.freeze({ foliage: COLORS.rock }),
+      // Ground detail keeps the pack's own colours: flowers are meant to be
+      // vivid, and the verge is where that belongs.
+    }),
     tree: plantTree,
     tuft: plantTuft,
     flower: plantFlower,

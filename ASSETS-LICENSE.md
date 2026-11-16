@@ -25,6 +25,32 @@ long as you:
   link to this repository, and say if you changed it;
 - **share alike**: publish your changed versions under CC BY-SA 4.0 too.
 
+## Scenery models
+
+The 3D models under `client/public/assets/scenery/` are not the contributors'
+work. They are imported from free packs and keep the licence they came with:
+**CC0 1.0** in every case, so they impose nothing on anyone using, changing or
+redistributing them.
+
+| Kit | Source | Licence |
+| --- | --- | --- |
+| `nature` | [Nature Kit 2.1](https://kenney.nl/assets/nature-kit) by Kenney | CC0 1.0 |
+| `racing` | [Racing Kit 2.0](https://kenney.nl/assets/racing-kit) by Kenney | CC0 1.0 |
+
+Each kit's `manifest.json` records the pack URL, the licence URL and the date
+the models were taken, and `make scenery-check` fails if a kit claims
+anything other than CC0. Both packs also ship their own `License.txt` saying
+CC0 1.0, which is the evidence the manifests name.
+
+**CC0 only, and this is checked, not trusted.** Quaternius also publishes a
+newer *Quaternius Asset License*, which forbids redistributing the models.
+Their pack pages still link CC0, and CC0 cannot be withdrawn, so their packs
+would stay free to redistribute — but a pack that shows the other licence is
+not imported, however good it looks: this repository is public, so a model
+here is a model everyone can download. No Quaternius pack ships yet: their
+downloads go through Google Drive folders that need a browser, so
+`nature` uses Kenney's Nature Kit instead.
+
 ## Name and logo
 
 The licence covers the copyright in the files, not the **OpenRadlr name or

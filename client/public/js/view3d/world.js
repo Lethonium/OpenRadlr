@@ -748,7 +748,7 @@ export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -788,7 +788,8 @@ export function buildScenery(
     positions.push([x, y, z]);
 
     const kind = inForest ? 0.28 + random() * 0.72 : random();
-    biome.flora.tree({ mesh, x, y, z, kind, random });
+    // A kit draws its own models; without one the biome keeps drawing cones.
+    (flora ?? biome.flora).tree({ mesh, x, y, z, kind, random });
   }
   return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
 }
@@ -800,7 +801,7 @@ export function buildScenery(
 export function buildGroundDetail(
   route,
   terrain,
-  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate } = {},
+  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate, flora = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x6a55);
   const halfWidth = roadHalfWidth(route.lanes) + VERGE;
@@ -820,13 +821,13 @@ export function buildGroundDetail(
     const p = spot();
     if (!p) continue;
     placed += 1;
-    biome.flora.tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
+    (flora ?? biome.flora).tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   for (let i = 0; i < flowers; i += 1) {
     const p = spot();
     if (!p) continue;
     placed += 1;
-    biome.flora.flower({ mesh, x: p[0], y: p[1], z: p[2], random });
+    (flora ?? biome.flora).flower({ mesh, x: p[0], y: p[1], z: p[2], random });
   }
   return { mesh: own ? mesh.build() : mesh, count: placed };
 }
@@ -967,7 +968,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, scenery = null } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -992,6 +993,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     road: new ChunkedMesh(),
     detail: new ChunkedMesh(),
     scenery: new ChunkedMesh(),
+    /** The same trees at a cheaper level of detail, drawn beyond `flora.nearRange` (#117). */
+    sceneryFar: new ChunkedMesh(),
     structures: new ChunkedMesh(),
     bright: new ChunkedMesh(),
   };
@@ -1113,16 +1116,26 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const margin = 450;
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    // The same wood again with each model's cheap twin, so trees far from the
+    // camera cost a fraction of what they do up close (#117). The far pass runs
+    // the same seed, so the trees land in the same spots at the same sizes.
+    const far = scenery?.far?.() ?? null;
+    if (far) {
+      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
+    }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
+    // A kit's tufts and flowers cost more each, so its flora asks for fewer.
+    const perKit = scenery?.detailDensity ?? {};
     buildGroundDetail(r, terrain, {
       biome,
       water: ground.water,
       into: chunks.detail,
-      tufts: Math.round(density.tufts * km * detail),
-      flowers: Math.round(density.flowers * km * detail),
+      tufts: Math.round(density.tufts * km * detail * (perKit.tufts ?? 1)),
+      flowers: Math.round(density.flowers * km * detail * (perKit.flowers ?? 1)),
       blocked: detailBlocked,
+      flora: scenery,
     });
   }
 
@@ -1140,6 +1153,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     waterLevel: ground.water,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
+    // Beyond this the far trees are drawn instead of the near ones (#117).
+    sceneryNearRange: scenery?.nearRange ?? null,
     meshes: {
       horizon: ground.mesh,
       arches: buildArches(route, { biome }),

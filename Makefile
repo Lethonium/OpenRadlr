@@ -181,7 +181,11 @@ secrets-baseline: ## Rebuild .secrets.baseline after reviewing the new findings
 	uvx --from detect-secrets==1.5.0 detect-secrets scan --baseline .secrets.baseline
 
 .PHONY: check
-check: lint test ## Everything CI runs
+check: lint test scenery-check ## Everything CI runs
+
+.PHONY: scenery-check
+scenery-check: ## Refuse scenery models that are not CC0 (see ASSETS-LICENSE.md)
+	$(NODE) tools/scenery/check.mjs
 
 .PHONY: routes
 routes: ## Regenerate the bundled map's road network and routes (tools/valley-map.mjs)

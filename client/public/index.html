@@ -82,6 +82,7 @@
     <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
     <link rel="modulepreload" href="js/view/events.js" />
+    <link rel="modulepreload" href="js/view/fpsMeter.js" />
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
     <link rel="modulepreload" href="js/view/ftpProvenance.js" />
     <link rel="modulepreload" href="js/view/ftpTestView.js" />
@@ -114,6 +115,7 @@
     <link rel="modulepreload" href="js/view3d/biomes/index.js" />
     <link rel="modulepreload" href="js/view3d/highlight.js" />
     <link rel="modulepreload" href="js/view3d/menuCamera.js" />
+    <link rel="modulepreload" href="js/view3d/scenery/load.js" />
     <link rel="modulepreload" href="js/view3d/studioCamera.js" />
     <link rel="modulepreload" href="js/view3d/studioScene.js" />
     <link rel="modulepreload" href="js/view3d/view3d.js" />
@@ -722,6 +724,7 @@
               <span id="group-gap" class="pill glass" hidden></span>
               <span id="sharing-line" class="pill glass" hidden></span>
               <span id="power-only" class="pill glass" title="Your trainer only sends power: resistance won't follow the road" hidden data-i18n="ride.powerOnly" data-i18n-attr="title:ride.yourTrainerOnlySends">Power only</span>
+              <span id="hud-fps" class="pill glass hud-fps" hidden></span>
             </div>
 
             <div id="junction" class="junction glass route-only" role="group" aria-labelledby="junction-title" hidden>
@@ -989,6 +992,7 @@
                     <div id="scene-controls" class="scene-controls">
                       <button type="button" id="camera-mode" class="toggle" title="Camera (C)" data-i18n="drawer.cameraChase" data-i18n-attr="title:ride.cameraC">Camera: Chase</button>
                       <button type="button" id="quality-mode" class="toggle" title="Lower this if the ride stutters" data-i18n="drawer.graphicsHigh" data-i18n-attr="title:drawer.lowerThisIfThe">Graphics: High</button>
+                      <button type="button" id="fps-mode" class="toggle" aria-pressed="false" title="Show the frame rate, to see what a scene costs" data-i18n="drawer.fpsOff" data-i18n-attr="title:drawer.fpsHint">Frame rate: hidden</button>
                       <select id="time-mode" aria-label="Time of day" title="Time of day (T)" data-i18n-attr="title:drawer.timeOfDayT,aria-label:drawer.timeOfDay">
                         <option value="auto" data-i18n="drawer.timeAuto">Time: auto</option>
                         <option value="day" data-i18n="drawer.timeDay">Day</option>

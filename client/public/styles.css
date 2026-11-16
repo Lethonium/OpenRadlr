@@ -1856,6 +1856,13 @@ body.riding {
   white-space: nowrap;
 }
 
+/* The optional frame-rate read-out (#117): monospaced so the digits do not
+   jitter the pills beside it as the number changes. */
+.hud-fps {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
 .pill {
   padding: 6px 14px;
   border-radius: 999px;
