@@ -30,7 +30,8 @@ import { inflateSync } from "node:zlib";
 /** Positions in centimetres: 1 = 1 m, so this is 0.01 m. */
 const QUANTUM = 100;
 
-const q = (value) => Math.round(value * QUANTUM) / QUANTUM;
+// `+ 0` turns -0 into 0, so a part turned about its own edge reads the same.
+const q = (value) => Math.round(value * QUANTUM) / QUANTUM + 0;
 
 // ------------------------------------------------------------------- GLB ---
 
@@ -88,20 +89,22 @@ function indicesOf(json, bin, primitive, vertexCount) {
  * A model as the renderer wants it: `triangles` is a flat list, each entry one
  * corner as `[x, y, z, r, g, b]`, three corners per face.
  */
-export function importGlb(file, { name = null, scale = 1, flip = false, baseDir = null } = {}) {
+export function importGlb(file, { name = null, scale = 1, flip = false, baseDir = null, origin = "base" } = {}) {
   const { json, bin } = splitGlb(file);
   // A pack's own name for the model is the one worth keeping.
   name ??= json.nodes?.find((node) => node.mesh !== undefined)?.name ?? json.meshes?.[0]?.name ?? "model";
   // A model is usually several primitives, one per material: a tree is bark and
   // leaves. Reading only the first would draw every tree in one colour.
-  const primitives = json.meshes?.flatMap((mesh) => mesh.primitives ?? []) ?? [];
+  // Each mesh is drawn where its node puts it: a door is a child node moved
+  // into its wall, and dropping the move leaves it standing in the room.
+  const primitives = meshPlacements(json).flatMap(({ mesh, matrix }) => (json.meshes[mesh]?.primitives ?? []).map((primitive) => ({ primitive, matrix })));
   if (primitives.length === 0) throw new Error(`${name}: no triangles, so there is nothing to draw`);
 
   const triangles = [];
   let textured = false;
-  for (const primitive of primitives) {
+  for (const { primitive, matrix } of primitives) {
     const attributes = primitive.attributes ?? {};
-    const positions = accessor(json, bin, attributes.POSITION, 3);
+    const positions = transformed(accessor(json, bin, attributes.POSITION, 3), matrix);
     const indices = indicesOf(json, bin, primitive, positions.length / 3);
     const uvs = attributes.TEXCOORD_0 !== undefined ? accessor(json, bin, attributes.TEXCOORD_0, 2) : null;
     const map = uvs ? colourMapOf(json, bin, primitive, { baseDir }) : null;
@@ -118,7 +121,65 @@ export function importGlb(file, { name = null, scale = 1, flip = false, baseDir 
       }
     }
   }
-  return finish(triangles, { name, scale, textured });
+  return finish(triangles, { name, scale, textured, origin });
+}
+
+/**
+ * Every mesh the default scene draws, with the matrix that places it: its
+ * node's translation, rotation and scale, after its parents'. A file with no
+ * scene draws each mesh once where it was modelled.
+ */
+function meshPlacements(json) {
+  const nodes = json.nodes ?? [];
+  const roots = json.scenes?.[json.scene ?? 0]?.nodes;
+  if (!roots) return (json.meshes ?? []).map((_, mesh) => ({ mesh, matrix: IDENTITY }));
+  const found = [];
+  const visit = (index, parent) => {
+    const node = nodes[index];
+    const matrix = multiply(parent, nodeMatrix(node));
+    if (node.mesh !== undefined) found.push({ mesh: node.mesh, matrix });
+    for (const child of node.children ?? []) visit(child, matrix);
+  };
+  for (const root of roots) visit(root, IDENTITY);
+  return found;
+}
+
+/** Column-major 4 × 4, as glTF writes them. */
+const IDENTITY = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+function nodeMatrix(node) {
+  if (Array.isArray(node.matrix)) return node.matrix;
+  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
+  const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1];
+  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
+  return [
+    (1 - 2 * (y * y + z * z)) * sx, 2 * (x * y + z * w) * sx, 2 * (x * z - y * w) * sx, 0,
+    2 * (x * y - z * w) * sy, (1 - 2 * (x * x + z * z)) * sy, 2 * (y * z + x * w) * sy, 0,
+    2 * (x * z + y * w) * sz, 2 * (y * z - x * w) * sz, (1 - 2 * (x * x + y * y)) * sz, 0,
+    tx, ty, tz, 1,
+  ];
+}
+
+function multiply(a, b) {
+  const out = new Array(16).fill(0);
+  for (let col = 0; col < 4; col += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      for (let k = 0; k < 4; k += 1) out[col * 4 + row] += a[k * 4 + row] * b[col * 4 + k];
+    }
+  }
+  return out;
+}
+
+function transformed(positions, m) {
+  if (m === IDENTITY) return positions;
+  const out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    const [x, y, z] = [positions[i], positions[i + 1], positions[i + 2]];
+    out[i] = m[0] * x + m[4] * y + m[8] * z + m[12];
+    out[i + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+    out[i + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  }
+  return out;
 }
 
 /** A material's plain colour, for packs that are not textured at all. */
@@ -313,7 +374,7 @@ export function importObj(text, { name = "model", mtl = "", scale = 1 } = {}) {
 // ---------------------------------------------------------------- shared ---
 
 /** Re-origins to the base centre, scales, and quantises. */
-function finish(triangles, { name, scale = 1, textured = false }) {
+function finish(triangles, { name, scale = 1, textured = false, origin = "base" }) {
   if (triangles.length === 0) throw new Error(`${name}: no triangles`);
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
@@ -327,7 +388,9 @@ function finish(triangles, { name, scale = 1, textured = false }) {
   }
   // Stand on the ground, centred on the footprint: an instance is placed by a
   // point on the terrain, not by a bounding box.
-  const centre = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
+  // A part of a modular kit keeps the pack's own origin instead: its place on
+  // the tile is what lets it be assembled with the others.
+  const centre = origin === "keep" ? [0, 0, 0] : [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
   const placed = triangles.map(([x, y, z, r, g, b]) => [
     q((x - centre[0]) * scale),
     q((y - centre[1]) * scale),
@@ -337,8 +400,8 @@ function finish(triangles, { name, scale = 1, textured = false }) {
     q3(b),
   ]);
   const bounds = {
-    min: [(min[0] - centre[0]) * scale, 0, (min[2] - centre[2]) * scale].map(q),
-    max: [(max[0] - centre[0]) * scale, (max[1] - min[1]) * scale, (max[2] - centre[2]) * scale].map(q),
+    min: [(min[0] - centre[0]) * scale, (min[1] - centre[1]) * scale, (min[2] - centre[2]) * scale].map(q),
+    max: [(max[0] - centre[0]) * scale, (max[1] - centre[1]) * scale, (max[2] - centre[2]) * scale].map(q),
   };
   return { name, triangles: placed, bounds, textured, vertices: placed.length };
 }

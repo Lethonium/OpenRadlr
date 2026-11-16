@@ -45,7 +45,7 @@ function glbWithAtlas(options = {}) {
  * than reusing the fixture writer so a test can describe exactly the model it
  * needs; the fixture the importer is tested on is the committed `quad.glb`.
  */
-function buildGlb({ positions, uvs, pixels, image, materials = true }) {
+function buildGlb({ positions, uvs, pixels, image, materials = true, nodes = [{ mesh: 0, name: "swatches" }], roots = [0] }) {
   const pos = new Float32Array(positions);
   const uv = new Float32Array(uvs);
   const normals = new Float32Array(positions.length).map((_, i) => (i % 3 === 2 ? 1 : 0));
@@ -64,8 +64,8 @@ function buildGlb({ positions, uvs, pixels, image, materials = true }) {
   const json = {
     asset: { version: "2.0" },
     scene: 0,
-    scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: "swatches" }],
+    scenes: [{ nodes: roots }],
+    nodes,
     meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, material: 0 }] }],
     materials: [materials ? { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } : { name: "wood", pbrMetallicRoughness: { baseColorFactor: [0.4, 0.25, 0.5, 1] } }],
     textures: [{ source: 0 }],
@@ -293,4 +293,30 @@ test("a swatch atlas gives a model many colours, not one", () => {
   for (const swatch of SWATCHES) {
     assert.equal(colours.has(swatch.join(",")), true, `missing swatch ${swatch}`);
   }
+});
+
+// Kenney's town kit is a tile grid: a wall stands on the edge of its tile, and a
+// door is a child node moved into its wall. Assembling a house needs both kept.
+const STRIP = { positions: [0, 0, 0, 1, 0, 0, 1, 1, 0], uvs: [0, 0, 0, 0, 0, 0], pixels: SWATCHES, materials: false };
+
+test("origin: keep leaves a part where the pack put it on its tile", () => {
+  const { glb } = buildGlb(STRIP);
+  const model = importGlb(glb, { origin: "keep" });
+  assert.deepEqual(model.bounds, { min: [0, 0, 0], max: [1, 1, 0] });
+});
+
+test("a node's translation moves its mesh", () => {
+  const { glb } = buildGlb({ ...STRIP, nodes: [{ mesh: 0, translation: [10, 0, 2] }] });
+  const model = importGlb(glb, { origin: "keep" });
+  assert.deepEqual(model.bounds, { min: [10, 0, 2], max: [11, 1, 2] });
+});
+
+test("a child node is placed by its parent's transform as well as its own", () => {
+  const { glb } = buildGlb({
+    ...STRIP,
+    // A quarter turn about y: +x becomes -z.
+    nodes: [{ children: [1], rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2] }, { mesh: 0, translation: [3, 0, 0] }],
+  });
+  const model = importGlb(glb, { origin: "keep" });
+  assert.deepEqual(model.bounds, { min: [0, 0, -4], max: [0, 1, -3] });
 });
