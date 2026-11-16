@@ -245,3 +245,47 @@ description.
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
 - The app icon is scaled up from the 512 px maskable icon, the largest master
   in the repo. A 1024 px original would look sharper on the App Store.
+
+## App release information on requests
+
+The native web view appends its platform and the installed package's version and
+build number to the standard HTTP user agent. For example:
+
+```text
+OpenRadlr/0.1.0 (android; build/3)
+OpenRadlr/1.0 (ios; build/1)
+```
+
+This is set before the first navigation and also accompanies the web view's API
+requests and WebSocket upgrade. It describes the native shell; `client_version`
+in the WebSocket protocol continues to describe the web client served by the
+server. A client can forge a user agent, so it is not an authentication signal.
+
+The server exports `openradlr_client_requests_total` on its existing
+`/internal/metrics` endpoint, grouped by `client` (`android`, `ios`, or `browser`),
+`app_version` and `app_build`. The `browser` bucket also includes older app builds
+without the marker and requests with an invalid marker. Health checks and metrics
+scrapes are excluded. WebSocket upgrades count as HTTP requests; individual
+WebSocket messages do not.
+
+These are request totals, not unique users, installations or sessions. The
+counter keeps no raw user agents, IP addresses, device identifiers, rider names,
+request paths or individual request records. It lives in memory and resets when
+the server restarts. At most 32 app release combinations have separate counters;
+additional combinations share an `other` version/build bucket per platform, so
+untrusted headers cannot create unlimited metric series. Keep the endpoint on
+the host's private monitoring network as described in [Deployment](deploy.md).
+
+Example PromQL for a dashboard connected to the endpoint:
+
+```promql
+sum by (client) (rate(openradlr_client_requests_total[5m]))
+```
+
+Requests by Android release over the last day:
+
+```promql
+sum by (app_version, app_build) (
+  increase(openradlr_client_requests_total{client="android"}[24h])
+)
+```
