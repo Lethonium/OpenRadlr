@@ -1,0 +1,98 @@
+{
+  "name": "fantasy-town",
+  "licence": "CC0-1.0",
+  "provenance": {
+    "pack": "https://kenney.nl/assets/fantasy-town-kit",
+    "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "taken": "2026-11-16",
+    "note": "Kenney's Fantasy Town Kit 2.0, whose own License.txt says CC0 1.0. Cottages, the church and the windmill are assembled from the pack's parts by tools/scenery/assemble.mjs and recoloured; the props are the pack's models as they are."
+  },
+  "models": {
+    "cottage-a": {
+      "role": "houses",
+      "file": "cottage-a",
+      "far": "cottage-a-far"
+    },
+    "cottage-b": {
+      "role": "houses",
+      "file": "cottage-b",
+      "far": "cottage-b-far"
+    },
+    "cottage-c": {
+      "role": "houses",
+      "file": "cottage-c",
+      "far": "cottage-c-far"
+    },
+    "cottage-d": {
+      "role": "houses",
+      "file": "cottage-d",
+      "far": "cottage-d-far"
+    },
+    "cottage-e": {
+      "role": "houses",
+      "file": "cottage-e",
+      "far": "cottage-e-far"
+    },
+    "cottage-f": {
+      "role": "houses",
+      "file": "cottage-f",
+      "far": "cottage-f-far"
+    },
+    "cottage-g": {
+      "role": "houses",
+      "file": "cottage-g",
+      "far": "cottage-g-far"
+    },
+    "cottage-h": {
+      "role": "houses",
+      "file": "cottage-h",
+      "far": "cottage-h-far"
+    },
+    "church": {
+      "role": "church",
+      "file": "church",
+      "far": "church-far"
+    },
+    "windmill": {
+      "role": "windmills",
+      "file": "windmill",
+      "far": "windmill-far"
+    },
+    "fountain": {
+      "role": "fountains",
+      "file": "fountain"
+    },
+    "stall": {
+      "role": "stalls",
+      "file": "stall"
+    },
+    "stall-red": {
+      "role": "stalls",
+      "file": "stall-red"
+    },
+    "stall-green": {
+      "role": "stalls",
+      "file": "stall-green"
+    },
+    "bench": {
+      "role": "benches",
+      "file": "bench"
+    },
+    "lantern": {
+      "role": "lanterns",
+      "file": "lantern"
+    },
+    "fence": {
+      "role": "fences",
+      "file": "fence"
+    },
+    "hedge": {
+      "role": "hedges",
+      "file": "hedge"
+    },
+    "cart": {
+      "role": "carts",
+      "file": "cart"
+    }
+  }
+}

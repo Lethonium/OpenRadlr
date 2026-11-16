@@ -36,11 +36,17 @@ redistributing them.
 | --- | --- | --- |
 | `nature` | [Nature Kit 2.1](https://kenney.nl/assets/nature-kit) by Kenney | CC0 1.0 |
 | `racing` | [Racing Kit 2.0](https://kenney.nl/assets/racing-kit) by Kenney | CC0 1.0 |
+| `fantasy-town` | [Fantasy Town Kit 2.0](https://kenney.nl/assets/fantasy-town-kit) by Kenney | CC0 1.0 |
 
 Each kit's `manifest.json` records the pack URL, the licence URL and the date
 the models were taken, and `make scenery-check` fails if a kit claims
-anything other than CC0. Both packs also ship their own `License.txt` saying
+anything other than CC0. Every pack also ships its own `License.txt` saying
 CC0 1.0, which is the evidence the manifests name.
+
+The `fantasy-town` buildings (cottages, church, windmill) are assembled from
+the pack's wall and roof parts by `tools/scenery/assemble.mjs` and recoloured;
+they are combinations of Kenney's models, under the same CC0, and the pack's
+`License.txt` sits beside them.
 
 **CC0 only, and this is checked, not trusted.** Quaternius also publishes a
 newer *Quaternius Asset License*, which forbids redistributing the models.
