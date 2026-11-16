@@ -90,26 +90,41 @@ function indicesOf(json, bin, primitive, vertexCount) {
  */
 export function importGlb(file, { name = null, scale = 1, flip = false, baseDir = null } = {}) {
   const { json, bin } = splitGlb(file);
-  const primitive = primitiveOf(json);
   // A pack's own name for the model is the one worth keeping.
   name ??= json.nodes?.find((node) => node.mesh !== undefined)?.name ?? json.meshes?.[0]?.name ?? "model";
-  const attributes = primitive.attributes ?? {};
-  const positions = accessor(json, bin, attributes.POSITION, 3);
-  const vertexCount = positions.length / 3;
-  const indices = indicesOf(json, bin, primitive, vertexCount);
-  const uvs = attributes.TEXCOORD_0 !== undefined ? accessor(json, bin, attributes.TEXCOORD_0, 2) : null;
-  const map = uvs ? colourMapOf(json, bin, primitive, { baseDir }) : null;
+  // A model is usually several primitives, one per material: a tree is bark and
+  // leaves. Reading only the first would draw every tree in one colour.
+  const primitives = json.meshes?.flatMap((mesh) => mesh.primitives ?? []) ?? [];
+  if (primitives.length === 0) throw new Error(`${name}: no triangles, so there is nothing to draw`);
 
   const triangles = [];
-  for (let i = 0; i + 2 < indices.length; i += 3) {
-    const corners = [indices[i], indices[i + 1], indices[i + 2]];
-    if (flip) corners.reverse();
-    const colour = map ? map.at(centroidUv(corners, uvs)) : [1, 1, 1];
-    for (const corner of corners) {
-      triangles.push([positions[corner * 3], positions[corner * 3 + 1], positions[corner * 3 + 2], ...colour]);
+  let textured = false;
+  for (const primitive of primitives) {
+    const attributes = primitive.attributes ?? {};
+    const positions = accessor(json, bin, attributes.POSITION, 3);
+    const indices = indicesOf(json, bin, primitive, positions.length / 3);
+    const uvs = attributes.TEXCOORD_0 !== undefined ? accessor(json, bin, attributes.TEXCOORD_0, 2) : null;
+    const map = uvs ? colourMapOf(json, bin, primitive, { baseDir }) : null;
+    textured ||= Boolean(map);
+    // No map is normal, not a failure: most low-poly packs colour each material
+    // with a plain factor, and those are the colours worth keeping.
+    const flat = baseColourOf(json, primitive);
+    for (let i = 0; i + 2 < indices.length; i += 3) {
+      const corners = [indices[i], indices[i + 1], indices[i + 2]];
+      if (flip) corners.reverse();
+      const colour = map ? map.at(centroidUv(corners, uvs)) : flat;
+      for (const corner of corners) {
+        triangles.push([positions[corner * 3], positions[corner * 3 + 1], positions[corner * 3 + 2], ...colour]);
+      }
     }
   }
-  return finish(triangles, { name, scale, textured: Boolean(map) });
+  return finish(triangles, { name, scale, textured });
+}
+
+/** A material's plain colour, for packs that are not textured at all. */
+function baseColourOf(json, primitive) {
+  const factor = json.materials?.[primitive.material ?? 0]?.pbrMetallicRoughness?.baseColorFactor;
+  return Array.isArray(factor) && factor.length >= 3 ? factor.slice(0, 3) : [1, 1, 1];
 }
 
 function centroidUv(corners, uvs) {

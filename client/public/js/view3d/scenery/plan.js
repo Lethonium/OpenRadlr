@@ -7,7 +7,7 @@
  * styled model instead of cones, so no placement rule changes.
  */
 import { placement } from "../math.js";
-import { pickLod } from "./kits.js";
+import { fileOf, pickLod } from "./kits.js";
 import { buildMesh } from "./models.js";
 
 /**
@@ -37,7 +37,7 @@ function meshesOf(kit, readModelFile) {
   if (kit.meshes) return kit.meshes;
   const meshes = {};
   for (const [id, model] of Object.entries(kit.models)) {
-    for (const variant of [model.near, model.far]) {
+    for (const variant of [fileOf(model), model.far]) {
       if (variant === undefined || meshes[variant]) continue;
       // `append` takes a built mesh (plain typed arrays), not a MeshBuilder.
       meshes[variant] = buildMesh(readModelFile(variant), id).build();
@@ -52,18 +52,23 @@ function meshesOf(kit, readModelFile) {
  * model of that role, turned and sized from the seeded random the world passes
  * in, so the same route always grows the same wood.
  */
-export function planFlora(kit, { nearRange = 150, readModelFile, biome = null } = {}) {
+/** What the scenery builder asks for: the role that stands in for its trees. */
+export const TREE_ROLE = "trees";
+
+export function planFlora(kit, { nearRange = 150, readModelFile, biome = null, role = TREE_ROLE } = {}) {
   return {
     /** The roles this kit can draw, so a caller knows what to ask for. */
     roles: kit.roles,
-    tree({ mesh, x, y, z, random, role = kit.roles[0] }) {
-      const ids = kit.byRole[role];
+    tree({ mesh, x, y, z, random, role: asked = role }) {
+      const ids = kit.byRole[asked];
       if (!ids || ids.length === 0) return; // a role the kit does not hold draws nothing
       const model = kit.models[ids[Math.floor(random() * ids.length)]];
       const yaw = random() * Math.PI * 2;
       const [minSize = 1, maxSize = minSize] = model.sizes ?? [1];
       const size = (minSize + random() * (maxSize - minSize)) * (model.height ?? 1);
-      const variant = pickLod(model, 0, nearRange);
+      // One level of detail for now: the far variant is chosen by the view, which
+      // knows the distance; the world build places from the map, at one size.
+      const variant = model.far !== undefined ? pickLod(model, 0, nearRange) : fileOf(model);
       void biome;
       mesh.append(meshesOf(kit, readModelFile)[variant], scaled(placement([x, y, z], yaw, 0), size));
     },

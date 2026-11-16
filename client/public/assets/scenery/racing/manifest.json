@@ -1,0 +1,78 @@
+{
+  "name": "racing",
+  "licence": "CC0-1.0",
+  "provenance": {
+    "pack": "https://kenney.nl/assets/racing-kit",
+    "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "taken": "2026-11-16",
+    "note": "Racing Kit 2.0 by Kenney. Its own License.txt says CC0 1.0 Universal, and that file ships inside the pack."
+  },
+  "models": {
+    "treeLarge": {
+      "role": "trees",
+      "file": "treeLarge",
+      "height": 5.6,
+      "sizes": [
+        0.85,
+        1.25
+      ]
+    },
+    "treeSmall": {
+      "role": "trees",
+      "file": "treeSmall",
+      "height": 3.4,
+      "sizes": [
+        0.8,
+        1.3
+      ]
+    },
+    "fenceStraight": {
+      "role": "hedges",
+      "file": "fenceStraight",
+      "height": 3.0,
+      "sizes": [
+        0.9,
+        1.05
+      ]
+    },
+    "fenceCurved": {
+      "role": "hedges",
+      "file": "fenceCurved",
+      "height": 3.0,
+      "sizes": [
+        0.9,
+        1.05
+      ]
+    },
+    "barrierRed": {
+      "role": "props",
+      "file": "barrierRed",
+      "height": 9
+    },
+    "barrierWhite": {
+      "role": "props",
+      "file": "barrierWhite",
+      "height": 9
+    },
+    "barrierWall": {
+      "role": "props",
+      "file": "barrierWall",
+      "height": 9
+    },
+    "flagRed": {
+      "role": "props",
+      "file": "flagRed",
+      "height": 5
+    },
+    "flagGreen": {
+      "role": "props",
+      "file": "flagGreen",
+      "height": 5
+    },
+    "flagCheckers": {
+      "role": "props",
+      "file": "flagCheckers",
+      "height": 5
+    }
+  }
+}

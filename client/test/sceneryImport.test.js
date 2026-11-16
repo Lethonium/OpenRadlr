@@ -29,8 +29,9 @@ const QUAD_WITH_ATLAS = glbWithAtlas();
  * A GLB whose faces each sit in a different corner of a 2 × 2 swatch atlas,
  * the shape of a real pack's colour map.
  */
-function glbWithAtlas() {
+function glbWithAtlas(options = {}) {
   const { glb } = buildGlb({
+    ...options,
     positions: [-4, 0, 0, -2, 0, 0, -2, 2, 0, -2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 2, 2, 0, 2, 0, 0, 4, 0, 0, 4, 2, 0],
     uvs: [0.1, 0.1, 0.4, 0.1, 0.4, 0.4, 0.6, 0.1, 0.9, 0.1, 0.9, 0.4, 0.6, 0.6, 0.9, 0.6, 0.9, 0.9, 0.1, 0.6, 0.4, 0.6, 0.4, 0.9],
     pixels: SWATCHES,
@@ -43,7 +44,7 @@ function glbWithAtlas() {
  * than reusing the fixture writer so a test can describe exactly the model it
  * needs; the fixture the importer is tested on is the committed `quad.glb`.
  */
-function buildGlb({ positions, uvs, pixels, image }) {
+function buildGlb({ positions, uvs, pixels, image, materials = true }) {
   const pos = new Float32Array(positions);
   const uv = new Float32Array(uvs);
   const normals = new Float32Array(positions.length).map((_, i) => (i % 3 === 2 ? 1 : 0));
@@ -65,7 +66,7 @@ function buildGlb({ positions, uvs, pixels, image }) {
     scenes: [{ nodes: [0] }],
     nodes: [{ mesh: 0, name: "swatches" }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, material: 0 }] }],
-    materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+    materials: [materials ? { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } : { name: "wood", pbrMetallicRoughness: { baseColorFactor: [0.4, 0.25, 0.5, 1] } }],
     textures: [{ source: 0 }],
     images: [image ? { ...image, name: "colormap" } : { bufferView: 3, mimeType: "image/png" }],
     accessors: [
@@ -194,6 +195,16 @@ function glbWithAtlasWithImage(image) {
 test("a textured face reports the texel it read, so a wrong colour map is visible", () => {
   const model = importGlb(QUAD);
   assert.equal(model.textured, true);
+});
+
+test("an untextured model takes its material's plain colour", () => {
+  // Most low-poly packs colour each material with a factor rather than a map.
+  // Falling back to white for those would import a whole pack as blank shapes.
+  const glb = glbWithAtlas({ materials: false });
+  const model = importGlb(glb);
+  assert.equal(model.textured, false);
+  const colours = new Set(model.triangles.map(([, , , r, g, b]) => `${r},${g},${b}`));
+  assert.deepEqual([...colours], ["0.4,0.25,0.5"], "the model's own colour, not white");
 });
 
 test("an untextured OBJ takes its colours from the material", () => {

@@ -23,12 +23,14 @@ export function indexKit(manifest, { name = manifest?.name ?? "kit" } = {}) {
   const models = {};
   const declared = manifest.models ?? {};
   for (const [id, model] of Object.entries(declared)) {
+    // `near`/`far` name other models of the kit (a cheaper level of detail);
+    // `file` is a file name, checked by the loader instead.
     for (const variant of [model.near, model.far]) {
-      if (variant === undefined) continue;
-      if (!(variant in declared)) {
+      if (variant !== undefined && !(variant in declared)) {
         throw new Error(`${name}: model "${id}" uses "${variant}", which the kit does not hold`);
       }
     }
+    if (fileOf(model) === undefined) throw new Error(`${name}: model "${id}" names no file to draw`);
     models[id] = model;
   }
   const byRole = {};
@@ -42,4 +44,12 @@ export function indexKit(manifest, { name = manifest?.name ?? "kit" } = {}) {
 /** Which of a model's variants to draw at `distance`: the near one within range. */
 export function pickLod(model, distance, nearRange) {
   return model.far !== undefined && distance > nearRange ? model.far : model.near;
+}
+
+/**
+ * The file holding a model. A manifest names it `near` (with an optional `far`
+ * for distance), or plainly `file` when the kit has only one level of detail.
+ */
+export function fileOf(model) {
+  return model.near ?? model.file;
 }

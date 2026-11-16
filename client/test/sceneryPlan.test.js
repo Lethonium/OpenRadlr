@@ -35,7 +35,7 @@ const KIT = {
   licence: "CC0-1.0",
   provenance: { pack: "https://quaternius.com/packs/ultimatenature.html", licence: "https://creativecommons.org/publicdomain/zero/1.0/", taken: "2026-11-16" },
   models: {
-    pine: { role: "ridges", height: 1, near: "pine" },
+    pine: { role: "trees", height: 1, near: "pine" },
   },
 };
 
@@ -56,8 +56,8 @@ test("a model reads back into a MeshBuilder", () => {
 
 test("a kit indexes its models by role", () => {
   const kit = indexKit(KIT);
-  assert.deepEqual(kit.roles, ["ridges"]);
-  assert.equal(kit.byRole.ridges.length, 1);
+  assert.deepEqual(kit.roles, ["trees"]);
+  assert.equal(kit.byRole.trees.length, 1);
 });
 
 test("a kit that is not CC0 is refused, with its name", () => {
@@ -66,7 +66,7 @@ test("a kit that is not CC0 is refused, with its name", () => {
 });
 
 test("a model naming a variant the kit does not hold is refused", () => {
-  const bad = { ...KIT, models: { pine: { role: "ridges", near: "gone" } } };
+  const bad = { ...KIT, models: { pine: { role: "trees", near: "gone" } } };
   assert.throws(() => indexKit(bad), /gone/);
 });
 
@@ -95,7 +95,7 @@ test("the flora draws the model where it is asked to, from the random it is give
 });
 
 test("the flora asks the random for its size, so instances differ", () => {
-  const flora = floraOf({ ...KIT, models: { pine: { role: "ridges", near: "pine", sizes: [1, 3] } } });
+  const flora = floraOf({ ...KIT, models: { pine: { role: "trees", near: "pine", sizes: [1, 3] } } });
   const heightWith = (r) => {
     const mesh = new MeshBuilder();
     flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(r) });
@@ -112,6 +112,24 @@ test("a kit with no model for the asked role draws nothing rather than crashing"
   const mesh = new MeshBuilder();
   flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(0.5), role: "house" });
   assert.equal(mesh.vertexCount, 0);
+});
+
+test("trees are drawn by the trees role, not whichever role the kit happens to list first", () => {
+  // A kit holds fences and flags beside its trees; the scenery builder asks for
+  // trees, and must get trees even though "hedges" sorts before "trees".
+  const kit = indexKit({
+    ...KIT,
+    models: {
+      fence: { role: "hedges", near: "pine" },
+      pine: { role: "trees", near: "pine" },
+    },
+  });
+  const flora = planFlora(kit, { nearRange: 150, readModelFile: () => MODEL });
+  const mesh = new MeshBuilder();
+  flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(0.5) });
+  // The pine stands 4 tall; a fence-shaped answer would not.
+  const ys = Array.from(mesh.positions.data.slice(0, mesh.positions.length)).filter((_, i) => i % 3 === 1);
+  assert.equal(Math.max(...ys), 4);
 });
 
 test("the flora turns each instance, so a wood is not a grid of copies", () => {
