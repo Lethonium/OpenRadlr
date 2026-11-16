@@ -36,6 +36,8 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
+import { loadRiders } from "./profile/riders.js";
+import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
@@ -151,14 +153,14 @@ const TICKER_ITEMS = 3;
 const TICKER_SECONDS = 9;
 const readSetting = (key) => {
   try {
-    return localStorage.getItem(key);
+    return riderStore.getItem(key);
   } catch {
     return null;
   }
 };
 const writeSetting = (key, value) => {
   try {
-    localStorage.setItem(key, value);
+    riderStore.setItem(key, value);
   } catch {
     // Settings are a convenience; ignore unavailable storage.
   }
@@ -263,7 +265,25 @@ function buildRideWorld() {
     });
 }
 
-const profiles = new ProfileStore();
+/** localStorage, or undefined where even touching it throws. */
+const rawStorage = (() => {
+  try {
+    return localStorage;
+  } catch {
+    return undefined;
+  }
+})();
+/** The riders on this device and which one is active (#112). */
+/**
+ * The roster: `{active, ids}`. Module-level rather than on `app`, because the `app` literal
+ * itself reads rider storage (`profiles.load()`) before `app` exists.
+ */
+const riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
+const activeRider = () => riders.active;
+/** Everything that belongs to the active rider; device keys go through `rawStorage`. */
+const riderStore = riderStorage(rawStorage, activeRider);
+
+const profiles = new ProfileStore({ storage: riderStore });
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
@@ -381,11 +401,11 @@ const app = {
   /** The autosaved ride "Continue" picks up: `{snapshot, photos}`. */
   restored: null,
   /** The ride autosaved in this browser (#73), and the one the start menu offers. */
-  autosave: new RideAutosave({ store: indexedDbStore() }),
+  autosave: new RideAutosave({ store: indexedDbStore(() => riderDbName("openradlr-autosave", activeRider())) }),
   /** Every finished ride, kept locally (#48, #83). */
-  history: new RideHistory({ store: indexedDbStore("openradlr-history") }),
+  history: new RideHistory({ store: indexedDbStore(() => riderDbName("openradlr-history", activeRider())) }),
   /** My best lap per route, ridden again by a ghost. */
-  ghosts: new GhostStore({ store: indexedDbStore("openradlr-ghosts") }),
+  ghosts: new GhostStore({ store: indexedDbStore(() => riderDbName("openradlr-ghosts", activeRider())) }),
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -522,13 +542,9 @@ function renderLanguageSelect() {
   select.hidden = options.length < 2;
 }
 
-/** localStorage, or undefined where even touching it throws. */
+/** The active rider's storage (the roster and device keys live outside it). */
 function browserStorage() {
-  try {
-    return localStorage;
-  } catch {
-    return undefined;
-  }
+  return riderStore;
 }
 
 function changeLanguage(code) {
@@ -3324,7 +3340,7 @@ function submitGoalForm() {
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
-  return { storage: browserStorage(), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
 }
 
 /** The "Your data" page: each item with its count, export and delete. */
