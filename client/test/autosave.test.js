@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTOSAVE_MAX_AGE_MS, RideAutosave, continueAllowed, unfinishedLabel } from "../public/js/ride/rideAutosave.js";
+import {
+  AUTOSAVE_MAX_AGE_MS,
+  RideAutosave,
+  continueAllowed,
+  deleteIndexedDb,
+  indexedDbStore,
+  unfinishedLabel,
+} from "../public/js/ride/rideAutosave.js";
 
 /** The store contract on a Map. */
 function mapStore() {
@@ -117,4 +124,51 @@ test("saving reports whether the recovery copy was written", async () => {
   assert.equal(await good.save(snapshot()), true);
   const bad = new RideAutosave({ store: { put: async () => { throw new Error("quota"); } }, log: () => {} });
   assert.equal(await bad.save(snapshot()), false);
+});
+
+/** A fake IndexedDB factory that records each database name and fails every open. */
+function recordingIdb() {
+  const opened = [];
+  const deleted = [];
+  return {
+    opened,
+    deleted,
+    open(name) {
+      opened.push(name);
+      const request = {};
+      queueMicrotask(() => {
+        request.error = new Error("blocked");
+        request.onerror?.();
+      });
+      return request;
+    },
+    deleteDatabase(name) {
+      deleted.push(name);
+      const request = {};
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    },
+  };
+}
+
+test("a store resolves its database name on every open", async () => {
+  const idb = recordingIdb();
+  let current = "a";
+  const store = indexedDbStore(() => current, { idb });
+  await store.get("k").catch(() => {});
+  current = "b";
+  await store.get("k").catch(() => {});
+  assert.deepEqual(idb.opened, ["a", "b"]);
+});
+
+test("a store still opens a fixed database name", async () => {
+  const idb = recordingIdb();
+  await indexedDbStore("plain", { idb }).get("k").catch(() => {});
+  assert.deepEqual(idb.opened, ["plain"]);
+});
+
+test("deleteIndexedDb deletes the named database", async () => {
+  const idb = recordingIdb();
+  await deleteIndexedDb("n", { idb });
+  assert.deepEqual(idb.deleted, ["n"]);
 });

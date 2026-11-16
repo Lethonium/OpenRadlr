@@ -15,13 +15,17 @@ const PHOTO = "photo:";
 
 /**
  * The store the autosave writes to, on IndexedDB: one object store of keys
- * and values. Every call opens the database again; autosaves are rare.
+ * and values. Every call opens the database again; autosaves are rare. The
+ * name may be a function, resolved on every open, so a rider switch changes
+ * the database without rebuilding the store.
+ * @param {string | (() => string)} [name]
+ * @param {{idb?: IDBFactory}} [options]
  * @returns {{get: (key: string) => Promise<any>, put: (key: string, value: any) => Promise<void>, delete: (key: string) => Promise<void>, keys: () => Promise<string[]>}}
  */
-export function indexedDbStore(name = "openradlr-autosave") {
+export function indexedDbStore(name = "openradlr-autosave", { idb = globalThis.indexedDB } = {}) {
   const open = () =>
     new Promise((resolve, reject) => {
-      const request = indexedDB.open(name, 1);
+      const request = idb.open(typeof name === "function" ? name() : name, 1);
       request.onupgradeneeded = () => request.result.createObjectStore("kv");
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -44,6 +48,15 @@ export function indexedDbStore(name = "openradlr-autosave") {
     delete: async (key) => void (await run("readwrite", (store) => store.delete(key))),
     keys: async () => (await run("readonly", (store) => store.getAllKeys())).map(String),
   };
+}
+
+/** Deletes a whole IndexedDB database (a rider being deleted). */
+export function deleteIndexedDb(name, { idb = globalThis.indexedDB } = {}) {
+  return new Promise((resolve, reject) => {
+    const request = idb.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export class RideAutosave {
