@@ -51,14 +51,15 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
-import { RideAutosave, continueAllowed, deleteIndexedDb, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
+import { continueAllowed, deleteIndexedDb, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { BotCalls } from "./ride/botCalls.js";
-import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
+import { LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
-import { RideHistory, rideRecord } from "./ride/rideHistory.js";
+import { rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
+import { rideStores } from "./ride/rideStores.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
 import { toLatLon } from "./route/geo.js";
 import { RouteGeometry } from "./route/geometry.js";
@@ -293,6 +294,9 @@ nativeApp?.onBack?.(goBack);
 /** Below this the menu fills the screen and shows its page list first. */
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
+/** The active rider's ride stores (#115); applyRoster builds them again whenever the rider changes. */
+const stores = rideStores(activeRider());
+
 const app = {
   /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
   updateDismissed: false,
@@ -404,11 +408,11 @@ const app = {
   /** The autosaved ride "Continue" picks up: `{snapshot, photos}`. */
   restored: null,
   /** The ride autosaved in this browser (#73), and the one the start menu offers. */
-  autosave: new RideAutosave({ store: indexedDbStore(() => riderDbName("openradlr-autosave", activeRider())) }),
+  autosave: stores.autosave,
   /** Every finished ride, kept locally (#48, #83). */
-  history: new RideHistory({ store: indexedDbStore(() => riderDbName("openradlr-history", activeRider())) }),
+  history: stores.history,
   /** My best lap per route, ridden again by a ghost. */
-  ghosts: new GhostStore({ store: indexedDbStore(() => riderDbName("openradlr-ghosts", activeRider())) }),
+  ghosts: stores.ghosts,
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -629,11 +633,15 @@ function applyFtp(ftp, source, extra = {}) {
   renderFtpTest();
 }
 
-/** After the ride is stored, offers a higher FTP when the history supports one. */
-async function offerFtp() {
+/**
+ * After the ride is stored, offers a higher FTP when the history supports one. `history` is
+ * the finishing rider's; `generation` drops the offer once that rider is no longer active.
+ */
+async function offerFtp(history, generation) {
   const prompt = $("ftp-prompt");
   prompt.hidden = true;
-  const records = await app.history.list();
+  const records = await history.list();
+  if (generation !== app.riderGeneration) return;
   if (!records.length || records[0].test) return;
   // Rides from before a typed or tested FTP was set must not argue it back up
   const { ftp, ftpDismissed: dismissed, ftpSource, ftpDate } = app.profile;
@@ -1089,6 +1097,12 @@ const canSwitchRider = () => !app.ride && !panels.isOpen && !$("setup").hidden;
 function applyRoster(roster) {
   riders = roster;
   saveRiders(rawStorage, riders);
+  // The ride stores follow the active rider; those of the previous one stay with the
+  // saves still using them (#115).
+  const own = rideStores(roster.active);
+  app.autosave = own.autosave;
+  app.history = own.history;
+  app.ghosts = own.ghosts;
   // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
   app.riderGeneration += 1;
   app.profile = profiles.load();
@@ -2945,22 +2959,33 @@ function startMilestones() {
 }
 
 /** What achievements are worked out from: the kept records, summits, lemons and the server's routes (null until known). */
-function achievementSources(records) {
+function achievementSources(records, read = readSetting) {
   let summits;
   try {
-    summits = JSON.parse(readSetting(SUMMITS_KEY) ?? "[]");
+    summits = JSON.parse(read(SUMMITS_KEY) ?? "[]");
   } catch {
     summits = [];
   }
   const routes = app.info ? routesOf(app.info).filter((route) => route.kind !== "studio" && route.kind !== "workout") : null;
-  return { records, summits: Array.isArray(summits) ? summits : [], lemons: Number.parseInt(readSetting(LEMONS_KEY) ?? "", 10) || 0, routes };
+  return { records, summits: Array.isArray(summits) ? summits : [], lemons: Number.parseInt(read(LEMONS_KEY) ?? "", 10) || 0, routes };
 }
 
-/** Latches what the kept rides earned, silently (backdated). */
-function reconcileAchievements(records) {
-  const storage = browserStorage();
+/**
+ * Latches what the kept rides earned, silently (backdated). `rider` is whose records
+ * achievements these are — the finishing rider, whose saves may still land after another
+ * rider became active (#115); it defaults to the active rider.
+ */
+function reconcileAchievements(records, rider = riders.active) {
+  const storage = riderStorage(rawStorage, () => rider);
+  const read = (key) => {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
   const state = loadAchievements(storage);
-  const next = reconcile(state, achievementSources(records), Date.now());
+  const next = reconcile(state, achievementSources(records, read), Date.now());
   if (next !== state) saveAchievements(storage, next);
   return next;
 }
@@ -3680,7 +3705,11 @@ function leaveRide() {
   if (question && !confirm(question)) return false;
   // Keep an unsaved finished ride for download or status checking from the menu.
   // Wait for the final snapshot before clearing, so it cannot resurrect a discarded ride.
-  if (!recoverable) app.autosaveClearing = Promise.resolve(app.finishSave).then(() => app.autosave.clear());
+  // The clear must hit the autosave of the rider who finished, not whoever is active by then (#115).
+  if (!recoverable) {
+    const autosave = app.autosave;
+    app.autosaveClearing = Promise.resolve(app.finishSave).then(() => autosave.clear());
+  }
   endRide();
   return true;
 }
@@ -3815,9 +3844,19 @@ function saveFinishedRide() {
     testFtp: app.ftpTest?.testFtp ?? null,
     device: deviceKind(app.trainer),
   });
-  app.historySave = app.history.save(record);
-  app.historySave.then(() => app.history.list()).then(reconcileAchievements).catch(() => {});
-  return app.historySave.then(offerFtp).catch((error) => console.error("ride history:", error));
+  // The rider who finished: the follow-ups read and write their data even once they have
+  // returned to the menu and another rider is active (#115).
+  const history = app.history;
+  const rider = riders.active;
+  const generation = app.riderGeneration;
+  app.historySave = history.save(record);
+  app.historySave
+    .then(() => history.list())
+    .then((records) => reconcileAchievements(records, rider))
+    .catch(() => {});
+  return app.historySave
+    .then(() => offerFtp(history, generation))
+    .catch((error) => console.error("ride history:", error));
 }
 
 /** Shows the summary of the finished ride; saves nothing. */
