@@ -3,6 +3,7 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
+import { renderAndroidAppLink, renderExternalLink } from "./view/externalLink.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
@@ -98,7 +99,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote, rideCards, cardIdOf, cardPick, directionsOf, renderDirections } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote, rideCards, cardIdOf, cardPick, directionsOf, renderDirections } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
@@ -131,6 +132,10 @@ import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
+function setNativeImmersive(enabled) {
+  nativeApp?.setImmersive?.(enabled).catch((error) => console.warn("System bars:", error));
+}
+setNativeImmersive(false);
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
 /** How often a ride is written to the browser while it goes on (#73). */
@@ -1192,9 +1197,10 @@ function renderStartMenu() {
   $("server-label").textContent = serverName(app.info);
   $("server-players").textContent = status.text;
   const build = buildLabel(app.info, BUILD);
-  const privacy = privacyUrl(app.info);
-  $("privacy-link").hidden = !privacy;
-  if (privacy) $("privacy-link").href = privacy;
+  renderExternalLink($("privacy-link"), app.info?.privacy_url);
+  renderExternalLink($("discord-link"), app.info?.discord_url);
+  renderAndroidAppLink($("android-app-link"), { native: Boolean(nativeApp) });
+  renderAndroidAppLink($("android-app-help"), { native: Boolean(nativeApp) });
   $("build-label").textContent = build.text;
   $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
   $("update-banner").hidden = !build.stale || app.updateDismissed;
@@ -2214,6 +2220,7 @@ function endRide() {
   initBiomePicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
+  setNativeImmersive(false);
   delete $("join").dataset.busy;
   // A join that failed never left the menu: it is only paused.
   if (app.menu) {
@@ -2310,6 +2317,7 @@ function startRide() {
   setDifficultyInputs(app.profile.difficulty);
   $("setup").hidden = true;
   $("ride").hidden = false;
+  setNativeImmersive(true);
   clearInterval(app.infoTimer);
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();

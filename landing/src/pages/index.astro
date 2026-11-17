@@ -39,8 +39,8 @@ const features = [
     text: "Finish a ride and send it to Strava as a virtual ride with its climbing and a map. Or download .fit, .gpx and .tcx.",
   },
   {
-    title: "Runs in the browser",
-    text: "Nothing to install or update. Add it to your home screen and it opens like an app.",
+    title: "Browser and Android",
+    text: "Use Chrome or Edge, or get the Android app with native Bluetooth for your trainer.",
   },
 ];
 
@@ -52,6 +52,12 @@ const faq = [
   {
     q: "Do I need an account?",
     a: "No. Enter a name and ride. Your profile (weight, FTP, devices) stays in your browser. Connecting Strava is optional and only needed for uploads.",
+  },
+  {
+    q: "Is there an Android app?",
+    a: "Yes. The free Android app connects to your trainer through native Bluetooth.",
+    href: site.googlePlayUrl,
+    link: "Get the Android app",
   },
   {
     q: "Does it work on an iPhone or iPad?",
@@ -84,12 +90,13 @@ const faq = [
     <div class="wrap hero-text">
       <h1 id="hero-title">Free indoor cycling, together.</h1>
       <p class="lede">
-        Connect your smart trainer, open the browser and ride an island world with friends, strangers and bots.
+        Connect your smart trainer and ride an island world with friends, strangers and bots.
+        In your browser or with the Android app.
         Open source, no subscription.
       </p>
       <div class="actions">
-        <a class="button primary large" href={site.appUrl}>Ride now on {appHost}</a>
-        <a class="button large" href="#host">Host your own server</a>
+        <a class="button primary large" href={site.appUrl}>Ride in your browser</a>
+        <a class="google-play" href={site.googlePlayUrl} aria-label="Get OpenRadlr for Android on Google Play"><img src="/brands/google-play.svg" alt="Get it on Google Play" width="216" height="64" /></a>
       </div>
     </div>
     <div class="hero-ground">
@@ -157,9 +164,11 @@ const faq = [
           </p>
         </li>
         <li>
-          <h3>Chrome or Edge</h3>
+          <h3>The Android app, Chrome or Edge</h3>
           <p>
-            On Windows, macOS, Android or ChromeOS, for Web Bluetooth. On iPhone and iPad, use the Bluefy browser.
+            On Android, <a href={site.googlePlayUrl}>get OpenRadlr on Google Play</a> for native Bluetooth.
+            In a browser, use Chrome or Edge on Windows, macOS, Android or ChromeOS.
+            On iPhone and iPad, use the Bluefy browser.
           </p>
         </li>
         <li>
@@ -204,7 +213,7 @@ make up</code></pre>
           faq.map((item) => (
             <details>
               <summary>{item.q}</summary>
-              <p>{item.a}</p>
+              <p>{item.a}{"href" in item && <> <a href={item.href}>{item.link}</a>.</>}</p>
             </details>
           ))
         }
@@ -212,25 +221,22 @@ make up</code></pre>
     </div>
   </section>
 
-  <section class="section last-call" aria-label="Start riding">
-    <div class="wrap last-call-inner">
-      <p class="last-call-line">The road is open.</p>
-      <a class="button primary large" href={site.appUrl}>Ride now on {appHost}</a>
-      <p class="community muted">
-        {
-          site.discordUrl ? (
-            <>
-              Looking for riding partners? Meet them on <a href={site.discordUrl}>Discord</a>.
-            </>
-          ) : (
-            <>
-              A community Discord is on its way. Until then, ideas and bug reports go to{" "}
-              <a href={`${site.githubUrl}/issues`}>GitHub issues</a>.
-            </>
-          )
-        }{" "}
-        Riding stays free for everyone.
-      </p>
+  <section class="section last-call" aria-labelledby="last-call-title">
+    <div class="wrap">
+      <h2 id="last-call-title">The road is open.</h2>
+      <div class="launch-links">
+        <a class="launch-link browser-launch" href={site.appUrl}>
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="4" /><path d="M3 12h26M8 9h1m3 0h1m1 8 6 3-6 3z" /></svg>
+          Ride now
+        </a>
+        <a class="google-play" href={site.googlePlayUrl} aria-label="Get OpenRadlr for Android on Google Play">
+          <img src="/brands/google-play.svg" alt="Get it on Google Play" width="216" height="64" loading="lazy" />
+        </a>
+        <a class="launch-link discord-launch" href={site.discordUrl || `${site.githubUrl}/issues`}>
+          {site.discordUrl ? (<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.7 5.1a18.4 18.4 0 0 0-4.5-1.4l-.6 1.2a16.8 16.8 0 0 0-5.2 0l-.6-1.2a18.4 18.4 0 0 0-4.5 1.4C1.5 9.2.7 13.2 1.1 17.2a18 18 0 0 0 5.5 2.8l1.1-1.8-1.7-.8.4-.3a13 13 0 0 0 11.2 0l.4.3-1.7.8 1.1 1.8a18 18 0 0 0 5.5-2.8c.5-4.6-.8-8.5-3.2-12.1ZM8.5 14.9c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z" /></svg>) : (<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M27 15a11 11 0 0 1-16 10l-7 3 2-8a11 11 0 1 1 21-5Z" /><path d="M11 14h10m-10 5h6" /></svg>)}
+          {site.discordUrl ? "Join Discord" : "Give feedback"}
+        </a>
+      </div>
     </div>
   </section>
 </Base>
@@ -283,6 +289,7 @@ make up</code></pre>
   .actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 0.75rem;
     margin-top: 2rem;
   }
@@ -447,22 +454,90 @@ make up</code></pre>
     color: var(--muted);
   }
 
-  .last-call-inner {
+  .last-call {
+    padding-block: clamp(3rem, 7vw, 5rem);
+    text-align: center;
+  }
+  .last-call h2 {
+    font-size: clamp(3rem, 6vw, 4.5rem);
+    margin-bottom: 1.5rem;
+  }
+  .launch-links {
     display: flex;
-    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
-    justify-content: space-between;
-    gap: 1.5rem;
+    flex-wrap: wrap;
+    gap: .75rem;
   }
-  .community {
-    flex-basis: 100%;
-    margin-top: 1rem;
+  .launch-link {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: .75rem;
+    min-width: 216px;
+    min-height: 64px;
+    padding: .8rem 1.5rem;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-decoration: none;
   }
-  .last-call-line {
-    font-family: var(--display);
-    font-style: italic;
-    font-weight: 800;
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    line-height: 1;
+  .launch-link svg {
+    width: 32px;
+    height: 32px;
+    flex: none;
+  }
+  .browser-launch {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+  .browser-launch:hover {
+    background: #ff8c3a;
+    color: var(--accent-text);
+  }
+  .discord-launch {
+    background: #5865f2;
+    color: #fff;
+  }
+  .discord-launch:hover {
+    background: #4752c4;
+    color: #fff;
+  }
+  .google-play {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    border-radius: 12px;
+  }
+  .google-play img {
+    display: block;
+    width: 216px;
+    height: 64px;
+  }
+  .google-play:hover {
+    background: var(--surface);
+  }
+  @media (max-width: 48rem) {
+    .launch-links {
+      flex-direction: column;
+      gap: 24px;
+    }
+    .launch-link,
+    .launch-links .google-play {
+      width: min(100% - 8px, 280px);
+      height: auto;
+      min-height: 0;
+      aspect-ratio: 238.96 / 70.87;
+    }
+    .launch-links .google-play {
+      padding: 0;
+      border-radius: 8px;
+    }
+    .launch-links .google-play img {
+      width: 100%;
+      height: auto;
+    }
   }
 </style>

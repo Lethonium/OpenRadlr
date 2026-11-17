@@ -1,9 +1,21 @@
 import AuthenticationServices
 import Capacitor
 import UIKit
+import WebKit
 
 /// The app's web view with the app's own plugins registered.
 class AppViewController: CAPBridgeViewController {
+    override open func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let configuration = super.webViewConfiguration(for: instanceConfiguration)
+        // Configure before the first navigation; these are release facts, not a device identifier.
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        let suffix = "OpenRadlr/\(version) (ios; build/\(build))"
+        configuration.applicationNameForUserAgent = [configuration.applicationNameForUserAgent, suffix]
+            .compactMap { $0 }.joined(separator: " ")
+        return configuration
+    }
+
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(WebAuthPlugin())
     }
