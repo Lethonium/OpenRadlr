@@ -192,6 +192,7 @@ export default {
   "scenery.heading": "Scenery",
   "scenery.off": "Off",
   "scenery.models": "Models",
+  "scenery.quaternius": "Quaternius",
   "scenery.racing": "Race kit",
   "drawer.fpsHint": "Show the frame rate, to see what a scene costs",
   "drawer.fpsOn": "Frame rate: shown",

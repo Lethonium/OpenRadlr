@@ -11,9 +11,9 @@ const CAMERA_KEYS = {
   seat: "camera.seat", pov: "camera.pov", wide: "camera.wide", coach: "camera.coach",
 };
 /** The scenery levels, in the order the popover offers them. */
-export const SCENERY_LEVELS = Object.freeze(["off", "models", "racing"]);
+export const SCENERY_LEVELS = Object.freeze(["off", "models", "quaternius", "racing"]);
 
-const SCENERY_KEYS = { off: "scenery.off", models: "scenery.models", racing: "scenery.racing" };
+const SCENERY_KEYS = { off: "scenery.off", models: "scenery.models", quaternius: "scenery.quaternius", racing: "scenery.racing" };
 const TIME_KEYS = { auto: "viewPopover.timeAuto", day: "drawer.timeDay", golden: "drawer.timeGolden", dusk: "drawer.timeDusk" };
 
 const option = (id, label) => ({ id, label });

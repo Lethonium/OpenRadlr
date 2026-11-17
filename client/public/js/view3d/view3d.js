@@ -57,11 +57,18 @@ export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
  */
 const VILLAGE_NEAR = 350;
 
+/**
+ * Where a farm's modelled buildings give way to their cheap twins, in metres
+ * to the nearest edge of a chunk (#117). A barn is a few thousand faces and
+ * reads as a box from this far.
+ */
+const FARM_NEAR = 300;
+
 const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, village: 2600, villageFar: 2600, bright: 1200, detail: 220 },
+  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, village: 2600, villageFar: 2600, farm: 2600, farmFar: 2600, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -406,6 +413,7 @@ export class View3D {
     this.#splits = {
       scenery: this.chunks.sceneryFar?.length ? (world.sceneryNearRange ?? 260) : null,
       village: this.chunks.villageFar?.length ? VILLAGE_NEAR : null,
+      farm: this.chunks.farmFar?.length ? FARM_NEAR : null,
     };
     this.clouds = this.renderer.upload(world.clouds);
     this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
@@ -839,7 +847,7 @@ export class View3D {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
-      for (const group of ["scenery", "structures", "village"]) {
+      for (const group of ["scenery", "structures", "village", "farm"]) {
         for (const chunk of this.chunks[group] ?? []) {
           if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) {
             if (chunk.handle) this.renderer.drawShadowCaster(chunk.handle, this.identity);

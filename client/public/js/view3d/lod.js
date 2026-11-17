@@ -8,7 +8,7 @@
  */
 
 /** Each near group and the group holding its cheap twins. */
-export const LOD_PAIRS = Object.freeze({ scenery: "sceneryFar", village: "villageFar" });
+export const LOD_PAIRS = Object.freeze({ scenery: "sceneryFar", village: "villageFar", farm: "farmFar" });
 
 const NEAR_OF = Object.freeze(Object.fromEntries(Object.entries(LOD_PAIRS).map(([near, far]) => [far, near])));
 

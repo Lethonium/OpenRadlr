@@ -1104,6 +1104,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // beyond (#117). Only there when a kit builds the village, so a world
     // without scenery holds the groups it always did.
     ...(scenery?.has?.("houses") ? { village: instancedChunk(), villageFar: instancedChunk() } : {}),
+    // A farm kit's buildings, near and far, like the village (#117). The
+    // procedural farm stays on the route when no kit holds farm roles.
+    ...(scenery?.has?.("farmBarns") ? { farm: instancedChunk(), farmFar: instancedChunk() } : {}),
   };
 
   const long = route.length > LONG_ROUTE_M;
@@ -1194,7 +1197,19 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
-  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome });
+  for (const r of ordered) {
+    buildFarms(r, terrain, {
+      structures: chunks.structures,
+      occupancy,
+      seed: r.seed >>> 0,
+      count: farmsOn(r),
+      lakeLevel: ground.water,
+      avoid,
+      biome,
+      kit: scenery,
+      into: chunks.farm ? { near: chunks.farm, far: chunks.farmFar } : null,
+    });
+  }
   const rotors = buildWindTurbines(route, terrain, {
     structures: chunks.structures,
     occupancy,

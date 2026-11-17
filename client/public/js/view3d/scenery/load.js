@@ -18,7 +18,14 @@ const KITS_PATH = "assets/scenery";
  * kit. `racing` keeps Kenney's Racing Kit instead, since a racing island with
  * barriers and flags on the verges is a different look worth trying.
  */
-export const KITS_OF = Object.freeze({ off: [], models: ["nature", "fantasy-town"], racing: ["racing"] });
+export const KITS_OF = Object.freeze({
+  off: [],
+  models: ["nature", "fantasy-town"],
+  // The Quaternius comparison level: better trees and modelled farmsteads,
+  // with Kenney's town kit still building the villages (#117).
+  quaternius: ["quaternius-nature", "fantasy-town", "quaternius-farm"],
+  racing: ["racing"],
+});
 
 /** What the worker needs: manifests with their models inlined, since functions cannot travel. */
 let loaded = null;

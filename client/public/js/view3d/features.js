@@ -632,9 +632,17 @@ function paveSquare(route, terrain, { from, to, side, near, far }, { structures,
 
 // ------------------------------------------------------------------- farms ---
 
-/** Farmsteads (barn, house, silo, hay bales) with grazing animals nearby. */
-export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
+/**
+ * Farmsteads (barn, house, silo, hay bales) with grazing animals nearby.
+ *
+ * With a farm kit, the buildings come from the kit and are instanced into
+ * `into.near`/`into.far`; the hay bales and animals stay procedural. The kit's
+ * model choices use their own seeded stream, so turning it on never moves the
+ * farms or their herds.
+ */
+export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate, kit = null, into = null }) {
   const random = seededRandom(seed ^ 0xfa53);
+  const kitRandom = seededRandom((seed ^ 0xfa54) >>> 0);
   const m = sharedModels(biome);
   const farms = [];
   let attempts = 0;
@@ -661,9 +669,39 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
       const y = groundUnder(terrain, p, yaw + turn, w, dpt);
       structures.append(mesh, placement([p[0], y, p[2]], yaw + turn));
     };
-    place(m.barn, 0, 0, 0, 15, 10);
-    place(houseVariant(biome, Math.floor(random() * HOUSE_VARIANTS)), -17, -4, 0, 10, 9);
-    place(m.silo, 10.5, 6, 0, 5, 5);
+    // The kit's buildings are instanced: the near copy and the cheap twin at
+    // the same transform, so the yard does not change as a chunk crosses the
+    // farm's near range. A role the kit does not hold falls back to the
+    // procedural building at the same spot.
+    const placeKit = (role, lx, lz, turn) => {
+      if (!into?.near || !kit?.has?.(role)) return false;
+      const model = kit.model(role, kitRandom);
+      if (!model) return false;
+      const p = local(lx, lz);
+      const { min, max } = model.bounds;
+      const w = max[0] - min[0];
+      const d = max[2] - min[2];
+      const y = groundUnder(terrain, p, yaw + turn, w, d);
+      const matrix = placement([p[0], y, p[2]], yaw + turn);
+      appendInstance(into.near, model.near, matrix);
+      if (model.far) appendInstance(into.far, model.far, matrix);
+      return true;
+    };
+    // This draw belongs to the procedural house; taking it either way keeps
+    // every later draw in the same place, so the farm sites do not move when
+    // the kit is turned on.
+    const house = houseVariant(biome, Math.floor(random() * HOUSE_VARIANTS));
+    if (!placeKit("farmBarns", 0, 0, 0)) place(m.barn, 0, 0, 0, 15, 10);
+    if (!placeKit("houses", -17, -4, 0)) place(house, -17, -4, 0, 10, 9);
+    if (!placeKit("farmSilos", 10.5, 6, 0)) place(m.silo, 10.5, 6, 0, 5, 5);
+    // A well, a chicken coop and, on some farms, a windmill. They are extra
+    // yard furniture, so they use the kit's own stream and never shift a farm.
+    placeKit("farmWells", 4, -7, 0);
+    if (kitRandom() < 0.5) placeKit("farmCoops", 15, -6, 0);
+    if (kitRandom() < 0.34) placeKit("farmWindmills", -25, 11, 0);
+    if (kit?.has?.("farmFences")) {
+      for (let i = -1; i <= 1; i += 1) placeKit("farmFences", i * 6, 13, 0);
+    }
     for (let b = 0; b < 4 + Math.floor(random() * 4); b += 1) {
       place(m.bale, 4 + random() * 14, -9 - random() * 8, random() * Math.PI, 1.3, 1.5);
     }

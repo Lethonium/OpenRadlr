@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { drawnAt } from "../public/js/view3d/lod.js";
 
-const SPLITS = { scenery: 150, village: 350 };
+const SPLITS = { scenery: 150, village: 350, farm: 300 };
 
 test("a near group draws within its split and its far twin beyond it", () => {
   assert.equal(drawnAt("village", 300, SPLITS), true);
@@ -16,7 +16,7 @@ test("a near group draws within its split and its far twin beyond it", () => {
 });
 
 test("exactly one copy draws at every distance", () => {
-  for (const near of ["scenery", "village"]) {
+  for (const near of ["scenery", "village", "farm"]) {
     for (let distance = 0; distance < 1000; distance += 25) {
       assert.equal(drawnAt(near, distance, SPLITS) !== drawnAt(`${near}Far`, distance, SPLITS), true, `${near} at ${distance}`);
     }

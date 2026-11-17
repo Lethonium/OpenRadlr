@@ -49,6 +49,7 @@ test("a level names the kits it wants", () => {
   assert.deepEqual(KITS_OF.off, []);
   // The modelled island: Kenney's trees, and its villages built from the town kit.
   assert.deepEqual(KITS_OF.models, ["nature", "fantasy-town"]);
+  assert.deepEqual(KITS_OF.quaternius, ["quaternius-nature", "fantasy-town", "quaternius-farm"]);
   assert.deepEqual(KITS_OF.racing, ["racing"]);
 });
 

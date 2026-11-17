@@ -192,6 +192,7 @@ export default {
   "scenery.heading": "Szenerie",
   "scenery.off": "Aus",
   "scenery.models": "Modelle",
+  "scenery.quaternius": "Quaternius",
   "scenery.racing": "Rennset",
   "drawer.fpsHint": "Zeigt die Bildrate, damit du siehst, was eine Szene kostet",
   "drawer.fpsOn": "Bildrate: sichtbar",
