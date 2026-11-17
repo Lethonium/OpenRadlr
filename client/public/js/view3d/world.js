@@ -36,6 +36,8 @@ import { inStretch, resolveZones } from "./zones.js";
 import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fieldAt, forestAt, kindAt, treeFactor } from "../land/land.js";
 import { canGrowTree, slopeAt } from "../land/mountains.js";
+import { layoutSettlement } from "../land/settlement.js";
+import { buildSettlement } from "./settlement.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -1235,6 +1237,17 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   // Places other features must keep clear of.
   const occupancy = new Occupancy();
+  // Settlements are places, not route zones: the city spans the Hilltop
+  // Café's three roads. Only a modelled world gets them, so scenery off keeps
+  // the villages it always had (#117).
+  const settlements = scenery && network?.settlements?.length
+    ? network.settlements.map((settlement) => layoutSettlement({ ...settlement, terrain, roads: ordered }))
+    : [];
+  const inSettlement = (r, zone) => {
+    if (settlements.length === 0) return false;
+    const p = roadFrame(r, (zone.from + zone.to) / 2).center;
+    return settlements.some((s) => Math.hypot(p[0] - s.center[0], p[2] - s.center[1]) < s.radius);
+  };
   const nearRiver = (x, z, margin = 0) => terrain.riverDistance(x, z) < RIVER.halfWidth + RIVER.bank * 0.6 + margin;
   const nearRoad = (x, z, radius) => terrain.distanceToRoad(x, z) < half + radius * 0.8;
   const avoid = (x, z, radius = 0) => nearRiver(x, z, radius) || terrain.height(x, z) < ground.water + 2.5 || nearRoad(x, z, radius);
@@ -1243,6 +1256,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   for (const river of rivers) buildBridge(river.route, terrain, river, chunks.structures, biome);
   for (const r of ordered) {
     for (const village of zonesOf.get(r).villages) {
+      if (inSettlement(r, village)) continue;
       buildVillage(r, terrain, village, {
         structures: chunks.structures,
         bright: chunks.bright,
@@ -1286,6 +1300,21 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     if (gym) gyms.push(gym);
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
+  }
+  // The settlements themselves, after the café so the square keeps its
+  // forecourt clear. A town kit's buildings go into the village groups; a kit
+  // without houses falls back to the biome's own.
+  for (const settlement of settlements) {
+    buildSettlement(settlement, {
+      terrain,
+      structures: chunks.structures,
+      bright: chunks.bright,
+      into: { near: chunks.village ?? chunks.structures, far: chunks.villageFar, trees: chunks.scenery },
+      biome,
+      kit: scenery,
+      flora: scenery,
+      occupancy,
+    });
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);

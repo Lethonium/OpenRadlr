@@ -72,6 +72,16 @@ export class RoadNetwork {
       this.edges.set(e.id, geometry);
     }
     this.routes = (file.routes ?? []).map((r) => ({ id: r.id, name: r.name, walk: r.walk ?? [] }));
+    // Settlements are places, not route zones: a city can span several roads
+    // and must look the same whichever route is ridden (#117). `y` is the map's
+    // north-up coordinate, so world z is −y.
+    this.settlements = (file.settlements ?? []).map((s) => ({
+      id: s.id,
+      kind: s.kind ?? "village",
+      center: [Number(s.x), -Number(s.y)],
+      radius: Number(s.radius ?? 220),
+      seed: Number(s.seed ?? this.seed) >>> 0,
+    }));
   }
 
   /** Roads in file order (the order everything shared is built in). */
