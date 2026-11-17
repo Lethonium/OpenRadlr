@@ -77,8 +77,8 @@ least two streets and a junction; the drone shows a grid.
       not get a second strip (`hill-road` 1919–2249, `orchard-lane` 90–420,
       `hill-north` 90–420, `rolling-hills` 90–420).
 - [x] Keep the café on the square and its approach clear (occupancy).
-- [ ] Test: the city is in the same place on every route; scenery off has no
-      settlement. Verified manually in the world build; add the test.
+- [x] Test: the city is in the same place on every route; scenery off has no
+      settlement (`test/settlementWorld.test.js`).
 
 **Acceptance:** riding `rolling-hills` from the start passes through the city;
 the drone at the café shows the grid and the square.
