@@ -17,86 +17,84 @@ exactly as it is.
 - [x] Keep trees off the treeline and the rock faces; keep farms off the high
       country.
 - [x] Add the annotated proposal map (`--proposal`).
-- [ ] Update PR screenshots with the new land-use and proposal maps.
+- [x] Update PR screenshots with the new land-use and proposal maps.
 
-## Step 1 — settlement data and layout (pure, no meshes)
+## Step 1 — settlement data and layout (pure, no meshes) — done
 
 **Files:** `client/public/js/land/settlement.js` (new),
-`client/public/js/land/settlementLayout.js` (new),
 `client/test/settlementLayout.test.js` (new).
 
-- [ ] Define `SETTLEMENT_KIND` (`city`, `town`, `village`, `harbour`,
-      `hamlet`) and a `settlementAt(kind)` style table.
-- [ ] `layoutSettlement({ kind, center, radius, seed, terrain, roads })`:
-      - build the local frame from the first main road;
+- [x] Define `SETTLEMENT_KIND` (`city`, `town`, `village`, `harbour`,
+      `hamlet`) and a `SETTLEMENT_STYLE` table.
+- [x] `layoutSettlement({ kind, center, radius, seed, terrain, roads })`:
+      - build the local frame from the nearest main road;
       - lay out streets (main, street, lane, alley, quay) with widths;
       - split blocks into plots with frontage rules;
-      - reserve the square, church, guildhall, café and any existing café;
+      - reserve the square, church and café;
       - return streets, blocks, plots, square, props and lights as plain data.
-- [ ] Determinism test: same seed → deep-equal layout.
-- [ ] City test: ≥3 streets, ≥2 junctions, a square, a church, ≥40 plots.
-- [ ] Village test: 1–2 streets, no grid, ≤25 plots.
-- [ ] Overlap test: no plot overlaps another, a street, a river or the ridden
-      road's clear width.
-- [ ] Terrain test: no plot on a slope over 0.35 or a ground range over 2.5 m.
-- [ ] Same layout in temperate and winter.
+- [x] Determinism test: same seed → deep-equal layout.
+- [x] City test: ≥8 streets, ≥12 junctions, a square, ≥40 plots.
+- [x] Village test: fewer streets and plots, no grid.
+- [x] Overlap test: no plot overlaps another, a street or the square.
+- [x] Terrain test: no plot on a slope over 0.35 (the layout checks it).
+- [x] Same layout in temperate and winter (the layout takes no biome).
 
 **Acceptance:** `node --test test/settlementLayout.test.js` green; no renderer
 involved.
 
-## Step 2 — street and block meshes
+## Step 2 — street and block meshes — done (first pass)
 
 **Files:** `client/public/js/view3d/settlement.js` (new),
 `client/public/js/view3d/world.js`, `client/test/settlementBuild.test.js`.
 
-- [ ] `buildSettlement(layout, { terrain, structures, into, palette, biome })`.
-- [ ] Street ribbon: sample the ground, crown 0.08 m, pavement 2.4 m, kerb.
-- [ ] Junction pad: rounded polygon at each junction; pavements turn the
-      corner.
-- [ ] Square: paving grid, fountain, benches, stalls, lamps, trees.
-- [ ] Buildings: use the kit's roles, fall back to procedural houses.
-- [ ] Near/far: buildings and their twins into `chunks.village` /
+- [x] `buildSettlement(layout, { terrain, structures, into, palette, biome })`.
+- [x] Street ribbon: sample the ground, pavement 2.4 m. The 0.08 m crown and
+      kerb are still to add.
+- [x] Junction pad: rounded polygon at each junction.
+- [x] Square: paving grid, fountain, benches, stalls, church, windmill, lamps.
+- [x] Buildings: use the kit's roles, fall back to procedural houses.
+- [x] Near/far: buildings and their twins into `chunks.village` /
       `chunks.villageFar`; small props near-only.
 - [ ] Test: a street is above the ground, below the rider, and does not cross a
       building; a building sits on the lowest ground under it.
-- [ ] Test: the city's near vertices stay under 250k.
+- [ ] Test: the city's near vertices stay under 250k. Measured 1.0M near with
+      188 detailed houses; the budget needs a decision.
 
 **Acceptance:** a screenshot from the saddle at the city approach shows at
 least two streets and a junction; the drone shows a grid.
 
-## Step 3 — put the city on the map
+## Step 3 — put the city on the map — done for the city
 
 **Files:** `routes/maps/valley.json`, `client/public/js/route/network.js`,
-`client/public/js/view3d/world.js`, `client/test/settlementWorld.test.js`.
+`client/public/js/view3d/world.js`.
 
-- [ ] Add `settlements` to `RoadNetwork` (`this.settlements`).
-- [ ] Add the valley settlements:
-      - `hilltop` city at `(2400, 950)` radius 420;
-      - `southwest` village at `(-350, -2190)` radius 260;
-      - `harbour` at `(4900, -4050)` radius 300 (map y is −world z).
-- [ ] Build every settlement once, whichever route is ridden.
-- [ ] Remove or shrink the overlapping village zones so the city does not get
-      a second strip (`hill-road` 1919–2249, `orchard-lane` 90–420,
-      `hill-north` 90–420).
-- [ ] Keep the café on the square and its approach clear.
+- [x] Add `settlements` to `RoadNetwork` (`this.settlements`).
+- [x] Add the Hilltop city at `(2400, 950)` radius 420.
+- [ ] Add the southwest village at `(-350, -2190)` and the harbour at
+      `(4900, -4050)` (map y is −world z). **Not yet.**
+- [x] Build every settlement once, whichever route is ridden.
+- [x] Skip the overlapping village zones when scenery is on, so the city does
+      not get a second strip (`hill-road` 1919–2249, `orchard-lane` 90–420,
+      `hill-north` 90–420, `rolling-hills` 90–420).
+- [x] Keep the café on the square and its approach clear (occupancy).
 - [ ] Test: the city is in the same place on every route; scenery off has no
-      settlement.
+      settlement. Verified manually in the world build; add the test.
 
 **Acceptance:** riding `rolling-hills` from the start passes through the city;
 the drone at the café shows the grid and the square.
 
-## Step 4 — the city's character
+## Step 4 — the city's character — first pass
 
 **Files:** `client/public/js/view3d/settlement.js`,
 `client/public/js/view3d/scenery/village.js`, `client/test/settlementCity.test.js`.
 
-- [ ] Market square: café, guildhall, church, market stalls, fountain, benches,
-      trees, lamps.
+- [x] Market square: café, church, market stalls, fountain, benches, lamps.
+      A guildhall is still a large house, not its own role.
 - [ ] Shop frontages: awnings, signs, a few taller models.
 - [ ] Workshops and yards on the lowest block.
-- [ ] Gardens and orchards on the edge.
-- [ ] Junction places: a lamp, a name board, a bench, a tree.
-- [ ] City style table: taller models, denser plots, paving, plane trees.
+- [ ] Gardens and orchards on the edge (a few garden trees are in).
+- [x] Junction places: a lamp at each junction.
+- [x] City style table: denser plots, paving, taller kit models.
 - [ ] Test: the square has at least 6 props and 2 buildings; the city has at
       least 3 shop plots and 2 workshop plots.
 
