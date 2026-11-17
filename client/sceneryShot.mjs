@@ -5,20 +5,22 @@
 // same place every time with no pedalling to get there.
 //
 //   node sceneryShot.mjs --out DIR --at 6490 --camera drone --scenery models
+//   node sceneryShot.mjs --route riverside-flats --at 4700 --scenery quaternius
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
 /** Settings written before the app starts, so it reads them on load. */
-export function settingsFor({ scenery, camera, view = "3d" }) {
+export function settingsFor({ scenery, camera, route = null, view = "3d" }) {
   const settings = { "openride.view": view, "openradlr.showFps": "on" };
   if (scenery) settings["openradlr.scenery"] = scenery;
   if (camera) settings["openride.camera"] = camera;
+  if (route) settings["openride.route"] = route;
   return settings;
 }
 
 /** `--name value` pairs, with defaults for a scenery shot. */
 export function parseShotArgs(argv) {
-  const opts = { url: "http://localhost:8080", out: null, at: "0", camera: "drone", scenery: "models", width: 1600, height: 900, wait: 9000, name: null };
+  const opts = { url: "http://localhost:8080", out: null, at: "0", camera: "drone", scenery: "models", route: null, width: 1600, height: 900, wait: 9000, name: null };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const key = arg.startsWith("--") ? arg.slice(2) : null;
@@ -48,6 +50,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     await page.locator("#name").fill("Scenery Check");
     await page.locator("button#join").click({ timeout: 30000 });
     await page.locator("#hud").waitFor({ state: "visible", timeout: 60000 });
+    // The world is built in a worker and only then is the 3D view shown; a full
+    // map takes ~20 s under software WebGL. Without this wait a shot taken at
+    // the default settle time is the 2D map.
+    await page.locator("#world-wrap").waitFor({ state: "visible", timeout: 120000 }).catch(() => {});
     // Software WebGL builds a world slowly and the rider drifts while it does.
     // Pause at the join point so every scenery level is photographed at the
     // same spot, not wherever the ride happened to reach.
