@@ -5,6 +5,34 @@ Conventional Commit titles of the pull requests merged since the last one
 (see [docs/releases.md](docs/releases.md)). Don't edit it by hand; a clear PR
 title is the release note.
 
+## [0.2.0](https://github.com/Lethonium/OpenRadlr/compare/v0.1.0...v0.2.0) (2026-11-17)
+
+
+### Features
+
+* **app:** Add release metrics and immersive Android rides ([#118](https://github.com/Lethonium/OpenRadlr/issues/118)) ([4e48f4e](https://github.com/Lethonium/OpenRadlr/commit/4e48f4e4a37a1be5e2139c1271d07db120f71865))
+* **app:** Keep Android rides running with live notification controls ([#120](https://github.com/Lethonium/OpenRadlr/issues/120)) ([30bc3b3](https://github.com/Lethonium/OpenRadlr/commit/30bc3b3e0be2adba8c5ec28edb4fff332afe6b8b))
+* **client:** Add a profile page with your rides, FTP over time and your data ([#100](https://github.com/Lethonium/OpenRadlr/issues/100)) ([1f09630](https://github.com/Lethonium/OpenRadlr/commit/1f096309cf39f753095286fe81ce2d91c0d9c977))
+* **client:** Add the top-down 2D ride map ([3893e4a](https://github.com/Lethonium/OpenRadlr/commit/3893e4afbed60ed305f3cf69b7c77c9ecb36315d))
+* **client:** Earn achievements from your rides, each with its own pin ([#109](https://github.com/Lethonium/OpenRadlr/issues/109)) ([efb6962](https://github.com/Lethonium/OpenRadlr/commit/efb69621d2f9b2d580ee00c6c3c8f67b643cbdc7))
+* **client:** Link the Discord community from the app start menu ([#110](https://github.com/Lethonium/OpenRadlr/issues/110)) ([27bcdbf](https://github.com/Lethonium/OpenRadlr/commit/27bcdbf44fc507f4d34aa9160d262a3272a3e47a))
+* **client:** Reorganize settings into scannable rows ([#111](https://github.com/Lethonium/OpenRadlr/issues/111)) ([f51d21f](https://github.com/Lethonium/OpenRadlr/commit/f51d21f307b24fa1c96b5aabb35e3e75cfb1e845))
+* **client:** Set and follow season goals, with weekly steps and a HUD line ([#102](https://github.com/Lethonium/OpenRadlr/issues/102)) ([b78ec7c](https://github.com/Lethonium/OpenRadlr/commit/b78ec7c77f40693ad6cf8f5ebf4220347a891e2d))
+* **client:** Share one device between several riders, each with their own profile and progress ([#115](https://github.com/Lethonium/OpenRadlr/issues/115)) ([fdd274a](https://github.com/Lethonium/OpenRadlr/commit/fdd274ac46eeb92c4a2f5494ca0a3aed6adf0606))
+* Make the Android app and Discord easy to find ([#121](https://github.com/Lethonium/OpenRadlr/issues/121)) ([921c242](https://github.com/Lethonium/OpenRadlr/commit/921c242b3dac95996a107cfd98ebb506818cd4d3))
+* Ride both velodromes on the island and meet other apps' riders on Herne Hill ([#108](https://github.com/Lethonium/OpenRadlr/issues/108)) ([4d96d93](https://github.com/Lethonium/OpenRadlr/commit/4d96d9371acbc9d22363a39c015699b54ccf9345))
+* Show your ride live on a phone as a cockpit you arrange yourself ([#88](https://github.com/Lethonium/OpenRadlr/issues/88)) ([0ec4ffe](https://github.com/Lethonium/OpenRadlr/commit/0ec4ffe55739d820555f7c1cdb67386db0fb35d5))
+* Turn the spin studio into a glass building across from the Valley Café ([#85](https://github.com/Lethonium/OpenRadlr/issues/85)) ([89b453d](https://github.com/Lethonium/OpenRadlr/commit/89b453dded6572aaff15f2793a515fe5a26f6d29))
+
+
+### Bug Fixes
+
+* **client:** Allow Android to select ZWO workouts ([#124](https://github.com/Lethonium/OpenRadlr/issues/124)) ([a272269](https://github.com/Lethonium/OpenRadlr/commit/a272269fa6761b0f241e380beee1da801d8c097b))
+* **client:** Glide lane changes instead of stepping at the update rate ([#81](https://github.com/Lethonium/OpenRadlr/issues/81)) ([248f154](https://github.com/Lethonium/OpenRadlr/commit/248f1544f4248ca84d0223facb198e55294623dd))
+* **client:** Remove the dark rectangle above the Rider panel on the start menu ([#116](https://github.com/Lethonium/OpenRadlr/issues/116)) ([d4757e2](https://github.com/Lethonium/OpenRadlr/commit/d4757e2c3ad59fdb51da124702c67bd9ed0f8975))
+* **client:** Stack the HUD notices on tablets and desktops too ([#84](https://github.com/Lethonium/OpenRadlr/issues/84)) ([83732a2](https://github.com/Lethonium/OpenRadlr/commit/83732a266b84243ed384afb41bb5306f07fb9820))
+* Lay out the phone ride screen without overlaps in portrait and landscape ([#79](https://github.com/Lethonium/OpenRadlr/issues/79)) ([2b09a79](https://github.com/Lethonium/OpenRadlr/commit/2b09a79b34b8fb0d2f7c81d3a7acb150b8e23190))
+
 ## 0.1.0 (2026-11-11)
 
 The first release.
