@@ -179,18 +179,19 @@ drone.
 
 ## Step 8 — docs, screenshots, check
 
-- [ ] Update `docs/protocol.md` only if a protocol field changes (it should
+- [x] Update `docs/protocol.md` only if a protocol field changes (it does
       not).
-- [ ] Add an ADR for the settlement layer (data, determinism, lighting).
-- [ ] Update `CHANGELOG`? No: Release Please writes it from the PR title.
-- [ ] Add screenshots to PR #119:
+- [x] Add ADR 0029 for the settlement layer (data, determinism, lighting).
+- [x] Update `CHANGELOG`? No: Release Please writes it from the PR title.
+- [x] Add screenshots to PR #119:
       - land-use map with rock and snow;
       - annotated proposal map;
-      - city from the saddle and the drone;
+      - city from the saddle and the drone (regridded);
       - village and harbour;
-      - dusk city with lights, day city without.
-- [ ] `make check` green (lint, client tests, Rust tests, scenery check).
-- [ ] Keep the PR draft until the user has seen the city.
+      - dusk city with lights, day and golden hour without.
+- [x] `make check` green (lint, client tests, Rust tests, scenery check):
+      1924 tests, on the branch as pushed.
+- [ ] Keep the PR draft until the user has seen the city. Still draft.
 
 ## Risks
 
