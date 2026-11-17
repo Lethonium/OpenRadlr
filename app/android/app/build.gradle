@@ -24,7 +24,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Google Play takes every versionCode once: raise it for each upload.
         // The client comes from the server, so this only changes with the native shell.
-        versionCode 3
+        versionCode 4
         versionName "0.1.0"
         buildConfigField 'boolean', 'BUNDLED_PREVIEW', 'false'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
