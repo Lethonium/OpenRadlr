@@ -42,8 +42,9 @@ redistributing them.
 
 Each kit's `manifest.json` records the pack URL, the licence URL and the date
 the models were taken, and `make scenery-check` fails if a kit claims
-anything other than CC0. Every pack also ships its own `License.txt` saying
-CC0 1.0, which is the evidence the manifests name.
+anything other than CC0. Where a pack ships its own `License.txt` saying CC0
+1.0, it sits beside the kit; where it does not, the manifest records the page
+that states CC0.
 
 The `fantasy-town` buildings (cottages, church, windmill) are assembled from
 the pack's wall and roof parts by `tools/scenery/assemble.mjs` and recoloured;
