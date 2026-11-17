@@ -249,7 +249,9 @@ export function buildSettlement(layout, {
     if (flora && into.trees && houses % 5 === 0 && Math.hypot(pos[0] - layout.center[0], pos[1] - layout.center[1]) < 150) {
       const bx = pos[0] - facing[0] * (depth / 2 + 3);
       const bz = pos[1] - facing[1] * (depth / 2 + 3);
-      flora.tree({ mesh: into.trees, x: bx, y: terrain.height(bx, bz), z: bz, kind: 0.9, random, role: "leafy" });
+      // A garden tree, not a wood tree: the kit's mature trees are 9–12 m, and
+      // a house's back garden wants half of that.
+      flora.tree({ mesh: into.trees, x: bx, y: terrain.height(bx, bz), z: bz, kind: 0.9, random, role: "leafy", scale: 0.45 });
     }
   }
 

@@ -134,7 +134,7 @@ function rolePalette(kit, model, painted) {
  */
 export function planFlora(kit, { readModelFile, fallback = null, painted = null, far = false, nearRange = null } = {}) {
   /** Draws one model of `role` at a point, or hands the spot to the biome. */
-  const draw = (mesh, x, y, z, random, role, fallbackAt) => {
+  const draw = (mesh, x, y, z, random, role, fallbackAt, scale = 1) => {
     const ids = kit.byRole[role];
     if (!ids || ids.length === 0) {
       fallbackAt?.(mesh, x, y, z, random);
@@ -147,7 +147,7 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
     const model = kit.models[pick];
     const yaw = random() * Math.PI * 2;
     const [minSize = 1, maxSize = minSize] = model.sizes ?? [1];
-    const size = (minSize + random() * (maxSize - minSize)) * (model.height ?? 1);
+    const size = (minSize + random() * (maxSize - minSize)) * (model.height ?? 1) * scale;
     // The same tree, drawn from its cheap twin when the caller asked for far
     // ones: the random draws above are taken either way, so a wood and its far
     // copy put every tree in the same spot.
@@ -184,10 +184,11 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
     /**
      * A tree, as the kind the world asked for. An explicit `role` overrides the
      * kind, which is how the studio and the tests draw one particular model.
+     * `scale` shrinks a mature wood tree to a garden tree; a wood keeps 1.
      */
-    tree({ mesh, x, y, z, kind = 0.5, random, role = null }) {
+    tree({ mesh, x, y, z, kind = 0.5, random, role = null, scale = 1 }) {
       const asked = role ?? ROLES_BY_KIND[kindOf(kind)];
-      draw(mesh, x, y, z, random, asked, (m, cx, cy, cz, r) => fallback?.tree({ mesh: m, x: cx, y: cy, z: cz, kind, random: r }));
+      draw(mesh, x, y, z, random, asked, (m, cx, cy, cz, r) => fallback?.tree({ mesh: m, x: cx, y: cy, z: cz, kind, random: r }), scale);
     },
     tuft({ mesh, x, y, z, random }) {
       draw(mesh, x, y, z, random, TUFT_ROLE, (m, cx, cy, cz, r) => fallback?.tuft({ mesh: m, x: cx, y: cy, z: cz, random: r }));

@@ -116,6 +116,19 @@ test("the flora asks the random for its size, so instances differ", () => {
   assert.equal(heightWith(0.999), 12);
 });
 
+test("a garden tree can be scaled down while a wood keeps its mature size", () => {
+  const flora = floraOf();
+  const heightOf = (scale) => {
+    const mesh = new MeshBuilder();
+    flora.tree({ mesh, x: 0, y: 0, z: 0, kind: 0.5, random: fixed(0.5), scale });
+    const ys = Array.from(mesh.positions.data.slice(0, mesh.positions.length)).filter((_, i) => i % 3 === 1);
+    return Math.round(Math.max(...ys));
+  };
+  // The test pine stands 4 m tall at scale 1; a garden tree at 0.45 is 1.8 m.
+  assert.equal(heightOf(1), 4);
+  assert.equal(heightOf(0.45), 2);
+});
+
 test("a kit with no model for the asked role draws nothing rather than crashing", () => {
   const flora = floraOf();
   const mesh = new MeshBuilder();

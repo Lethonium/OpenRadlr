@@ -585,7 +585,9 @@ function furnishVillage(route, terrain, zone, { kit, into, structures, palette, 
       standing.add(pos[0], pos[2], reach);
     }
     if (p.role === VILLAGE_ROLES.trees) {
-      kit.tree({ mesh: into.trees, x: pos[0], y: terrain.height(pos[0], pos[2]), z: pos[2], kind: 0.9, random, role: VILLAGE_ROLES.trees });
+      // A village tree beside a house stays garden-sized; the wood keeps the
+      // kit's mature trees.
+      kit.tree({ mesh: into.trees, x: pos[0], y: terrain.height(pos[0], pos[2]), z: pos[2], kind: 0.9, random, role: VILLAGE_ROLES.trees, scale: 0.5 });
       continue;
     }
     const building = BUILDING_ROLES.has(p.role);
