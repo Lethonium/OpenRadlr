@@ -1,7 +1,23 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">OpenRadlr</string>
-    <string name="title_activity_main">OpenRadlr</string>
-    <string name="package_name">com.openradlr.app</string>
-    <string name="custom_url_scheme">com.openradlr.app</string>
+    <string name="app_name" translatable="false">OpenRadlr</string>
+    <string name="title_activity_main" translatable="false">OpenRadlr</string>
+    <string name="package_name" translatable="false">com.openradlr.app</string>
+    <string name="custom_url_scheme" translatable="false">com.openradlr.app</string>
+    <string name="ride_channel">Active ride</string>
+    <string name="ride_channel_description">Live trainer stats and controls while riding.</string>
+    <string name="ride_notification_title">Your ride continues</string>
+    <string name="ride_stats">%1$d W · %2$s · %3$.1f %4$s</string>
+    <string name="ride_background_message">Trainer connected. Tap to return to your ride.</string>
+    <string name="ride_storage_error">Ride storage needs attention. Return to OpenRadlr.</string>
+    <string name="ride_return">Return to ride</string>
+    <string name="ride_end_save">End &amp; save</string>
+    <string name="ride_watts">%1$d W</string>
+    <string name="ride_cadence">%1$d rpm</string>
+    <string name="ride_distance">%1$.1f %2$s</string>
+    <string name="ride_elapsed">%1$02d:%2$02d:%3$02d</string>
+    <string name="ride_no_signal">Trainer signal interrupted. Reconnecting…</string>
+    <string name="ride_afk">Return to OpenRadlr to confirm you are still riding.</string>
+    <string name="ride_control_refused">Trainer control was refused. Return to OpenRadlr to retry.</string>
+    <string name="ride_compact_stats">%1$d W · %2$.1f %3$s</string>
 </resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Local development and the on-device WebSocket regression peer only. -->
+    <application android:usesCleartextTraffic="true">
+        <activity android:name="com.openradlr.app.ride.RideTestActivity" android:exported="false" />
+    </application>
+</manifest>

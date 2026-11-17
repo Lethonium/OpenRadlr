@@ -1,0 +1,179 @@
+{
+  "physics": {
+    "speed": 12,
+    "massKg": 85,
+    "cda": 0.32,
+    "crr": 0.004,
+    "airDensity": 1.225,
+    "ratio": 1,
+    "referenceRatio": 1
+  },
+  "cases": [
+    {
+      "name": "full draft",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 102,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 30,
+      "grade": 2.4
+    },
+    {
+      "name": "partial draft",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 104.25,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 15,
+      "grade": 2.9
+    },
+    {
+      "name": "adjacent lane",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 102,
+          "lane": 2.5
+        }
+      ],
+      "savingPercent": 0,
+      "grade": 3.4
+    },
+    {
+      "name": "different route",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "elsewhere",
+          "distance": 102,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 0,
+      "grade": 3.4
+    },
+    {
+      "name": "loop start line",
+      "loop": true,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 999,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 1,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 30,
+      "grade": 2.4
+    },
+    {
+      "name": "open start line",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 999,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 1,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 0,
+      "grade": 3.4
+    },
+    {
+      "name": "rider behind",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 99,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 0,
+      "grade": 3.4
+    },
+    {
+      "name": "nearest leader wins",
+      "loop": false,
+      "me": {
+        "id": 1,
+        "route": "r",
+        "distance": 100,
+        "lane": 2
+      },
+      "others": [
+        {
+          "id": 2,
+          "route": "r",
+          "distance": 106,
+          "lane": 2
+        },
+        {
+          "id": 3,
+          "route": "r",
+          "distance": 102,
+          "lane": 2
+        }
+      ],
+      "savingPercent": 30,
+      "grade": 2.4
+    }
+  ]
+}

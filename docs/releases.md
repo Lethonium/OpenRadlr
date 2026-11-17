@@ -51,6 +51,26 @@ trigger a release unless they declare a breaking change.
 3. Merge the release PR. The next workflow run creates the tag and GitHub Release.
    Deploy using the existing deployment process when ready.
 
+## Contributor credits
+
+After Release Please publishes a release, the workflow appends one compact
+**Contributors** section to its GitHub Release notes. Each human PR author in
+that release appears once; first-time contributors are marked `(first contribution)`.
+Bot accounts are excluded. GitHub's generated release notes supply both the PR
+attribution and first-time status, using the previous published stable release
+as the comparison point. These credits cover merged pull requests, including
+ones outside the feature/fix changelog; direct commits and reviews are not credited.
+
+The feature/fix notes and `CHANGELOG.md` keep their existing format, without
+per-change author mentions. Credits are added only to the published GitHub
+Release, so they appear after publication rather than in the release PR preview.
+
+To retry a failed credits step or refresh an existing release, run **Release
+Please** manually on `main` with **credits-tag** set to its tag, e.g. `v0.1.0`.
+This mode skips release creation and replaces only the managed contributor section,
+preserving the rest of the release notes. Leaving the input empty runs the usual
+release flow. Existing releases are not modified automatically.
+
 ## Version tracking
 
 `release-please-config.json` defines one root package so changes anywhere in the

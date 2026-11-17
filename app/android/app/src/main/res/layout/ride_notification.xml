@@ -1,0 +1,21 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="14dp" android:background="@drawable/ride_notification_background">
+    <TextView android:id="@+id/notification_route" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#FFFFFFFF" android:textSize="16sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="10dp">
+        <TextView android:id="@+id/notification_power" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFCF00" android:textSize="23sp" android:textStyle="bold" android:maxLines="1" />
+        <TextView android:id="@+id/notification_cadence" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFFFF" android:textSize="20sp" android:maxLines="1" />
+        <TextView android:id="@+id/notification_distance" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFFFF" android:textSize="20sp" android:maxLines="1" />
+    </LinearLayout>
+    <TextView android:id="@+id/notification_time" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#FFB8C7D4" android:textSize="12sp" android:paddingTop="2dp" />
+    <ProgressBar android:id="@+id/notification_progress" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="12dp"
+        android:progressTint="#FFFFCF00" android:progressBackgroundTint="#FF344454" />
+    <TextView android:id="@+id/notification_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#FFB8C7D4" android:textSize="12sp" android:paddingTop="8dp" android:maxLines="2" />
+</LinearLayout>
