@@ -8,7 +8,7 @@
 
 import { ACHIEVEMENTS_KEY, loadAchievements } from "./achievements.js";
 import { GOALS_KEY, loadGoals } from "./seasonGoals.js";
-import { RIDERS_KEY } from "./riders.js";
+import { RIDERS_KEY, removeRider } from "./riders.js";
 
 export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings", "device"];
 
@@ -164,6 +164,21 @@ export async function deleteRider({ storage, dbNames, deleteDb }) {
     }
   }
   return ok;
+}
+
+/**
+ * Deletes rider `id` of `roster` with everything they kept here and says which roster to
+ * keep: the rider leaves it only once all of their data went. When any of it refused,
+ * `ok` is false and the roster stands unchanged — the rider stays in the picker, so the
+ * data that remains stays reachable for a retry or an export.
+ * @param {{active: string, ids: string[]}} roster
+ * @param {string} id
+ * @param {{storage: Storage, dbNames: string[], deleteDb: (name: string) => Promise<void>}} options
+ * @returns {Promise<{roster: {active: string, ids: string[]}, ok: boolean}>}
+ */
+export async function deleteRiderFromRoster(roster, id, { storage, dbNames, deleteDb }) {
+  const ok = await deleteRider({ storage, dbNames, deleteDb });
+  return { roster: ok ? removeRider(roster, id) : roster, ok };
 }
 
 /**

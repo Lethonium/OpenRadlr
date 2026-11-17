@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deviceStorage, riderStorage } from "../public/js/profile/riderStorage.js";
-import { DATA_ITEMS, deleteItem, deleteRider, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
+import { DATA_ITEMS, deleteItem, deleteRider, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
 
 function fakeStorage(entries) {
   const map = new Map(Object.entries(entries));
@@ -287,4 +287,35 @@ test("deleteRider goes on past a database that fails and says false", async () =
   assert.equal(ok, false);
   assert.deepEqual(names, ["a", "b", "c"]);
   assert.equal(raw.getItem("openradlr.rider.k3x9q2ab.openradlr.lemons"), null);
+});
+
+test("deleteRiderFromRoster drops the rider once everything of them went", async () => {
+  const raw = fakeStorage({});
+  const roster = { active: "k3x9q2ab", ids: ["main", "k3x9q2ab"] };
+  const { roster: after, ok } = await deleteRiderFromRoster(roster, "k3x9q2ab", {
+    storage: riderStorage(raw, () => "k3x9q2ab"),
+    dbNames: ["openradlr-history.k3x9q2ab"],
+    deleteDb: async () => {},
+  });
+  assert.equal(ok, true);
+  assert.deepEqual(after, { active: "main", ids: ["main"] });
+});
+
+test("deleteRiderFromRoster keeps the rider in the roster when a database refuses", async () => {
+  const raw = fakeStorage({});
+  // Their rides' database refuses to go; the ghosts' does not.
+  const databases = new Map([["openradlr-history.k3x9q2ab", { "ride:1": {} }], ["openradlr-ghosts.k3x9q2ab", {}]]);
+  const roster = { active: "main", ids: ["main", "k3x9q2ab"] };
+  const { roster: kept, ok } = await deleteRiderFromRoster(roster, "k3x9q2ab", {
+    storage: riderStorage(raw, () => "k3x9q2ab"),
+    dbNames: [...databases.keys()],
+    deleteDb: async (name) => {
+      if (name === "openradlr-history.k3x9q2ab") throw new Error("blocked");
+      databases.delete(name);
+    },
+  });
+  assert.equal(ok, false);
+  // The rider stays reachable, and so do the rides that refused to go.
+  assert.deepEqual(kept, { active: "main", ids: ["main", "k3x9q2ab"] });
+  assert.deepEqual([...databases.keys()], ["openradlr-history.k3x9q2ab"]);
 });

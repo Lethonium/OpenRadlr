@@ -14,7 +14,7 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
-import { deleteItem, deleteRider, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
+import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
@@ -3570,7 +3570,9 @@ async function deleteProfileData(id) {
 
 /**
  * Deletes the active rider with everything they kept here. The card only asks; the rider is
- * switched away from first (a switch needs the dialogs closed), then their keys and databases go.
+ * switched away from first (a switch needs the dialogs closed), then their keys and databases
+ * go. Whatever refused to go keeps the rider in the picker: back on their page, with the error,
+ * their remains stay reachable for a retry.
  */
 async function deleteActiveRider() {
   const id = riders.active;
@@ -3587,18 +3589,21 @@ async function deleteActiveRider() {
   if (!confirmed) return;
   app.profileDialog.close();
   if (!switchRider(next.active)) return;
-  const ok = await deleteRider({
+  const { roster, ok } = await deleteRiderFromRoster(riders, id, {
     storage: own,
     dbNames: ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id)),
     deleteDb: deleteIndexedDb,
   });
-  riders = next;
+  if (!ok) {
+    switchRider(id);
+    await openProfile("data");
+    $("profile-data-error").textContent = t("profilePage.delete.failed");
+    $("profile-data-error").hidden = false;
+    return;
+  }
+  riders = roster;
   saveRiders(rawStorage, riders);
   renderRiderSwitcher();
-  if (ok) return;
-  await openProfile("data");
-  $("profile-data-error").textContent = t("profilePage.delete.failed");
-  $("profile-data-error").hidden = false;
 }
 
 function textElement(tag, text) {
