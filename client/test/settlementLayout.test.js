@@ -4,7 +4,10 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
+import { RoadNetwork } from "../public/js/route/network.js";
+import { networkTerrain } from "../public/js/view3d/world.js";
 import { SETTLEMENT_KIND, layoutSettlement } from "../public/js/land/settlement.js";
 
 const TERRAIN = { height: () => 10 };
@@ -109,4 +112,33 @@ test("a harbour gets a lane to the road, a quay and boats", () => {
   assert.ok(layout.quay, "a quay on the shore");
   assert.equal(layout.boats.length, 4);
   assert.ok(layout.boats.every((boat) => coast.height(boat.x, boat.z) < 0), "the boats are in the water");
+});
+
+test("the map's village and harbour stand on dry land, and the boats do not", () => {
+  const network = new RoadNetwork(JSON.parse(readFileSync(new URL("../../routes/maps/valley.json", import.meta.url))));
+  const roads = network.roads();
+  const terrain = networkTerrain(network, roads);
+  const layouts = Object.fromEntries(
+    network.settlements.map((settlement) => [settlement.id, layoutSettlement({ ...settlement, terrain, roads })]),
+  );
+
+  const village = layouts.southwest;
+  assert.ok(village.square, "the village has a green");
+  assert.ok(village.props.some((prop) => prop.role === "church"), "the village has a church");
+  assert.ok(village.streets.some((street) => street.kind === "street" && !street.existing), "a cross lane off the main road");
+
+  const harbour = layouts.harbour;
+  assert.ok(harbour.quay, "the harbour has a quay");
+  assert.ok(harbour.boats.length >= 3, `boats ${harbour.boats.length}`);
+  assert.ok(harbour.boats.every((boat) => terrain.height(boat.x, boat.z) < terrain.seaLevel), "the boats are in the sea");
+  assert.ok(harbour.streets.some((street) => street.kind === "lane"), "a lane from the road to the harbour");
+
+  for (const layout of [village, harbour]) {
+    for (const plot of layout.plots) {
+      assert.ok(
+        terrain.height(plot.x, plot.z) > terrain.seaLevel + 0.5,
+        `${layout.id} plot ${plot.x.toFixed(0)},${plot.z.toFixed(0)} is in the water`,
+      );
+    }
+  }
 });
