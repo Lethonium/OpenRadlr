@@ -12,8 +12,9 @@ import { floraOf } from "./scenery/flora.js";
 
 /** What the view draws: meshes, chunks, the animated objects and the gyms' spots and the studio's site (no functions). */
 export function sceneOf(world) {
-  const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio } = world;
+  const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio, lights } = world;
   const scene = { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio };
+  if (lights?.length) scene.lights = lights;
   if (world.instanceModels) scene.instanceModels = world.instanceModels;
   if (world.sceneryNearRange !== null && world.sceneryNearRange !== undefined) scene.sceneryNearRange = world.sceneryNearRange;
   return scene;

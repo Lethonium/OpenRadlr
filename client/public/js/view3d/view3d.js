@@ -42,6 +42,7 @@ import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { VEHICLE_KINDS } from "../ride/vehicle.js";
 import { buildBeerBike, buildSeatedBody, buildTandemFrame } from "./vehicleModel.js";
 import { buildWorld, riderPosition } from "./world.js";
+import { nearestLights } from "./townLight.js";
 import { sceneOf } from "./worldScene.js";
 import { drawnAt } from "./lod.js";
 import { resolveBiome } from "./biomes/index.js";
@@ -68,7 +69,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, canopy: 2000, village: 2600, villageFar: 2600, farm: 2600, farmFar: 2600, bright: 1200, detail: 220 },
+  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, canopy: 2000, village: 2600, villageFar: 2600, farm: 2600, farmFar: 2600, bright: 1200, glow: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -393,6 +394,8 @@ export class View3D {
     this.overview = world.overview ?? null;
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];
+    /** Every town light of the settlements (#117); the nearest eight reach the shader. */
+    this.townLights = world.lights ?? [];
     this.#studioSite = world.studio ?? null;
     this.#studio = world.studio ? new StudioLayer(this.renderer, world.studio) : null;
 
@@ -938,6 +941,9 @@ export class View3D {
    */
   #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
+    // Town light (#117): the nearest lamps and market lights light the walls
+    // and asphalt on High. Low keeps the emissive windows and drops them.
+    this.renderer.setPointLights?.(high && light.key === "dusk" ? nearestLights(this.townLights, eye) : []);
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
@@ -951,8 +957,13 @@ export class View3D {
         const distance = Math.hypot(chunk.center[0] - eye[0], chunk.center[1] - eye[1], chunk.center[2] - eye[2]) - chunk.radius;
         if (!drawnAt(group, distance, splits)) continue;
         if (!chunkVisible(chunk, eye, forward, range)) continue;
+        // Additive town glow (#117): warm pools on the street at dusk only.
+        if (group === "glow") {
+          if (high && light.key === "dusk" && chunk.handle) this.renderer.drawGlow?.(chunk.handle, this.identity, 1);
+          continue;
+        }
         if (chunk.handle) {
-          if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
+          if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 1 : light.key === "golden" ? 0.55 : 0.25);
           else this.renderer.draw(chunk.handle, this.identity);
         }
         for (const handle of chunk.instanceHandles) this.renderer.drawInstanced(handle, this.identity);

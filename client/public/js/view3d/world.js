@@ -38,6 +38,7 @@ import { fieldAt, forestAt, kindAt, treeFactor } from "../land/land.js";
 import { canGrowTree, slopeAt } from "../land/mountains.js";
 import { layoutSettlement } from "../land/settlement.js";
 import { buildSettlement } from "./settlement.js";
+import { buildTownLight, planTownLight } from "./townLight.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -1186,7 +1187,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     /** Cheap crowns filling the woods behind the modelled belt (#117). */
     ...(scenery ? { canopy: new ChunkedMesh() } : {}),
     structures: new ChunkedMesh(),
-    bright: new ChunkedMesh(),
     // A town kit's village: its buildings up close, and their cheap twins
     // beyond (#117). Only there when a kit builds the village, so a world
     // without scenery holds the groups it always did.
@@ -1194,6 +1194,12 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // A farm kit's buildings, near and far, like the village (#117). The
     // procedural farm stays on the route when no kit holds farm roles.
     ...(scenery?.has?.("farmBarns") ? { farm: instancedChunk(), farmFar: instancedChunk() } : {}),
+    // Additive ground pools, window halos and market glows (#117), then the
+    // emissive windows and heads. Both are drawn after the opaque buildings:
+    // a pool under a lamp or a window on a wall is otherwise covered by the
+    // building in front of it.
+    ...(scenery ? { glow: new ChunkedMesh() } : {}),
+    bright: new ChunkedMesh(),
   };
 
   const long = route.length > LONG_ROUTE_M;
@@ -1304,8 +1310,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // The settlements themselves, after the café so the square keeps its
   // forecourt clear. A town kit's buildings go into the village groups; a kit
   // without houses falls back to the biome's own.
+  const townLights = [];
   for (const settlement of settlements) {
-    buildSettlement(settlement, {
+    const built = buildSettlement(settlement, {
       terrain,
       structures: chunks.structures,
       bright: chunks.bright,
@@ -1316,6 +1323,12 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       occupancy,
       water: ground.water,
     });
+    // Town light (#117): warm windows, lamp pools and a few market lights.
+    // The plan is dusk's full strength; the view fades it out by time of day.
+    const height = (x, z) => terrain.height(x, z);
+    const plan = planTownLight(settlement, { height, houses: built.buildings });
+    buildTownLight(plan, { bright: chunks.bright, glow: chunks.glow, structures: chunks.structures, height });
+    townLights.push(...plan.lights);
   }
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
@@ -1438,6 +1451,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     cafes: cafeSpots,
     gyms,
     studio,
+    // Town light (#117): every lamp and market light of every settlement; the
+    // view uploads the nearest eight to the shader each frame.
+    ...(townLights.length ? { lights: townLights } : {}),
     waterLevel: ground.water,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
