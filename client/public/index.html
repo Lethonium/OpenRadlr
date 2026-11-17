@@ -418,7 +418,7 @@
                 <legend class="visually-hidden" data-i18n="start.rideSettings">Ride settings</legend>
                 <div class="settings-list">
                   <div class="setting-row">
-                    <span class="setting-label" data-i18n="settings.unitsFormat">Units</span>
+                    <span class="setting-label" data-i18n="rider.units">Units</span>
                     <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
                       <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
                       <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
@@ -428,8 +428,8 @@
                     <span class="setting-label" data-i18n="drawer.biome">Season</span>
                     <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
                   </div>
-                  <div class="setting-row">
-                    <span class="setting-label" data-i18n="rider.splits">Splits</span>
+                  <div class="setting-row ride-only">
+                    <label class="setting-label" for="split-mode" data-i18n="rider.splits">Splits</label>
                     <select id="split-mode" name="split-mode">
                       <option value="auto" data-i18n="layout.auto">Auto</option>
                       <option value="lap" data-i18n="rider.split.lap">Every lap</option>
@@ -444,13 +444,13 @@
                     <input id="auto-pause" type="checkbox" />
                   </label>
                   <div class="setting-row setting-row-wide ride-only" id="difficulty-row">
-                    <span class="setting-label"><span data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value">50 %</output></span>
-                    <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
-                    <span id="difficulty-hint" class="field-hint" data-i18n="settings.climbFeelHint">How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same.</span>
+                    <span class="setting-label"><span id="difficulty-label" data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value" for="difficulty">50 %</output></span>
+                    <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-labelledby="difficulty-label" aria-describedby="difficulty-hint" />
+                    <span id="difficulty-hint" class="field-hint" data-i18n="settings.climbFeelHint">How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.</span>
                   </div>
                 </div>
                 <details id="diagnostics" class="diagnostics">
-                  <summary data-i18n="settings.diagnostics">Device diagnostics</summary>
+                  <summary data-i18n="diagnostics.title">Device diagnostics</summary>
                   <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
                   <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
                   <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
@@ -1140,7 +1140,7 @@
                       <select id="menu-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
                     </label>
                     <div class="setting-row">
-                      <span class="setting-label" data-i18n="settings.unitsFormat">Units</span>
+                      <span class="setting-label" data-i18n="rider.units">Units</span>
                       <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
                         <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
                         <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
@@ -1153,7 +1153,7 @@
                       <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
                     </div>
                   </div>
-                  <div class="panel settings-group">
+                  <div class="panel">
                     <h2 data-i18n="drawer.keys">Keys</h2>
                     <dl class="kbd-grid">
                       <div><dt><kbd>←/→</kbd> <kbd>A/D</kbd></dt><dd data-i18n="keys.lane">Change lane</dd></div>

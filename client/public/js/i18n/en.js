@@ -50,6 +50,7 @@ export default {
   "devices.optional": "Optional",
   "menu.join": "Ride",
   "menu.boardCode": "Board with code",
+  "diagnostics.title": "Device diagnostics",
   "diagnostics.hint": "If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.",
   "diagnostics.empty": "No device connected yet.",
   "diagnostics.copy": "Copy report",
@@ -1222,9 +1223,7 @@ export default {
   "goals.image.progress": "Goals and this week's progress",
   "goals.image.off": "Nothing",
 
-  "settings.unitsFormat": "Units",
-  "settings.diagnostics": "Device diagnostics",
-  "settings.climbFeelHint": "How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same.",
+  "settings.climbFeelHint": "How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.",
   "keys.lane": "Change lane",
   "keys.race": "Join / leave a race",
   "keys.layout": "Layout",
