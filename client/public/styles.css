@@ -6923,51 +6923,49 @@ body.working-out #paddles {
 }
 
 /* Notices (status pills, junction, race and event calls, sprint/KOM countdown, splits,
-   milestones). Large screens: the wrapper makes no box, each keeps its own place. The
-   sprint/KOM countdown belongs to the race layout. */
+   milestones): one centred column on every screen. The media queries below only place it.
+   The sprint/KOM countdown belongs to the race layout. */
 .hud-notices {
-  display: contents;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.hud-notices > * {
+  position: static;
+  transform: none;
+  max-width: 100%;
+  margin: 0;
+}
+
+.hud-notices .milestone-banner.show {
+  animation-name: milestone-in-column;
+}
+
+/* The status pills wrap within the column instead of running past it. */
+.hud-notices .hud-status {
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .ride:not([data-layout="race"]) .marker-banner {
   display: none;
 }
 
-/* Phones: they stack in one centred column under the top panels, between the side rails
-   (stepper, lane buttons), so two at once never cover each other. */
+/* Phones: the column sits under the top panels, between the side rails (stepper, lane
+   buttons), so two notices at once never cover each other. */
 @media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
   .hud-notices {
-    position: absolute;
     top: calc(var(--top-stack) + var(--hud-row-gap));
     left: calc(var(--gap) + 64px + var(--hud-row-gap));
     right: calc(var(--gap) + 64px + var(--hud-row-gap));
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     gap: var(--hud-row-gap);
-    pointer-events: none;
-  }
-
-  .hud-notices > * {
-    position: static;
-    transform: none;
-    max-width: 100%;
-    margin: 0;
   }
 
   .hud-notices .race-call {
     white-space: normal;
-  }
-
-  .hud-notices .milestone-banner.show {
-    animation-name: milestone-in-column;
-  }
-
-  /* The status pills wrap instead of running off a narrow screen. */
-  .hud-notices .hud-status {
-    flex-wrap: wrap;
-    justify-content: center;
-    white-space: nowrap;
   }
 }
 
@@ -7081,7 +7079,7 @@ body.working-out #paddles {
   display: none;
 }
 
-/* Tablets and desktops: the notices stack in one centred column too, under the lowest top
+/* Tablets and desktops: the notices sit in the same centred column, under the lowest top
    panel of each layout (--top-stack), between the ticker or Nearby list on the left and the
    map on the right (360px each side; on narrower tablets up to the right edge). */
 @media (min-width: 761px) and (min-height: 501px) {
@@ -7102,26 +7100,10 @@ body.working-out #paddles {
   }
 
   .hud-notices {
-    position: absolute;
     top: calc(var(--top-stack) + 12px);
     left: 360px;
     right: 360px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     gap: 10px;
-    pointer-events: none;
-  }
-
-  .hud-notices > * {
-    position: static;
-    transform: none;
-    max-width: 100%;
-    margin: 0;
-  }
-
-  .hud-notices .milestone-banner.show {
-    animation-name: milestone-in-column;
   }
 }
 
@@ -7155,12 +7137,6 @@ body.working-out #paddles {
   .ride[data-layout="broadcast"] .nearby {
     top: 229px;
   }
-}
-
-/* Every screen: the status pills wrap within the notices column instead of running past it. */
-.hud-notices .hud-status {
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
 /* --- profile · goals (#99) -------------------------------------------- */
