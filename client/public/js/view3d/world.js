@@ -1139,6 +1139,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const instances = new InstanceCatalog();
   const instancedChunk = (size = CHUNK_SIZE) => new ChunkedMesh(size, instances);
+  // Only a kit with far twins gets the fine near chunks: without a far copy
+  // every chunk is drawn near, and 100 m chunks would triple the draw calls
+  // for no culling win.
+  const sceneryHasFar = Boolean(scenery?.far?.());
   const chunks = {
     terrain: new ChunkedMesh(),
     road: new ChunkedMesh(),
@@ -1146,7 +1150,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The near wood uses 100 m chunks: a 300 m chunk can hold a whole dense
     // wood and is either all near or all far, which made the camera's chunk
     // alone several million vertices. The far copy stays coarse.
-    scenery: instancedChunk(SCENERY_CHUNK),
+    scenery: instancedChunk(sceneryHasFar ? SCENERY_CHUNK : CHUNK_SIZE),
     /** The same trees at a cheaper level of detail, drawn beyond `flora.nearRange` (#117). */
     sceneryFar: instancedChunk(),
     /** Cheap crowns filling the woods behind the modelled belt (#117). */
