@@ -275,7 +275,7 @@ test("large files are encoded in chunks", async () => {
 
 test("only the features with native plugins are offered", () => {
   const share = { Filesystem: {}, Share: {} };
-  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn", "onBack"]);
+  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn", "onBack", "setImmersive"]);
   assert.equal(installNativeApp({ plugins: {}, navigator: {} }).saveFiles, null);
   assert.equal(typeof installNativeApp({ plugins: share, navigator: {} }).saveFiles, "function");
   assert.equal(typeof installNativeApp({ plugins: { WebAuth: {} }, navigator: {} }).signIn, "function");
@@ -367,4 +367,21 @@ test("with nothing left to go back to, the back button sends the app to the back
 
 test("without the App plugin there is no back button to handle", () => {
   assert.equal(installNativeApp({ plugins: {}, navigator: {} }).onBack, null);
+});
+
+test("Android system bars hide for a ride and return for the start screen", async () => {
+  const calls = [];
+  const app = installNativeApp({
+    plugins: { SystemBars: { hide: async () => calls.push("hide"), show: async () => calls.push("show") } },
+    navigator: {},
+    platform: "android",
+  });
+  await app.setImmersive(true);
+  await app.setImmersive(false);
+  assert.deepEqual(calls, ["hide", "show"]);
+});
+
+test("system-bar control stays optional on other platforms and older shells", () => {
+  assert.equal(installNativeApp({ plugins: {}, navigator: {}, platform: "android" }).setImmersive, null);
+  assert.equal(installNativeApp({ plugins: { SystemBars: {} }, navigator: {}, platform: "ios" }).setImmersive, null);
 });

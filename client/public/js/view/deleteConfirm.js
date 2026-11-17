@@ -20,13 +20,15 @@ const ITEMS = {
   progress: (f) => ({ title: t("profilePage.delete.progress.title"), lines: [t("profilePage.delete.progress.what", { summits: f.summits ?? 0, lemons: f.lemons ?? 0, achievements: f.achievements ?? 0 }), t("profilePage.delete.progress.again")], action: t("profilePage.delete.progress.action") }),
   unfinished: () => ({ title: t("profilePage.delete.unfinished.title"), lines: [t("profilePage.delete.unfinished.what")], action: t("profilePage.delete.unfinished.action") }),
   settings: () => ({ title: t("profilePage.delete.settings.title"), lines: [t("profilePage.delete.settings.what"), t("profilePage.delete.settings.devices")], action: t("profilePage.delete.settings.action") }),
+  device: () => ({ title: t("profilePage.delete.device.title"), lines: [t("profilePage.delete.device.what"), t("profilePage.delete.device.riders")], action: t("profilePage.delete.device.action"), offerExport: false }),
+  rider: (f) => ({ title: t("profilePage.delete.rider.title", { name: f.name ?? "" }), lines: [t("profilePage.delete.rider.what", { name: f.name ?? "" }), t("profilePage.delete.rider.device")], action: t("profilePage.delete.rider.action"), requireTick: true }),
   everything: (f) => ({ title: t("profilePage.delete.everything.title"), lines: [tn("profilePage.delete.everything.what", f.count ?? 0), t("profilePage.delete.everything.newRider"), t("profilePage.delete.rides.strava")], action: t("profilePage.delete.everything.action"), requireTick: true }),
 };
 
 /**
  * What a delete means, for the confirmation.
- * @param {"ride" | "rides" | "bestLaps" | "goal" | "goals" | "profile" | "progress" | "unfinished" | "settings" | "everything"} item
- * @param {{count?: number, from?: string, to?: string, date?: string, title?: string, summits?: number, lemons?: number}} facts
+ * @param {"ride" | "rides" | "bestLaps" | "goal" | "goals" | "profile" | "progress" | "unfinished" | "settings" | "device" | "rider" | "everything"} item
+ * @param {{count?: number, from?: string, to?: string, date?: string, title?: string, name?: string, summits?: number, lemons?: number}} facts
  */
 export function deleteTexts(item, facts = {}) {
   const texts = ITEMS[item]({ count: 0, ...facts });

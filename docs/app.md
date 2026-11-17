@@ -1,5 +1,10 @@
 # The OpenRadlr app (iOS and Android)
 
+**Android:** [Install OpenRadlr from Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app)
+on your phone or tablet. Open it, enter a rider name and connect your Bluetooth
+trainer to start riding. Riding is free. The instructions below are for building
+and testing the native shells; they are not required to install the Android app.
+
 No browser on iOS has Web Bluetooth, so on an iPhone or iPad you can only
 connect a trainer through the app. `app/` is a [Capacitor](https://capacitorjs.com)
 project that shows the normal OpenRadlr page and connects it to native
@@ -46,6 +51,32 @@ end a ride or a workout without asking:
 
 iOS has no back button, and in a browser the back button still leaves the
 page.
+
+## Fullscreen on Android
+
+The Android start screen keeps the clock and system icons visible over the island
+background, which extends behind the transparent status bar. During a ride, the
+status and navigation bars are hidden to give the road more room. Swipe from the screen edge to reveal Android's controls
+temporarily; returning to the start screen shows the bars again. The keyboard
+still opens normally for names, chat and other text fields.
+
+Deploy the web client together with the shell update: it switches the native
+SystemBars API when entering and leaving the ride screen.
+
+Device regression checks (with an Android emulator or phone attached):
+
+```bash
+cd app/android
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.openradlr.app.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The device tests check status-bar visibility, content extending underneath it,
+and light icons, including visibility after backgrounding and in landscape.
+Client tests cover entering and leaving immersive mode. With more than one
+device attached, select one with `adb -s`.
 
 ## Strava sign-in
 
@@ -245,3 +276,52 @@ description.
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
 - The app icon is scaled up from the 512 px maskable icon, the largest master
   in the repo. A 1024 px original would look sharper on the App Store.
+
+## App release information on requests
+
+The native web view appends its platform and the installed package's version and
+build number to the standard HTTP user agent. For example:
+
+```text
+OpenRadlr/0.1.0 (android; build/3)
+OpenRadlr/1.0 (ios; build/1)
+```
+
+This is set before the first navigation and also accompanies the web view's API
+requests and WebSocket upgrade. It describes the native shell; `client_version`
+in the WebSocket protocol continues to describe the web client served by the
+server. A client can forge a user agent, so it is not an authentication signal.
+
+The server exports `openradlr_client_requests_total` on its existing
+`/internal/metrics` endpoint, grouped by `client` (`android`, `ios`, or `browser`),
+`app_version` and `app_build`. The `browser` bucket also includes older app builds
+without the marker and requests with an invalid marker. Only successful `GET /api/info` responses are counted: the start menu requests
+this endpoint when it loads and while it remains open. Static files, failures,
+health checks, scrapes and WebSocket messages do not contribute. This measures
+menu-load and refresh activity, not unique users, installations or ride sessions.
+
+The counter keeps no raw user agents, IP addresses, device identifiers, rider
+names, request paths or individual request records. It lives in memory and resets
+when the server restarts. Separate release labels come only from an operator
+allowlist, never from request-controlled allocation. The default is
+`android/0.1.0/3,ios/1.0/1`; override `OPENRADLR_APP_METRIC_RELEASES` with a
+comma-separated `platform/version/build` list (at most 32 entries, empty disables
+release detail). Include the releases you still support when adding a new one.
+Unknown valid releases use `other` version/build buckets per platform. iOS build
+numbers may contain dot-separated numeric components. All counters are atomic;
+no global request lock is needed. Keep the endpoint on
+the host's private monitoring network as described in [Deployment](deploy.md).
+
+Example PromQL for a dashboard connected to the endpoint:
+
+```promql
+sum by (client) (rate(openradlr_client_requests_total[5m]))
+```
+
+Start-menu requests by Android release over the last day:
+
+```promql
+sum by (app_version, app_build) (
+  increase(openradlr_client_requests_total{client="android"}[24h])
+)
+```

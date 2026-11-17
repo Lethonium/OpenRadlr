@@ -639,6 +639,7 @@ kbd {
   margin: 32px auto 0;
   padding: 16px 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: center;
   justify-content: flex-start;
@@ -656,6 +657,35 @@ kbd {
 
 .build-label:hover {
   color: var(--text, inherit);
+}
+
+.community-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.community-link {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-underline-offset: 3px;
+}
+
+.community-link:hover {
+  border-color: var(--muted);
+}
+
+.community-link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 /* New version: a pill at the bottom, above the phone's Ride bar. */
@@ -3137,6 +3167,60 @@ body.riding {
   padding: 0;
 }
 
+/* Who is riding on this device: the active rider and, opened, the others and "Add rider". */
+.rider-switcher {
+  display: grid;
+  gap: 8px;
+}
+
+.rider-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.rider-initial {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rider-switch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-picker {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rider-picker button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.rider-picker button[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
 .profile-totals {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -4769,8 +4853,8 @@ body {
 }
 
 /* Edge to edge (the app on Android 15+, iOS home screen): the status bar lies over the page.
-   Outside a ride a strip in the page's colour keeps scrolled text from running under the clock. */
-body:not(.riding)::after {
+   Secondary pages keep a strip behind the clock; the start screen shows the island underneath. */
+body:not(.riding):not(:has(.start))::after {
   content: "";
   position: fixed;
   inset: 0 0 auto;

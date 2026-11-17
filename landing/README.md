@@ -2,7 +2,9 @@
 
 The public page for openradlr.com: a static [Astro](https://astro.build) site
 that explains OpenRadlr and links to the app (app.openradlr.com). It is
-separate from `client/`, which stays dependency-free.
+separate from `client/`, which stays dependency-free. The hero, setup guide, FAQ,
+closing section and footer also link to the published Android app on Google Play.
+Its store URL lives in `src/site.ts`.
 
 - `src/pages/index.astro`: the page itself; the privacy policy and imprint are
   operator-provided links (`PUBLIC_PRIVACY_URL`, `PUBLIC_IMPRINT_URL`).
@@ -35,7 +37,7 @@ npm run build     # static files in dist/
 | --- | --- | --- |
 | `PUBLIC_SITE_URL` | `https://openradlr.com` | canonical links, sitemap, Open Graph |
 | `PUBLIC_APP_URL` | `https://app.openradlr.com` | every *Ride now* button |
-| `PUBLIC_DISCORD_URL` | – | Discord link; without it the page points to GitHub issues |
+| `PUBLIC_DISCORD_URL` | – | Discord invite (the app's `OPENRADLR_DISCORD_URL`); use never-expiring invites with unlimited uses; without it the page points to GitHub issues |
 | `PUBLIC_PRIVACY_URL` | – | privacy policy link in the footer (the app's `OPENRADLR_PRIVACY_URL`); without it no link is shown |
 | `PUBLIC_IMPRINT_URL` | – | imprint (legal notice) link in the footer, e.g. a page from online-impressum.de; without it no link is shown |
 | `PUBLIC_PLAUSIBLE_DOMAIN` | – | cookie-free Plausible analytics; without it no script is loaded |

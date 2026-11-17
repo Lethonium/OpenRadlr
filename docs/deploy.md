@@ -109,12 +109,20 @@ don't want a landing page leave this out; nothing changes for them.
    OPENRADLR_LANDING_DOMAIN=openradlr.com, www.openradlr.com
    OPENRADLR_LANDING_URL=https://openradlr.com
    OPENRADLR_LANDING_PLAUSIBLE_DOMAIN=openradlr.com   # optional, cookie-free analytics
+   # OPENRADLR_DISCORD_URL=https://discord.gg/your-invite  # optional, community link in app + landing
    # OPENRADLR_PRIVACY_URL=https://...                # optional, privacy link (start menu + landing footer)
    # OPENRADLR_LANDING_IMPRINT_URL=https://...        # optional, imprint link in the footer
    ```
 
 3. `make up`. The bundled Caddy serves the landing page on the bare domain,
    redirects `www.` to it and proxies the app subdomain as before.
+   Set `OPENRADLR_DISCORD_URL` to your community's invite, configured in Discord
+   to **never expire** with **unlimited uses**. The same setting supplies the app
+   start menu (through `/api/info`) and the landing page (`PUBLIC_DISCORD_URL`).
+   Leave it empty to hide the app link and show the landing page's GitHub fallback.
+   Changing it requires recreating the server container and rebuilding the static
+   landing page, not a source change or release: `make up` applies both.
+
 4. **Strava:** the *Authorization Callback Domain* in the Strava API settings
    must be the app subdomain (`app.openradlr.com`). Change it when moving the
    app, then check *Connect with Strava* once.
@@ -247,3 +255,14 @@ read-only, so a new file only needs `make restart`. See [routes](routes.md).
 For a server without a reverse proxy, the bundled Caddy can handle TLS:
 `COMPOSE_PROFILES=tls` and `OPENRADLR_DOMAIN=ride.example.org` in `.env`
 (ports 80 and 443 must be reachable).
+
+### Requests by native app release
+
+The private `/internal/metrics` endpoint also exports
+`openradlr_client_requests_total{client,app_version,app_build}`. This aggregate
+counter helps compare native app releases and diagnose release-specific issues.
+It counts successful `GET /api/info` responses, excluding static assets, health
+checks and scrapes; menu refreshes count again. It does not estimate unique
+people or sessions. Set `OPENRADLR_APP_METRIC_RELEASES` to a comma-separated
+allowlist such as `android/0.1.0/3,ios/1.0/1` when supporting additional releases. See [App release information](app.md#app-release-information-on-requests)
+for label limits, compatibility with older app builds and example PromQL.

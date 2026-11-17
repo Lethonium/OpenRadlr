@@ -42,6 +42,8 @@
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/riderStorage.js" />
+    <link rel="modulepreload" href="js/profile/riders.js" />
     <link rel="modulepreload" href="js/profile/seasonGoals.js" />
     <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
@@ -61,6 +63,7 @@
     <link rel="modulepreload" href="js/ride/ridePause.js" />
     <link rel="modulepreload" href="js/ride/rideRecorder.js" />
     <link rel="modulepreload" href="js/ride/rideSession.js" />
+    <link rel="modulepreload" href="js/ride/rideStores.js" />
     <link rel="modulepreload" href="js/ride/roadRiders.js" />
     <link rel="modulepreload" href="js/ride/smoothing.js" />
     <link rel="modulepreload" href="js/ride/splits.js" />
@@ -82,6 +85,7 @@
     <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
     <link rel="modulepreload" href="js/view/events.js" />
+    <link rel="modulepreload" href="js/view/externalLink.js" />
     <link rel="modulepreload" href="js/view/ftpPrompt.js" />
     <link rel="modulepreload" href="js/view/ftpProvenance.js" />
     <link rel="modulepreload" href="js/view/ftpTestView.js" />
@@ -100,6 +104,7 @@
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
+    <link rel="modulepreload" href="js/view/riderSwitcher.js" />
     <link rel="modulepreload" href="js/view/screensDialog.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
@@ -274,6 +279,14 @@
                 <span data-i18n="rider.title">Rider</span>
                 <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
               </legend>
+              <!-- Who is riding on this device: the active rider, and the list to switch or add one -->
+              <div id="rider-switcher" class="rider-switcher">
+                <button type="button" id="rider-switch" class="secondary rider-switch" aria-expanded="false" aria-controls="rider-picker" aria-label="Who's riding" data-i18n-attr="aria-label:riders.switch">
+                  <span id="rider-switch-initial" class="rider-initial" aria-hidden="true">?</span>
+                  <span id="rider-switch-name" class="rider-switch-name"></span>
+                </button>
+                <ul id="rider-picker" class="rider-picker" hidden></ul>
+              </div>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
@@ -326,6 +339,7 @@
                 <p id="bluetooth-warning" class="bluetooth-note" hidden>
                   <strong data-i18n="start.thisBrowserCanT">This browser can't reach Bluetooth trainers.</strong>
                   <span data-i18n="start.useChrome">Use Chrome or Edge on Android, Windows, macOS or ChromeOS. iPhone, iPad, Safari and Firefox can't, but phone paddles work everywhere.</span>
+                  <a id="android-app-help" hidden target="_blank" rel="noopener noreferrer" data-i18n="start.androidApp">On Android? Get the app on Google Play.</a>
                 </p>
                 <!-- Every device line: state dot, name over what it's doing, actions on the right (deviceLine() in view/deviceSetup.js) -->
                 <div id="line-trainer" class="device-line bluetooth-only" data-state="idle">
@@ -452,6 +466,16 @@
         <footer class="build-line">
           <button type="button" id="build-label" class="build-label" title="Copy the build details" data-nav-skip data-i18n-attr="title:menu.build.copy"></button>
           <a id="privacy-link" class="build-label" target="_blank" rel="noopener" data-nav-skip hidden data-i18n="menu.privacy">Privacy</a>
+          <nav class="community-links" aria-label="Ride and community" data-i18n-attr="aria-label:menu.communityLinks">
+            <a id="android-app-link" class="build-label community-link" data-nav-skip hidden target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3" /><path d="M10 5h4m-3 14h2" /></svg>
+              <span data-i18n="menu.androidApp">Android app</span>
+            </a>
+            <a id="discord-link" class="build-label community-link" data-nav-skip hidden target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.7 5.1a18.4 18.4 0 0 0-4.5-1.4l-.6 1.2a16.8 16.8 0 0 0-5.2 0l-.6-1.2a18.4 18.4 0 0 0-4.5 1.4C1.5 9.2.7 13.2 1.1 17.2a18 18 0 0 0 5.5 2.8l1.1-1.8-1.7-.8.4-.3a13 13 0 0 0 11.2 0l.4.3-1.7.8 1.1 1.8a18 18 0 0 0 5.5-2.8c.5-4.6-.8-8.5-3.2-12.1ZM8.5 14.9c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z" /></svg>
+              <span data-i18n="menu.discord">Join our Discord</span>
+            </a>
+          </nav>
         </footer>
 
         <!-- A newer build is live: a toast over the page, not a line to hunt for -->
@@ -572,6 +596,7 @@
                     <div class="profile-data-actions">
                       <button type="button" id="profile-export" class="secondary" data-i18n="profilePage.data.export">Export as a file</button>
                       <button type="button" id="profile-delete-all" class="secondary profile-ride-delete" data-i18n="profilePage.data.deleteAll">Delete everything on this device</button>
+                      <button type="button" id="profile-delete-rider" class="secondary profile-ride-delete" hidden data-i18n="profilePage.data.deleteRider">Delete this rider</button>
                     </div>
                     <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
                   </div>

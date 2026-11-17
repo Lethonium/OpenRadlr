@@ -13,6 +13,9 @@ def uploadStoreFile = uploadKey('storeFile', 'OPENRADLR_UPLOAD_STORE_FILE')
 
 android {
     namespace = "com.openradlr.app"
+    buildFeatures {
+        buildConfig true
+    }
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.openradlr.app"
@@ -20,7 +23,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Google Play takes every versionCode once: raise it for each upload.
         // The client comes from the server, so this only changes with the native shell.
-        versionCode 1
+        versionCode 3
         versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -63,6 +66,8 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // Keep the test APK's old split stdlibs aligned with the BLE plugin's Kotlin runtime.
+    androidTestImplementation platform("org.jetbrains.kotlin:kotlin-bom:2.2.20")
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
