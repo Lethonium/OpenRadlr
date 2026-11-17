@@ -61,7 +61,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     await page.waitForTimeout(opts.wait);
     const out = opts.out ?? `${opts.camera}-${opts.at}-${opts.scenery}.png`;
     mkdirSync(out.replace(/\/[^/]*$/, "") || ".", { recursive: true });
-    await page.screenshot({ path: out });
+    // A dense wood is slow under software WebGL; the default 30 s is not enough.
+    await page.screenshot({ path: out, timeout: 120000 });
     console.log(out);
   } finally {
     await browser.close();
