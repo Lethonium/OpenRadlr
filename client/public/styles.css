@@ -117,6 +117,7 @@ input[type="range"] {
 }
 
 kbd {
+  font-family: inherit;
   border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: 4px;
@@ -1370,6 +1371,118 @@ button.small {
 
 .start-settings fieldset {
   margin-bottom: 14px;
+}
+
+/* Setting rows: one setting per row, its control on the right. */
+.settings-list {
+  display: grid;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: center;
+  padding: 11px 0;
+  color: var(--text);
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid var(--border);
+}
+
+.setting-row > select,
+.setting-row > .unit-switch,
+.setting-row > input[type="checkbox"],
+.setting-row > button {
+  justify-self: end;
+}
+
+.setting-row > select {
+  width: 190px;
+}
+
+.setting-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.setting-label {
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+}
+
+.setting-desc {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* The slider row: label with its live value on the left, the slider right. */
+.setting-row-wide .setting-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.setting-row-wide .setting-label output {
+  color: var(--muted);
+}
+
+.setting-row-wide input[type="range"] {
+  width: 170px;
+}
+
+.setting-row-wide .field-hint {
+  grid-column: 1 / -1;
+}
+
+/* The season swatches follow their select inside a row. */
+.setting-row .biome-preview {
+  grid-column: 2;
+  justify-self: end;
+  margin: 0;
+}
+
+/* Key help as a scannable grid of key caps. */
+.kbd-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+}
+
+.kbd-grid > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.kbd-grid dt {
+  white-space: nowrap;
+}
+
+.kbd-grid dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.kbd-grid kbd {
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 /* Ride and its error stay in reach: the bottom of the panel on wide screens, of the screen on phones. */
@@ -5010,7 +5123,8 @@ body:not(.riding):not(:has(.start))::after {
     height: 44px;
   }
 
-  .check input[type="checkbox"] {
+  .check input[type="checkbox"],
+  .setting-row input[type="checkbox"] {
     width: 22px;
     height: 22px;
   }

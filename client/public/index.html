@@ -416,52 +416,62 @@
               <summary data-i18n="start.settings">Settings</summary>
               <fieldset>
                 <legend class="visually-hidden" data-i18n="start.rideSettings">Ride settings</legend>
-                <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
-                  <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
-                  <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
+                <div class="settings-list">
+                  <div class="setting-row">
+                    <span class="setting-label" data-i18n="rider.units">Units</span>
+                    <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
+                      <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+                      <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <span class="setting-label" data-i18n="drawer.biome">Season</span>
+                    <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
+                  </div>
+                  <div class="setting-row ride-only">
+                    <label class="setting-label" for="split-mode" data-i18n="rider.splits">Splits</label>
+                    <select id="split-mode" name="split-mode">
+                      <option value="auto" data-i18n="layout.auto">Auto</option>
+                      <option value="lap" data-i18n="rider.split.lap">Every lap</option>
+                      <option value="1"></option>
+                      <option value="5"></option>
+                      <option value="10"></option>
+                      <option value="off" data-i18n="rider.split.off">Off</option>
+                    </select>
+                  </div>
+                  <label class="setting-row">
+                    <span class="setting-label" data-i18n="rider.autoPause">Auto-pause when I stop</span>
+                    <input id="auto-pause" type="checkbox" />
+                  </label>
+                  <div class="setting-row setting-row-wide ride-only" id="difficulty-row">
+                    <span class="setting-label"><span id="difficulty-label" data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value" for="difficulty">50 %</output></span>
+                    <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-labelledby="difficulty-label" aria-describedby="difficulty-hint" />
+                    <span id="difficulty-hint" class="field-hint" data-i18n="settings.climbFeelHint">How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.</span>
+                  </div>
                 </div>
-                <label><span data-i18n="drawer.biome">Season</span>
-                  <select id="start-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
-                </label>
-                <label class="ride-only"><span data-i18n="rider.splits">Splits</span>
-                  <select id="split-mode" name="split-mode">
-                    <option value="auto" data-i18n="layout.auto">Auto</option>
-                    <option value="lap" data-i18n="rider.split.lap">Every lap</option>
-                    <option value="1"></option>
-                    <option value="5"></option>
-                    <option value="10"></option>
-                    <option value="off" data-i18n="rider.split.off">Off</option>
-                  </select>
-                </label>
-                <label class="check"><input id="auto-pause" type="checkbox" /> <span data-i18n="rider.autoPause">Auto-pause when I stop</span></label>
-                <label id="difficulty-row" class="ride-only">
-                  <span class="label-text"><span data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value">50 %</output></span>
-                  <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-describedby="difficulty-hint" />
-                  <span id="difficulty-hint" class="field-hint" data-i18n="start.howMuchOfEach">How much of each climb your smart trainer simulates: 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.</span>
-                </label>
+                <details id="diagnostics" class="diagnostics">
+                  <summary data-i18n="diagnostics.title">Device diagnostics</summary>
+                  <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
+                  <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
+                  <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
+                </details>
+                <details id="screens" class="diagnostics" hidden>
+                  <summary data-i18n="screens.title">Second screen</summary>
+                  <p class="diagnostics-hint" data-i18n="screens.hint">Show your ride on a phone, or use this device as a cockpit for another tablet.</p>
+                  <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a second screen</button>
+                  <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>
+                  <dialog id="screens-dialog" aria-labelledby="screens-dialog-title">
+                    <h2 id="screens-dialog-title" data-i18n="screens.dialogTitle">Pair a second screen</h2>
+                    <p data-i18n="screens.dialogHint">On the phone, choose “Use this device as a cockpit” in the settings and enter this code.</p>
+                    <p id="screens-code" class="screens-code" aria-live="polite"></p>
+                    <p id="screens-countdown" class="hint"></p>
+                    <p id="screens-status" class="hint" role="status"></p>
+                    <button type="button" id="screens-renew" class="secondary" data-i18n="screens.renew" hidden>New code</button>
+                    <button type="button" id="screens-unpair" class="secondary" data-i18n="screens.unpair">Unpair all</button>
+                    <button type="button" id="screens-close" data-i18n="screens.close">Close</button>
+                  </dialog>
+                </details>
               </fieldset>
-              <details id="diagnostics" class="diagnostics">
-              <summary data-i18n="diagnostics.title">Device diagnostics</summary>
-              <p class="diagnostics-hint" data-i18n="diagnostics.hint">If your trainer shows no power, pedal for a few seconds, then copy this report and attach it to a bug report.</p>
-              <pre id="diagnostics-log" class="diagnostics-log" data-i18n="diagnostics.empty">No device connected yet.</pre>
-              <button type="button" id="copy-diagnostics" class="secondary" data-i18n="diagnostics.copy">Copy report</button>
-            </details>
-            <details id="screens" class="diagnostics" hidden>
-              <summary data-i18n="screens.title">Second screen</summary>
-              <p class="diagnostics-hint" data-i18n="screens.hint">Show your ride on a phone, or use this device as a cockpit for another tablet.</p>
-              <button type="button" id="screens-pair" class="secondary" data-i18n="screens.pair">Pair a second screen</button>
-              <button type="button" id="screens-cockpit" class="secondary" data-i18n="screens.useAsCockpit">Use this device as a cockpit</button>
-              <dialog id="screens-dialog" aria-labelledby="screens-dialog-title">
-                <h2 id="screens-dialog-title" data-i18n="screens.dialogTitle">Pair a second screen</h2>
-                <p data-i18n="screens.dialogHint">On the phone, choose “Use this device as a cockpit” in the settings and enter this code.</p>
-                <p id="screens-code" class="screens-code" aria-live="polite"></p>
-                <p id="screens-countdown" class="hint"></p>
-                <p id="screens-status" class="hint" role="status"></p>
-                <button type="button" id="screens-renew" class="secondary" data-i18n="screens.renew" hidden>New code</button>
-                <button type="button" id="screens-unpair" class="secondary" data-i18n="screens.unpair">Unpair all</button>
-                <button type="button" id="screens-close" data-i18n="screens.close">Close</button>
-              </dialog>
-            </details>
             </details>
           </form>
         </div>
@@ -1122,32 +1132,42 @@
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="settings" role="region" aria-labelledby="menu-nav-settings-title" hidden>
-                  <div class="panel">
-                    <h2 data-i18n="drawer.biome">Season</h2>
-                    <label><span class="visually-hidden" data-i18n="drawer.biome">Season</span>
+                  <div class="panel settings-list">
+                    <label class="setting-row">
+                      <span class="setting-label"><span data-i18n="drawer.biome">Season</span>
+                        <span class="setting-desc" data-i18n="drawer.biomeHint">Season: changes how the world looks, not where anything is</span>
+                      </span>
                       <select id="menu-biome" aria-label="Season" data-i18n-attr="aria-label:drawer.biome"></select>
                     </label>
-                    <p class="hint" data-i18n="drawer.biomeHint">Season: changes how the world looks, not where anything is</p>
-                  </div>
-                  <div class="panel">
-                    <h2 data-i18n="rider.units">Units</h2>
-                    <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
-                      <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
-                      <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
+                    <div class="setting-row">
+                      <span class="setting-label" data-i18n="rider.units">Units</span>
+                      <div class="unit-switch" role="group" aria-label="Units" data-i18n-attr="aria-label:rider.units">
+                        <button type="button" class="toggle" data-units="metric" aria-pressed="true" data-i18n="drawer.kmKg">km · kg</button>
+                        <button type="button" class="toggle" data-units="imperial" aria-pressed="false" data-i18n="drawer.miLb">mi · lb</button>
+                      </div>
+                    </div>
+                    <div class="setting-row">
+                      <span class="setting-label"><span data-i18n="drawer.trainer">Trainer</span>
+                        <span id="trainer-packets" class="setting-desc"></span>
+                      </span>
+                      <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
                     </div>
                   </div>
                   <div class="panel">
-                    <h2><span data-i18n="drawer.trainer">Trainer</span> <span id="trainer-packets" class="muted-count"></span></h2>
-                    <button type="button" id="ride-copy-diagnostics" class="secondary" data-i18n="drawer.copyDiagnostics">Copy diagnostics</button>
-                  </div>
-                  <div class="panel">
                     <h2 data-i18n="drawer.keys">Keys</h2>
-                    <p class="hint">
-                      <span data-i18n="drawer.keysHint">←/→ or A/D change lane · J join/leave a race · L layout · M menu · V 3D/2D · C camera · T time of day · P photo</span>
-                      <span id="shift-hint" hidden> · <span data-i18n="drawer.shiftHint">E/Q or +/− shift</span></span>
-                      <span id="power-hint" hidden> · <span data-i18n="drawer.powerHint">↑/↓ simulated power</span></span>
-                      <span id="erg-hint" hidden> · <span data-i18n="drawer.ergHint">↑/↓ ERG target</span></span>
-                    </p>
+                    <dl class="kbd-grid">
+                      <div><dt><kbd>←/→</kbd> <kbd>A/D</kbd></dt><dd data-i18n="keys.lane">Change lane</dd></div>
+                      <div><dt><kbd>J</kbd></dt><dd data-i18n="keys.race">Join / leave a race</dd></div>
+                      <div><dt><kbd>L</kbd></dt><dd data-i18n="keys.layout">Layout</dd></div>
+                      <div><dt><kbd>M</kbd></dt><dd data-i18n="keys.menu">Menu</dd></div>
+                      <div><dt><kbd>V</kbd></dt><dd data-i18n="keys.view">3D / 2D</dd></div>
+                      <div><dt><kbd>C</kbd></dt><dd data-i18n="keys.camera">Camera</dd></div>
+                      <div><dt><kbd>T</kbd></dt><dd data-i18n="keys.timeOfDay">Time of day</dd></div>
+                      <div><dt><kbd>P</kbd></dt><dd data-i18n="keys.photo">Photo</dd></div>
+                      <div id="shift-hint" hidden><dt><kbd>E/Q</kbd> <kbd>+/−</kbd></dt><dd data-i18n="keys.shift">Shift</dd></div>
+                      <div id="power-hint" hidden><dt><kbd>↑/↓</kbd></dt><dd data-i18n="keys.power">Simulated power</dd></div>
+                      <div id="erg-hint" hidden><dt><kbd>↑/↓</kbd></dt><dd data-i18n="keys.erg">ERG target</dd></div>
+                    </dl>
                   </div>
                 </div>
               </div>

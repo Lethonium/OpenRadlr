@@ -211,10 +211,10 @@ the FTMS default (see Scope, Out).
 ### Climb feel (option B)
 
 - **Trainer:** with a gearbox, the road grade goes to `effectiveGrade` unscaled (no `applyDifficulty`). Without one, nothing changes.
-- **Start menu:** the Climb feel slider (`#difficulty` in its `label`) is hidden while the virtual-shifting checkbox is checked and offered. It follows the same toggle that shows `#gear-settings`.
+- **Start menu:** the Climb feel slider (`#difficulty`, named by its row label) is hidden while the virtual-shifting checkbox is checked and offered. It follows the same toggle that shows `#gear-settings`.
 - **In-game menu:** the Training page's Climb feel panel (`#ride-difficulty`) is hidden when the ride has a gearbox.
 - **Stored value:** kept, so turning shifting off brings the rider's setting back.
-- **Text:** the hint `start.howMuchOfEach` (en + de) gets one more sentence: "Not used with virtual shifting: the gears do it."
+- **Text:** the hint `settings.climbFeelHint` (en + de) says it is also in the ride menu and not used with virtual shifting: the gears do it.
 
 `difficulty.js` keeps its `descents` option; the gearbox path no longer calls it.
 
