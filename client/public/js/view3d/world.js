@@ -1314,6 +1314,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       kit: scenery,
       flora: scenery,
       occupancy,
+      water: ground.water,
     });
   }
   // Route files: seven farms each. Network roads: about one per kilometre.

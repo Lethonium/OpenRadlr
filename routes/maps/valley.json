@@ -11,6 +11,22 @@
       "y": 950,
       "radius": 420,
       "seed": 7101
+    },
+    {
+      "id": "southwest",
+      "kind": "village",
+      "x": -350,
+      "y": -2190,
+      "radius": 260,
+      "seed": 7102
+    },
+    {
+      "id": "harbour",
+      "kind": "harbour",
+      "x": 4450,
+      "y": -4125,
+      "radius": 220,
+      "seed": 7103
     }
   ],
   "coast": {

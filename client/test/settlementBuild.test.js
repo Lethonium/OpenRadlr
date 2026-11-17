@@ -35,20 +35,21 @@ const FLORA = {
   tree: ({ mesh, x, y, z }) => mesh.box([x, y + 1, z], [1, 2, 1], [0.2, 0.5, 0.2]),
 };
 
-const build = (layout = LAYOUT) => {
+const build = (layout = LAYOUT, terrain = TERRAIN, water = 0) => {
   const structures = new MeshBuilder();
   const bright = new MeshBuilder();
   const near = new MeshBuilder();
   const far = new MeshBuilder();
   const trees = new MeshBuilder();
   const result = buildSettlement(layout, {
-    terrain: TERRAIN,
+    terrain,
     structures,
     bright,
     into: { near, far, trees },
     biome: temperate,
     kit: KIT,
     flora: FLORA,
+    water,
   });
   return { ...result, structures, bright, near, far, trees };
 };
@@ -92,4 +93,13 @@ test("a kit without houses falls back to the biome's own house", () => {
 test("a village builds fewer houses than the city", () => {
   const village = layoutSettlement({ id: "southwest", kind: SETTLEMENT_KIND.village, center: [0, 0], radius: 220, seed: 2026, terrain: TERRAIN, roads: [ROAD] });
   assert.ok(build(village).houses < build().houses);
+});
+
+test("a harbour builds its quay and boats", () => {
+  const coast = { seaLevel: 0, height: (x, z) => 20 + z, distanceToRoad: () => 1000 };
+  const harbour = layoutSettlement({ id: "harbour", kind: SETTLEMENT_KIND.harbour, center: [0, 60], radius: 50, seed: 7103, terrain: coast, roads: [ROAD] });
+  assert.ok(harbour.quay && harbour.boats.length === 4);
+  const withQuay = build(harbour);
+  const without = build({ ...harbour, quay: null, boats: [] });
+  assert.ok(withQuay.structures.vertexCount > without.structures.vertexCount, "the quay and boats add geometry");
 });

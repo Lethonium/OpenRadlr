@@ -7,7 +7,7 @@
  * worker, so it has no DOM and no clock, and the layout it receives is the
  * only source of randomness that matters.
  */
-import { appendInstance } from "./meshBuilder.js";
+import { MeshBuilder, appendInstance } from "./meshBuilder.js";
 import { placement } from "./math.js";
 import { seededRandom } from "./noise.js";
 
@@ -136,6 +136,7 @@ export function buildSettlement(layout, {
   kit = null,
   flora = null,
   occupancy = null,
+  water = -Infinity,
 } = {}) {
   if (!layout || !terrain || !structures || !into?.near) return { houses: 0, props: 0, lamps: 0 };
   const random = seededRandom((hash(layout.id) ^ 0x51e7) >>> 0);
@@ -151,22 +152,63 @@ export function buildSettlement(layout, {
   // would z-fight.
   const nearExisting = (x, z) => terrain.distanceToRoad(x, z) < 8;
   for (const street of layout.streets) {
+    if (street.draw === false) continue;
     const skip = street.existing ? null : nearExisting;
     if (!street.existing) ribbon(structures, street.points, street.width, roadColor, terrain, { skip });
+    const walk = street.pavement ?? pavement;
     for (const side of [-1, 1]) {
-      const offset = street.width / 2 + pavement / 2;
+      const offset = street.width / 2 + walk / 2;
       const points = street.points.map((p, i) => {
         const a = street.points[Math.max(0, i - 1)];
         const b = street.points[Math.min(street.points.length - 1, i + 1)];
         const n = perp2(normalize2(sub2(b, a)));
         return [p[0] + n[0] * side * offset, p[1] + n[1] * side * offset];
       });
-      ribbon(structures, points, pavement, palette.pavement, terrain, { lift: 0.14, skip });
+      ribbon(structures, points, walk, palette.pavement, terrain, { lift: 0.14, skip });
     }
   }
   for (const junction of layout.junctions) pad(structures, junction.x, junction.z, junction.radius, roadColor, terrain);
 
   if (layout.square) paveSquare(structures, layout.square, layout.frame, layout.center, terrain, palette.pavement);
+
+  // A harbour's quay, jetty and boats. The quay is a paved strip along the
+  // shore; the boats sit on the water surface, not the ground.
+  if (layout.quay) {
+    const { quay } = layout;
+    const along = [-Math.sin(quay.yaw), -Math.cos(quay.yaw)];
+    const across = quay.sea;
+    const corner = (a, b) => {
+      const x = quay.x + along[0] * a + across[0] * b;
+      const z = quay.z + along[1] * a + across[1] * b;
+      return [x, terrain.height(x, z) + 0.2, z];
+    };
+    const p0 = corner(-quay.length / 2, -quay.width / 2);
+    const p1 = corner(quay.length / 2, -quay.width / 2);
+    const p2 = corner(quay.length / 2, quay.width / 2);
+    const p3 = corner(-quay.length / 2, quay.width / 2);
+    structures.triangleFacing(p0, p1, p2, palette.pavement, [0, 1, 0]);
+    structures.triangleFacing(p0, p2, p3, palette.pavement, [0, 1, 0]);
+    // Bollards along the sea edge.
+    for (let a = -quay.length / 2 + 5; a <= quay.length / 2 - 5; a += 8) {
+      const x = quay.x + along[0] * a + across[0] * (quay.width / 2 - 0.4);
+      const z = quay.z + along[1] * a + across[1] * (quay.width / 2 - 0.4);
+      structures.box([x, terrain.height(x, z) + 0.45, z], [0.28, 0.9, 0.28], palette.stoneDark);
+    }
+    // A jetty into the water and four boats.
+    const jetty = new MeshBuilder();
+    jetty.box([0, 0, 0], [2.2, 0.16, 10], [0.45, 0.32, 0.2]);
+    const jettyX = quay.x + across[0] * (quay.width / 2 + 5);
+    const jettyZ = quay.z + across[1] * (quay.width / 2 + 5);
+    structures.append(jetty.build(), placement([jettyX, water + 0.35, jettyZ], Math.atan2(-across[0], -across[1])));
+    const boat = new MeshBuilder();
+    boat.box([0, 0.35, 0], [3.2, 0.7, 1.4], [0.82, 0.82, 0.8]);
+    boat.box([0, 0.8, 0], [2.2, 0.25, 1.0], [0.25, 0.3, 0.45]);
+    boat.box([0, 2.0, 0], [0.1, 2.4, 0.1], [0.35, 0.28, 0.2]);
+    const hull = boat.build();
+    for (const b of layout.boats ?? []) {
+      structures.append(hull, placement([b.x, water + 0.12, b.z], b.yaw));
+    }
+  }
 
   // Houses along the plots. The kit supplies the models; without one, the
   // biome's own house keeps the city visible in a world without a town kit.
@@ -182,6 +224,9 @@ export function buildSettlement(layout, {
     ];
     if (occupancy?.blocked?.(pos[0], pos[1], Math.max(width, depth) * 0.45)) continue;
     const y = groundUnder(terrain, pos[0], pos[1], plot.yaw, width, depth);
+    // A coastal plot can be on land at its centre and over the drop at its
+    // seaward corner; a house standing in the water is never right.
+    if (Number.isFinite(water) && y < water + 1) continue;
     const matrix = placement([pos[0], y, pos[1]], plot.yaw);
     if (model) {
       appendInstance(into.near, model.near, matrix);
@@ -215,6 +260,7 @@ export function buildSettlement(layout, {
     if (!picked) {
       if (prop.role === "church" && biome.models.church) {
         const y = groundUnder(terrain, prop.x, prop.z, prop.yaw, 10, 18);
+        if (Number.isFinite(water) && y < water + 1) continue;
         structures.append(biome.models.church(), placement([prop.x, y, prop.z], prop.yaw));
         occupancy?.add?.(prop.x, prop.z, prop.radius ?? 7);
         props += 1;
@@ -224,6 +270,7 @@ export function buildSettlement(layout, {
     const width = picked.bounds.max[0] - picked.bounds.min[0];
     const depth = picked.bounds.max[2] - picked.bounds.min[2];
     const y = groundUnder(terrain, prop.x, prop.z, prop.yaw, width, depth);
+    if (Number.isFinite(water) && y < water + 1) continue;
     const matrix = placement([prop.x, y, prop.z], prop.yaw);
     appendInstance(into.near, picked.near, matrix);
     if (picked.far && into.far) appendInstance(into.far, picked.far, matrix);

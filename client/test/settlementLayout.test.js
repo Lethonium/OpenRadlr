@@ -87,3 +87,26 @@ test("houses face the street on both sides", () => {
     assert.ok(plot.width >= 5 && plot.depth >= 5);
   }
 });
+
+test("a harbour gets a lane to the road, a quay and boats", () => {
+  // The shore is 80 m north of the centre; the road is 60 m south. The harbour
+  // is 60 m from the road, so it needs a lane, and the sea is close enough to
+  // find a quay.
+  const coast = { seaLevel: 0, height: (x, z) => 20 + z };
+  const layout = layoutSettlement({
+    id: "harbour",
+    kind: SETTLEMENT_KIND.harbour,
+    center: [0, 60],
+    radius: 50,
+    seed: 7103,
+    terrain: coast,
+    roads: [ROAD],
+  });
+  const lane = layout.streets.find((s) => s.kind === "lane");
+  assert.ok(lane, "a lane connects the harbour to the road");
+  assert.ok(Math.hypot(lane.points[0][0], lane.points[0][1]) < 2, "the lane starts at the road");
+  assert.ok(Math.hypot(lane.points.at(-1)[0], lane.points.at(-1)[1] - 60) < 2, "the lane ends at the harbour");
+  assert.ok(layout.quay, "a quay on the shore");
+  assert.equal(layout.boats.length, 4);
+  assert.ok(layout.boats.every((boat) => coast.height(boat.x, boat.z) < 0), "the boats are in the water");
+});

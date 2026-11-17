@@ -41,6 +41,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     plotDepth: [10, 15],
     square: [50, 40],
     lampEvery: 26,
+    maxSlope: 0.35,
     mainHouses: true,
     blocks: true,
   }),
@@ -57,6 +58,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     plotDepth: [10, 15],
     square: [34, 28],
     lampEvery: 28,
+    maxSlope: 0.35,
     mainHouses: true,
     blocks: true,
   }),
@@ -73,6 +75,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     plotDepth: [9, 14],
     square: [26, 22],
     lampEvery: 32,
+    maxSlope: 0.35,
     mainHouses: true,
     blocks: true,
   }),
@@ -89,6 +92,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     plotDepth: [9, 13],
     square: [28, 20],
     lampEvery: 30,
+    maxSlope: 0.55,
     mainHouses: true,
     blocks: true,
   }),
@@ -105,6 +109,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     plotDepth: [10, 15],
     square: null,
     lampEvery: 40,
+    maxSlope: 0.4,
     mainHouses: false,
     blocks: false,
   }),
@@ -158,7 +163,7 @@ function nearestRoad(roads, x, z) {
   const a = best.road.positionAt(best.d);
   const b = best.road.positionAt(Math.min(best.road.length, best.d + 10));
   const u = normalize2([b.x - a.x, -(b.y - a.y)]);
-  return { ...best, u, v: perp2(u) };
+  return { ...best, dist: Math.sqrt(best.squared), u, v: perp2(u) };
 }
 
 /** A polyline sampled between two local points. */
@@ -277,6 +282,44 @@ export function layoutSettlement({
       route: nearest.road,
     });
   }
+  // A settlement away from a road gets a lane to it: the harbour is at the
+  // shore, the nearest road is a kilometre inland, and the lane is the way
+  // down. The lane carries no houses and fewer lamps than a street.
+  if (nearest && nearest.dist > radius * 0.6) {
+    const roadPoint = [nearest.x, nearest.z];
+    const length = Math.hypot(center[0] - roadPoint[0], center[1] - roadPoint[1]);
+    const count = Math.max(2, Math.ceil(length / 10));
+    const points = [];
+    for (let i = 0; i <= count; i += 1) {
+      const t = i / count;
+      points.push([roadPoint[0] + (center[0] - roadPoint[0]) * t, roadPoint[1] + (center[1] - roadPoint[1]) * t]);
+    }
+    streets.push({
+      id: `${id}-lane`,
+      kind: "lane",
+      width: 4.5,
+      pavement: 1.5,
+      points,
+      houses: false,
+      lampEvery: 80,
+    });
+    // A few houses where the lane reaches the shore: the harbour itself is a
+    // narrow strip, not a grid. The lane's ribbon is drawn once; this entry
+    // only adds the frontage.
+    const shore = points.slice(Math.max(0, points.length - Math.ceil(160 / 10)));
+    if (shore.length >= 2) {
+      streets.push({
+        id: `${id}-shore`,
+        kind: "lane",
+        width: 4.5,
+        pavement: 1.5,
+        points: shore,
+        houses: true,
+        draw: false,
+        lampEvery: 1000,
+      });
+    }
+  }
 
   // Streets parallel to the main road, then cross streets.
   for (const b of rows) {
@@ -361,6 +404,52 @@ export function layoutSettlement({
     props.push({ role: "church", x: church[0], z: church[1], yaw: Math.atan2(side * v[0], side * v[1]), radius: 7 });
   }
 
+  // A harbour faces the water: a quay along the shore and a few boats in the
+  // bay. The sea direction is the lowest of eight samples around the centre.
+  let quay = null;
+  const boats = [];
+  if (kind === SETTLEMENT_KIND.harbour && terrain) {
+    const water = terrain.seaLevel ?? -Infinity;
+    let sea = null;
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (i / 8) * Math.PI * 2;
+      const dx = Math.cos(angle);
+      const dz = Math.sin(angle);
+      let shore = null;
+      for (let r = 10; r <= 180; r += 5) {
+        if (terrain.height(center[0] + dx * r, center[1] + dz * r) < water + 1.2) {
+          shore = r;
+          break;
+        }
+      }
+      if (shore !== null && (!sea || shore < sea.shore)) sea = { shore, dx, dz };
+    }
+    if (sea) {
+      const inland = Math.max(0, sea.shore - 8);
+      const shoreX = center[0] + sea.dx * inland;
+      const shoreZ = center[1] + sea.dz * inland;
+      const along = perp2([sea.dx, sea.dz]);
+      quay = {
+        x: shoreX,
+        z: shoreZ,
+        yaw: Math.atan2(-along[0], -along[1]),
+        length: 46,
+        width: 7,
+        sea: [sea.dx, sea.dz],
+      };
+      for (let i = 0; i < 4; i += 1) {
+        const offset = (i - 1.5) * 9;
+        boats.push({
+          x: shoreX + sea.dx * (18 + (i % 2) * 8) + along[0] * offset,
+          z: shoreZ + sea.dz * (18 + (i % 2) * 8) + along[1] * offset,
+          yaw: Math.atan2(-sea.dx, -sea.dz) + (i % 2 ? 0.3 : -0.2),
+        });
+      }
+      props.push({ role: "stalls", x: shoreX + along[0] * 8, z: shoreZ + along[1] * 8, yaw: quay.yaw, radius: 2 });
+      props.push({ role: "benches", x: shoreX - along[0] * 8, z: shoreZ - along[1] * 8, yaw: quay.yaw, radius: 1 });
+    }
+  }
+
   // Lamps: junctions first, then every few metres along the new streets.
   for (const junction of junctions) {
     const p = toLocal(junction.x, junction.z);
@@ -368,8 +457,8 @@ export function layoutSettlement({
     lamps.push({ x: lamp[0], z: lamp[1] });
   }
   for (const street of streets) {
-    if (street.existing) continue;
-    const step = style.lampEvery;
+    if (street.existing || street.draw === false) continue;
+    const step = street.lampEvery ?? style.lampEvery;
     const stride = Math.max(1, Math.round(step / 8));
     let side = 1;
     for (let i = 0; i < street.points.length; i += stride) {
@@ -461,9 +550,11 @@ export function layoutSettlement({
         const centerPlot = add2(station, scale2(normal, side * (front + depth / 2)));
         const facing = scale2(normal, -side);
         const [x, z] = centerPlot;
-        const ground = groundRange(terrain, x, z, Math.min(width, depth));
+        const ground = groundRange(terrain, x, z, Math.max(width, depth));
         const box = footprint(x, z, facing, width, depth);
-        const fits = !nearStreet(x, z, 1.4) && !inSquare(x, z) && freeFootprint(box) && (ground.slope < 0.35 || !terrain);
+        const sea = terrain?.seaLevel ?? -Infinity;
+        const wet = terrain && ground.low < sea + 2;
+        const fits = !wet && !nearStreet(x, z, 1.4) && !inSquare(x, z) && freeFootprint(box) && (ground.slope < (style.maxSlope ?? 0.35) || !terrain);
         if (fits) {
           markFootprint(box);
           plots.push({
@@ -484,6 +575,7 @@ export function layoutSettlement({
     }
   };
   for (const street of streets) {
+    if (street.houses === false) continue;
     if (!style.mainHouses && street.existing) continue;
     placeAlong(street, 1);
     placeAlong(street, -1);
@@ -511,5 +603,7 @@ export function layoutSettlement({
     square,
     lamps,
     props,
+    quay,
+    boats,
   };
 }
