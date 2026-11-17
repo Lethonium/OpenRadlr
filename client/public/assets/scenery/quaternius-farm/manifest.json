@@ -1,0 +1,90 @@
+{
+  "name": "quaternius-farm",
+  "licence": "CC0-1.0",
+  "provenance": {
+    "pack": "https://quaternius.itch.io/lowpoly-farm-buildings",
+    "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "taken": "2026-11-17",
+    "note": "LowPoly Farm Buildings by Quaternius. Its itch.io page states CC0 1.0. The pack has no License.txt of its own."
+  },
+  "models": {
+    "barn": {
+      "role": "farmBarns",
+      "file": "Barn",
+      "far": "Barn-far",
+      "triangles": 2910
+    },
+    "bigBarn": {
+      "role": "farmBarns",
+      "file": "BigBarn",
+      "far": "BigBarn-far",
+      "triangles": 4224
+    },
+    "openBarn": {
+      "role": "farmBarns",
+      "file": "OpenBarn",
+      "far": "OpenBarn-far",
+      "triangles": 1612
+    },
+    "smallBarn": {
+      "role": "farmBarns",
+      "file": "SmallBarn",
+      "far": "SmallBarn-far",
+      "triangles": 2176
+    },
+    "silo": {
+      "role": "farmSilos",
+      "file": "Silo",
+      "far": "Silo-far",
+      "triangles": 1592
+    },
+    "siloHouse": {
+      "role": "farmSilos",
+      "file": "Silo_House",
+      "far": "Silo_House-far",
+      "triangles": 2880
+    },
+    "waterTower": {
+      "role": "farmSilos",
+      "file": "WaterTower",
+      "far": "WaterTower-far",
+      "triangles": 2507
+    },
+    "windmill": {
+      "role": "farmWindmills",
+      "file": "Windmill",
+      "far": "Windmill-far",
+      "triangles": 1440
+    },
+    "towerWindmill": {
+      "role": "farmWindmills",
+      "file": "TowerWindmill",
+      "far": "TowerWindmill-far",
+      "triangles": 7827
+    },
+    "well": {
+      "role": "farmWells",
+      "file": "Well",
+      "far": "Well-far",
+      "triangles": 2880
+    },
+    "fence": {
+      "role": "farmFences",
+      "file": "Fence",
+      "far": "Fence-far",
+      "triangles": 188
+    },
+    "fence2": {
+      "role": "farmFences",
+      "file": "Fence2",
+      "far": "Fence2-far",
+      "triangles": 324
+    },
+    "coop": {
+      "role": "farmCoops",
+      "file": "ChickenCoop",
+      "far": "ChickenCoop-far",
+      "triangles": 948
+    }
+  }
+}

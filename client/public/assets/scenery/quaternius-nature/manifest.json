@@ -1,0 +1,198 @@
+{
+  "name": "quaternius-nature",
+  "licence": "CC0-1.0",
+  "provenance": {
+    "pack": "https://quaternius.com/packs/ultimatenature.html",
+    "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "taken": "2026-11-17",
+    "note": "Ultimate Nature Pack by Quaternius. The pack's own License.txt, in its Google Drive folder, says CC0 1.0 Universal. OBJ folder, 19 of the 150 models."
+  },
+  "models": {
+    "pine1": {
+      "role": "firs",
+      "file": "PineTree_1",
+      "height": 4.4,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "PineTree_1-far",
+      "triangles": 1920
+    },
+    "pine2": {
+      "role": "firs",
+      "file": "PineTree_2",
+      "height": 4,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "PineTree_2-far",
+      "triangles": 1692
+    },
+    "pine3": {
+      "role": "firs",
+      "file": "PineTree_3",
+      "height": 4,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "PineTree_3-far",
+      "triangles": 2392
+    },
+    "common1": {
+      "role": "leafy",
+      "file": "CommonTree_1",
+      "height": 4,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "CommonTree_1-far",
+      "triangles": 2888
+    },
+    "common2": {
+      "role": "leafy",
+      "file": "CommonTree_2",
+      "height": 3.5,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "CommonTree_2-far",
+      "triangles": 2952
+    },
+    "common3": {
+      "role": "leafy",
+      "file": "CommonTree_3",
+      "height": 3.2,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "CommonTree_3-far",
+      "triangles": 1584
+    },
+    "common4": {
+      "role": "leafy",
+      "file": "CommonTree_4",
+      "height": 3.3,
+      "sizes": [
+        0.55,
+        1
+      ],
+      "far": "CommonTree_4-far",
+      "triangles": 1352
+    },
+    "birch1": {
+      "role": "leafy",
+      "file": "BirchTree_1",
+      "height": 3.1,
+      "sizes": [
+        0.6,
+        1
+      ],
+      "far": "BirchTree_1-far",
+      "triangles": 1704
+    },
+    "birch2": {
+      "role": "leafy",
+      "file": "BirchTree_2",
+      "height": 2.8,
+      "sizes": [
+        0.6,
+        1
+      ],
+      "far": "BirchTree_2-far",
+      "triangles": 1568
+    },
+    "willow1": {
+      "role": "leafy",
+      "file": "Willow_1",
+      "height": 3.9,
+      "sizes": [
+        0.6,
+        1
+      ],
+      "far": "Willow_1-far",
+      "triangles": 1946
+    },
+    "willow2": {
+      "role": "leafy",
+      "file": "Willow_2",
+      "height": 3.6,
+      "sizes": [
+        0.6,
+        1
+      ],
+      "far": "Willow_2-far",
+      "triangles": 2752
+    },
+    "willow3": {
+      "role": "leafy",
+      "file": "Willow_3",
+      "height": 3.1,
+      "sizes": [
+        0.6,
+        1
+      ],
+      "far": "Willow_3-far",
+      "triangles": 1044
+    },
+    "bush1": {
+      "role": "bushes",
+      "file": "Bush_1",
+      "height": 1.6,
+      "sizes": [
+        0.7,
+        1
+      ],
+      "far": "Bush_1-far",
+      "triangles": 364
+    },
+    "bush2": {
+      "role": "bushes",
+      "file": "Bush_2",
+      "height": 1.4,
+      "sizes": [
+        0.7,
+        1
+      ],
+      "far": "Bush_2-far",
+      "triangles": 268
+    },
+    "bushBerries": {
+      "role": "bushes",
+      "file": "BushBerries_1",
+      "height": 1.6,
+      "sizes": [
+        0.8,
+        1
+      ],
+      "far": "BushBerries_1-far",
+      "triangles": 892
+    },
+    "rock1": {
+      "role": "rocks",
+      "file": "Rock_1",
+      "height": 1.5,
+      "sizes": [
+        0.5,
+        1.1
+      ],
+      "far": "Rock_1-far",
+      "triangles": 70
+    },
+    "rock2": {
+      "role": "rocks",
+      "file": "Rock_2",
+      "height": 1.4,
+      "sizes": [
+        0.5,
+        1.1
+      ],
+      "triangles": 80
+    }
+  }
+}
