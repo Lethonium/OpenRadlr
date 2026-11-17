@@ -10,6 +10,7 @@ import { CROWD } from "./crowd.js";
 import { appendInstance, MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
 import { villageLots, villageShape } from "../land/land.js";
+import { TREELINE, slopeAt } from "../land/mountains.js";
 import { fbm, seededRandom } from "./noise.js";
 import { temperate } from "./biomes/index.js";
 import { VILLAGE_ROLES, layVillage } from "./scenery/village.js";
@@ -657,6 +658,10 @@ export function buildFarms(route, terrain, { structures, occupancy, seed, count 
     if (terrain.distanceToRoad(pos[0], pos[2]) < 55) continue;
     const samples = [-18, 18].flatMap((dx) => [-18, 18].map((dz) => terrain.height(pos[0] + dx, pos[2] + dz)));
     if (Math.max(...samples) - Math.min(...samples) > 6 || Math.min(...samples) < lakeLevel + 2) continue;
+    // No farm in the high country: above the treeline is alpine pasture and
+    // rock, not a farmyard (#117). The map and the trees use the same line.
+    if (Number.isFinite(lakeLevel) && Math.max(...samples) - lakeLevel > TREELINE) continue;
+    if (slopeAt(terrain, pos[0], pos[2]) > 0.5) continue;
 
     const yaw = yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.5;
     const local = (lx, lz) => {

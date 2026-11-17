@@ -35,6 +35,18 @@ test("a crown is cheap", () => {
   assert.ok(mesh.vertexCount / count <= 3 * 20, `${mesh.vertexCount / count} corners a crown`);
 });
 
+test("a wood reaches beyond the near verge, not just 170 m", () => {
+  // The terrain's `distanceToRoad` only searches the verge. The canopy must
+  // use the index's far distance, or it grows a belt and calls it a wood.
+  const farTerrain = {
+    ...terrain,
+    distanceToRoad: (x) => (Math.abs(x) > 170 ? Infinity : Math.abs(x)),
+    index: { distance: (x) => Math.abs(x) },
+  };
+  const { positions } = buildCanopy(farTerrain, BOX, { land: LAND, water: 0, biome: temperate, reach: [50, 400] });
+  assert.ok(positions.some(([x]) => x > 250), "a crown 250–400 m from the road");
+});
+
 test("the same land grows the same canopy", () => {
   assert.deepEqual(canopy().positions, canopy().positions);
 });

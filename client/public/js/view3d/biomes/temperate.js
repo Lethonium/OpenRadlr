@@ -28,6 +28,7 @@ import {
   buildWarningSign,
 } from "../structures.js";
 import { fbm, valueNoise } from "../noise.js";
+import { snowAt } from "../../land/mountains.js";
 
 export const COLORS = Object.freeze({
   road: [0.25, 0.26, 0.28],
@@ -99,6 +100,7 @@ const RIVER_BED = [0.5, 0.45, 0.34];
 const RIVER_MEADOW = [0.34, 0.5, 0.26];
 const STEEP = [0.48, 0.46, 0.42];
 const HIGH = [0.5, 0.52, 0.42];
+const SNOW = [0.88, 0.91, 0.95];
 
 const smoothstep = (edge0, edge1, x) => {
   const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -133,15 +135,23 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
     base = FIELDS.find((f) => patch < f.upTo).color;
   }
   const colour = [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
+  let out = colour;
   if (wood > 0) {
     const floor = [0.18, 0.27, 0.14];
-    return colour.map((c, i) => c * (1 - wood) + floor[i] * shade * wood);
-  }
-  if (crop > 0) {
+    out = colour.map((c, i) => c * (1 - wood) + floor[i] * shade * wood);
+  } else if (crop > 0) {
     const crops = [0.44, 0.6, 0.27];
-    return colour.map((c, i) => c * (1 - crop) + crops[i] * shade * crop);
+    out = colour.map((c, i) => c * (1 - crop) + crops[i] * shade * crop);
   }
-  return colour;
+  // Permanent snow on the peaks (#117): the same line the tree scatter and
+  // the top-down map use, so the high country reads the same in all three.
+  // Broken up by noise and thinned on the steeper faces, so the high country
+  // is snow, rock and alpine grass rather than a white second winter.
+  const snow = snowAt(height, water)
+    * (0.72 + 0.28 * valueNoise(x / 55, z / 55, seed + 97))
+    * (1 - 0.45 * smoothstep(0.35, 0.6, steep));
+  if (snow > 0) out = out.map((c, i) => c * (1 - snow) + SNOW[i] * (0.92 + 0.08 * shade) * snow);
+  return out;
 }
 
 /** One tree, bush or rock at `[x, y, z]`; `kind` is the placement's random draw. */

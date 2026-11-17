@@ -35,6 +35,7 @@ import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
 import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fieldAt, forestAt, kindAt, treeFactor } from "../land/land.js";
+import { canGrowTree, slopeAt } from "../land/mountains.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -132,6 +133,16 @@ export class RoadIndex {
       }
     }
     return best ? { sample: best, distance: Math.sqrt(bestSquared) } : null;
+  }
+
+  /**
+   * Distance to the nearest road within `rings` cells, or `Infinity` when it
+   * is further away. `nearest`'s default two rings reach about 170 m, which is
+   * right for the road's own verge but not for a wood that reaches 400 m out:
+   * the canopy used that and only ever grew a thin belt (#117).
+   */
+  distance(x, z, rings = 8) {
+    return this.nearest(x, z, rings)?.distance ?? Infinity;
   }
 }
 
@@ -767,6 +778,14 @@ export const landOf = (seed) =>
 const DENSE_REACH = 260;
 
 /**
+ * Distance to the road for a wood that reaches hundreds of metres out. The
+ * terrain's `distanceToRoad` only searches the road's own verge (~170 m); the
+ * canopy needs the real distance, or it never fills a wood (#117).
+ */
+const roadDistance = (terrain, x, z, rings = 8) =>
+  terrain.index?.distance ? terrain.index.distance(x, z, rings) : terrain.distanceToRoad(x, z);
+
+/**
  * The near wood's chunk size (#117). A 300 m chunk can hold a whole dense
  * wood, and the near/far split is per chunk: the camera's chunk alone was
  * several million vertices. Smaller near chunks cull the wood behind the
@@ -849,6 +868,9 @@ export function buildScenery(
     if (terrain.distanceToRoad(x, z) < halfWidth + 3 || blocked(x, z)) continue;
     const ground = terrain.height(x, z);
     if (ground < water + 2.5) continue; // no trees in the sea or on the beach
+    // The high country is bare: no trees above the treeline, none on the
+    // rock faces (#117). The map and the ground use the same line.
+    if (!canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
     const y = ground - 0.3;
     positions.push([x, y, z]);
 
@@ -894,10 +916,11 @@ export function buildCanopy(terrain, box, { land, water = -Infinity, biome = tem
       const z = (gz + jz) * step;
       const wood = land.forestAt(x, z);
       if (wood < 0.55 || pick > wood) continue;
-      const road = terrain.distanceToRoad(x, z);
+      const road = roadDistance(terrain, x, z, 8);
       if (road < near || road > far) continue;
       const ground = terrain.height(x, z);
       if (ground < water + 2.5 || blocked(x, z)) continue;
+      if (!canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
       const y = ground - 0.3;
       positions.push([x, y, z]);
       if (pick < 0.55 * wood) {
@@ -933,6 +956,7 @@ export function buildUnderstory(route, terrain, { into = null, flora = null, lan
     if (land.forestAt(x, z) < 0.45) continue;
     const ground = terrain.height(x, z);
     if (ground < water + 2.5) continue;
+    if (!canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
     const role = random() < 0.68 ? "bushes" : "rocks";
     flora.tree({ mesh: into, x, y: ground - 0.05, z, kind: 0.2, random, role });
     placed += 1;
@@ -961,7 +985,11 @@ export function buildGroundDetail(
     // On tight bends a spot beside one segment can land on the next one.
     if (terrain.distanceToRoad(x, z) < halfWidth + 0.2 || blocked(x, z)) return null;
     const y = terrain.height(x, z);
-    return y < water + 2.5 ? null : [x, y, z];
+    if (y < water + 2.5) return null;
+    // No grass or flowers on the high country: above the treeline is rock,
+    // alpine meadow and snow (#117).
+    if (!canGrowTree(y, water, slopeAt(terrain, x, z))) return null;
+    return [x, y, z];
   };
   for (let i = 0; i < tufts; i += 1) {
     const p = spot();
