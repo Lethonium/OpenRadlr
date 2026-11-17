@@ -1,0 +1,13 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical">
+    <ImageView android:layout_width="44dp" android:layout_height="44dp" android:layout_marginEnd="8dp"
+        android:src="@drawable/notification_brand" android:scaleType="fitCenter" android:contentDescription="@string/app_name" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/app_name"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title" android:textStyle="bold" android:textSize="14sp" android:maxLines="1" />
+        <TextView android:id="@+id/compact_stats" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <Chronometer android:id="@+id/compact_clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title" android:textSize="22sp" android:textStyle="bold" android:layout_marginStart="10dp" />
+</LinearLayout>

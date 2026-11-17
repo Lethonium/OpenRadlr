@@ -3,18 +3,20 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
+import { nativeControl, enrichNativeSample } from "./native/backgroundRide.js";
+import { renderAndroidAppLink, renderExternalLink } from "./view/externalLink.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectionHelp, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
-import { deleteItem, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
+import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
@@ -36,6 +38,9 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
+import { addRider, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
+import { riderRows } from "./view/riderSwitcher.js";
+import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
@@ -48,14 +53,15 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
-import { RideAutosave, continueAllowed, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
+import { continueAllowed, deleteIndexedDb, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { BotCalls } from "./ride/botCalls.js";
-import { GhostStore, LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
+import { LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
-import { RideHistory, rideRecord } from "./ride/rideHistory.js";
+import { rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
+import { rideStores } from "./ride/rideStores.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
 import { toLatLon } from "./route/geo.js";
 import { RouteGeometry } from "./route/geometry.js";
@@ -94,7 +100,7 @@ import { drawRaceTimeline } from "./view/raceTimelineView.js";
 import { drawMapPreview } from "./view/mapPreview.js";
 import { MenuStage } from "./view/menuStage.js";
 import { BUILD } from "./build.js";
-import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, privacyUrl, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote, rideCards, cardIdOf, cardPick, directionsOf, renderDirections } from "./view/startMenu.js";
+import { buildLabel, communityDistance, pickRoute, renderRoutes, routesOf, serverStatus, stageHeadline, stageLede, stageStats, workoutRoute, devicesVisible, serverName, joinAction, stravaLine, activityOf, activityTabs, pickForActivity, renderActivityTabs, routesFor, shownActivity, showsCards, sharedNote, rideCards, cardIdOf, cardPick, directionsOf, renderDirections } from "./view/startMenu.js";
 import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
@@ -127,6 +133,12 @@ import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
+const nativeRide = nativeApp?.backgroundRide;
+const createRideSocket = nativeRide ? (url) => nativeRide.createSocket(url) : undefined;
+function setNativeImmersive(enabled) {
+  nativeApp?.setImmersive?.(enabled).catch((error) => console.warn("System bars:", error));
+}
+setNativeImmersive(false);
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
 /** How often a ride is written to the browser while it goes on (#73). */
@@ -151,14 +163,14 @@ const TICKER_ITEMS = 3;
 const TICKER_SECONDS = 9;
 const readSetting = (key) => {
   try {
-    return localStorage.getItem(key);
+    return riderStore.getItem(key);
   } catch {
     return null;
   }
 };
 const writeSetting = (key, value) => {
   try {
-    localStorage.setItem(key, value);
+    riderStore.setItem(key, value);
   } catch {
     // Settings are a convenience; ignore unavailable storage.
   }
@@ -263,7 +275,26 @@ function buildRideWorld() {
     });
 }
 
-const profiles = new ProfileStore();
+/** localStorage, or undefined where even touching it throws. */
+const rawStorage = (() => {
+  try {
+    return localStorage;
+  } catch {
+    return undefined;
+  }
+})();
+/** The riders on this device and which one is active (#112). */
+/**
+ * The roster: `{active, ids}`. Module-level rather than on `app`, because the `app` literal
+ * itself reads rider storage (`profiles.load()`) before `app` exists.
+ */
+let riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
+const activeRider = () => riders.active;
+/** Everything that belongs to the active rider; device keys go through `rawStorage`. */
+const riderStore = riderStorage(rawStorage, activeRider);
+
+const profiles = new ProfileStore({ storage: riderStore });
+
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
@@ -272,9 +303,14 @@ nativeApp?.onBack?.(goBack);
 /** Below this the menu fills the screen and shows its page list first. */
 const MENU_NARROW_QUERY = "(max-width: 999px), (max-height: 559px)";
 
+/** The active rider's ride stores (#115); applyRoster builds them again whenever the rider changes. */
+const stores = rideStores(activeRider());
+
 const app = {
   /** The rider chose "Later" on the new-version toast; it stays gone until the page reloads. */
   updateDismissed: false,
+  /** Counts rider switches: a read that started for an earlier rider must not draw its result (#112). */
+  riderGeneration: 0,
   profile: profiles.load(),
   /** The season goals as stored, and the rides and best laps their weeks are computed from. */
   goals: { rhythmStartMs: null, goals: [] },
@@ -381,11 +417,11 @@ const app = {
   /** The autosaved ride "Continue" picks up: `{snapshot, photos}`. */
   restored: null,
   /** The ride autosaved in this browser (#73), and the one the start menu offers. */
-  autosave: new RideAutosave({ store: indexedDbStore() }),
+  autosave: stores.autosave,
   /** Every finished ride, kept locally (#48, #83). */
-  history: new RideHistory({ store: indexedDbStore("openradlr-history") }),
+  history: stores.history,
   /** My best lap per route, ridden again by a ghost. */
-  ghosts: new GhostStore({ store: indexedDbStore("openradlr-ghosts") }),
+  ghosts: stores.ghosts,
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -522,13 +558,9 @@ function renderLanguageSelect() {
   select.hidden = options.length < 2;
 }
 
-/** localStorage, or undefined where even touching it throws. */
+/** The active rider's storage (the roster and device keys live outside it). */
 function browserStorage() {
-  try {
-    return localStorage;
-  } catch {
-    return undefined;
-  }
+  return riderStore;
 }
 
 function changeLanguage(code) {
@@ -610,11 +642,15 @@ function applyFtp(ftp, source, extra = {}) {
   renderFtpTest();
 }
 
-/** After the ride is stored, offers a higher FTP when the history supports one. */
-async function offerFtp() {
+/**
+ * After the ride is stored, offers a higher FTP when the history supports one. `history` is
+ * the finishing rider's; `generation` drops the offer once that rider is no longer active.
+ */
+async function offerFtp(history, generation) {
   const prompt = $("ftp-prompt");
   prompt.hidden = true;
-  const records = await app.history.list();
+  const records = await history.list();
+  if (generation !== app.riderGeneration) return;
   if (!records.length || records[0].test) return;
   // Rides from before a typed or tested FTP was set must not argue it back up
   const { ftp, ftpDismissed: dismissed, ftpSource, ftpDate } = app.profile;
@@ -635,23 +671,32 @@ async function offerFtp() {
   prompt.hidden = false;
 }
 
-function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
-  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
+/** Fills the start menu's rider fields from `app.profile`; again after the rider changes. */
+function fillSetupFields() {
   setUnits(app.profile.units);
   $("name").value = app.profile.name;
   $("weight").value = kgToDisplay(app.profile.weightKg);
   renderUnits();
-  // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-units]");
-    if (button) setUnitSystem(button.dataset.units);
-  });
   refreshFtpFields();
   $("split-mode").value = SPLIT_SETTINGS.includes(app.profile.splitMode) ? app.profile.splitMode : "auto";
   $("auto-pause").checked = Boolean(app.profile.autoPause);
   showLevel();
   setDifficultyInputs(app.profile.difficulty);
+  $("virtual-shifting").checked = app.profile.virtualShifting;
+  $("chainring").value = app.profile.chainring;
+  $("cog").value = app.profile.cog;
+  fillWorkoutSetup();
+}
+
+function initSetup() {
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
+  fillSetupFields();
+  // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-units]");
+    if (button) setUnitSystem(button.dataset.units);
+  });
   initWorkoutSetup();
 
   if (!isBluetoothAvailable()) {
@@ -665,9 +710,6 @@ function initSetup() {
   initKnownDevices();
 
   $("difficulty").addEventListener("input", (e) => setDifficultyInputs(e.target.value / 100));
-  $("virtual-shifting").checked = app.profile.virtualShifting;
-  $("chainring").value = app.profile.chainring;
-  $("cog").value = app.profile.cog;
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", showShiftingSettings);
@@ -707,6 +749,7 @@ function initSetup() {
   initScreens();
   initStartVehicle();
   initStartMenu();
+  initRiderSwitcher();
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -723,12 +766,16 @@ function initSetup() {
 
 /** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
 function initWorkoutSetup() {
-  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
-  app.workoutFigure = null;
-  $("workout-cues").checked = app.profile.workoutCues !== false;
   $("workout-cards").addEventListener("keydown", (event) => {
     if (event.key === "Escape" /* i18n-ok */ && app.workoutFigure !== null) pickWorkoutFigure(app.workoutPick, null);
   });
+}
+
+/** The saved plan and cue choice of the rider; the cards are drawn from them. */
+function fillWorkoutSetup() {
+  app.workoutPick = PRESETS.some((plan) => plan.id === app.profile.workoutPreset) ? app.profile.workoutPreset : PRESETS[0].id;
+  app.workoutFigure = null;
+  $("workout-cues").checked = app.profile.workoutCues !== false;
   renderWorkoutPick();
   $("workout-hint").textContent = t("workout.figureHint");
 }
@@ -995,6 +1042,137 @@ async function loadStravaAccount() {
   if (app.unfinished && !$("unfinished-save").hidden) setupRecoveryUpload();
 }
 
+// -------------------------------------------------------- rider switcher ---
+
+/** The name a rider has in their own profile (the active rider's included). */
+function nameOf(id) {
+  return new ProfileStore({ storage: riderStorage(rawStorage, () => id) }).load().name;
+}
+
+/** The start menu's rider button, and the list under it while it is open. */
+function renderRiderSwitcher() {
+  const rows = riderRows(riders, nameOf);
+  const current = rows.find((row) => row.active) ?? rows[0];
+  $("rider-switch-initial").textContent = current.initial;
+  $("rider-switch-name").textContent = current.name;
+  const open = !$("rider-picker").hidden;
+  $("rider-switch").setAttribute("aria-expanded", String(open));
+  const choice = (label, initial, onClick, checked) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    if (checked !== undefined) {
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-checked", String(checked));
+    }
+    const mark = document.createElement("span");
+    mark.className = "rider-initial";
+    mark.setAttribute("aria-hidden", "true");
+    mark.textContent = initial;
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.append(mark, text);
+    button.addEventListener("click", onClick);
+    item.append(button);
+    return item;
+  };
+  $("rider-picker").setAttribute("role", "radiogroup");
+  $("rider-picker").setAttribute("aria-label", t("riders.switch"));
+  $("rider-picker").replaceChildren(
+    ...rows.map((row) => choice(row.name, row.initial, () => switchRider(row.id), row.active)),
+    choice(t("riders.add"), "+", () => addNewRider()),
+  );
+}
+
+function toggleRiderPicker(open = $("rider-picker").hidden) {
+  $("rider-picker").hidden = !open;
+  renderRiderSwitcher();
+}
+
+function initRiderSwitcher() {
+  $("rider-switch").addEventListener("click", () => toggleRiderPicker());
+  relocaliseHooks.push(renderRiderSwitcher);
+  renderRiderSwitcher();
+}
+
+/** Riders change only from the start menu: not mid-ride, and not with a dialog open. */
+const canSwitchRider = () => !app.ride && !panels.isOpen && !$("setup").hidden;
+
+/**
+ * Makes `roster`'s active rider the one the page shows: every rider's data is read again from the
+ * rider-scoped storage, without a reload, so Bluetooth devices stay connected.
+ */
+function applyRoster(roster) {
+  riders = roster;
+  saveRiders(rawStorage, riders);
+  // The ride stores follow the active rider; those of the previous one stay with the
+  // saves still using them (#115).
+  const own = rideStores(roster.active);
+  app.autosave = own.autosave;
+  app.history = own.history;
+  app.ghosts = own.ghosts;
+  // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
+  app.riderGeneration += 1;
+  app.profile = profiles.load();
+  // Progress: the season goals, and what the profile and goals pages read from the history.
+  loadGoalsState();
+  app.profileData = null;
+  app.goalData = null;
+  app.lemonHunt = null;
+  app.lemonTotal = 0;
+  app.milestones = null;
+  // Settings of the rider (the view, camera, layout and quality are read when a ride starts).
+  const time = readSetting(TIME_KEY);
+  app.timeMode = TIME_MODES.includes(time) ? time : "day";
+  $("time-mode").value = app.timeMode;
+  app.routeId = readSetting(ROUTE_KEY);
+  app.rideRouteId = app.routeId;
+  app.rideMode = readSetting(RIDE_MODE_KEY);
+  app.coachVoice = readSetting(COACH_VOICE_KEY) === "on";
+  const biome = app.biome;
+  app.biome = biomeSetting();
+  // The rider's own language wins over the browser's; the text is drawn again like after changeLanguage.
+  initLocale({ storage: browserStorage(), languages: navigator.languages });
+  fillSetupFields();
+  toggleRiderPicker(false);
+  // The hooks draw the start menu, the pickers and the units; then the parts that read stores.
+  relocalise();
+  if (app.biome !== biome) app.menu?.biomeChanged();
+  else app.redrawStage?.();
+  renderRideModes();
+  app.unfinished = null;
+  renderUnfinished();
+  refreshUnfinished();
+}
+
+/** Switches to rider `id` in place; false when a ride or a dialog is open or the rider is unknown. */
+function switchRider(id) {
+  if (!canSwitchRider() || !riders.ids.includes(id)) return false;
+  if (id !== riders.active) applyRoster(setActive(riders, id));
+  else toggleRiderPicker(false);
+  $("rider-switch").focus();
+  return true;
+}
+
+/** Adds a rider with the current language and defaults, switches to them and asks for their name. */
+async function addNewRider() {
+  if (!canSwitchRider()) return;
+  const locale = getLocale();
+  const { roster, id } = addRider(riders);
+  riders = roster;
+  saveLocale(locale, browserStorage());
+  applyRoster(roster);
+  // Like a fresh install: stored defaults and a key pair, written for this rider even if the rider switches meanwhile.
+  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id) });
+  const generation = app.riderGeneration;
+  const profile = await own.ensureKeys(own.save(own.load()));
+  if (generation !== app.riderGeneration) return;
+  app.profile = profile;
+  $("name").focus();
+  $("name").select();
+}
+
 function renderAccount() {
   const strava = app.info?.strava;
   if (strava?.enabled && app.stravaAccount === undefined) {
@@ -1023,9 +1201,10 @@ function renderStartMenu() {
   $("server-label").textContent = serverName(app.info);
   $("server-players").textContent = status.text;
   const build = buildLabel(app.info, BUILD);
-  const privacy = privacyUrl(app.info);
-  $("privacy-link").hidden = !privacy;
-  if (privacy) $("privacy-link").href = privacy;
+  renderExternalLink($("privacy-link"), app.info?.privacy_url);
+  renderExternalLink($("discord-link"), app.info?.discord_url);
+  renderAndroidAppLink($("android-app-link"), { native: Boolean(nativeApp) });
+  renderAndroidAppLink($("android-app-help"), { native: Boolean(nativeApp) });
   $("build-label").textContent = build.text;
   $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
   $("update-banner").hidden = !build.stale || app.updateDismissed;
@@ -1167,7 +1346,7 @@ async function connectDevice(connect, onConnected, kind, { pending = t("devices.
   } catch (error) {
     // Given up quietly (another device was connected meanwhile) or the picker was closed: nothing to say.
     const cancelled = error.name === "AbortError" || /cancel/i.test(error.message ?? "");
-    settle(cancelled ? null : { state: "error", text: connectErrorText(error, deviceName) });
+    settle(cancelled ? null : { state: "error", ...connectionHelp(error, { native: Boolean(nativeRide), deviceName }) });
     if (!cancelled && error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
@@ -1267,6 +1446,14 @@ function renderDeviceLine(kind) {
 
 /** Every device line with its actions: Reconnect a known device (the chooser then reads "Other"), else connect, change or add. */
 function renderDeviceLines() {
+  const help = Object.values(app.deviceAttempts).find((attempt) => attempt?.settings);
+  const settings = $("bluetooth-settings");
+  settings.hidden = !nativeRide || !help;
+  if (help) {
+    settings.textContent = t(help.settings === "bluetooth" ? "setup.bluetoothSettings" : "setup.appPermissions");
+    settings.onclick = () => nativeRide.openSettings(help.settings).catch(() => notify(t("setup.settingsUnavailable"), "error"));
+  }
+
   const connectedNow = { trainer: Boolean(lineTrainer()), hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
   for (const kind of Object.keys(DEVICES)) {
     renderDeviceLine(kind);
@@ -1723,6 +1910,8 @@ function keepFormEdits() {
   if (app.ride) return;
   app.profile = profiles.save(keepValid(app.profile, formProfile()));
   $("ftp-source").textContent = ftpProvenance(app.profile, { locale: getLocale() });
+  // The rider button shows the name just typed.
+  renderRiderSwitcher();
 }
 
 /** @param {{snapshot: object, photos: object[]} | null} [restored] an autosaved ride to continue (#73) */
@@ -1795,7 +1984,7 @@ async function joinRide(restored = null) {
     app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
   }
 
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
   if (app.trainer instanceof PaddleTrainer) app.trainer.setFtp(app.profile.ftp);
@@ -1847,7 +2036,7 @@ async function joinRide(restored = null) {
     onError: (error) => notify(t("ride.trainerError", { message: error.message }), "error"),
   });
   app.session.start();
-  startRide();
+  await startRide();
 }
 
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
@@ -1875,7 +2064,7 @@ async function joinWorkout(profile, errors) {
   app.routes = new Map([[app.route.id, app.route]]);
   app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
 
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
   app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
@@ -1906,6 +2095,12 @@ function learnLevel() {
  * Trainer, heart rate monitor and controllers stay connected.
  */
 function endRide() {
+  if (nativeRide?.active) {
+    if (app.nativeEnding) return;
+    app.nativeEnding = nativeRide.stop(false).then(() => { saveRide(); app.nativeEnding = null; endRide(); })
+      .catch((error) => { app.nativeEnding = null; notify(t("nativeRide.failed"), "error"); console.warn(error); });
+    return;
+  }
   const ride = app.ride;
   if (!ride) return;
   app.finishUpload?.dispose();
@@ -2043,6 +2238,7 @@ function endRide() {
   initBiomePicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
+  setNativeImmersive(false);
   delete $("join").dataset.busy;
   // A join that failed never left the menu: it is only paused.
   if (app.menu) {
@@ -2059,6 +2255,7 @@ function endRide() {
 function wireConnection(connection) {
   // An ended ride's connection closes on its own; it no longer drives the screen.
   const on = (type, handler) => connection.on(type, (message) => connection === app.connection && handler(message));
+  on("rejoined", (message) => { app.riderId = message.rider_id; });
   on("state", (message) => {
     // My rider decides which road I'm on: my route, another one I turned onto, or off every route.
     const mine = message.riders.find((rider) => rider.id === app.riderId);
@@ -2133,12 +2330,13 @@ function stampExercise(rider) {
   return { ...rider, exerciseSince: app.exerciseSince.get(rider.id).since };
 }
 
-function startRide() {
+async function startRide() {
   const info = app.connection.serverInfo;
   $("server-label").textContent = app.studio ? `${info.server_name} · ${app.route.name}` : `${info.server_name} · ${app.route.name} · ${formatDistanceWithUnit(app.route.length, 1)}`;
   setDifficultyInputs(app.profile.difficulty);
   $("setup").hidden = true;
   $("ride").hidden = false;
+  setNativeImmersive(true);
   clearInterval(app.infoTimer);
   app.infoTimer = setInterval(refreshServerPlayers, INFO_REFRESH_MS * 2);
   refreshServerPlayers();
@@ -2192,6 +2390,7 @@ function startRide() {
 
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
+  await startNativeRide();
   startSplits();
   initFinish();
   initAfkPrompt();
@@ -2209,6 +2408,51 @@ function startRide() {
     renderAfkPrompt();
   };
   requestAnimationFrame(loop);
+}
+
+/** The native journal is authoritative for measured Android rides, including while hidden. */
+async function startNativeRide() {
+  if (!nativeRide || !(app.trainer instanceof SmartTrainer)) { app.nativeRideId = null; return; }
+  app.nativeRideId = crypto.randomUUID();
+  app.nativeWasHidden = false;
+  app.nativeSyncing = false;
+  const recorder = app.recorder;
+  const control = () => nativeControl({
+    profile: app.profile, training: app.training, gearbox: app.gearbox, routes: app.routes,
+    studio: app.studio, physics: app.connection?.physics, paused: Boolean(app.pause?.pausedAt),
+    canControl: canControl(app.trainer), nowS: now(),
+  });
+  try {
+    await nativeRide.start({ snapshot: rideSnapshot(), trainerId: app.trainer.id, hrId: app.heartRateMonitor?.id ?? null, control: control() }, {
+      onSamples: (samples) => {
+        for (const sample of samples) recorder.add(enrichNativeSample(sample, app.routes.get(sample.route), toLatLon));
+        if (app.recorder === recorder) updateSplits();
+      },
+      onState: async (state) => {
+        if (app.recorder !== recorder) return;
+        if (app.nativeWasHidden && !document.hidden) {
+          app.training?.player?.restoreElapsed(state.elapsed, now());
+          app.rideDistance = state.distance;
+          const riders = app.state?.riders ?? app.studio?.state?.riders ?? [];
+          app.lastMyDistance = riders.find((rider) => rider.id === app.riderId)?.distance ?? null;
+          app.nativeWasHidden = false;
+        }
+        if (!document.hidden) app.nativeSyncing = false;
+        if (state.error && !app.nativeRecordError) { app.nativeRecordError = true; notify(t("nativeRide.storageError"), "error"); }
+        const checkpoint = rideSnapshot();
+        checkpoint.recorder = { pauses: recorder.pauses, intervalMs: recorder.intervalMs };
+        await nativeRide.update(control(), checkpoint);
+      },
+      onResume: () => { app.nativeWasHidden = true; app.nativeSyncing = true; },
+      onEnded: () => finishRide(),
+      onError: () => { app.nativeSyncing = false; notify(t("nativeRide.failed"), "error"); },
+    });
+    await app.autosave.save(rideSnapshot());
+  } catch (error) {
+    app.nativeSyncing = false;
+    notify(t("nativeRide.unavailable"), "error");
+    console.warn("Native background ride:", error);
+  }
 }
 
 function startRoad({ simulated, setSimPower }) {
@@ -2601,6 +2845,7 @@ function updateStudioPanels() {
 }
 
 function studioFrame() {
+  if (nativeRide?.active && app.nativeSyncing) return;
   const studio = app.studio;
   if (!studio.state) return;
   const time = now();
@@ -2663,7 +2908,7 @@ function studioFrame() {
   app.rideDistance = me ? app.distanceOffset + me.distance : app.rideDistance;
 
   // Offline the rider's last state is stale: they don't move until the server is back.
-  if (!app.finished && app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
+  if (!nativeRide?.active && !app.finished && app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
   const silentFor = time - (app.lastTrainerDataAt ?? app.rideStartedAt);
   $("trainer-warning").hidden = silentFor < 5;
 }
@@ -2788,22 +3033,33 @@ function startMilestones() {
 }
 
 /** What achievements are worked out from: the kept records, summits, lemons and the server's routes (null until known). */
-function achievementSources(records) {
+function achievementSources(records, read = readSetting) {
   let summits;
   try {
-    summits = JSON.parse(readSetting(SUMMITS_KEY) ?? "[]");
+    summits = JSON.parse(read(SUMMITS_KEY) ?? "[]");
   } catch {
     summits = [];
   }
   const routes = app.info ? routesOf(app.info).filter((route) => route.kind !== "studio" && route.kind !== "workout") : null;
-  return { records, summits: Array.isArray(summits) ? summits : [], lemons: Number.parseInt(readSetting(LEMONS_KEY) ?? "", 10) || 0, routes };
+  return { records, summits: Array.isArray(summits) ? summits : [], lemons: Number.parseInt(read(LEMONS_KEY) ?? "", 10) || 0, routes };
 }
 
-/** Latches what the kept rides earned, silently (backdated). */
-function reconcileAchievements(records) {
-  const storage = browserStorage();
+/**
+ * Latches what the kept rides earned, silently (backdated). `rider` is whose records
+ * achievements these are — the finishing rider, whose saves may still land after another
+ * rider became active (#115); it defaults to the active rider.
+ */
+function reconcileAchievements(records, rider = riders.active) {
+  const storage = riderStorage(rawStorage, () => rider);
+  const read = (key) => {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
   const state = loadAchievements(storage);
-  const next = reconcile(state, achievementSources(records), Date.now());
+  const next = reconcile(state, achievementSources(records, read), Date.now());
   if (next !== state) saveAchievements(storage, next);
   return next;
 }
@@ -2838,6 +3094,7 @@ function initProfile() {
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
+  $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
   initGoalForm();
   $("profile-goals-link").addEventListener("click", () => app.profileDialog.open("goals"));
   $("profile-rides-more").addEventListener("click", () => {
@@ -2857,10 +3114,13 @@ function openProfile(page) {
 
 /** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
 async function loadProfile(keep) {
+  const generation = app.riderGeneration;
   const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
+  if (generation !== app.riderGeneration) return;
   // Achievements are latched before the data page counts them.
   const achievements = reconcileAchievements(records);
   const items = await inventory(dataSources());
+  if (generation !== app.riderGeneration) return;
   app.profileData = { records, bests, items, achievements };
   app.goalData = { records, bests };
   loadGoalsState();
@@ -3324,7 +3584,7 @@ function submitGoalForm() {
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
-  return { storage: browserStorage(), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
 }
 
 /** The "Your data" page: each item with its count, export and delete. */
@@ -3358,6 +3618,7 @@ function renderProfileData() {
   const anyReadable = items.some((entry) => entry.readable);
   $("profile-export").disabled = !anyReadable;
   $("profile-delete-all").disabled = !items.every((entry) => entry.readable);
+  $("profile-delete-rider").hidden = riders.ids.length < 2;
 }
 
 /** Downloads everything as one file; false (with the error on the page) when the storage couldn't be read. */
@@ -3400,8 +3661,48 @@ async function deleteProfileData(id) {
   if (!tried) return;
   // The profile and settings in memory would be written back: start fresh instead.
   if (needsReload(id)) return location.reload();
+  // The device's own keys changed: the device lines and graphics quality read them again.
+  if (id === "device") renderDeviceLines();
   await loadProfile();
   $("profile-export").focus();
+}
+
+/**
+ * Deletes the active rider with everything they kept here. The card only asks; the rider is
+ * switched away from first (a switch needs the dialogs closed), then their keys and databases
+ * go. Whatever refused to go keeps the rider in the picker: back on their page, with the error,
+ * their remains stay reachable for a retry.
+ */
+async function deleteActiveRider() {
+  const id = riders.active;
+  const next = removeRider(riders, id);
+  if (!next) return;
+  const name = nameOf(id);
+  // The wrapper is pinned to this rider: it must not follow the active rider once that changes.
+  const own = riderStorage(rawStorage, () => id);
+  const confirmed = await app.deleteConfirm.ask({
+    texts: deleteTexts("rider", { name }),
+    onConfirm: async () => true,
+    onExport: exportProfileData,
+  });
+  if (!confirmed) return;
+  app.profileDialog.close();
+  if (!switchRider(next.active)) return;
+  const { roster, ok } = await deleteRiderFromRoster(riders, id, {
+    storage: own,
+    dbNames: ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id)),
+    deleteDb: deleteIndexedDb,
+  });
+  if (!ok) {
+    switchRider(id);
+    await openProfile("data");
+    $("profile-data-error").textContent = t("profilePage.delete.failed");
+    $("profile-data-error").hidden = false;
+    return;
+  }
+  riders = roster;
+  saveRiders(rawStorage, riders);
+  renderRiderSwitcher();
 }
 
 function textElement(tag, text) {
@@ -3478,7 +3779,16 @@ function leaveRide() {
   if (question && !confirm(question)) return false;
   // Keep an unsaved finished ride for download or status checking from the menu.
   // Wait for the final snapshot before clearing, so it cannot resurrect a discarded ride.
-  if (!recoverable) app.autosaveClearing = Promise.resolve(app.finishSave).then(() => app.autosave.clear());
+  // Pin cleanup to the rider who left, and start stopping before another ride can start.
+  if (!recoverable) {
+    const autosave = app.autosave;
+    const stopped = nativeRide?.stop(false);
+    app.autosaveClearing = Promise.all([app.finishSave, stopped]).then(async () => {
+      await nativeRide?.clear();
+      await autosave.clear();
+    });
+  }
+
   endRide();
   return true;
 }
@@ -3567,6 +3877,12 @@ function finishStats() {
  */
 function finishRide() {
   if (!app.ride || app.finished) return;
+  if (nativeRide?.active) {
+    if (app.nativeFinishing) return;
+    app.nativeFinishing = nativeRide.stop(true).then(() => { app.nativeFinishing = null; finishRide(); })
+      .catch((error) => { app.nativeFinishing = null; notify(t("nativeRide.failed"), "error"); console.warn(error); });
+    return;
+  }
   app.menuDialog?.cancelConfirm();
   app.viewPopover?.close();
   $("reconnecting").hidden = true;
@@ -3613,9 +3929,19 @@ function saveFinishedRide() {
     testFtp: app.ftpTest?.testFtp ?? null,
     device: deviceKind(app.trainer),
   });
-  app.historySave = app.history.save(record);
-  app.historySave.then(() => app.history.list()).then(reconcileAchievements).catch(() => {});
-  return app.historySave.then(offerFtp).catch((error) => console.error("ride history:", error));
+  // The rider who finished: the follow-ups read and write their data even once they have
+  // returned to the menu and another rider is active (#115).
+  const history = app.history;
+  const rider = riders.active;
+  const generation = app.riderGeneration;
+  app.historySave = history.save(record);
+  app.historySave
+    .then(() => history.list())
+    .then((records) => reconcileAchievements(records, rider))
+    .catch(() => {});
+  return app.historySave
+    .then(() => offerFtp(history, generation))
+    .catch((error) => console.error("ride history:", error));
 }
 
 /** Shows the summary of the finished ride; saves nothing. */
@@ -3773,7 +4099,7 @@ function connectionLost(lost) {
 
 /** One attempt: a new connection that asks for the same rider back. */
 async function rejoin(lost) {
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   try {
     const riderId = await connection.join({
@@ -3914,6 +4240,8 @@ function saveRide() {
 function rideSnapshot() {
   return {
     version: 1,
+    profileId: activeRider(),
+    ...(app.nativeRideId && { nativeRideId: app.nativeRideId }),
     savedAt: Date.now(),
     serverUrl: defaultServerUrl(),
     routeId: app.route.id,
@@ -3921,6 +4249,7 @@ function rideSnapshot() {
     studio: Boolean(app.studio),
     trainerKind: deviceKind(app.trainer),
     rideStartedAt: Date.now() - (now() - app.rideStartedAt) * 1000,
+    recordDurationS: app.recorder.summary().durationS,
     distance: app.rideDistance,
     riderId: app.riderId,
     distanceOffset: app.distanceOffset,
@@ -3935,7 +4264,17 @@ async function refreshUnfinished() {
   const clearing = app.autosaveClearing;
   app.autosaveClearing = null;
   await clearing?.catch(() => {});
-  app.unfinished = await app.autosave.load();
+  const generation = app.riderGeneration;
+  const profileId = activeRider();
+  const autosave = app.autosave;
+  const saved = await autosave.load();
+  if (generation !== app.riderGeneration) return;
+  const recovered = nativeRide && !nativeRide.active ? await nativeRide.recover(saved, profileId).catch(() => saved) : saved;
+  if (generation !== app.riderGeneration) return;
+  app.unfinished = recovered;
+  if (recovered !== saved) await autosave.save(recovered);
+  if (generation !== app.riderGeneration) return;
+
   renderUnfinished();
 }
 
@@ -3952,6 +4291,7 @@ async function discardUnfinished() {
   app.recoveryUpload?.dispose();
   app.recoveryUpload = null;
   await app.autosave.clear();
+  await nativeRide?.clear();
   app.unfinished = null;
   renderUnfinished();
 }
@@ -3965,7 +4305,11 @@ function initRecovery() {
   window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
     deviceLog.info(`Page ${document.visibilityState}`);
-    if (document.visibilityState !== "hidden") return;
+    if (document.visibilityState !== "hidden") {
+      if (nativeRide?.active) { app.nativeSyncing = true; nativeRide.flush().catch((error) => { app.nativeSyncing = false; console.warn(error); }); }
+      return;
+    }
+    if (nativeRide?.active) { app.nativeWasHidden = true; app.nativeSyncing = true; }
     saveRide();
     saveWorkoutRecord();
   });
@@ -5241,7 +5585,7 @@ function performPause(actions, time) {
 }
 
 function frame() {
-  if (!app.state) return;
+  if (!app.state || (nativeRide?.active && app.nativeSyncing)) return;
 
   const time = now();
   const everyone = app.smoother.sample(time);
@@ -5325,7 +5669,7 @@ function frame() {
   const position = me ? app.route.positionAt(me.distance) : null;
   const onRoad = me && me.route !== OFF_ROUTE_ID;
   // No samples while paused: the ride file holds the pause instead (#89).
-  const kept = !app.finished && !app.pause?.pausedAt && app.recorder.add({
+  const kept = !nativeRide?.active && !app.finished && !app.pause?.pausedAt && app.recorder.add({
     t: Date.now(),
     ...(position ? toLatLon(position.x, position.y, app.route.geo) : {}),
     route: onRoad ? (me.route ?? app.route.id) : null,

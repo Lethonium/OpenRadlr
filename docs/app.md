@@ -1,5 +1,10 @@
 # The OpenRadlr app (iOS and Android)
 
+**Android:** [Install OpenRadlr from Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app)
+on your phone or tablet. Open it, enter a rider name and connect your Bluetooth
+trainer to start riding. Riding is free. The instructions below are for building
+and testing the native shells; they are not required to install the Android app.
+
 No browser on iOS has Web Bluetooth, so on an iPhone or iPad you can only
 connect a trainer through the app. `app/` is a [Capacitor](https://capacitorjs.com)
 project that shows the normal OpenRadlr page and connects it to native
@@ -46,6 +51,112 @@ end a ride or a workout without asking:
 
 iOS has no back button, and in a browser the back button still leaves the
 page.
+
+## Fullscreen on Android
+
+The Android start screen keeps the clock and system icons visible over the island
+background, which extends behind the transparent status bar. During a ride, the
+status and navigation bars are hidden to give the road more room. Swipe from the screen edge to reveal Android's controls
+temporarily; returning to the start screen shows the bars again. The keyboard
+still opens normally for names, chat and other text fields.
+
+Deploy the web client together with the shell update: it switches the native
+SystemBars API when entering and leaving the ride screen.
+
+Device regression checks (with an Android emulator or phone attached):
+
+```bash
+cd app/android
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.openradlr.app.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The device tests check status-bar visibility, content extending underneath it,
+and light icons, including visibility after backgrounding and in landscape.
+Client tests cover entering and leaving immersive mode. With more than one
+device attached, select one with `adb -s`.
+
+## Android background rides
+
+During a measured trainer ride, Android runs a `connectedDevice` foreground
+service with its own sensor callbacks, WebSocket, telemetry clock and local
+journal. Switching to another app or locking the screen does not depend on
+WebView animation frames to keep power, cadence and recording going. Native
+reconnect restores the trainer/strap subscriptions and resumes the server rider
+using the existing protocol token. Virtual gears retain the web client's drafting
+savings, including loop start-line gaps. Readings older than five seconds are not
+replayed as fresh power; a lost server connection does not invent distance.
+
+An ongoing notification shows the OpenRadlr emblem, live watts, distance and a
+minutes/seconds clock even when collapsed. Expand it for cadence, elapsed time,
+route/workout progress and **Return to ride** / **End & save**. Android asks for
+notification permission the first time. Declining it does not prevent Android
+from running the service, but its notification is then subject to Android's
+notification-permission visibility rules. End/save keeps the recording locally,
+leaves the game and releases trainer resistance; it never uploads a ride.
+
+The service runs only for a real-trainer ride. It stops its timer and wake lock
+when the ride ends. The native journal is private to the app and excluded from
+Android backups; it is reconciled with the usual unfinished-ride recovery on the
+next launch. Snapshots carry a local `profileId`; recovery accepts only the active
+profile's journal. Older unscoped journals belong to the original `main` rider.
+Snapshot creation and recovery use the active local rider roster. Recovery reads
+are discarded if the rider generation changes while they are pending.
+Force-stop, reboot or process termination stop live riding: recovery
+preserves completed samples without pretending the ride kept running. Background
+support here is Android-specific; iOS keeps the limitations below.
+
+Bluetooth connection failures distinguish a switched-off adapter, unavailable
+hardware, denied permission and a timeout. Native permission/adapter explanations
+offer Android settings shortcuts. A timeout suggests waking the trainer and
+closing other apps without claiming another app definitely owns it. A refused
+control point remains distinguishable from a power-only trainer.
+
+Deploy this web client with the updated Android shell. Older shells retain their
+existing foreground behavior. The unreleased Android version code remains **3**.
+For Google Play, declare the connected-device foreground service and describe its
+user-started trainer connection, ongoing notification, and stop action.
+
+For an untethered developer test of an unmerged client against production, build
+an opt-in bundled-client debug APK. It uses the configured server origin for
+API, authentication and ride sockets, while loading this checkout's static
+client assets from the APK. No local server or `adb reverse` is needed after
+installation. This changes the client on the test device only.
+
+```bash
+cd app
+npx cap sync android # default: https://app.openradlr.com
+cd android
+./gradlew -PbundledPreview=true :app:assembleDebug
+adb -s <device> install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+The preview uses the debug signing key; it can update a matching debug install,
+but cannot replace a Play-signed app in place. Release bundles always use the
+server-delivered client. Keep the Android version code unchanged for this preview.
+
+Native checks (alongside `make check`):
+
+```bash
+cd app/android
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.openradlr.app.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The background instrumentation test uses the real Android service, screen lock,
+WebSocket and journal with a fake peripheral/peer at their I/O boundaries. It
+checks measured telemetry, notification controls and completed-ride recovery.
+`RidePreviewTest` is an opt-in interactive smoke fixture (`-e interactive true`)
+for the local server, not an automatic CI test or production simulator.
+
+Before store rollout, test a physical FTMS trainer and heart-rate strap: switch
+apps, lock for several minutes, disconnect/reconnect the trainer, interrupt the
+network, resume a workout and end from the notification. Emulator fakes verify
+lifecycle and data flow, not radio/firmware interoperability.
 
 ## Strava sign-in
 
@@ -228,20 +339,68 @@ description.
 10. Android: back works as in [Back button](#back-button). Mid-ride it asks
     before finishing, mid-workout it pauses and asks, and on the start menu
     the app goes to the background.
-11. Lock the phone or switch apps for a minute mid-ride, then come back: the
-    trainer is still connected (iOS) and the ride goes on.
+11. Android: lock the phone or switch apps mid-ride. Check the live notification,
+    continued samples, reconnection and End/save. Returning restores the recorded
+    ride. Test on physical hardware as well as the emulator.
 
 ## Known limitations
 
-- **Background:** on iOS the app declares the `bluetooth-central` background
-  mode, so the trainer, strap and controllers stay connected while the app is
-  in the background. The page and its server connection are still paused
-  there, so your rider stops and the ride picks up again when you come back. App Review asks why an app uses this mode; the answer is "keeps the
-  rider's fitness devices connected". Android has no equivalent yet (it would
-  need a foreground service); there the devices reconnect when you return.
+- **iOS background:** `bluetooth-central` keeps fitness-device connections
+  available, but the page and server connection can still pause. Android's native
+  background-ride service does not change iOS execution. App Review may ask for
+  the purpose of the background mode: keeping the rider's fitness devices connected.
 - **Picker filters:** the native picker takes one filter (see ADR 0021).
   Zwift controllers are found by their name prefix "Zwift".
 - **App Store review:** an app that wraps a website must offer more than the
   website (rule 4.2). Native Bluetooth is the argument; expect questions.
 - The app icon is scaled up from the 512 px maskable icon, the largest master
   in the repo. A 1024 px original would look sharper on the App Store.
+
+## App release information on requests
+
+The native web view appends its platform and the installed package's version and
+build number to the standard HTTP user agent. For example:
+
+```text
+OpenRadlr/0.1.0 (android; build/3)
+OpenRadlr/1.0 (ios; build/1)
+```
+
+This is set before the first navigation and also accompanies the web view's API
+requests and WebSocket upgrade. It describes the native shell; `client_version`
+in the WebSocket protocol continues to describe the web client served by the
+server. A client can forge a user agent, so it is not an authentication signal.
+
+The server exports `openradlr_client_requests_total` on its existing
+`/internal/metrics` endpoint, grouped by `client` (`android`, `ios`, or `browser`),
+`app_version` and `app_build`. The `browser` bucket also includes older app builds
+without the marker and requests with an invalid marker. Only successful `GET /api/info` responses are counted: the start menu requests
+this endpoint when it loads and while it remains open. Static files, failures,
+health checks, scrapes and WebSocket messages do not contribute. This measures
+menu-load and refresh activity, not unique users, installations or ride sessions.
+
+The counter keeps no raw user agents, IP addresses, device identifiers, rider
+names, request paths or individual request records. It lives in memory and resets
+when the server restarts. Separate release labels come only from an operator
+allowlist, never from request-controlled allocation. The default is
+`android/0.1.0/3,ios/1.0/1`; override `OPENRADLR_APP_METRIC_RELEASES` with a
+comma-separated `platform/version/build` list (at most 32 entries, empty disables
+release detail). Include the releases you still support when adding a new one.
+Unknown valid releases use `other` version/build buckets per platform. iOS build
+numbers may contain dot-separated numeric components. All counters are atomic;
+no global request lock is needed. Keep the endpoint on
+the host's private monitoring network as described in [Deployment](deploy.md).
+
+Example PromQL for a dashboard connected to the endpoint:
+
+```promql
+sum by (client) (rate(openradlr_client_requests_total[5m]))
+```
+
+Start-menu requests by Android release over the last day:
+
+```promql
+sum by (app_version, app_build) (
+  increase(openradlr_client_requests_total{client="android"}[24h])
+)
+```

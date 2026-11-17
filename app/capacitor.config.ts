@@ -28,6 +28,11 @@ const config: CapacitorConfig = {
     contentInset: "never",
   },
   plugins: {
+    SystemBars: {
+      style: "DARK",
+      initialViewportFitValueHint: "cover",
+      hidden: false,
+    },
     BluetoothLe: {
       displayStrings: {
         scanning: "Looking for devices…",

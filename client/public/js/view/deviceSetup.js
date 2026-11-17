@@ -60,6 +60,14 @@ export function connectErrorText(error, deviceName = null) {
   return t("setup.err.unknown", { message });
 }
 
+/** A native failure's explanation and optional system-settings action. */
+export function connectionHelp(error, { native = false, deviceName = null } = {}) {
+  if (error?.code === "BLUETOOTH_UNAVAILABLE") return { text: t("setup.err.unsupported"), settings: null };
+  if (error?.code === "BLUETOOTH_OFF") return { text: t("setup.err.adapter"), settings: native ? "bluetooth" : null };
+  if (native && ["SecurityError", "NotAllowedError"].includes(error?.name)) return { text: t("setup.err.nativePermission"), settings: "app" };
+  return { text: connectErrorText(error, deviceName), settings: null };
+}
+
 /** After this long without a packet the trainer is probably asleep or taken by another app. */
 export const SILENT_AFTER_MS = 5000;
 

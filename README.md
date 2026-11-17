@@ -10,11 +10,15 @@
   <sub><i>Radler</i> (German): a cyclist. Also half beer, half lemonade — the usual reward afterwards.</sub>
 </p>
 
-Hook up a smart trainer, open the browser and ride a virtual route together with
+Hook up a smart trainer, open your browser or the Android app and ride a virtual route together with
 others. Every server is just a Docker container: run it at home for your LAN, on
 a VPS for your club, or join a public one. This repository contains the
 **proof of concept**: a Rust game server and a browser client (installable as
 an app) with a 3D and a 2D view.
+
+**Start riding:** [Open in your browser](https://app.openradlr.com) ·
+[Get the Android app on Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app).
+The Android app connects your Bluetooth trainer natively. Riding is free.
 
 <p align="center">
   <a href="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml"><img src="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
@@ -142,7 +146,8 @@ Later, to deploy new commits: `make update`.
 
 The server exposes aggregate Prometheus metrics at `/internal/metrics` for
 connected riders, configured rider capacity, community distance totals and AFK
-warning outcomes (`openradlr_afk_events_total`). The
+warning outcomes (`openradlr_afk_events_total`), plus start-menu requests by app
+platform and release (`openradlr_client_requests_total`). The
 endpoint contains no rider names, IDs, credentials or request details. The
 Monitoring stack scrapes it over the private `openradlr-metrics` Docker
 network; its Grafana dashboard also probes the public `/healthz` URL.

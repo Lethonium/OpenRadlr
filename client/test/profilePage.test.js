@@ -206,3 +206,11 @@ test("data rows: progress with only achievements can be deleted", () => {
   const rows = dataRows([{ id: "progress", count: { summits: 0, lemons: 0, achievements: 1 }, readable: true }]);
   assert.equal(rows[0].canDelete, true);
 });
+
+test("dataRows: the device row is named and can be deleted when it has entries", () => {
+  const [row] = dataRows([{ id: "device", count: 4, readable: true }]);
+  assert.equal(row.name, "This device");
+  assert.equal(row.count, "4 entries");
+  assert.equal(row.canDelete, true);
+  assert.ok(row.detail.length > 0);
+});
