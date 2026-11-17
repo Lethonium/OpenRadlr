@@ -48,6 +48,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     await page.locator("#name").fill("Scenery Check");
     await page.locator("button#join").click({ timeout: 30000 });
     await page.locator("#hud").waitFor({ state: "visible", timeout: 60000 });
+    // Software WebGL builds a world slowly and the rider drifts while it does.
+    // Pause at the join point so every scenery level is photographed at the
+    // same spot, not wherever the ride happened to reach.
+    await page.locator("#pause-ride").click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(opts.wait);
     const out = opts.out ?? `${opts.camera}-${opts.at}-${opts.scenery}.png`;
     mkdirSync(out.replace(/\/[^/]*$/, "") || ".", { recursive: true });
