@@ -53,6 +53,11 @@ test("the city is built from the map, whichever route is ridden", () => {
   assert.ok(world.chunks.structures.some((chunk) => chunk.mesh.vertexCount > 0), "streets and paving exist");
   assert.ok(world.chunks.glow?.some((chunk) => chunk.mesh.vertexCount > 0), "the town's pools are in the glow group");
   assert.ok(world.lights?.length > 0, "the lamps and market lights are point lights");
+  // Drawn in insertion order: the glow must come after the buildings it lights,
+  // and the emissive windows after the glow, or a wall swallows them (#117).
+  const order = Object.keys(world.chunks);
+  assert.ok(order.indexOf("glow") > order.indexOf("structures"), "pools are drawn after the buildings");
+  assert.ok(order.indexOf("bright") > order.indexOf("glow"), "windows are drawn after the pools");
 });
 
 test("scenery off keeps the old world without a settlement", () => {

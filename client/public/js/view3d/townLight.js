@@ -21,7 +21,7 @@ export const TOWN_LIGHT = Object.freeze({
   lamp: Object.freeze([1.0, 0.66, 0.34]),
   market: Object.freeze([1.0, 0.8, 0.52]),
   /** Share of the street-facing windows that are lit at dusk. */
-  lit: 0.7,
+  lit: 0.65,
   /** How much of the emissive brightness each time of day keeps. */
   brightness: Object.freeze({ day: 0.25, golden: 0.55, dusk: 1 }),
   /** Pools are dusk only: golden hour keeps a warm hint, but no pools. */
@@ -214,21 +214,33 @@ export function planTownLight(layout, { mode = "dusk", height = () => 0, houses 
 
 /**
  * The `count` lights nearest `eye`, closest first. Ties keep their input
- * order, so the selection does not flicker between frames.
+ * order, so the selection does not flicker between frames. Runs once per
+ * frame, so it keeps a bounded top list instead of sorting every light.
  *
  * @param {object[]} lights
  * @param {number[]} eye `[x, y, z]`
- * @param {number} [count]
+ * @param {number} [count] never more than the shader's eight
  */
 export function nearestLights(lights, eye, count = MAX_TOWN_LIGHTS) {
   if (!Array.isArray(lights) || lights.length === 0 || count <= 0) return [];
-  const ranked = lights.map((light, index) => ({
-    light,
-    index,
-    distance: (light.x - eye[0]) ** 2 + (light.y - eye[1]) ** 2 + (light.z - eye[2]) ** 2,
-  }));
-  ranked.sort((a, b) => a.distance - b.distance || a.index - b.index);
-  return ranked.slice(0, Math.min(count, ranked.length)).map((entry) => entry.light);
+  const limit = Math.min(count, MAX_TOWN_LIGHTS, lights.length);
+  const best = [];
+  const distances = [];
+  for (const light of lights) {
+    const distance = (light.x - eye[0]) ** 2 + (light.y - eye[1]) ** 2 + (light.z - eye[2]) ** 2;
+    // A later light at the same distance loses to the one already kept, which
+    // keeps the choice stable while the rider moves.
+    if (best.length === limit && distance >= distances[limit - 1]) continue;
+    let at = best.length;
+    while (at > 0 && distances[at - 1] > distance) at -= 1;
+    if (best.length === limit) {
+      best.pop();
+      distances.pop();
+    }
+    best.splice(at, 0, light);
+    distances.splice(at, 0, distance);
+  }
+  return best;
 }
 
 /**
@@ -309,12 +321,15 @@ function addPost(mesh, sign, height) {
 /**
  * An additive ground pool: concentric rings fading from the lamp colour to
  * black, because additive blending adds nothing where the colour is black.
- * Three rings keep the edge soft without a texture.
+ * Three rings keep the edge soft without a texture. The pool's alpha is baked
+ * into the colour (additive blending ignores the destination alpha), so dusk's
+ * 0.22 stays a glow rather than a flat coat of paint.
  */
 function addPool(mesh, pool, height) {
   if (!mesh) return;
   const rings = 3;
   const segments = 12;
+  const alpha = pool.alpha ?? 1;
   const at = (a, r) => {
     const x = pool.x + Math.cos(a) * r;
     const z = pool.z + Math.sin(a) * r;
@@ -324,7 +339,7 @@ function addPool(mesh, pool, height) {
     const inner = (ring / rings) * pool.radius;
     const outer = ((ring + 1) / rings) * pool.radius;
     const fade = (1 - ring / rings) ** 2;
-    const colour = pool.colour.map((c) => c * fade);
+    const colour = pool.colour.map((c) => c * fade * alpha);
     for (let i = 0; i < segments; i += 1) {
       const a0 = (i / segments) * TAU;
       const a1 = ((i + 1) / segments) * TAU;

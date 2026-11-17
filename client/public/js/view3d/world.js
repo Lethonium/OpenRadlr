@@ -1310,6 +1310,17 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // The settlements themselves, after the café so the square keeps its
   // forecourt clear. A town kit's buildings go into the village groups; a kit
   // without houses falls back to the biome's own.
+  // A pool or a lamp's light sits on the surface, not on the ground: near a
+  // road the ground is levelled to the road bed 0.35 m below the asphalt, so a
+  // pool at `terrain.height` would be buried under the road (#117).
+  const lightSurface = (x, z) => {
+    const ground = terrain.height(x, z);
+    const near = terrain.index?.nearest?.(x, z);
+    if (!near) return ground;
+    const half = roadHalfWidth(near.sample.route.lanes) + VERGE;
+    if (near.distance > half) return ground;
+    return Math.max(ground, near.sample.elevation + ROAD_LIFT.ridden);
+  };
   const townLights = [];
   for (const settlement of settlements) {
     const built = buildSettlement(settlement, {
@@ -1325,9 +1336,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     });
     // Town light (#117): warm windows, lamp pools and a few market lights.
     // The plan is dusk's full strength; the view fades it out by time of day.
-    const height = (x, z) => terrain.height(x, z);
-    const plan = planTownLight(settlement, { height, houses: built.buildings });
-    buildTownLight(plan, { bright: chunks.bright, glow: chunks.glow, structures: chunks.structures, height });
+    const plan = planTownLight(settlement, { height: lightSurface, houses: built.buildings });
+    buildTownLight(plan, { bright: chunks.bright, glow: chunks.glow, structures: chunks.structures, height: lightSurface });
     townLights.push(...plan.lights);
   }
   // Route files: seven farms each. Network roads: about one per kilometre.

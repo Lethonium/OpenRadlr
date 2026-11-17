@@ -403,6 +403,9 @@ export class View3D {
 
     this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
     this.instanceMeshes = (world.instanceModels ?? []).map(({ mesh }) => this.renderer.upload(mesh));
+    // Build the instanced program now, so the first frame's town lights reach
+    // it too: `setPointLights` uploads to every program that exists (#117).
+    if (this.instanceMeshes.length > 0) this.renderer.instancePrograms?.();
     this.chunks = Object.fromEntries(
       Object.entries(world.chunks).map(([name, list]) => [name, list.map(({ batches = [], ...chunk }) => ({
         ...chunk,

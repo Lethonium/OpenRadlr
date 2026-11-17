@@ -273,6 +273,12 @@ export class Renderer {
     };
     this.uniforms = uniforms(gl, this.program, MESH_UNIFORMS);
     this.pointLights = { mesh: pointLightUniforms(gl, this.program), instanced: null };
+    // Reused each frame: the town light runs on the hot path and must not
+    // allocate a new pair of uniform arrays per frame (#117).
+    this.pointLightData = {
+      position: new Float32Array(MAX_POINT_LIGHTS * 4),
+      colour: new Float32Array(MAX_POINT_LIGHTS * 4),
+    };
     this.instancePipeline = null;
     this.depthUniforms = uniforms(gl, this.depthProgram, ["u_lightViewProjection", "u_model"]);
     this.weatherAttributes = {
@@ -584,12 +590,19 @@ export class Renderer {
   setPointLights(lights = []) {
     const gl = this.gl;
     const count = Math.min(lights.length, MAX_POINT_LIGHTS);
-    const position = new Float32Array(MAX_POINT_LIGHTS * 4);
-    const colour = new Float32Array(MAX_POINT_LIGHTS * 4);
+    const position = this.pointLightData.position;
+    const colour = this.pointLightData.colour;
     for (let i = 0; i < count; i += 1) {
       const light = lights[i];
-      position.set([light.x, light.y, light.z, light.radius ?? 10], i * 4);
-      colour.set([light.colour[0], light.colour[1], light.colour[2], light.intensity ?? 1], i * 4);
+      const at = i * 4;
+      position[at] = light.x;
+      position[at + 1] = light.y;
+      position[at + 2] = light.z;
+      position[at + 3] = light.radius ?? 10;
+      colour[at] = light.colour[0];
+      colour[at + 1] = light.colour[1];
+      colour[at + 2] = light.colour[2];
+      colour[at + 3] = light.intensity ?? 1;
     }
     const targets = [[this.program, this.pointLights.mesh]];
     if (this.instancePipeline) targets.push([this.instancePipeline.program, this.pointLights.instanced]);
