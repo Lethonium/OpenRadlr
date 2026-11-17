@@ -155,13 +155,20 @@ export function planFlora(kit, { readModelFile, fallback = null, painted = null,
     appendInstance(mesh, mesh0, scaled(placement([x, y, z], yaw, 0), size));
   };
 
+  // Only the detail roles the kit actually draws are thinned. A kit with no
+  // tufts falls back to the biome's cheap tufts; thinning those too would
+  // leave the verge nearly bare for no saving.
+  const detailDensity = {};
+  if (kit.byRole[TUFT_ROLE]?.length) detailDensity.tufts = DENSE_DETAIL_DENSITY.tufts;
+  if (kit.byRole[FLOWER_ROLE]?.length) detailDensity.flowers = DENSE_DETAIL_DENSITY.flowers;
+
   return {
     /** The roles this kit can draw, so a caller knows what to ask for. */
     roles: kit.roles,
     /** The indexed kit, for callers that ask for a model by role (a village's houses). */
     kit,
     /** How much of the ground detail to ask for, against the biome's own. */
-    detailDensity: DENSE_DETAIL_DENSITY,
+    detailDensity,
     /** Beyond this distance the world draws `far()` instead (#117). */
     nearRange,
     /**

@@ -189,6 +189,24 @@ test("a kit with a cheap twin draws it beyond the near range, in the same place"
   assert.deepEqual(firstVertex(far, 0), firstVertex(near, 0), "the far tree stands where the near one does");
 });
 
+test("a kit only thins the ground detail it actually draws", () => {
+  // A kit with no tufts falls back to the biome's three-blade tufts. Thinning
+  // those as if they were modelled tufts would leave the verge nearly bare.
+  const noDetail = floraOf();
+  assert.deepEqual(noDetail.detailDensity, {});
+  const withTufts = floraOf({
+    ...KIT,
+    models: {
+      ...KIT.models,
+      tuft: { role: "tufts", near: "pine" },
+      flower: { role: "flowers", near: "pine" },
+    },
+  });
+  assert.deepEqual(withTufts.detailDensity, { tufts: 0.12, flowers: 0.5 });
+  const flowersOnly = floraOf({ ...KIT, models: { ...KIT.models, flower: { role: "flowers", near: "pine" } } });
+  assert.deepEqual(flowersOnly.detailDensity, { flowers: 0.5 });
+});
+
 test("a kit without a cheap twin draws no far wood at all", () => {
   // One level of detail means the near wood is the only wood: drawing a second
   // copy in the same place would double the cost and z-fight.
