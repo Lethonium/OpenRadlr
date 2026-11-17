@@ -115,6 +115,7 @@ const DATA_NAMES = {
   progress: "profilePage.data.progress",
   unfinished: "profilePage.data.unfinished",
   settings: "profilePage.data.settings",
+  device: "profilePage.data.device",
 };
 
 const DATA_DETAILS = {
@@ -125,6 +126,7 @@ const DATA_DETAILS = {
   progress: "profilePage.data.progress.detail",
   unfinished: "profilePage.data.unfinished.detail",
   settings: "profilePage.data.settings.detail",
+  device: "profilePage.data.device.detail",
 };
 
 function dataCount({ id, count }) {

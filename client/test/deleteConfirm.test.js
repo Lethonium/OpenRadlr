@@ -222,3 +222,18 @@ test("profilePage.delete.failed does not promise that nothing was deleted", () =
   assert.doesNotMatch(t("profilePage.delete.failed"), /Nothing was deleted/);
   assert.match(t("profilePage.delete.failed"), /may already be deleted/);
 });
+
+test("deleteTexts: the device row says what is paired again", () => {
+  const x = deleteTexts("device");
+  assert.equal(x.title, "Reset this device?");
+  assert.ok(x.lines.length >= 2);
+  assert.equal(x.offerExport, false);
+});
+
+test("deleteTexts: a rider is named and their data listed", () => {
+  const x = deleteTexts("rider", { name: "Anna" });
+  assert.equal(x.title, "Delete rider Anna?");
+  assert.ok(x.lines.some((line) => line.includes("Anna's rides")));
+  assert.equal(x.action, "Delete rider");
+  assert.equal(x.requireTick, true);
+});

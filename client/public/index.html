@@ -42,6 +42,8 @@
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/riderStorage.js" />
+    <link rel="modulepreload" href="js/profile/riders.js" />
     <link rel="modulepreload" href="js/profile/seasonGoals.js" />
     <link rel="modulepreload" href="js/profile/stats.js" />
     <link rel="modulepreload" href="js/ride/afkPrompt.js" />
@@ -61,6 +63,7 @@
     <link rel="modulepreload" href="js/ride/ridePause.js" />
     <link rel="modulepreload" href="js/ride/rideRecorder.js" />
     <link rel="modulepreload" href="js/ride/rideSession.js" />
+    <link rel="modulepreload" href="js/ride/rideStores.js" />
     <link rel="modulepreload" href="js/ride/roadRiders.js" />
     <link rel="modulepreload" href="js/ride/smoothing.js" />
     <link rel="modulepreload" href="js/ride/splits.js" />
@@ -101,6 +104,7 @@
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
     <link rel="modulepreload" href="js/view/rideMapView.js" />
+    <link rel="modulepreload" href="js/view/riderSwitcher.js" />
     <link rel="modulepreload" href="js/view/screensDialog.js" />
     <link rel="modulepreload" href="js/view/splitsView.js" />
     <link rel="modulepreload" href="js/view/startMenu.js" />
@@ -275,6 +279,14 @@
                 <span data-i18n="rider.title">Rider</span>
                 <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
               </legend>
+              <!-- Who is riding on this device: the active rider, and the list to switch or add one -->
+              <div id="rider-switcher" class="rider-switcher">
+                <button type="button" id="rider-switch" class="secondary rider-switch" aria-expanded="false" aria-controls="rider-picker" aria-label="Who's riding" data-i18n-attr="aria-label:riders.switch">
+                  <span id="rider-switch-initial" class="rider-initial" aria-hidden="true">?</span>
+                  <span id="rider-switch-name" class="rider-switch-name"></span>
+                </button>
+                <ul id="rider-picker" class="rider-picker" hidden></ul>
+              </div>
               <!-- Strava: who you are once connected, an offer otherwise, a callout where the server needs it -->
               <div id="account" class="strava-line" hidden>
                 <div class="device-line">
@@ -584,6 +596,7 @@
                     <div class="profile-data-actions">
                       <button type="button" id="profile-export" class="secondary" data-i18n="profilePage.data.export">Export as a file</button>
                       <button type="button" id="profile-delete-all" class="secondary profile-ride-delete" data-i18n="profilePage.data.deleteAll">Delete everything on this device</button>
+                      <button type="button" id="profile-delete-rider" class="secondary profile-ride-delete" hidden data-i18n="profilePage.data.deleteRider">Delete this rider</button>
                     </div>
                     <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
                   </div>
