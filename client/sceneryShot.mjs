@@ -52,14 +52,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     await page.locator("#name").fill("Scenery Check");
     await page.locator("button#join").click({ timeout: 30000 });
     await page.locator("#hud").waitFor({ state: "visible", timeout: 60000 });
-    // The world is built in a worker and only then is the 3D view shown; a full
-    // map takes ~20 s under software WebGL. Without this wait a shot taken at
-    // the default settle time is the 2D map.
+    // Pause at the join point first, so the shot is taken where `--at` asked
+    // and not wherever the ride reached while the worker built the world.
+    // The pill is the only reliable answer: the click can land on the
+    // building overlay and be swallowed.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.locator("#pause-ride").click({ timeout: 5000 }).catch(() => {});
+      const paused = await page.evaluate("!document.querySelector('#pause-pill')?.hidden");
+      if (paused) break;
+      await page.waitForTimeout(500);
+    }
+    // The world is built in a worker and takes a while under software WebGL;
+    // before it is ready the canvas still shows the menu's island (or the 2D
+    // map), which is easy to mistake for a finished shot.
     await page.locator("#world-wrap").waitFor({ state: "visible", timeout: 120000 }).catch(() => {});
-    // Software WebGL builds a world slowly and the rider drifts while it does.
-    // Pause at the join point so every scenery level is photographed at the
-    // same spot, not wherever the ride happened to reach.
-    await page.locator("#pause-ride").click({ timeout: 5000 }).catch(() => {});
+    // The note says "Building 3D world…" until the worker has handed the world
+    // over; it is the only honest "the shot is ready" signal.
+    await page.waitForFunction("!document.querySelector('#view-note')?.textContent", null, { timeout: 180000 }).catch(() => {});
+    // A moment more for the first frames at the paused spot.
     await page.waitForTimeout(opts.wait);
     const out = opts.out ?? `${opts.camera}-${opts.at}-${opts.scenery}.png`;
     mkdirSync(out.replace(/\/[^/]*$/, "") || ".", { recursive: true });
