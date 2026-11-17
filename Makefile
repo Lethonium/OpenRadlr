@@ -118,6 +118,7 @@ dev: ## Run the server locally with cargo on http://localhost:8080 (reads .env.d
 		{ [ -n "$${OPENRADLR_STRAVA_CLIENT_ID:-}" ] || [ ! -f ../.env ] || eval "$$(grep -E '^OPENRADLR_STRAVA_CLIENT_(ID|SECRET)=' ../.env)"; } && \
 		{ [ -z "$${OPENRADLR_STRAVA_CLIENT_ID:-}" ] || OPENRADLR_PUBLIC_URL="$${OPENRADLR_PUBLIC_URL:-http://localhost:8080}"; } && set +a && \
 		OPENRADLR_STATIC_DIR=../client/public OPENRADLR_ROUTE_FILE=../routes/rolling-hills.json \
+		OPENRADLR_ROUTES_DIR="$${OPENRADLR_ROUTES_DIR:-../routes}" \
 		OPENRADLR_BIND=127.0.0.1:8080 RUST_LOG=$${RUST_LOG:-info,openradlr_server=debug} cargo run --bin openradlr-server
 
 .PHONY: test
