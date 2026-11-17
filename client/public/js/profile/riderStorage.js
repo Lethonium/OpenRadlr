@@ -3,8 +3,9 @@
  * second screens, graphics, Strava) pass through unchanged; every other key is the
  * rider's. Rider "main" keeps today's unprefixed keys, so existing data needs no
  * migration; other riders live under `openradlr.rider.<id>.`. The rider is resolved on
- * every call, so switching riders needs no new wrapper. Never throws: unavailable
- * storage reads as empty and ignores writes.
+ * every call, so switching riders needs no new wrapper. Reads never throw: unavailable
+ * storage reads as empty, and writes without any storage are ignored. A storage that
+ * is there but refuses a write or a delete throws to the caller, whose catch it is.
  */
 import { MAIN_RIDER, RIDERS_KEY } from "./riders.js";
 
@@ -72,8 +73,8 @@ export function riderIdsInStorage(raw) {
 function view(raw, rawKeyOf, visible) {
   return {
     getItem: (key) => attempt(null, () => raw.getItem(rawKeyOf(key))),
-    setItem: (key, value) => attempt(undefined, () => raw.setItem(rawKeyOf(key), value)),
-    removeItem: (key) => attempt(undefined, () => raw.removeItem(rawKeyOf(key))),
+    setItem: (key, value) => raw?.setItem(rawKeyOf(key), value),
+    removeItem: (key) => raw?.removeItem(rawKeyOf(key)),
     key: (index) => visible(rawKeys(raw))[index] ?? null,
     get length() {
       return visible(rawKeys(raw)).length;

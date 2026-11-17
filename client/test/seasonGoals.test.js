@@ -16,6 +16,7 @@ import {
   refreshWeekBest,
   activeGoals,
 } from "../public/js/profile/seasonGoals.js";
+import { riderStorage } from "../public/js/profile/riderStorage.js";
 
 // Local dates, as the app sees them.
 const at = (y, m, d, h = 12, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -94,6 +95,12 @@ test("saveGoals writes what loadGoals reads, and says false when storage throws"
   assert.equal(saveGoals(storage, state), true);
   assert.deepEqual(loadGoals(storage), state);
   assert.equal(saveGoals({ setItem: () => { throw new Error("quota"); } }, state), false);
+});
+
+test("saveGoals says false through a rider-scoped storage that refuses", () => {
+  const refusing = { getItem: () => null, setItem: () => { throw new Error("quota"); } };
+  const state = { rhythmStartMs: MON, image: "progress", goals: [goalOver(10)] };
+  assert.equal(saveGoals(riderStorage(refusing, () => "x"), state), false);
 });
 
 test("addGoal anchors the rhythm on the Monday of the first goal and keeps it", () => {

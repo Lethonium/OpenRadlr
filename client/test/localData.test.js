@@ -152,6 +152,18 @@ test("deleteItem reports a storage error as false", async () => {
   assert.equal(await deleteItem("rides", { storage: storage(), stores: st }), false);
 });
 
+test("deleteItem reports false when the rider-scoped storage refuses", async () => {
+  const raw = fakeStorage({ "openride.profile.v1": "{}" });
+  raw.removeItem = () => { throw new Error("quota"); };
+  assert.equal(await deleteItem("profile", { storage: riderStorage(raw, () => "x"), stores: stores() }), false);
+});
+
+test("deleteItem reports false when the device storage refuses", async () => {
+  const raw = fakeStorage({ "openradlr.devices": "[]" });
+  raw.removeItem = () => { throw new Error("quota"); };
+  assert.equal(await deleteItem("device", { storage: riderStorage(raw, () => "x"), deviceStorage: deviceStorage(raw), stores: stores() }), false);
+});
+
 test("needsReload: when the profile, settings or the unfinished ride go", () => {
   assert.equal(needsReload("everything"), true);
   assert.equal(needsReload("profile"), true);

@@ -113,12 +113,16 @@ test("storage whose reads throw reads as empty", () => {
   assert.deepEqual([storage.getItem("openradlr.goals"), storage.length], [null, 0]);
 });
 
-test("storage whose writes throw does not throw", () => {
-  const storage = riderStorage(brokenStorage, () => "main");
-  assert.doesNotThrow(() => {
-    storage.setItem("openradlr.goals", "v");
-    storage.removeItem("openradlr.goals");
-  });
+test("a rider's write through refusing storage throws", () => {
+  assert.throws(() => riderStorage(brokenStorage, () => "x").setItem("openradlr.goals", "v"), /blocked/);
+});
+
+test("a rider's delete through refusing storage throws", () => {
+  assert.throws(() => riderStorage(brokenStorage, () => "x").removeItem("openradlr.goals"), /blocked/);
+});
+
+test("a device key's delete through refusing storage throws", () => {
+  assert.throws(() => deviceStorage(brokenStorage).removeItem("openradlr.devices"), /blocked/);
 });
 
 test("the device view lists only device keys", () => {
