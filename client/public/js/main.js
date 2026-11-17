@@ -3,12 +3,13 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
+import { nativeControl, enrichNativeSample } from "./native/backgroundRide.js";
 import { renderAndroidAppLink, renderExternalLink } from "./view/externalLink.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
 import { KnownDevices, grantedDevices, whenInRange } from "./ble/knownDevices.js";
-import { addonsShown, chooseRideMode, connectErrorText, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
+import { addonsShown, chooseRideMode, connectionHelp, controllerCheck, controllerLine, deviceActions, deviceLine, expectsOtherHalf, heartRateCheck, liveCheck, missingHalfHint, needsDownButton, remapForDown, rideModes } from "./view/deviceSetup.js";
 import { connectController, openController } from "./ble/controllers.js";
 import { ControllerInput, MergedControllers, alternatives, controllerNavigates } from "./input/controller.js";
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
@@ -132,6 +133,8 @@ import { createScreensDialog } from "./view/screensDialog.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
+const nativeRide = nativeApp?.backgroundRide;
+const createRideSocket = nativeRide ? (url) => nativeRide.createSocket(url) : undefined;
 function setNativeImmersive(enabled) {
   nativeApp?.setImmersive?.(enabled).catch((error) => console.warn("System bars:", error));
 }
@@ -291,6 +294,7 @@ const activeRider = () => riders.active;
 const riderStore = riderStorage(rawStorage, activeRider);
 
 const profiles = new ProfileStore({ storage: riderStore });
+
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
 const panels = createPanelStack();
@@ -1342,7 +1346,7 @@ async function connectDevice(connect, onConnected, kind, { pending = t("devices.
   } catch (error) {
     // Given up quietly (another device was connected meanwhile) or the picker was closed: nothing to say.
     const cancelled = error.name === "AbortError" || /cancel/i.test(error.message ?? "");
-    settle(cancelled ? null : { state: "error", text: connectErrorText(error, deviceName) });
+    settle(cancelled ? null : { state: "error", ...connectionHelp(error, { native: Boolean(nativeRide), deviceName }) });
     if (!cancelled && error.name !== "NotFoundError") deviceLog.error(`Connecting failed: ${error.message}`);
     return false;
   }
@@ -1442,6 +1446,14 @@ function renderDeviceLine(kind) {
 
 /** Every device line with its actions: Reconnect a known device (the chooser then reads "Other"), else connect, change or add. */
 function renderDeviceLines() {
+  const help = Object.values(app.deviceAttempts).find((attempt) => attempt?.settings);
+  const settings = $("bluetooth-settings");
+  settings.hidden = !nativeRide || !help;
+  if (help) {
+    settings.textContent = t(help.settings === "bluetooth" ? "setup.bluetoothSettings" : "setup.appPermissions");
+    settings.onclick = () => nativeRide.openSettings(help.settings).catch(() => notify(t("setup.settingsUnavailable"), "error"));
+  }
+
   const connectedNow = { trainer: Boolean(lineTrainer()), hr: Boolean(app.heartRateMonitor), controller: app.controllers.length > 0 };
   for (const kind of Object.keys(DEVICES)) {
     renderDeviceLine(kind);
@@ -1972,7 +1984,7 @@ async function joinRide(restored = null) {
     app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
   }
 
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
   if (app.trainer instanceof PaddleTrainer) app.trainer.setFtp(app.profile.ftp);
@@ -2024,7 +2036,7 @@ async function joinRide(restored = null) {
     onError: (error) => notify(t("ride.trainerError", { message: error.message }), "error"),
   });
   app.session.start();
-  startRide();
+  await startRide();
 }
 
 /** The café workout (#77): joins the default route's world without a trainer and runs the plan. */
@@ -2052,7 +2064,7 @@ async function joinWorkout(profile, errors) {
   app.routes = new Map([[app.route.id, app.route]]);
   app.smoother = new RiderSmoother(app.route, { routeOf: (rider) => app.routes.get(rider.route), laneDelayOf: ownLaneNow });
 
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
   app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
@@ -2083,6 +2095,12 @@ function learnLevel() {
  * Trainer, heart rate monitor and controllers stay connected.
  */
 function endRide() {
+  if (nativeRide?.active) {
+    if (app.nativeEnding) return;
+    app.nativeEnding = nativeRide.stop(false).then(() => { saveRide(); app.nativeEnding = null; endRide(); })
+      .catch((error) => { app.nativeEnding = null; notify(t("nativeRide.failed"), "error"); console.warn(error); });
+    return;
+  }
   const ride = app.ride;
   if (!ride) return;
   app.finishUpload?.dispose();
@@ -2237,6 +2255,7 @@ function endRide() {
 function wireConnection(connection) {
   // An ended ride's connection closes on its own; it no longer drives the screen.
   const on = (type, handler) => connection.on(type, (message) => connection === app.connection && handler(message));
+  on("rejoined", (message) => { app.riderId = message.rider_id; });
   on("state", (message) => {
     // My rider decides which road I'm on: my route, another one I turned onto, or off every route.
     const mine = message.riders.find((rider) => rider.id === app.riderId);
@@ -2311,7 +2330,7 @@ function stampExercise(rider) {
   return { ...rider, exerciseSince: app.exerciseSince.get(rider.id).since };
 }
 
-function startRide() {
+async function startRide() {
   const info = app.connection.serverInfo;
   $("server-label").textContent = app.studio ? `${info.server_name} · ${app.route.name}` : `${info.server_name} · ${app.route.name} · ${formatDistanceWithUnit(app.route.length, 1)}`;
   setDifficultyInputs(app.profile.difficulty);
@@ -2371,6 +2390,7 @@ function startRide() {
 
   app.recorder = new RideRecorder();
   if (app.restored) restoreRide(app.restored);
+  await startNativeRide();
   startSplits();
   initFinish();
   initAfkPrompt();
@@ -2388,6 +2408,51 @@ function startRide() {
     renderAfkPrompt();
   };
   requestAnimationFrame(loop);
+}
+
+/** The native journal is authoritative for measured Android rides, including while hidden. */
+async function startNativeRide() {
+  if (!nativeRide || !(app.trainer instanceof SmartTrainer)) { app.nativeRideId = null; return; }
+  app.nativeRideId = crypto.randomUUID();
+  app.nativeWasHidden = false;
+  app.nativeSyncing = false;
+  const recorder = app.recorder;
+  const control = () => nativeControl({
+    profile: app.profile, training: app.training, gearbox: app.gearbox, routes: app.routes,
+    studio: app.studio, physics: app.connection?.physics, paused: Boolean(app.pause?.pausedAt),
+    canControl: canControl(app.trainer), nowS: now(),
+  });
+  try {
+    await nativeRide.start({ snapshot: rideSnapshot(), trainerId: app.trainer.id, hrId: app.heartRateMonitor?.id ?? null, control: control() }, {
+      onSamples: (samples) => {
+        for (const sample of samples) recorder.add(enrichNativeSample(sample, app.routes.get(sample.route), toLatLon));
+        if (app.recorder === recorder) updateSplits();
+      },
+      onState: async (state) => {
+        if (app.recorder !== recorder) return;
+        if (app.nativeWasHidden && !document.hidden) {
+          app.training?.player?.restoreElapsed(state.elapsed, now());
+          app.rideDistance = state.distance;
+          const riders = app.state?.riders ?? app.studio?.state?.riders ?? [];
+          app.lastMyDistance = riders.find((rider) => rider.id === app.riderId)?.distance ?? null;
+          app.nativeWasHidden = false;
+        }
+        if (!document.hidden) app.nativeSyncing = false;
+        if (state.error && !app.nativeRecordError) { app.nativeRecordError = true; notify(t("nativeRide.storageError"), "error"); }
+        const checkpoint = rideSnapshot();
+        checkpoint.recorder = { pauses: recorder.pauses, intervalMs: recorder.intervalMs };
+        await nativeRide.update(control(), checkpoint);
+      },
+      onResume: () => { app.nativeWasHidden = true; app.nativeSyncing = true; },
+      onEnded: () => finishRide(),
+      onError: () => { app.nativeSyncing = false; notify(t("nativeRide.failed"), "error"); },
+    });
+    await app.autosave.save(rideSnapshot());
+  } catch (error) {
+    app.nativeSyncing = false;
+    notify(t("nativeRide.unavailable"), "error");
+    console.warn("Native background ride:", error);
+  }
 }
 
 function startRoad({ simulated, setSimPower }) {
@@ -2780,6 +2845,7 @@ function updateStudioPanels() {
 }
 
 function studioFrame() {
+  if (nativeRide?.active && app.nativeSyncing) return;
   const studio = app.studio;
   if (!studio.state) return;
   const time = now();
@@ -2842,7 +2908,7 @@ function studioFrame() {
   app.rideDistance = me ? app.distanceOffset + me.distance : app.rideDistance;
 
   // Offline the rider's last state is stale: they don't move until the server is back.
-  if (!app.finished && app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
+  if (!nativeRide?.active && !app.finished && app.recorder.add({ t: Date.now(), distance: app.rideDistance, power, cadence, heartRate, speed: app.offline ? 0 : (me?.speed ?? 0), elevation: null })) updateSplits();
   const silentFor = time - (app.lastTrainerDataAt ?? app.rideStartedAt);
   $("trainer-warning").hidden = silentFor < 5;
 }
@@ -3713,11 +3779,16 @@ function leaveRide() {
   if (question && !confirm(question)) return false;
   // Keep an unsaved finished ride for download or status checking from the menu.
   // Wait for the final snapshot before clearing, so it cannot resurrect a discarded ride.
-  // The clear must hit the autosave of the rider who finished, not whoever is active by then (#115).
+  // Pin cleanup to the rider who left, and start stopping before another ride can start.
   if (!recoverable) {
     const autosave = app.autosave;
-    app.autosaveClearing = Promise.resolve(app.finishSave).then(() => autosave.clear());
+    const stopped = nativeRide?.stop(false);
+    app.autosaveClearing = Promise.all([app.finishSave, stopped]).then(async () => {
+      await nativeRide?.clear();
+      await autosave.clear();
+    });
   }
+
   endRide();
   return true;
 }
@@ -3806,6 +3877,12 @@ function finishStats() {
  */
 function finishRide() {
   if (!app.ride || app.finished) return;
+  if (nativeRide?.active) {
+    if (app.nativeFinishing) return;
+    app.nativeFinishing = nativeRide.stop(true).then(() => { app.nativeFinishing = null; finishRide(); })
+      .catch((error) => { app.nativeFinishing = null; notify(t("nativeRide.failed"), "error"); console.warn(error); });
+    return;
+  }
   app.menuDialog?.cancelConfirm();
   app.viewPopover?.close();
   $("reconnecting").hidden = true;
@@ -4022,7 +4099,7 @@ function connectionLost(lost) {
 
 /** One attempt: a new connection that asks for the same rider back. */
 async function rejoin(lost) {
-  const connection = new GameConnection({ url: defaultServerUrl() });
+  const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   try {
     const riderId = await connection.join({
@@ -4163,6 +4240,8 @@ function saveRide() {
 function rideSnapshot() {
   return {
     version: 1,
+    profileId: activeRider(),
+    ...(app.nativeRideId && { nativeRideId: app.nativeRideId }),
     savedAt: Date.now(),
     serverUrl: defaultServerUrl(),
     routeId: app.route.id,
@@ -4170,6 +4249,7 @@ function rideSnapshot() {
     studio: Boolean(app.studio),
     trainerKind: deviceKind(app.trainer),
     rideStartedAt: Date.now() - (now() - app.rideStartedAt) * 1000,
+    recordDurationS: app.recorder.summary().durationS,
     distance: app.rideDistance,
     riderId: app.riderId,
     distanceOffset: app.distanceOffset,
@@ -4185,9 +4265,16 @@ async function refreshUnfinished() {
   app.autosaveClearing = null;
   await clearing?.catch(() => {});
   const generation = app.riderGeneration;
-  const saved = await app.autosave.load();
+  const profileId = activeRider();
+  const autosave = app.autosave;
+  const saved = await autosave.load();
   if (generation !== app.riderGeneration) return;
-  app.unfinished = saved;
+  const recovered = nativeRide && !nativeRide.active ? await nativeRide.recover(saved, profileId).catch(() => saved) : saved;
+  if (generation !== app.riderGeneration) return;
+  app.unfinished = recovered;
+  if (recovered !== saved) await autosave.save(recovered);
+  if (generation !== app.riderGeneration) return;
+
   renderUnfinished();
 }
 
@@ -4204,6 +4291,7 @@ async function discardUnfinished() {
   app.recoveryUpload?.dispose();
   app.recoveryUpload = null;
   await app.autosave.clear();
+  await nativeRide?.clear();
   app.unfinished = null;
   renderUnfinished();
 }
@@ -4217,7 +4305,11 @@ function initRecovery() {
   window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
     deviceLog.info(`Page ${document.visibilityState}`);
-    if (document.visibilityState !== "hidden") return;
+    if (document.visibilityState !== "hidden") {
+      if (nativeRide?.active) { app.nativeSyncing = true; nativeRide.flush().catch((error) => { app.nativeSyncing = false; console.warn(error); }); }
+      return;
+    }
+    if (nativeRide?.active) { app.nativeWasHidden = true; app.nativeSyncing = true; }
     saveRide();
     saveWorkoutRecord();
   });
@@ -5493,7 +5585,7 @@ function performPause(actions, time) {
 }
 
 function frame() {
-  if (!app.state) return;
+  if (!app.state || (nativeRide?.active && app.nativeSyncing)) return;
 
   const time = now();
   const everyone = app.smoother.sample(time);
@@ -5577,7 +5669,7 @@ function frame() {
   const position = me ? app.route.positionAt(me.distance) : null;
   const onRoad = me && me.route !== OFF_ROUTE_ID;
   // No samples while paused: the ride file holds the pause instead (#89).
-  const kept = !app.finished && !app.pause?.pausedAt && app.recorder.add({
+  const kept = !nativeRide?.active && !app.finished && !app.pause?.pausedAt && app.recorder.add({
     t: Date.now(),
     ...(position ? toLatLon(position.x, position.y, app.route.geo) : {}),
     route: onRoad ? (me.route ?? app.route.id) : null,

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EXERCISES, createPlan, planDuration, planPositionAt, planSummary, withGetReady } from "../public/js/workout/plan.js";
+import { WorkoutPlayer, createWorkout, steady } from "../public/js/ride/workout.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 test("a plan keeps its blocks and labels them", () => {
@@ -72,4 +73,12 @@ test("a flow's movements each point at one of its steps", () => {
   const { flow, steps } = EXERCISES.sun_salutation;
   for (const index of flow.order) assert.ok(index >= 0 && index < steps.length, String(index));
   assert.deepEqual([...new Set(flow.order)], steps.map((_, i) => i));
+});
+
+
+test("a workout reconciles its native background clock without counting the gap twice", () => {
+  const player = new WorkoutPlayer(createWorkout({ name: "Native", segments: [steady(120, .5)] }), 200);
+  player.tick(10);
+  player.restoreElapsed(60, 70);
+  assert.equal(player.tick(71).elapsedS, 61);
 });

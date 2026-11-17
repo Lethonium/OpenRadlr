@@ -1,0 +1,3 @@
+<full-backup-content>
+    <exclude domain="file" path="active-ride.jsonl" />
+</full-backup-content>

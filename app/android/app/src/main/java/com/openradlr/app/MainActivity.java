@@ -13,7 +13,9 @@ public class MainActivity extends BridgeActivity {
         WebView webView = findViewById(com.getcapacitor.android.R.id.webview);
         String suffix = " OpenRadlr/" + BuildConfig.VERSION_NAME + " (android; build/" + BuildConfig.VERSION_CODE + ")";
         webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + suffix);
+        registerPlugin(com.openradlr.app.ride.BackgroundRidePlugin.class);
         super.load();
+        if (BuildConfig.BUNDLED_PREVIEW) com.openradlr.app.preview.BundledPreview.install(bridge);
         // Ride visibility is controlled by SystemBars from the client. Keep edge
         // swipes available while hidden, without forcing fullscreen on the menu.
         WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())

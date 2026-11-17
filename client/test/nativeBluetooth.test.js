@@ -161,10 +161,10 @@ test("disconnecting on purpose closes the native link and stops reconnecting", a
   assert.deepEqual(events, [], "a goodbye, not a drop to reconnect from");
 });
 
-test("a failed connect rejects with a NetworkError and releases the link", async () => {
+test("a failed connect preserves its timeout category and releases the link", async () => {
   const { fake, bluetooth } = setup();
   fake.fail.getServices = "Connection timeout";
-  await assert.rejects(SmartTrainer.connect(bluetooth), { name: "NetworkError", message: "Connection timeout" });
+  await assert.rejects(SmartTrainer.connect(bluetooth), { name: "TimeoutError", message: "Connection timeout" });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.ok(fake.calls.some((call) => call.method === "disconnect"));
 });
@@ -275,7 +275,7 @@ test("large files are encoded in chunks", async () => {
 
 test("only the features with native plugins are offered", () => {
   const share = { Filesystem: {}, Share: {} };
-  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn", "onBack", "setImmersive"]);
+  assert.deepEqual(Object.keys(installNativeApp({ plugins: {}, navigator: {} })), ["saveFiles", "signIn", "onBack", "backgroundRide", "setImmersive"]);
   assert.equal(installNativeApp({ plugins: {}, navigator: {} }).saveFiles, null);
   assert.equal(typeof installNativeApp({ plugins: share, navigator: {} }).saveFiles, "function");
   assert.equal(typeof installNativeApp({ plugins: { WebAuth: {} }, navigator: {} }).signIn, "function");
@@ -384,4 +384,17 @@ test("Android system bars hide for a ride and return for the start screen", asyn
 test("system-bar control stays optional on other platforms and older shells", () => {
   assert.equal(installNativeApp({ plugins: {}, navigator: {}, platform: "android" }).setImmersive, null);
   assert.equal(installNativeApp({ plugins: { SystemBars: {} }, navigator: {}, platform: "ios" }).setImmersive, null);
+});
+
+test("Bluetooth being off retains a category distinct from cancelling the picker", async () => {
+  const { fake, bluetooth } = setup();
+  fake.plugin.isEnabled = async () => ({ value: false });
+  await assert.rejects(bluetooth.requestDevice({}), { code: "BLUETOOTH_OFF" });
+});
+
+test("a native GATT timeout retains an actionable timeout category", async () => {
+  const { fake, bluetooth } = setup();
+  const device = await bluetooth.requestDevice({});
+  fake.fail.connect = "Connection timeout.";
+  await assert.rejects(device.gatt.connect(), { name: "TimeoutError" });
 });

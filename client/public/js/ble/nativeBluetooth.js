@@ -72,7 +72,7 @@ function commonPrefix(texts) {
 }
 
 const domError = (name, message) => Object.assign(new Error(message), { name });
-const noAdapter = () => domError("NotFoundError", "Bluetooth adapter not available."); // i18n-ok (Chrome's own message)
+const noAdapter = (code = "BLUETOOTH_UNAVAILABLE") => Object.assign(domError("NotFoundError", "Bluetooth adapter not available."), { code }); // i18n-ok (Chrome's own message)
 
 /** The plugin's start-up failures as the errors a browser gives, so the device setup explains them. */
 function initializeError(error) {
@@ -99,7 +99,7 @@ export class NativeBluetooth {
     await this.#initialize();
     // Switched off, the picker would just stay empty: say so, as Chrome does.
     const enabled = await this.#plugin.isEnabled?.();
-    if (enabled && !enabled.value) throw noAdapter();
+    if (enabled && !enabled.value) throw noAdapter("BLUETOOTH_OFF");
     let found;
     try {
       found = await this.#plugin.requestDevice(scanOptions(options));
@@ -231,7 +231,10 @@ class NativeDevice {
       this.#services = services;
     } catch (error) {
       this.run(() => this.#plugin.disconnect({ deviceId: this.id })).catch(() => {});
-      throw domError("NetworkError", error?.message ?? String(error));
+      const message = error?.message ?? String(error);
+      if (/permission|not authori[sz]ed|not allowed/i.test(message)) throw domError("NotAllowedError", message);
+      if (/timed? ?out|timeout/i.test(message)) throw domError("TimeoutError", message);
+      throw domError("NetworkError", message);
     }
     this.gatt.connected = true;
     return this.gatt;

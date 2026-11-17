@@ -206,3 +206,28 @@ test("the heart rate check: waiting for the first beat, the bpm, a hint when bea
   assert.equal(heartRateCheck({ sinceDataMs: 12000, heartRate: 144 }).state, "silent");
   assert.match(heartRateCheck({ sinceDataMs: 12000, heartRate: 144 }).text, /12 s/);
 });
+
+test("native Bluetooth failures offer the relevant Android settings", async () => {
+  const { connectionHelp } = await import("../public/js/view/deviceSetup.js");
+  const off = connectionHelp({ code: "BLUETOOTH_OFF", name: "NotFoundError" }, { native: true });
+  assert.equal(off.settings, "bluetooth");
+  assert.match(off.text, /Bluetooth is off/);
+  const denied = connectionHelp({ name: "NotAllowedError" }, { native: true });
+  assert.equal(denied.settings, "app");
+  assert.match(denied.text, /phone.*settings/);
+});
+
+test("a timeout suggests possible causes without claiming another app owns the trainer", async () => {
+  const { connectionHelp } = await import("../public/js/view/deviceSetup.js");
+  const help = connectionHelp({ name: "TimeoutError" }, { native: true });
+  assert.equal(help.settings, null);
+  assert.match(help.text, /awake|pedal/);
+  assert.doesNotMatch(help.text, /is connected to another app/);
+});
+
+test("missing Bluetooth hardware is not confused with a cancelled picker", async () => {
+  const { connectionHelp } = await import("../public/js/view/deviceSetup.js");
+  const help = connectionHelp({ code: "BLUETOOTH_UNAVAILABLE", name: "NotFoundError" }, { native: true });
+  assert.match(help.text, /doesn't support|not available|isn't available/);
+  assert.equal(help.settings, null);
+});
