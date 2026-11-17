@@ -46,13 +46,16 @@ export class GameConnection extends Emitter {
             this.graceS = message.grace_s ?? 0;
             this.#send(ClientMessages.join(profile));
             break;
-          case "joined":
+          case "joined": {
+            const rejoined = joined;
             joined = true;
             this.riderId = message.rider_id;
             this.resumeToken = message.resume_token ?? null;
             this.physics = message.physics ?? null;
             resolve(message.rider_id);
+            if (rejoined) this.emit("rejoined", message);
             break;
+          }
           case "error":
             if (!joined) reject(Object.assign(new Error(`${message.code}: ${message.message}`), { code: message.code, serverMessage: message.message }));
             this.emit("error", message);
