@@ -125,7 +125,7 @@ function houseFor(kit, plot, random) {
  * @param {object|null} [options.kit] the scenery kit (houses, church, props)
  * @param {object|null} [options.flora] the scenery flora, for garden trees
  * @param {object|null} [options.occupancy] existing occupancy
- * @returns {{houses: number, props: number, lamps: number}}
+ * @returns {{houses: number, props: number, lamps: number, buildings: object[]}}
  */
 export function buildSettlement(layout, {
   terrain,
@@ -137,7 +137,7 @@ export function buildSettlement(layout, {
   flora = null,
   occupancy = null,
 } = {}) {
-  if (!layout || !terrain || !structures || !into?.near) return { houses: 0, props: 0, lamps: 0 };
+  if (!layout || !terrain || !structures || !into?.near) return { houses: 0, props: 0, lamps: 0, buildings: [] };
   const random = seededRandom((hash(layout.id) ^ 0x51e7) >>> 0);
   const palette = biome.palette;
   const roadColor = biome.road?.surface ?? [0.25, 0.26, 0.28];
@@ -145,6 +145,9 @@ export function buildSettlement(layout, {
   let houses = 0;
   let props = 0;
   let lamps = 0;
+  // The houses as placed, so the town light can put windows on their real
+  // facades rather than on the plot's guess (#117).
+  const buildings = [];
 
   // Streets, pavements and junctions. A new street stops short of an existing
   // road: the existing asphalt is the junction, and a ribbon laid over it
@@ -199,6 +202,7 @@ export function buildSettlement(layout, {
     }
     occupancy?.add?.(pos[0], pos[1], Math.max(width, depth) * 0.45);
     houses += 1;
+    buildings.push({ x: pos[0], z: pos[1], yaw: plot.yaw, facing, width, depth, ground: y });
     // A garden tree behind every fifth house near the centre, where the kit
     // has one. The city is a town, not a wood; the trees are a garnish.
     if (flora && into.trees && houses % 5 === 0 && Math.hypot(pos[0] - layout.center[0], pos[1] - layout.center[1]) < 150) {
@@ -243,5 +247,5 @@ export function buildSettlement(layout, {
     }
   }
 
-  return { houses, props, lamps };
+  return { houses, props, lamps, buildings };
 }

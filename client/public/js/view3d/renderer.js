@@ -74,6 +74,9 @@ uniform vec2 u_fogRange;
 uniform float u_alpha;
 uniform float u_unlit;
 uniform float u_fogScale;
+uniform int u_lightCount;
+uniform vec4 u_lightPosition[8];
+uniform vec4 u_lightColour[8];
 out vec4 outColor;
 
 vec3 toneMap(vec3 c) {
@@ -99,6 +102,19 @@ float sunVisibility() {
   return mix(1.0, mix(1.0 - u_shadowStrength, 1.0, lit), edge);
 }
 
+// Town light (#117): the nearest few street lamps and market lights. The
+// radius is in w, the intensity in the colour's w; no shadows, no draw calls.
+vec3 townLight(vec3 albedo) {
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_lightCount) break;
+    vec4 at = u_lightPosition[i];
+    float falloff = max(0.0, 1.0 - length(at.xyz - v_world) / at.w);
+    sum += albedo * u_lightColour[i].rgb * (u_lightColour[i].a * falloff * falloff);
+  }
+  return sum;
+}
+
 void main() {
   vec3 n = normalize(v_normal);
   if (!gl_FrontFacing) n = -n;
@@ -108,6 +124,7 @@ void main() {
   // Soft rim light keeps silhouettes readable against the terrain.
   float rim = pow(1.0 - max(dot(n, toCamera), 0.0), 3.0) * 0.18;
   vec3 lit = v_color * (ambient * 0.62 + u_sunColor * sun * 0.85) + rim * u_skyColor;
+  lit += townLight(v_color);
   lit = mix(lit, v_color, u_unlit);
   float distance = length(v_world - u_cameraPosition);
   float fog = smoothstep(u_fogRange.x, u_fogRange.y, distance);
@@ -225,6 +242,7 @@ const MESH_UNIFORMS = Object.freeze([
   "u_shadowMap",
   "u_shadowStrength",
   "u_shadowTexel",
+  "u_lightCount",
 ]);
 
 export class Renderer {
@@ -254,6 +272,7 @@ export class Renderer {
       color: gl.getAttribLocation(this.program, "a_color"),
     };
     this.uniforms = uniforms(gl, this.program, MESH_UNIFORMS);
+    this.pointLights = { mesh: pointLightUniforms(gl, this.program), instanced: null };
     this.instancePipeline = null;
     this.depthUniforms = uniforms(gl, this.depthProgram, ["u_lightViewProjection", "u_model"]);
     this.weatherAttributes = {
@@ -303,6 +322,7 @@ export class Renderer {
       uniforms: uniforms(gl, program, MESH_UNIFORMS),
       depthUniforms: uniforms(gl, depthProgram, ["u_lightViewProjection", "u_model"]),
     };
+    this.pointLights.instanced = pointLightUniforms(gl, program);
     return this.instancePipeline;
   }
 
@@ -541,6 +561,7 @@ export class Renderer {
       gl.uniform1f(u.u_shadowStrength, shadow?.lightViewProjection ? shadowStrength : 0);
       gl.uniform1f(u.u_shadowTexel, shadow ? 1 / shadow.size : 0);
       gl.uniformMatrix4fv(u.u_lightViewProjection, false, shadow?.lightViewProjection ?? IDENTITY);
+      gl.uniform1i(u.u_lightCount, 0);
     }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, shadow?.texture ?? null);
@@ -553,6 +574,34 @@ export class Renderer {
     this.gl.uniform1f(this.uniforms.u_unlit, unlit);
     this.draw(handle, model);
     this.gl.uniform1f(this.uniforms.u_unlit, 0);
+  }
+
+  /**
+   * Uploads the town's nearest point lights (#117): at most eight, as
+   * `{x, y, z, radius, colour, intensity}`. The opaque shader adds them to the
+   * lit colour; an empty list switches them off.
+   */
+  setPointLights(lights = []) {
+    const gl = this.gl;
+    const count = Math.min(lights.length, MAX_POINT_LIGHTS);
+    const position = new Float32Array(MAX_POINT_LIGHTS * 4);
+    const colour = new Float32Array(MAX_POINT_LIGHTS * 4);
+    for (let i = 0; i < count; i += 1) {
+      const light = lights[i];
+      position.set([light.x, light.y, light.z, light.radius ?? 10], i * 4);
+      colour.set([light.colour[0], light.colour[1], light.colour[2], light.intensity ?? 1], i * 4);
+    }
+    const targets = [[this.program, this.pointLights.mesh]];
+    if (this.instancePipeline) targets.push([this.instancePipeline.program, this.pointLights.instanced]);
+    for (const [program, u] of targets) {
+      gl.useProgram(program);
+      gl.uniform1i(u.count, count);
+      if (count > 0) {
+        gl.uniform4fv(u.position, position);
+        gl.uniform4fv(u.colour, colour);
+      }
+    }
+    gl.useProgram(this.program);
   }
 
   draw(handle, model, tint = [1, 1, 1]) {
@@ -648,10 +697,47 @@ export class Renderer {
     gl.depthMask(true);
     gl.disable(gl.BLEND);
   }
+
+  /**
+   * Additive glow (#117): the ground pools under lamps and market lights.
+   * Drawn after the road and before the rider, without writing depth. The
+   * meshes fade their own colour to black at the rim, so the pool is soft.
+   */
+  drawGlow(handle, model, alpha = 1) {
+    const gl = this.gl;
+    gl.useProgram(this.program);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.depthMask(false);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(-2, -4);
+    gl.uniform1f(this.uniforms.u_alpha, alpha);
+    gl.uniform1f(this.uniforms.u_unlit, 1);
+    gl.uniform1f(this.uniforms.u_fogScale, 0);
+    this.draw(handle, model);
+    gl.uniform1f(this.uniforms.u_alpha, 1);
+    gl.uniform1f(this.uniforms.u_unlit, 0);
+    gl.uniform1f(this.uniforms.u_fogScale, 1);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
 }
 
 function uniforms(gl, program, names) {
   return Object.fromEntries(names.map((name) => [name, gl.getUniformLocation(program, name)]));
+}
+
+/** The opaque shader's town-light slots (#117). */
+const MAX_POINT_LIGHTS = 8;
+
+function pointLightUniforms(gl, program) {
+  return {
+    count: gl.getUniformLocation(program, "u_lightCount"),
+    position: gl.getUniformLocation(program, "u_lightPosition[0]"),
+    colour: gl.getUniformLocation(program, "u_lightColour[0]"),
+  };
 }
 
 function compile(gl, type, source) {

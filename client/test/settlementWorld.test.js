@@ -51,10 +51,14 @@ test("the city is built from the map, whichever route is ridden", () => {
     "the city stands at the Hilltop Café",
   );
   assert.ok(world.chunks.structures.some((chunk) => chunk.mesh.vertexCount > 0), "streets and paving exist");
+  assert.ok(world.chunks.glow?.some((chunk) => chunk.mesh.vertexCount > 0), "the town's pools are in the glow group");
+  assert.ok(world.lights?.length > 0, "the lamps and market lights are point lights");
 });
 
 test("scenery off keeps the old world without a settlement", () => {
   const world = buildWorld(new RouteGeometry(ROUTE), { network: roadNetworkOf(NETWORK) });
   assert.equal(world.chunks.village, undefined, "no kit, no city group");
+  assert.equal(world.chunks.glow, undefined, "no kit, no town glow");
+  assert.equal(world.lights, undefined, "no kit, no town lights");
   assert.ok(world.chunks.structures.length > 0, "the procedural village is still in the structures");
 });
