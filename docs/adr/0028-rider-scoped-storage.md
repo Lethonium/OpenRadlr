@@ -24,7 +24,12 @@ heart rate strap and second screens connected.
   data. Other riders use `openradlr.rider.<id>.<key>`. The roster lives in
   `openradlr.riders` as `{ active, ids }`; without one, `"main"` is the only rider.
 - **IndexedDB per rider.** `riderDbName(base, id)` gives `base` for `"main"` and
-  `base.<id>` otherwise. `indexedDbStore` resolves the name on every call.
+  `base.<id>` otherwise. The ride stores (`ride/rideStores.js`) are pinned to
+  one rider at construction: their operations span awaits (a lap offered with
+  a read and a write, a save with its follow-ups), and the active rider can
+  change while such an operation is out. Stores built for a rider keep that
+  rider's databases for good; the start menu builds them again whenever the
+  active rider changes, and post-save callbacks capture their rider (#115).
 - **Switching in place.** `switchRider(id)` changes the roster and refreshes the
   start menu without a reload, so Bluetooth and cockpit pairing stay connected.
   It is refused during a ride or with a dialog open. Late async results are
@@ -33,8 +38,13 @@ heart rate strap and second screens connected.
 
 ## Consequences
 
-- The wrapper never throws, so a wrong reference inside `riderOf` fails silently
-  with defaults. The roster is therefore a module-level variable in `main.js`,
-  set before anything reads storage.
+- Reads through the wrapper never throw, but a storage that refuses a write or
+  a delete throws to the caller, whose catch it is (#115): save and delete
+  flows report the failure instead of pretending success. Without any storage
+  at all, writes are still ignored.
+- The roster is a module-level variable in `main.js`, set before anything
+  reads storage.
 - Deleting a rider switches away first, then removes its keys and databases.
+  Whatever refuses to go keeps the rider in the roster, so their remains stay
+  reachable for a retry (#115).
 - No protocol change: each rider already has their own key pair.
