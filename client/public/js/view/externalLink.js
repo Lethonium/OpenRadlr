@@ -17,3 +17,8 @@ export function renderExternalLink(element, value) {
   if (url) element.href = url;
   else element.removeAttribute("href");
 }
+
+/** Browsers can discover the store release; native riders already have the app. */
+export function renderAndroidAppLink(element, { native }) {
+  renderExternalLink(element, native ? null : "https://play.google.com/store/apps/details?id=com.openradlr.app");
+}

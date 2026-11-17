@@ -1,5 +1,10 @@
 # The OpenRadlr app (iOS and Android)
 
+**Android:** [Install OpenRadlr from Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app)
+on your phone or tablet. Open it, enter a rider name and connect your Bluetooth
+trainer to start riding. Riding is free. The instructions below are for building
+and testing the native shells; they are not required to install the Android app.
+
 No browser on iOS has Web Bluetooth, so on an iPhone or iPad you can only
 connect a trainer through the app. `app/` is a [Capacitor](https://capacitorjs.com)
 project that shows the normal OpenRadlr page and connects it to native

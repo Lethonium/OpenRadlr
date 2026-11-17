@@ -30,3 +30,11 @@ long as you:
 The licence covers the copyright in the files, not the **OpenRadlr name or
 the lemon logo as a brand**. See [TRADEMARKS.md](TRADEMARKS.md): a fork can
 reuse the art, but must not present itself as OpenRadlr.
+
+## Third-party brand assets
+
+`landing/public/brands/google-play.svg` is the unmodified Google Play download
+badge from Google's [Partner Marketing Hub](https://partnermarketinghub.withgoogle.com/brands/google-play/google-play/lockups-icons-badges/).
+It is a Google brand asset, excluded from the CC BY-SA artwork licence above,
+and used under Google's brand guidelines. Google Play and the Google Play logo
+are trademarks of Google LLC.

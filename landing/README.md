@@ -2,7 +2,9 @@
 
 The public page for openradlr.com: a static [Astro](https://astro.build) site
 that explains OpenRadlr and links to the app (app.openradlr.com). It is
-separate from `client/`, which stays dependency-free.
+separate from `client/`, which stays dependency-free. The hero, setup guide, FAQ,
+closing section and footer also link to the published Android app on Google Play.
+Its store URL lives in `src/site.ts`.
 
 - `src/pages/index.astro`: the page itself; the privacy policy and imprint are
   operator-provided links (`PUBLIC_PRIVACY_URL`, `PUBLIC_IMPRINT_URL`).

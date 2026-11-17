@@ -38,3 +38,20 @@ test("an unsafe configuration never reveals a link", () => {
   assert.equal(element.hidden, true);
   assert.equal(element.href, undefined);
 });
+
+test("the browser start screen offers the published Android app", async () => {
+  const { renderAndroidAppLink } = await import("../public/js/view/externalLink.js");
+  const element = link();
+  renderAndroidAppLink(element, { native: false });
+  assert.equal(element.hidden, false);
+  assert.equal(element.href, "https://play.google.com/store/apps/details?id=com.openradlr.app");
+});
+
+test("the native shell does not advertise installing the Android app", async () => {
+  const { renderAndroidAppLink } = await import("../public/js/view/externalLink.js");
+  const element = link();
+  renderAndroidAppLink(element, { native: false });
+  renderAndroidAppLink(element, { native: true });
+  assert.equal(element.hidden, true);
+  assert.equal(element.href, undefined);
+});
