@@ -1366,8 +1366,12 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const near = terrain.index.nearest(x, z);
     return near !== null && near.distance < 70 && inStretch(near.sample.route, zonesOf.get(near.sample.route).villages, near.sample.distance, 20);
   };
-  const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || inVillage(x, z);
-  const detailBlocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.7) || occupancy.blocked(x, z) || (inVillage(x, z) && terrain.distanceToRoad(x, z) < half + PAVEMENT + 1);
+  // A settlement keeps its streets, square and quay clear of the wood; its own
+  // builder plants the garden trees. Without this the tall firs grow through a
+  // harbour's quay and hide the town from the road.
+  const nearSettlement = (x, z) => settlements.some((s) => Math.hypot(x - s.center[0], z - s.center[1]) < s.radius * 0.65);
+  const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || nearSettlement(x, z) || inVillage(x, z);
+  const detailBlocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.7) || occupancy.blocked(x, z) || nearSettlement(x, z) || (inVillage(x, z) && terrain.distanceToRoad(x, z) < half + PAVEMENT + 1);
   for (const r of ordered) {
     const km = r.length / 1000;
     const margin = 450;

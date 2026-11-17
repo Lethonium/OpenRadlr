@@ -30,9 +30,9 @@ export const SETTLEMENT_KIND = Object.freeze({
 export const SETTLEMENT_STYLE = Object.freeze({
   city: Object.freeze({
     block: 100,
-    crossFrom: -3,
-    crossTo: 3,
-    rows: [-2, -1, 1, 2],
+    crossFrom: -2,
+    crossTo: 2,
+    rows: [-1, 1],
     streetWidth: 7,
     pavement: 2.4,
     garden: 3,
@@ -78,6 +78,8 @@ export const SETTLEMENT_STYLE = Object.freeze({
     maxSlope: 0.35,
     mainHouses: true,
     blocks: true,
+    // A village hugs its green and cross lane; it does not line the whole road.
+    frontage: 0.45,
   }),
   harbour: Object.freeze({
     block: 68,
@@ -95,6 +97,7 @@ export const SETTLEMENT_STYLE = Object.freeze({
     maxSlope: 0.55,
     mainHouses: true,
     blocks: true,
+    frontage: 0.45,
   }),
   hamlet: Object.freeze({
     block: 58,
@@ -180,6 +183,34 @@ function line(local, a, b, step = 8) {
   return points;
 }
 
+/** The middle `share` of a street's points: the part of a road a village lines. */
+function sliceFrontage(points, share) {
+  if (share >= 1 || points.length < 3) return points;
+  const first = Math.floor(((1 - share) / 2) * (points.length - 1));
+  const last = Math.ceil(((1 + share) / 2) * (points.length - 1)) + 1;
+  return points.slice(first, last);
+}
+
+/** The dry part of a street: a harbour's cross lane must not run into the sea. */
+function trimToLand(points, terrain) {
+  const sea = terrain?.seaLevel;
+  if (!Number.isFinite(sea) || points.length < 2) return points;
+  const dry = points.map(([x, z]) => terrain.height(x, z) >= sea + 1.2);
+  if (dry.every(Boolean)) return points;
+  // Keep the longest run of dry points.
+  let best = { from: 0, to: -1 };
+  let from = -1;
+  for (let i = 0; i <= points.length; i += 1) {
+    if (i < points.length && dry[i]) {
+      if (from < 0) from = i;
+    } else if (from >= 0) {
+      if (i - 1 - from > best.to - best.from) best = { from, to: i - 1 };
+      from = -1;
+    }
+  }
+  return best.to > best.from ? points.slice(best.from, best.to + 1) : [];
+}
+
 /** Distance from a point to a polyline, for keeping plots off the streets. */
 function distanceToLine(x, z, points) {
   let best = Infinity;
@@ -254,7 +285,10 @@ export function layoutSettlement({
 
   const cross = [];
   for (let i = style.crossFrom; i <= style.crossTo; i += 1) cross.push(i * style.block);
-  const rows = [...style.rows];
+  // `rows` are block counts, like `crossFrom`/`crossTo`: a row at 1 stands one
+  // block off the main road, not one metre. Using the counts as metres put every
+  // parallel street on top of the main road, which made every town a strip.
+  const rows = style.rows.map((row) => row * style.block);
   const rowEdges = [...new Set([...rows, 0].sort((a, b) => a - b))];
   const uMin = cross[0] - style.block / 2;
   const uMax = cross[cross.length - 1] + style.block / 2;
@@ -280,6 +314,7 @@ export function layoutSettlement({
       from,
       to,
       route: nearest.road,
+      frontage: style.frontage ?? 1,
     });
   }
   // A settlement away from a road gets a lane to it: the harbour is at the
@@ -321,29 +356,40 @@ export function layoutSettlement({
     }
   }
 
-  // Streets parallel to the main road, then cross streets.
+  // Streets parallel to the main road, then cross streets. A street is cut at
+  // the water, so a harbour's grid stops at the quay instead of running into
+  // the bay.
   for (const b of rows) {
-    streets.push({
-      id: `${id}-street-${b}`,
-      kind: "street",
-      width: style.streetWidth,
-      points: line(local, [uMin, b], [uMax, b]),
-    });
+    const points = trimToLand(line(local, [uMin, b], [uMax, b]), terrain);
+    if (points.length >= 2) {
+      streets.push({
+        id: `${id}-street-${b}`,
+        kind: "street",
+        width: style.streetWidth,
+        points,
+      });
+    }
   }
   for (const a of cross) {
-    streets.push({
-      id: `${id}-cross-${a}`,
-      kind: "street",
-      width: style.streetWidth,
-      points: line(local, [a, vMin], [a, vMax]),
-    });
+    const points = trimToLand(line(local, [a, vMin], [a, vMax]), terrain);
+    if (points.length >= 2) {
+      streets.push({
+        id: `${id}-cross-${a}`,
+        kind: "street",
+        width: style.streetWidth,
+        points,
+      });
+    }
   }
 
   // Junctions: every new street against every street it crosses, including the
-  // main road at v = 0.
+  // main road at v = 0. A junction in the water is not a place.
+  const sea = terrain?.seaLevel;
+  const onLand = (x, z) => !Number.isFinite(sea) || terrain.height(x, z) >= sea + 1.2;
   for (const a of cross) {
     for (const b of [0, ...rows]) {
-      junctions.push({ x: local(a, b)[0], z: local(a, b)[1], radius: style.streetWidth * 0.9 });
+      const [x, z] = local(a, b);
+      if (onLand(x, z)) junctions.push({ x, z, radius: style.streetWidth * 0.9 });
     }
   }
 
@@ -577,8 +623,13 @@ export function layoutSettlement({
   for (const street of streets) {
     if (street.houses === false) continue;
     if (!style.mainHouses && street.existing) continue;
-    placeAlong(street, 1);
-    placeAlong(street, -1);
+    // A village's main road only carries houses around its centre; the rest of
+    // the road stays open, so the settlement reads as a cluster, not a strip.
+    const frontage = street.frontage !== undefined && street.frontage < 1
+      ? { ...street, points: sliceFrontage(street.points, street.frontage) }
+      : street;
+    placeAlong(frontage, 1);
+    placeAlong(frontage, -1);
   }
 
   // A windmill or a farm on the edge of the settlement, as a landmark.
@@ -586,6 +637,10 @@ export function layoutSettlement({
     const edge = local(uMax + style.block * 0.4, random() < 0.5 ? -style.block : style.block);
     props.push({ role: "windmills", x: edge[0], z: edge[1], yaw: random() * Math.PI * 2, radius: 6 });
   }
+
+  // A prop the build would skip for standing in the water is not part of the
+  // layout either, so the map and the world agree.
+  const dryProps = props.filter((prop) => onLand(prop.x, prop.z));
 
   return {
     id,
@@ -602,7 +657,7 @@ export function layoutSettlement({
     plots,
     square,
     lamps,
-    props,
+    props: dryProps,
     quay,
     boats,
   };
