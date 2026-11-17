@@ -213,6 +213,35 @@ fraction of the cost; a real bloom can come later if the look needs it.
 - Low quality keeps the emissive heads and windows, drops the point lights and
   the pools.
 
+## Borrowed from the Living island
+
+PR #49 (`feat/living-island`) already solved the *distribution* problem, and
+its drone view read as a genuine island even though the flat ground texture was
+the wrong answer for the saddle. We should borrow the distribution, not the
+texture:
+
+- **`groundGrid`** (`view3d/living/fields.js`): height, slope, river distance
+  and road distance on a coarse grid. Use it for placement and ground colour;
+  it removes the per-point terrain lookups and gives the same answer to the
+  world, the map and the tests.
+- **Road distance saturating at 800 m**: a distance field instead of a bucket
+  search. This is also the robust fix for the canopy's far reach.
+- **Height bands**: coast/sand, farm (0–55 m), rough pasture (55–95 m),
+  moor/heath (95–205 m), rock (205–330 m), snow (330 m+). This is the variety
+  the drone had; our treeline and snowline are the same idea, made explicit.
+- **Parcels turned along the nearest road**, each with one crop, block-level
+  crop bias, hedges on the parcel edges, tracks on a few. Use the parcel data
+  to choose crop colours, hedge lines and orchard rows, not to paint a 2048²
+  texture.
+- **Village and farm proximity**: farmland gathers near roads and settlements;
+  rough pasture and moor take over higher up. That is what stops the island
+  from being one even quilt.
+
+What we do **not** borrow: the single flat ground texture. The user disliked
+how empty it looked from the saddle. Our ground stays vertex-coloured and
+model-backed; the parcel data only decides what grows and what colour the
+ground takes.
+
 ## Variety across the island
 
 The city is one character, not the whole island. Each settlement and region

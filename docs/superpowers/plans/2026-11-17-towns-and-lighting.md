@@ -141,11 +141,23 @@ and the drone.
 **Acceptance:** a dusk screenshot from the saddle shows warm pools on the
 street and lit windows; a day screenshot shows neither.
 
-## Step 7 — variety pass
+## Step 7 — variety pass, borrowing the Living distribution
 
-**Files:** `client/public/js/land/settlement.js`,
-`client/public/js/view3d/settlement.js`, `client/test/settlementVariety.test.js`.
+**Files:** `client/public/js/land/groundGrid.js` (new),
+`client/public/js/land/fields.js` (new, adapted from
+`view3d/living/fields.js`), `client/public/js/land/settlement.js`,
+`client/public/js/view3d/settlement.js`,
+`client/public/js/view3d/biomes/temperate.js`,
+`client/test/landFields.test.js`.
 
+- [ ] Port `groundGrid` (height, slope, river, road distance on a coarse grid)
+      and the road-distance field that saturates at 800 m.
+- [ ] Port the parcel layout: blocks turned along the nearest road, one crop per
+      parcel, block-level crop bias, hedges and tracks on the edges.
+- [ ] Use the parcels for placement and ground colour, **not** a flat texture:
+      crop colours, hedge lines, orchard rows and farm tracks.
+- [ ] Height bands: farm (0–55 m), rough pasture (55–95 m), moor/heath
+      (95–205 m), rock (205–330 m), snow (330 m+), coast/sand.
 - [ ] Style tables for city, village, harbour, hamlet.
 - [ ] Tree species and ground cover per region (plane trees, apples, pines,
       willows, reeds).
@@ -154,6 +166,8 @@ street and lit windows; a day screenshot shows neither.
 - [ ] North high country: treeline, alpine meadow, snow.
 - [ ] Test: two settlements of different kinds do not share the same building
       mix or tree mix.
+- [ ] Test: the same parcel data gives the same ground colour and the same
+      hedges in the world and on the map.
 
 **Acceptance:** the proposal map's eight regions each read differently in the
 drone.
