@@ -1,5 +1,10 @@
 # Devices
 
+On Android, [get OpenRadlr on Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app)
+to connect fitness devices through native Bluetooth. For browser rides, use
+Chrome or Edge on Windows, macOS, Android or ChromeOS. See the [app guide](app.md)
+for native builds and testing.
+
 | Device | Protocol | Status |
 | --- | --- | --- |
 | Smart trainers (e.g. Wahoo KICKR Core, Van Rysel D500) | Bluetooth FTMS `0x1826` and/or Cycling Power `0x1818` | Supported: power, cadence, simulation mode |

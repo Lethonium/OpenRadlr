@@ -3,7 +3,7 @@
  * to the DOM and runs the render loop. All logic lives in the imported
  * modules, which are unit-tested; this file only connects them.
  */
-import { renderExternalLink } from "./view/externalLink.js";
+import { renderAndroidAppLink, renderExternalLink } from "./view/externalLink.js";
 import { loadAnalytics } from "./analytics.js";
 import { DeviceLog, deviceLogOptions } from "./ble/deviceLog.js";
 import { HeartRateMonitor, PaddleTrainer, SimulatedTrainer, SmartTrainer, canExportRide, couldControlResistance, deviceKind, hasRealPowerSource, isBluetoothAvailable } from "./ble/devices.js";
@@ -1030,6 +1030,8 @@ function renderStartMenu() {
   const build = buildLabel(app.info, BUILD);
   renderExternalLink($("privacy-link"), app.info?.privacy_url);
   renderExternalLink($("discord-link"), app.info?.discord_url);
+  renderAndroidAppLink($("android-app-link"), { native: Boolean(nativeApp) });
+  renderAndroidAppLink($("android-app-help"), { native: Boolean(nativeApp) });
   $("build-label").textContent = build.text;
   $("build-label").title = t("menu.build.tapToCopy", { details: build.details });
   $("update-banner").hidden = !build.stale || app.updateDismissed;

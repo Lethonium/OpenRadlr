@@ -9,6 +9,7 @@ export const site = {
   url: env.PUBLIC_SITE_URL || "https://openradlr.com",
   appUrl: env.PUBLIC_APP_URL || "https://app.openradlr.com",
   githubUrl: "https://github.com/Lethonium/OpenRadlr",
+  googlePlayUrl: "https://play.google.com/store/apps/details?id=com.openradlr.app",
   // Operator-provided invite; empty means the page links GitHub only.
   discordUrl: env.PUBLIC_DISCORD_URL || "",
   // The operator's privacy policy and imprint (legal notice), linked in the
@@ -20,7 +21,7 @@ export const site = {
   plausibleDomain: env.PUBLIC_PLAUSIBLE_DOMAIN || "",
   plausibleScript: env.PUBLIC_PLAUSIBLE_SCRIPT || "https://plausible.io/js/script.js",
   description:
-    "Free, open-source indoor cycling in the browser. Connect your smart trainer and ride an island world together with friends and bots.",
+    "Free, open-source indoor cycling in your browser or on Android. Connect your smart trainer and ride an island world together with friends and bots.",
 };
 
 /** The app's address without the scheme, for button captions. */

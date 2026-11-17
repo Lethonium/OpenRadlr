@@ -10,11 +10,15 @@
   <sub><i>Radler</i> (German): a cyclist. Also half beer, half lemonade — the usual reward afterwards.</sub>
 </p>
 
-Hook up a smart trainer, open the browser and ride a virtual route together with
+Hook up a smart trainer, open your browser or the Android app and ride a virtual route together with
 others. Every server is just a Docker container: run it at home for your LAN, on
 a VPS for your club, or join a public one. This repository contains the
 **proof of concept**: a Rust game server and a browser client (installable as
 an app) with a 3D and a 2D view.
+
+**Start riding:** [Open in your browser](https://app.openradlr.com) ·
+[Get the Android app on Google Play](https://play.google.com/store/apps/details?id=com.openradlr.app).
+The Android app connects your Bluetooth trainer natively. Riding is free.
 
 <p align="center">
   <a href="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml"><img src="https://github.com/Lethonium/OpenRadlr/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
