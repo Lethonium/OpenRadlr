@@ -183,13 +183,23 @@ At day, none of this is on. At golden hour, a warm hint, no pools.
 2. **Ground pools** (cheap, near-only).
    - An additive, radial-gradient quad on the pavement/road under each lamp,
      radius 6–9 m, alpha 0.22 at dusk, 0 at day.
-   - A smaller pool under a lit shop window, radius 2–3 m, alpha 0.12.
-   - Pools follow the ground and are drawn after the road, before the rider.
+   - A smaller pool under a lit shop window, radius 2–3 m, alpha 0.12. The
+     layout has no shop role yet, so these go to every other house fronting
+     the square.
+   - Pools follow the surface, not `terrain.height`: near a road the ground is
+     levelled to the road bed about 0.35 m below the asphalt, so a pool on the
+     terrain is buried under the road. The pool rides the asphalt where there
+     is one and the ground elsewhere, a little above the paving (the paving
+     itself rides 0.25 m up because the terrain mesh bulges).
+   - Additive blending ignores the destination alpha, so the alpha is baked
+     into the pool's vertex colour.
+   - Pools are drawn after the road and before the rider.
 3. **Point lights** (High quality only, nearest 8).
    - A uniform array of up to 8 point lights: position, colour, radius.
    - The opaque shader adds `colour * intensity * max(0, 1 - d / radius)^2`
      to the lit colour. The nearest lamps and the market lights are selected
-     each frame.
+     each frame by distance to the camera; ties keep the layout's order, so the
+     choice does not flicker, and the list never exceeds eight.
    - This is what actually lights the asphalt and the house walls; the pools
      make the same light visible on Low.
 4. **Market lights** (hero props).
@@ -202,9 +212,15 @@ At day, none of this is on. At golden hour, a warm hint, no pools.
 No bloom pass. Additive quads and a warm point light give the glow at a
 fraction of the cost; a real bloom can come later if the look needs it.
 
+The time presets are not re-timed here: dusk keeps the island's existing warm
+sunset sky and low sun, and the town light is tuned to read on top of it (dark
+asphalt, warm pools, small warm windows). A cooler, darker dusk like the
+reference is a separate change to `view3d/lighting.js`.
+
 ### Performance
 
-- Pools: 2 triangles each, near-only (1200 m), no shadows.
+- Pools: 72 triangles each (three fading rings of 12 segments, no texture),
+  near-only (1200 m), no shadows.
 - Window quads: 2 triangles each, instanced with the building's near model;
   the far twin has none.
 - Point lights: 8 in the shader, selected per frame; no per-light draw call.

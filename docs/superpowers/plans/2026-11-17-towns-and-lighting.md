@@ -123,23 +123,25 @@ and the drone.
 `client/sceneryShot.mjs` for the 3D shots, `client/settlementMap.mjs` for the
 layout diagrams.
 
-## Step 6 — town light
+## Step 6 — town light (done)
 
-**Files:** `client/public/js/view3d/lighting.js` (new),
+**Files:** `client/public/js/view3d/townLight.js` (new),
 `client/public/js/view3d/renderer.js`, `client/public/js/view3d/view3d.js`,
 `client/public/js/view3d/world.js`, `client/test/townLight.test.js`.
 
-- [ ] Window quads: 2–4 per street-facing facade, seeded on/off, into `bright`.
-- [ ] Lamp heads: keep in `bright`; raise dusk brightness to 1.0.
-- [ ] Ground pools: additive radial quads into a new `chunks.glow`; radius
+- [x] Window quads: 2–4 per street-facing facade, seeded on/off, into `bright`.
+- [x] Lamp heads: keep in `bright`; raise dusk brightness to 1.0.
+- [x] Ground pools: additive radial quads into a new `chunks.glow`; radius
       6–9 m for lamps, 2–3 m for shop windows; dusk only.
-- [ ] Point lights: up to 8 nearest, in the opaque shader; High quality only.
-- [ ] Market lights: string bulbs across the square, lit stalls, one lit clock
+- [x] Pools ride the surface, not `terrain.height`: near a road the ground is
+      levelled 0.35 m below the asphalt, so pools there were buried.
+- [x] Point lights: up to 8 nearest, in the opaque shader; High quality only.
+- [x] Market lights: string bulbs across the square, lit stalls, one lit clock
       or sign.
-- [ ] Day: pools empty, bright intensity low. Dusk: pools and lights on.
-- [ ] Test: at dusk the light list is non-empty and the pools are in `glow`;
+- [x] Day: pools empty, bright intensity low. Dusk: pools and lights on.
+- [x] Test: at dusk the light list is non-empty and the pools are in `glow`;
       at day the pools are empty.
-- [ ] Test: the nearest 8 selection is stable and does not flicker.
+- [x] Test: the nearest 8 selection is stable and does not flicker.
 
 **Acceptance:** a dusk screenshot from the saddle shows warm pools on the
 street and lit windows; a day screenshot shows neither.
