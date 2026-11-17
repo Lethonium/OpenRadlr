@@ -117,6 +117,8 @@ test("the world only grows a farm group when a kit can build one", () => {
   assert.ok(withFarm.chunks.farm?.length > 0, "the farm group exists");
   assert.ok(withFarm.chunks.farmFar?.length > 0, "its far twin exists");
   assert.ok(withFarm.chunks.farm.some((chunk) => (chunk.batches?.length ?? 0) > 0), "a farm chunk holds instanced buildings");
+  assert.ok(withFarm.chunks.canopy?.length > 0, "the woods get their cheap crowns");
   const without = buildWorld(new RouteGeometry(routeFile));
   assert.equal(without.chunks.farm, undefined, "no kit, no farm group");
+  assert.equal(without.chunks.canopy, undefined, "no kit, no canopy");
 });

@@ -68,7 +68,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, village: 2600, villageFar: 2600, farm: 2600, farmFar: 2600, bright: 1200, detail: 220 },
+  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, sceneryFar: 2000, canopy: 2000, village: 2600, villageFar: 2600, farm: 2600, farmFar: 2600, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */

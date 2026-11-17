@@ -110,17 +110,38 @@ const smoothstep = (edge0, edge1, x) => {
  * the distance to the nearest river; heights are the terrain's, not the
  * biome's, so seasons only recolour the same land.
  */
-function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infinity, riverHalfWidth = 9 }) {
+function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infinity, riverHalfWidth = 9, forest = null, field = null }) {
   if (height < water - 0.2) return SAND.map((c, i) => c + (SEA_FLOOR[i] - c) * smoothstep(0, 14, water - height)); // sea floor
   if (height < water + 2.4 && steep < 0.5) return SAND.map((c) => c * (0.95 + 0.1 * valueNoise(x / 9, z / 9, seed + 3))); // beach
   if (riverDistance < riverHalfWidth + 3) return RIVER_BED; // river bed and muddy banks
   if (riverDistance < riverHalfWidth + 9) return RIVER_MEADOW; // lush river meadow
   if (steep > 0.6) return STEEP;
-  const patch = valueNoise(x / 85, z / 85, seed + 31);
-  const base = FIELDS.find((f) => patch < f.upTo).color;
   const shade = 0.92 + 0.16 * fbm(x / 30, z / 30, seed + 7, 2);
   const high = smoothstep(85, 140, height - water);
-  return [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
+  let base;
+  let wood = 0;
+  let crop = 0;
+  if (forest !== null || field !== null) {
+    // Scenery on: the ground follows the seeded land. Meadow is the base;
+    // the wood and the crops are painted over the high-ground blend below,
+    // so a wood on a hill is still a dark wood rather than the high olive.
+    wood = smoothstep(0.45, 0.72, forest ?? 0);
+    crop = smoothstep(0.45, 0.7, field ?? 0) * (1 - wood);
+    base = [0.36, 0.54, 0.24];
+  } else {
+    const patch = valueNoise(x / 85, z / 85, seed + 31);
+    base = FIELDS.find((f) => patch < f.upTo).color;
+  }
+  const colour = [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
+  if (wood > 0) {
+    const floor = [0.18, 0.27, 0.14];
+    return colour.map((c, i) => c * (1 - wood) + floor[i] * shade * wood);
+  }
+  if (crop > 0) {
+    const crops = [0.44, 0.6, 0.27];
+    return colour.map((c, i) => c * (1 - crop) + crops[i] * shade * crop);
+  }
+  return colour;
 }
 
 /** One tree, bush or rock at `[x, y, z]`; `kind` is the placement's random draw. */

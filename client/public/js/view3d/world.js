@@ -453,7 +453,7 @@ export const TERRAIN_LAYERS = Object.freeze({ sink: 40, floorGap: 20 });
 /** Above this many fine-grid nodes an island is "huge" (a 180 km route): built lazily, in big far blocks, with a horizon around all of it. */
 export const HUGE_ISLAND_NODES = 1_500_000;
 
-export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate } = {}) {
+export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate, land = null } = {}) {
   const { minX, maxX, minY, maxY } = terrain.bounds;
   const seed = terrain.seed;
   const water = waterLevel(terrain.index);
@@ -467,7 +467,16 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   const [cx, cz] = terrain.island?.center ?? terrain.index.center;
   if (huge) horizon = Math.hypot(bounds.x1 - bounds.x0, bounds.z1 - bounds.z0) / 2 + horizon;
   const riverDistance = (x, z) => terrain.riverDistance?.(x, z) ?? Infinity;
-  const color = (x, z, y, steep) => biome.terrainColor({ x, z, height: y, steep, seed, water, riverDistance: riverDistance(x, z), riverHalfWidth: RIVER.halfWidth });
+  // With scenery on, the ground follows the land: dark forest floor under the
+  // woods, calm crop greens in the fields, meadow elsewhere. With scenery off
+  // `land` is null and every colour is exactly what it was before (#117).
+  const color = (x, z, y, steep) => biome.terrainColor({
+    x, z, height: y, steep, seed, water,
+    riverDistance: riverDistance(x, z),
+    riverHalfWidth: RIVER.halfWidth,
+    forest: land ? land.forestAt(x, z) : null,
+    field: land ? land.fieldAt(x, z) : null,
+  });
 
   const fine = into ?? new MeshBuilder();
   const mesh = into ? new MeshBuilder() : fine;
@@ -758,6 +767,14 @@ export const landOf = (seed) =>
 const DENSE_REACH = 260;
 
 /**
+ * The near wood's chunk size (#117). A 300 m chunk can hold a whole dense
+ * wood, and the near/far split is per chunk: the camera's chunk alone was
+ * several million vertices. Smaller near chunks cull the wood behind the
+ * rider; the far copy stays at the coarse 300 m.
+ */
+const SCENERY_CHUNK = 100;
+
+/**
  * Trees (firs and leafy), bushes and rocks scattered deterministically:
  * denser near the road, clustered into small woods, never on the road and
  * never in the sea. Shadows come from the renderer's shadow map.
@@ -893,6 +910,34 @@ export function buildCanopy(terrain, box, { land, water = -Infinity, biome = tem
     }
   }
   return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
+}
+
+/**
+ * The wood's understory (#117): bushes and rocks along the verge, where the
+ * modelled trees are close enough to see. The tree scatter puts no bush or
+ * rock inside a wood, so without this a wood is trunks on open grass; a few
+ * low things between them are what make it read as a forest floor rather than
+ * a park. Only a kit that holds bushes or rocks grows one.
+ */
+export function buildUnderstory(route, terrain, { into = null, flora = null, land = null, water = -Infinity, blocked = () => false, count = 0, reach = 24, seed = 0 } = {}) {
+  if (!into || !flora || !land || !(flora.has?.("bushes") || flora.has?.("rocks"))) return { count: 0 };
+  const random = seededRandom((seed >>> 0) ^ 0x5eee);
+  const halfWidth = roadHalfWidth(route.lanes) + VERGE;
+  let placed = 0;
+  for (let i = 0; i < count; i += 1) {
+    const frame = roadFrame(route, random() * route.length);
+    const side = random() < 0.5 ? -1 : 1;
+    const offset = halfWidth + 1.2 + Math.pow(random(), 1.4) * reach;
+    const [x, , z] = add(frame.center, scale(frame.right, side * offset));
+    if (terrain.distanceToRoad(x, z) < halfWidth + 0.8 || blocked(x, z)) continue;
+    if (land.forestAt(x, z) < 0.45) continue;
+    const ground = terrain.height(x, z);
+    if (ground < water + 2.5) continue;
+    const role = random() < 0.68 ? "bushes" : "rocks";
+    flora.tree({ mesh: into, x, y: ground - 0.05, z, kind: 0.2, random, role });
+    placed += 1;
+  }
+  return { count: placed };
 }
 
 /**
@@ -1082,6 +1127,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const routes = network ? [route, ...roads, ...tracks.filter((t) => t !== route)] : mapRoutes;
   const ordered = network ? roads : [...routes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const seed = network ? network.seed : mapSeed(route);
+  // The same seeded land for the scenery, the ground colour and the canopy, so
+  // a wood is a dark wood on the ground and full behind its first trees (#117).
+  const landUse = landOf(seed);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
   const base = network ? networkTerrain(network, [...roads, ...tracks], { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
   const sea = waterLevel(base.index);
@@ -1090,14 +1138,19 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const half = roadHalfWidth(route.lanes) + VERGE;
 
   const instances = new InstanceCatalog();
-  const instancedChunk = () => new ChunkedMesh(CHUNK_SIZE, instances);
+  const instancedChunk = (size = CHUNK_SIZE) => new ChunkedMesh(size, instances);
   const chunks = {
     terrain: new ChunkedMesh(),
     road: new ChunkedMesh(),
     detail: instancedChunk(),
-    scenery: instancedChunk(),
+    // The near wood uses 100 m chunks: a 300 m chunk can hold a whole dense
+    // wood and is either all near or all far, which made the camera's chunk
+    // alone several million vertices. The far copy stays coarse.
+    scenery: instancedChunk(SCENERY_CHUNK),
     /** The same trees at a cheaper level of detail, drawn beyond `flora.nearRange` (#117). */
     sceneryFar: instancedChunk(),
+    /** Cheap crowns filling the woods behind the modelled belt (#117). */
+    ...(scenery ? { canopy: new ChunkedMesh() } : {}),
     structures: new ChunkedMesh(),
     bright: new ChunkedMesh(),
     // A town kit's village: its buildings up close, and their cheap twins
@@ -1110,7 +1163,14 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   };
 
   const long = route.length > LONG_ROUTE_M;
-  const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+  const ground = buildTerrain(terrain, {
+    into: chunks.terrain,
+    biome,
+    // Only a modelled world gets the land-aware ground; scenery off keeps the
+    // ground it has always had.
+    land: scenery ? landUse : null,
+    ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}),
+  });
 
   // Nodes where a network's roads meet, for the junction pads.
   const degree = new Map();
@@ -1252,7 +1312,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const { minX, maxX, minY, maxY } = r.bounds;
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
     const count = Math.round(density.trees * km * (long ? LONG.trees : 1));
-    const land = landOf(seed);
+    const land = landUse;
     buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land });
     // The same wood again with each model's cheap twin, so trees far from the
     // camera cost a fraction of what they do up close (#117). The far pass runs
@@ -1273,6 +1333,31 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       flowers: Math.round(density.flowers * km * detail * (perKit.flowers ?? 1)),
       blocked: detailBlocked,
       flora: scenery,
+    });
+    // A wood is not just trunks: bushes and rocks on the verge are the near
+    // forest floor. They go in the detail group, which is already near-only.
+    buildUnderstory(r, terrain, {
+      into: chunks.detail,
+      flora: scenery,
+      land,
+      water: ground.water,
+      blocked: detailBlocked,
+      count: Math.round(320 * km * detail),
+      seed: r.seed >>> 0,
+    });
+  }
+
+  // The cheap crowns behind the modelled belt, once over the island (#117).
+  if (scenery && landUse) {
+    buildCanopy(terrain, ground.bounds, {
+      land: landUse,
+      water: ground.water,
+      biome,
+      into: chunks.canopy,
+      blocked,
+      step: 15,
+      reach: [60, 420],
+      seed,
     });
   }
 
