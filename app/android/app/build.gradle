@@ -10,6 +10,7 @@ if (keystorePropertiesFile.exists()) {
 }
 def uploadKey = { String name, String env -> System.getenv(env) ?: keystoreProperties.getProperty(name) }
 def uploadStoreFile = uploadKey('storeFile', 'OPENRADLR_UPLOAD_STORE_FILE')
+def bundledPreview = providers.gradleProperty('bundledPreview').map { it == 'true' }.getOrElse(false)
 
 android {
     namespace = "com.openradlr.app"
@@ -25,6 +26,7 @@ android {
         // The client comes from the server, so this only changes with the native shell.
         versionCode 3
         versionName "0.1.0"
+        buildConfigField 'boolean', 'BUNDLED_PREVIEW', 'false'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,6 +45,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            buildConfigField 'boolean', 'BUNDLED_PREVIEW', bundledPreview.toString()
+        }
         release {
             if (uploadStoreFile) {
                 signingConfig signingConfigs.release
@@ -51,7 +56,19 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    sourceSets.debug.assets.srcDir(layout.buildDirectory.dir('generated/previewAssets'))
+    sourceSets.test.resources.srcDir('../../../client/test/fixtures')
 }
+
+// Opt-in developer build: current client assets with the configured live backend.
+// Release bundles always keep the normal server-delivered client.
+def previewAssets = tasks.register('preparePreviewAssets', Sync) {
+    if (bundledPreview) {
+        from('../../../client/public') { into 'bundled-preview' }
+    }
+    into layout.buildDirectory.dir('generated/previewAssets')
+}
+tasks.named('preBuild').configure { dependsOn previewAssets }
 
 repositories {
     flatDir{
@@ -65,10 +82,13 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
     testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.json:json:20250517"
     // Keep the test APK's old split stdlibs aligned with the BLE plugin's Kotlin runtime.
     androidTestImplementation platform("org.jetbrains.kotlin:kotlin-bom:2.2.20")
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }

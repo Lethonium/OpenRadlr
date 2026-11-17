@@ -5,6 +5,7 @@
  * the client never needs to know where it runs.
  */
 
+import { NativeRide } from "./backgroundRide.js";
 import { NativeBluetooth } from "../ble/nativeBluetooth.js";
 
 /** The app's native plugins, or null in a browser. */
@@ -24,12 +25,14 @@ export const APP_SCHEME = "openradlr";
  *   saveFiles: ((files: {blob: Blob, name: string}[]) => Promise<void>) | null,
  *   signIn: ((url: string) => Promise<string>) | null,
  *   onBack: ((back: () => boolean) => void) | null,
+ *   backgroundRide: NativeRide | null,
  *   setImmersive: ((enabled: boolean) => Promise<void>) | null,
  * } | null}
  */
 export function installNativeApp({ plugins = nativePlugins(), navigator: nav = globalThis.navigator, storage, platform = globalThis.Capacitor?.getPlatform?.() } = {}) {
   if (!plugins) return null;
-  if (plugins.BluetoothLe && !nav.bluetooth) define(nav, "bluetooth", new NativeBluetooth({ plugin: plugins.BluetoothLe, ...(storage !== undefined && { storage }) }));
+  const backgroundRide = platform === "android" && plugins.BackgroundRide ? new NativeRide({ plugin: plugins.BackgroundRide }) : null;
+  if (plugins.BluetoothLe && !nav.bluetooth) define(nav, "bluetooth", new NativeBluetooth({ plugin: backgroundRide ? backgroundRide.bluetooth(plugins.BluetoothLe) : plugins.BluetoothLe, ...(storage !== undefined && { storage }) }));
   // The web view's own wake lock may exist and still let the screen dim.
   if (plugins.KeepAwake) define(nav, "wakeLock", nativeWakeLock(plugins.KeepAwake));
   const canShare = Boolean(plugins.Filesystem && plugins.Share);
@@ -44,6 +47,7 @@ export function installNativeApp({ plugins = nativePlugins(), navigator: nav = g
     saveFiles: canShare ? (files) => shareFiles(plugins, files) : null,
     signIn: canSignIn ? (url) => systemSignIn(plugins, url) : null,
     onBack: plugins.App ? (back) => onBackButton(plugins.App, back) : null,
+    backgroundRide,
     setImmersive: platform === "android" && plugins.SystemBars
       ? (enabled) => Promise.resolve().then(() => enabled ? plugins.SystemBars.hide() : plugins.SystemBars.show())
       : null,

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ride_channel">Aktive Fahrt</string>
+    <string name="ride_channel_description">Aktuelle Trainerdaten und Steuerung während der Fahrt.</string>
+    <string name="ride_notification_title">Deine Fahrt geht weiter</string>
+    <string name="ride_stats">%1$d W · %2$s · %3$.1f %4$s</string>
+    <string name="ride_background_message">Trainer verbunden. Tippen, um zur Fahrt zurückzukehren.</string>
+    <string name="ride_storage_error">Fahrtdaten konnten nicht gespeichert werden. OpenRadlr öffnen.</string>
+    <string name="ride_return">Zur Fahrt</string>
+    <string name="ride_end_save">Beenden &amp; speichern</string>
+    <string name="ride_watts">%1$d W</string>
+    <string name="ride_cadence">%1$d rpm</string>
+    <string name="ride_distance">%1$.1f %2$s</string>
+    <string name="ride_elapsed">%1$02d:%2$02d:%3$02d</string>
+    <string name="ride_no_signal">Trainersignal unterbrochen. Verbindung wird wiederhergestellt…</string>
+    <string name="ride_afk">Öffne OpenRadlr, um zu bestätigen, dass du noch fährst.</string>
+    <string name="ride_control_refused">Trainersteuerung wurde abgelehnt. Öffne OpenRadlr, um es erneut zu versuchen.</string>
+    <string name="ride_compact_stats">%1$d W · %2$.1f %3$s</string>
+</resources>

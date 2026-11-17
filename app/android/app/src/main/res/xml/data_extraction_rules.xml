@@ -1,0 +1,4 @@
+<data-extraction-rules>
+    <cloud-backup><exclude domain="file" path="active-ride.jsonl" /></cloud-backup>
+    <device-transfer><exclude domain="file" path="active-ride.jsonl" /></device-transfer>
+</data-extraction-rules>

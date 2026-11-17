@@ -152,6 +152,13 @@ export class WorkoutPlayer {
     return this.#elapsed;
   }
 
+  /** Reconciles time recorded by the native ride clock before frame ticks resume. */
+  restoreElapsed(elapsedS, nowS) {
+    if (!Number.isFinite(elapsedS) || elapsedS < 0 || !Number.isFinite(nowS)) return;
+    this.#elapsed = elapsedS;
+    this.#lastTick = nowS;
+  }
+
   /** Advances the workout clock to `nowS`. */
   tick(nowS) {
     if (this.#lastTick !== null && !this.paused) this.#elapsed += Math.max(0, nowS - this.#lastTick);
