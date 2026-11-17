@@ -29,13 +29,13 @@ Make a settlement map data and a pure layout:
 - `buildSettlement` turns that data into meshes. Buildings and their far twins
   reuse `chunks.village`/`chunks.villageFar`; small props stay near-only.
   Scenery off keeps the old procedural villages exactly as before.
-- Town light is part of the same layer: emissive window and lamp-head quads in
-  the existing `bright` group, additive ground pools in a new `glow` group,
-  and at most eight nearest lights in the opaque shader on High quality. There
-  is no bloom pass. Pools ride the road surface rather than `terrain.height`,
-  because the ground near a road is levelled about 0.35 m below the asphalt,
-  and their dusk alpha is baked into the vertex colour because additive
-  blending ignores destination alpha.
+- Town light is part of the same layer: emissive window panes placed in the
+  model's real openings and lamp-head quads in the existing `bright` group,
+  additive ground pools in a new `glow` group, and at most eight nearest lights
+  in the opaque shader on High quality. There is no bloom pass. Pools ride the
+  road surface rather than `terrain.height`, because the ground near a road is
+  levelled about 0.35 m below the asphalt, and their dusk alpha is baked into
+  the vertex colour because additive blending ignores destination alpha.
 - The harbour lane is scenery, not a rideable road, so the network's routes do
   not change.
 

@@ -10,6 +10,7 @@
 import { MeshBuilder, appendInstance } from "./meshBuilder.js";
 import { placement } from "./math.js";
 import { seededRandom } from "./noise.js";
+import { facadeWindows } from "./scenery/windows.js";
 
 const TAU = Math.PI * 2;
 
@@ -247,7 +248,16 @@ export function buildSettlement(layout, {
     }
     occupancy?.add?.(pos[0], pos[1], Math.max(width, depth) * 0.45);
     houses += 1;
-    buildings.push({ x: pos[0], z: pos[1], yaw: plot.yaw, facing, width, depth, ground: y });
+    // The real wall and its openings, so the town light puts a pane in a
+    // window rather than a square somewhere on the facade (#117).
+    const facade = model ? facadeWindows(model.near) : null;
+    buildings.push({
+      x: pos[0], z: pos[1], yaw: plot.yaw, facing, width, depth, ground: y,
+      height: model ? model.bounds.max[1] - model.bounds.min[1] : 6,
+      facade: facade?.facade ?? null,
+      wallWidth: facade?.wallWidth ?? null,
+      windows: facade?.windows ?? null,
+    });
     // A garden tree behind every fifth house near the centre, where the kit
     // has one. The city is a town, not a wood; the trees are a garnish.
     if (flora && into.trees && houses % 5 === 0 && Math.hypot(pos[0] - layout.center[0], pos[1] - layout.center[1]) < 150) {

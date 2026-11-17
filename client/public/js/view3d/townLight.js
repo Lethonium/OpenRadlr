@@ -78,33 +78,52 @@ export function planTownLight(layout, { mode = "dusk", height = () => 0, houses 
   const market = { bulbs: [], stalls: [], sign: null };
   const buildings = houses ?? layout.plots.map((plot) => plotHouse(plot, height));
 
-  // Windows: two to four per street-facing facade, most of them lit. The
-  // facade is the plot's street edge, which is where `buildSettlement` puts
-  // the house; the windows sit a hair in front of it so they never z-fight.
+  // Windows: the real openings in each house's street facade when the model
+  // has them, so a pane lands in a window rather than on the wall (#117).
+  // A house without detected openings falls back to a regular pattern on its
+  // actual wall plane, not on the bounding box (which includes the roof).
   for (const house of buildings) {
     const facing = house.facing ?? [-Math.sin(house.yaw), -Math.cos(house.yaw)];
     const along = [-facing[1], facing[0]];
     const yaw = Math.atan2(facing[0], facing[1]);
     const ground = house.ground ?? height(house.x, house.z);
-    const count = 2 + Math.floor(random() * 3);
-    for (let i = 0; i < count; i += 1) {
-      const lit = random() < TOWN_LIGHT.lit;
-      const spread = ((i + 0.5) / count - 0.5) * house.width * 0.8;
-      const floor = random() < 0.65 ? 1 : 2;
-      const tone = 0.75 + random() * 0.25;
-      if (!lit) continue;
-      const width = 0.9 + random() * 0.3;
-      const windowHeight = 1.2 + random() * 0.3;
-      const front = house.depth / 2 + 0.06;
-      windows.push({
-        x: house.x + facing[0] * front + along[0] * spread,
-        y: ground + 1.55 + (floor - 1) * 2.6,
-        z: house.z + facing[1] * front + along[1] * spread,
-        yaw,
-        width,
-        height: windowHeight,
-        colour: TOWN_LIGHT.window.map((c) => c * tone),
-      });
+    const wallWidth = house.wallWidth ?? house.width;
+    const front = (house.facade ?? house.depth / 2) + 0.02;
+    if (house.windows?.length) {
+      for (const opening of house.windows) {
+        const lit = random() < TOWN_LIGHT.lit;
+        const tone = 0.75 + random() * 0.25;
+        if (!lit) continue;
+        windows.push({
+          x: house.x + along[0] * opening.x + facing[0] * front,
+          y: ground + opening.y,
+          z: house.z + along[1] * opening.x + facing[1] * front,
+          yaw,
+          width: Math.max(0.2, opening.width * 0.9),
+          height: Math.max(0.3, opening.height * 0.9),
+          colour: TOWN_LIGHT.window.map((c) => c * tone),
+        });
+      }
+      continue;
+    }
+    const columns = wallWidth > 7.5 ? 3 : 2;
+    const floors = (house.height ?? 6) > 4.8 ? 2 : 1;
+    for (let floor = 1; floor <= floors; floor += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const lit = random() < TOWN_LIGHT.lit;
+        const tone = 0.75 + random() * 0.25;
+        if (!lit) continue;
+        const spread = ((column + 0.5) / columns - 0.5) * wallWidth * 0.62;
+        windows.push({
+          x: house.x + facing[0] * front + along[0] * spread,
+          y: ground + (floor === 1 ? 1.55 : 3.9),
+          z: house.z + facing[1] * front + along[1] * spread,
+          yaw,
+          width: 0.7,
+          height: 1.0,
+          colour: TOWN_LIGHT.window.map((c) => c * tone),
+        });
+      }
     }
   }
 
@@ -259,10 +278,10 @@ export function buildTownLight(plan, { bright, glow, structures, height = () => 
   if (!plan) return { windows: 0, pools: 0, bulbs: 0 };
   let windows = 0;
   for (const window of plan.windows ?? []) {
-    // A soft additive halo around the pane, then the pane itself. The halo is
-    // in the glow group (drawn after the buildings) so it is never swallowed
-    // by the wall it sits on.
-    addQuad(glow, { ...window, width: window.width * 1.9, height: window.height * 1.9 }, window.colour.map((c) => c * 0.22));
+    // A soft round spill of light around the pane. It is a disc in the
+    // window's own plane, not a rectangle on the wall: a square halo read as
+    // a lit placard pasted on the facade (#117).
+    addWindowGlow(glow, window);
     addQuad(bright, window, window.colour);
     windows += 1;
   }
@@ -303,9 +322,39 @@ function addQuad(mesh, quad, colour) {
   mesh.triangleFacing(a, c, d, colour, normal);
 }
 
-/** A small warm bulb, as two crossed quads so it reads from every side. */
-function addBulb(mesh, bulb) {
+/**
+ * A round spill of light in the window's plane, fading to black at the rim.
+ * Two rings and eight segments keep it soft without a texture; additive
+ * blending turns the black rim into nothing (#117).
+ */
+function addWindowGlow(mesh, window) {
   if (!mesh) return;
+  const normal = [Math.sin(window.yaw), 0, Math.cos(window.yaw)];
+  const along = [Math.cos(window.yaw), 0, -Math.sin(window.yaw)];
+  const rings = 2;
+  const segments = 8;
+  const radius = Math.max(window.width, window.height) * 0.65;
+  const at = (angle, r) => [
+    window.x + along[0] * Math.cos(angle) * r,
+    window.y + Math.sin(angle) * r,
+    window.z + along[2] * Math.cos(angle) * r,
+  ];
+  for (let ring = 0; ring < rings; ring += 1) {
+    const inner = (ring / rings) * radius;
+    const outer = ((ring + 1) / rings) * radius;
+    const fade = (1 - ring / rings) ** 2;
+    const colour = window.colour.map((c) => c * fade * 0.12);
+    for (let i = 0; i < segments; i += 1) {
+      const a0 = (i / segments) * TAU;
+      const a1 = ((i + 1) / segments) * TAU;
+      mesh.triangleFacing(at(a0, inner), at(a1, inner), at(a1, outer), colour, normal);
+      mesh.triangleFacing(at(a0, inner), at(a1, outer), at(a0, outer), colour, normal);
+    }
+  }
+}
+
+/** A small warm bulb, as two crossed quads so it reads from every side. */
+function addBulb(mesh, bulb) {  if (!mesh) return;
   const size = bulb.size ?? 0.16;
   for (const yaw of [0, Math.PI / 2]) addQuad(mesh, { ...bulb, yaw, width: size, height: size }, TOWN_LIGHT.market);
 }

@@ -129,7 +129,8 @@ layout diagrams.
 `client/public/js/view3d/renderer.js`, `client/public/js/view3d/view3d.js`,
 `client/public/js/view3d/world.js`, `client/test/townLight.test.js`.
 
-- [x] Window quads: 2–4 per street-facing facade, seeded on/off, into `bright`.
+- [x] Window panes in the model's real openings, seeded on/off, into `bright`;
+      a regular pattern on the real wall plane when a model has no openings.
 - [x] Lamp heads: keep in `bright`; raise dusk brightness to 1.0.
 - [x] Ground pools: additive radial quads into a new `chunks.glow`; radius
       6–9 m for lamps, 2–3 m for shop windows; dusk only.

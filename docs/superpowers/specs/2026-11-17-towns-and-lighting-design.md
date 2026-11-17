@@ -176,10 +176,18 @@ At day, none of this is on. At golden hour, a warm hint, no pools.
 1. **Emissive heads and windows** (always on, cheap).
    - Lamp heads and lit windows go into the `bright` group, which is drawn
      unlit. At dusk the brightness is 1.0; at golden 0.55; at day 0.25.
-   - Window quads are added to the street-facing facades: 2–4 per house,
-     seeded on/off (about 65 % lit at dusk), warm `[1.0, 0.72, 0.38]`.
-   - The town kit's own window faces are used where the kit has a `windows`
-     role; otherwise the quads are placed from the footprint.
+   - Window panes are added to the street-facing facades, seeded on/off
+     (about 65 % lit at dusk), warm `[1.0, 0.72, 0.38]`.
+   - The kit's houses are shells: their windows are holes in the wall, not
+     panes. The facade plane and the openings are read from the model mesh
+     once per model — the wall's own colour and the empty regions enclosed by
+     its frames — and a pane is placed in each opening. A model without
+     detected openings falls back to a regular two- or three-column pattern on
+     its real wall plane, not on the bounding box (which includes the roof
+     overhang). A square placed from the bounding box floats in front of the
+     facade and reads as a lit placard.
+   - The soft spill around a pane is a round additive disc in the pane's
+     plane, not a rectangular halo.
 2. **Ground pools** (cheap, near-only).
    - An additive, radial-gradient quad on the pavement/road under each lamp,
      radius 6–9 m, alpha 0.22 at dusk, 0 at day.
