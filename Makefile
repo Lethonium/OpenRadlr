@@ -30,7 +30,7 @@ endif
 ifneq ($(shell command -v npm 2>/dev/null),)
   NPM := cd client && npm
 else
-  NPM := docker run --rm -t -v "$(CURDIR)/client":/app -w /app $(NODE_IMAGE) npm
+  NPM := docker run --rm -t -v "$(CURDIR)":/app -w /app/client $(NODE_IMAGE) npm
 endif
 
 .PHONY: help
