@@ -70,8 +70,9 @@ least two streets and a junction; the drone shows a grid.
 
 - [x] Add `settlements` to `RoadNetwork` (`this.settlements`).
 - [x] Add the Hilltop city at `(2400, 950)` radius 420.
-- [ ] Add the southwest village at `(-350, -2190)` and the harbour at
-      `(4900, -4050)` (map y is −world z). **Not yet.**
+- [x] Add the southwest village at `(-350, -2190)` and the harbour at
+      `(4450, -4125)` (map y is −world z). The harbour moved to the bay the
+      terrain actually has.
 - [x] Build every settlement once, whichever route is ridden.
 - [x] Skip the overlapping village zones when scenery is on, so the city does
       not get a second strip (`hill-road` 1919–2249, `orchard-lane` 90–420,
@@ -106,17 +107,21 @@ and the drone.
 **Files:** `routes/maps/valley.json`,
 `client/public/js/view3d/settlement.js`, `client/test/settlementVillage.test.js`.
 
-- [ ] Southwest village: green, church, farm lane, one cross lane, stone walls,
-      orchard.
-- [ ] Harbour: a new lane from the southeast road to the bay, quay, boats,
-      fish market, net racks, dunes, reeds.
-- [ ] Harbour lane is scenery, not a rideable road; it does not change the
+- [x] Southwest village: a green with a fountain, a church, and a cross lane
+      off the main road.
+- [x] Harbour: a new lane from the southeast road to the bay, a quay, a jetty,
+      four boats, and a fish-market square with stalls at the quay.
+- [x] Harbour lane is scenery, not a rideable road; it does not change the
       network's routes.
-- [ ] Test: the harbour has a quay, ≥3 boats and a lane that reaches the water;
-      the village has a green and a church.
-- [ ] Test: neither settlement enters the river or the sea.
+- [x] Test: the harbour has a quay, ≥3 boats and a lane to the road; the
+      village has a green and a church.
+- [x] Test: neither settlement enters the river or the sea (on the real map).
+- [ ] Still open, not in this pass: stone walls and an orchard in the village;
+      net racks, dunes and reeds at the harbour.
 
-**Acceptance:** screenshots of the village and the harbour.
+**Acceptance:** screenshots of the village and the harbour. Done:
+`client/sceneryShot.mjs` for the 3D shots, `client/settlementMap.mjs` for the
+layout diagrams.
 
 ## Step 6 — town light
 
