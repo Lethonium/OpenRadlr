@@ -171,10 +171,56 @@ function buildCastle({ terrain, center, yaw, random }) {
   return { near: finish(near), far: finish(far), at, walls, gaps, wallHeight, towerHeight, corners };
 }
 
+const LIMESTONE = [[0.97, 0.92, 0.8], [1, 0.96, 0.85], [0.92, 0.86, 0.74]];
+const WET_ROCK = [0.6, 0.57, 0.5];
+
+/**
+ * The sea arch: a limestone half-ellipse of rock blocks on two pillars that
+ * run down to the seabed. Local zero is the water line.
+ */
+function buildSeaArch({ terrain, center, yaw, water, random }) {
+  const rx = 28;
+  const ry = 34;
+  const thick = 8;
+  const depth = 12;
+  const at = [center[0], water, center[1]];
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const seabed = (x) => Math.max(-45, terrain.height(center[0] + cy * x, center[1] - sy * x) - water - 1.5);
+
+  const near = new MeshBuilder();
+  const far = new MeshBuilder();
+  const point = (angle) => [Math.cos(angle) * rx, Math.sin(angle) * ry];
+  const block = (b, a0, a1, jitter) => {
+    const [x0, y0] = point(a0);
+    const [x1, y1] = point(a1);
+    const tx = x1 - x0;
+    const ty = y1 - y0;
+    const len = Math.hypot(tx, ty);
+    const k = jitter ? 0.9 + random() * 0.2 : 1;
+    const normal = [(-ty / len) * thick * k, (tx / len) * thick * k, 0];
+    const color = LIMESTONE[Math.floor(random() * LIMESTONE.length)];
+    b.orientedBox([(x0 + x1) / 2, (y0 + y1) / 2, 0], [tx * 1.12, ty * 1.12, 0], normal, [0, 0, depth * k], color);
+  };
+  const segments = 7;
+  for (let i = 0; i < segments; i += 1) block(near, (i / segments) * Math.PI, ((i + 1) / segments) * Math.PI, true);
+  for (let i = 0; i < 3; i += 1) block(far, (i / 3) * Math.PI, ((i + 1) / 3) * Math.PI, false);
+  for (const side of [-1, 1]) {
+    const x = side * rx;
+    const bottom = seabed(x);
+    // Wet, dark foot below the surface; pale rock above, up to where the arch springs.
+    near.box([x, bottom / 2 - 0.4, 0], [thick * 1.05, -bottom + 0.8, depth * 1.05], WET_ROCK);
+    near.box([x, 1.5, 0], [thick, 3, depth], LIMESTONE[2]);
+    far.cylinder([x, bottom, 0], thick / 2 + 1, -bottom + 3, WET_ROCK, 5, thick / 2, false);
+  }
+  return { near: finish(near), far: finish(far), at, span: rx * 2 };
+}
+
 /** Landmark kinds by name. Tasks add the rest here. */
 export const LANDMARKS = {
   lighthouse: { build: buildLighthouse },
   castle: { build: buildCastle },
+  seaArch: { build: buildSeaArch },
 };
 
 /**

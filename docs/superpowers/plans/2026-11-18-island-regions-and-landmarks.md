@@ -244,9 +244,11 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Files:** Modify `client/public/js/view3d/landmarks.js`, `routes/maps/valley.json`; Test `client/test/landmarks.test.js`
 
-- [ ] **Step 1: Failing tests:** `seaArch` stands where the sea is ≥ 3 m deep; both feet reach below `water − 2`; the opening is open (no triangle crosses the middle 30 % of the span below `water + 8`); it is visible from the coast road (the nearest road sample is within 1,200 m).
-- [ ] **Step 2–4:** FAIL, implement (limestone colour, 5–8 rock segments along a half-ellipse, ~35 m high, ~50 m span); start at `x 1550, y −4200`; PASS.
-- [ ] **Step 5: Commit** `feat: Set a sea arch in the south bay (#117)`.
+- [x] **Step 1: Failing tests:** `seaArch` stands where the sea is ≥ 3 m deep; both feet reach below `water − 2`; the opening is open (no triangle crosses the middle 30 % of the span below `water + 8`); it is visible from the coast road (the nearest road sample is within 1,200 m).
+- [x] **Step 2–4:** FAIL, implement (limestone colour, 5–8 rock segments along a half-ellipse, ~35 m high, ~50 m span); start at `x 1550, y −4200`; PASS.
+- [x] **Step 5: Commit** `feat: Set a sea arch in the south bay (#117)`.
+
+> Done: sea arch kept at map `x 1550, y -4200` (38 m deep; cape-loop and island-tour see it along ~580 m at ~1 km, the forest rule only counts woods on land).
 
 ### Task 13: Viaduct, where a road crosses high
 

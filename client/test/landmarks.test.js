@@ -97,6 +97,28 @@ test("the castle's walls follow a slope: every corner is founded below the groun
   }
 });
 
+test("a sea arch rises from the water on two feet and leaves the middle open", () => {
+  const sea = { height: () => -20 };
+  const built = LANDMARKS.seaArch.build({ terrain: sea, center: [0, 0], yaw: 0, water: -2.4, random: seededRandom(1) });
+  assert.ok(triangles(built.far) > 0 && triangles(built.far) <= 60, `far has ${triangles(built.far)} triangles`);
+  assert.equal(built.at[1], -2.4, "local zero is the water line");
+  const xs = Array.from({ length: built.near.vertexCount }, (_, v) => built.near.positions[v * 3]);
+  const ys = heights(built.near);
+  const span = built.span;
+  for (const side of [-1, 1]) {
+    const foot = ys.filter((_, v) => Math.sign(xs[v]) === side && Math.abs(xs[v]) > span * 0.35);
+    assert.ok(Math.min(...foot) + built.at[1] < -2.4 - 2, "a foot reaches below the surface");
+  }
+  assert.ok(Math.max(...ys) > 28 && Math.max(...ys) < 42, `${Math.max(...ys)} m high`);
+  const p = built.near.positions;
+  for (let t = 0; t < built.near.vertexCount; t += 3) {
+    const verts = [0, 1, 2].map((k) => [p[(t + k) * 3], p[(t + k) * 3 + 1]]);
+    const crossesOpening = verts.some(([x, y]) => Math.abs(x) < span * 0.15 && y > 0 && y < 8);
+    assert.ok(!crossesOpening, "nothing stands in the middle opening above the water, below 8 m");
+  }
+  assert.ok(colorsOf(built.near).some(([r, g, b]) => r > 0.7 && g > 0.65 && b > 0.5), "pale limestone");
+});
+
 test("buildLandmarks places each landmark, reserves its apron and returns the movers", () => {
   const near = new ChunkedMesh();
   const far = new ChunkedMesh();
@@ -234,6 +256,24 @@ test("a road sees the castle's tower rise over the trees", () => {
 
 test("the castle is in the village groups and reserves its apron", () => {
   const near = (chunks) => (chunks ?? []).some((c) => Math.hypot(c.center[0] - castle.center[0], c.center[2] - castle.center[1]) < 80 && c.mesh.vertexCount > 0);
+  assert.ok(near(on.chunks.village) && near(on.chunks.villageFar));
+});
+
+const seaArch = network.landmarks.find((l) => l.kind === "seaArch");
+
+test("the sea arch stands in deep water within sight of a road", () => {
+  assert.ok(seaArch, "a sea arch is in the map");
+  const [ax, az] = seaArch.center;
+  for (const dx of [-30, 0, 30]) {
+    assert.ok(on.terrain.height(ax + dx, az) <= on.waterLevel - 3, `the sea is ${(on.waterLevel - on.terrain.height(ax + dx, az)).toFixed(1)} m deep at ${dx}`);
+  }
+  const seen = ["cape-loop.json", "island-tour.json"].map((f) => seenAlong(f, seaArch.center, on.waterLevel, 35, 0, 100, 1200));
+  assert.ok(Math.max(...seen) >= 200, `a road sees it along ${Math.max(...seen)} m`);
+});
+
+test("the sea arch is in the village groups", () => {
+  const [ax, az] = seaArch.center;
+  const near = (chunks) => (chunks ?? []).some((c) => Math.hypot(c.center[0] - ax, c.center[2] - az) < 100 && c.mesh.vertexCount > 0);
   assert.ok(near(on.chunks.village) && near(on.chunks.villageFar));
 });
 
