@@ -365,8 +365,9 @@ The bundle includes the mapping for Google Play crash deobfuscation. R8 report
 percentages describe compiler coverage, not measured startup, RAM or frame rate.
 
 Test the **signed, optimised release APK**, in addition to the debug service tests
-above, on an Android 12+ emulator with network access (the client loads
-from the configured server). Use an explicit device serial for every adb command:
+above, on an Android 12+ emulator with WebView 140+ and network access (the client
+loads from the configured server). Older WebViews use Capacitor's protective
+native insets, so the zero-padding edge-to-edge assertion does not apply there. Use an explicit device serial for every adb command:
 
 ```bash
 cd app/android
