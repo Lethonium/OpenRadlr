@@ -64,6 +64,13 @@ function fakeGl() {
     uniform1i() {},
     uniform2fv() {},
     uniform3fv() {},
+    clearColor() {},
+    clear() {},
+    depthMask() {},
+    polygonOffset() {},
+    uniform4fv() {},
+    activeTexture() {},
+    bindTexture() {},
   };
   return gl;
 }
@@ -109,4 +116,50 @@ test("scenery without instances compiles only the ordinary programs", () => {
   renderer.upload(triangle());
   assert.equal(gl.state.programs.length, programs);
   assert.equal(gl.state.instancedDraws.length, 0);
+});
+
+const frame = (extra = {}) => ({
+  viewProjection: identity(),
+  inverseViewProjection: identity(),
+  camera: [0, 0, 0],
+  zenith: [0.3, 0.5, 0.8],
+  horizon: [0.8, 0.8, 0.8],
+  ground: [0.4, 0.4, 0.3],
+  sun: [0, 1, 0],
+  sunColor: [1, 1, 1],
+  fog: [100, 1000],
+  ...extra,
+});
+
+/** The fake gl, recording every `uniform1f` as {name, value}. */
+function recordingGl() {
+  const gl = fakeGl();
+  gl.state.floats = [];
+  gl.uniform1f = (name, value) => gl.state.floats.push({ name, value });
+  return gl;
+}
+const lastFloat = (gl, name) => gl.state.floats.findLast((entry) => entry.name === name)?.value;
+
+test("begin hands the frame's sun scatter and saturation to the opaque shader", () => {
+  const gl = recordingGl();
+  new Renderer(gl).begin(frame({ sunScatter: 0.4, saturation: 1.1 }));
+  assert.equal(lastFloat(gl, "u_sunScatter"), 0.4);
+  assert.equal(lastFloat(gl, "u_saturation"), 1.1);
+});
+
+test("begin without sun scatter or saturation renders as before", () => {
+  const gl = recordingGl();
+  new Renderer(gl).begin(frame());
+  assert.equal(lastFloat(gl, "u_sunScatter"), 0);
+  assert.equal(lastFloat(gl, "u_saturation"), 1);
+  assert.equal(lastFloat(gl, "u_specular"), 0);
+});
+
+test("a transparent draw sets its specular glint and resets it afterwards", () => {
+  const gl = recordingGl();
+  const renderer = new Renderer(gl);
+  const handle = renderer.upload(triangle());
+  renderer.drawTransparent(handle, identity(), { alpha: 0.8, specular: 0.6 });
+  const values = gl.state.floats.filter((entry) => entry.name === "u_specular").map((entry) => entry.value);
+  assert.deepEqual(values, [0.6, 0]);
 });

@@ -288,7 +288,7 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 **Files:** Create `docs/adr/0030-island-regions-and-landmarks.md`; Modify `docs/architecture.md` (regions and landmarks beside the settlement layer), this plan (Baseline and results)
 
 - [ ] **Step 1: Bench** each region view and the dense wood against the baseline; record a table here. Over budget → lower densities first, then shorten `cover` range, before anything else.
-  - Baseline (Task 1): _fill in_.
+  - Baseline (Task 1): `sceneryBench.mjs --at 6490 --camera chase --scenery quaternius --frames 300` on rolling-hills (software WebGL): opaque 957 draw calls and 1,527,246 visible vertices (shadow 6 calls, 44,100 vertices); 1.88 fps (low 1.57), mean render CPU 3.1 ms; scene build 11.2 s.
 - [ ] **Step 2: ADR 0030** — context (variety, Cykelapp lessons), decision (map regions + style tables + landmarks + movers), consequences (budget numbers, scenery off unchanged, winter overrides).
 - [ ] **Step 3:** `make check` equivalent: lint, full client tests, `cargo test`, scenery-check — all green.
 - [ ] **Step 4:** Push `feat/island-regions`, open a **draft** PR against `feat/scenery-kit` titled `feat(client): Give the island regions, landmarks and warmer light`, screenshots via the `pr-screenshots` branch (gh contents API, 1× scale), assign RalfLeonFasler.

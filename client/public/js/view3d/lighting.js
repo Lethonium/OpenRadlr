@@ -3,6 +3,8 @@
  *
  * A preset sets the sun direction (pointing towards the sun), its colour,
  * the sky gradient, the ground bounce colour and how far the haze reaches.
+ * `sunScatter` leans the haze to the sun's colour towards the sun; `saturation`
+ * lifts the colour after tone mapping (1 = unchanged).
  */
 import { lookAt, multiply, normalize, orthographic } from "./math.js";
 
@@ -10,23 +12,27 @@ export const TIME_PRESETS = Object.freeze({
   day: {
     label: "Day", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.55, 0.62, 0.32]),
-    sunColor: [1.0, 0.94, 0.82],
-    zenith: [0.3, 0.52, 0.84],
-    horizon: [0.76, 0.85, 0.93],
+    sunColor: [1.0, 0.92, 0.78],
+    zenith: [0.28, 0.48, 0.86],
+    horizon: [0.86, 0.84, 0.82],
     ground: [0.4, 0.38, 0.3],
     cloudTint: [1, 1, 1],
     fog: [260, 4200],
+    sunScatter: 0.25,
+    saturation: 1.1,
     shadowStrength: 0.62,
   },
   golden: {
     label: "Golden hour", // i18n-ok (English id label; the UI translates by mode)
-    sun: normalize([0.8, 0.2, 0.3]),
-    sunColor: [1.0, 0.72, 0.45],
-    zenith: [0.33, 0.45, 0.72],
-    horizon: [0.98, 0.79, 0.6],
+    sun: normalize([0.8, 0.13, 0.3]),
+    sunColor: [1.0, 0.66, 0.38],
+    zenith: [0.38, 0.42, 0.7],
+    horizon: [1.0, 0.74, 0.52],
     ground: [0.42, 0.33, 0.25],
     cloudTint: [1.0, 0.86, 0.72],
     fog: [220, 3600],
+    sunScatter: 0.55,
+    saturation: 1.15,
     shadowStrength: 0.68,
   },
   dusk: {
@@ -38,6 +44,8 @@ export const TIME_PRESETS = Object.freeze({
     ground: [0.4, 0.33, 0.36],
     cloudTint: [0.98, 0.72, 0.68],
     fog: [200, 3200],
+    sunScatter: 0.45,
+    saturation: 1.1,
     shadowStrength: 0.5,
   },
 });

@@ -74,6 +74,9 @@ uniform vec2 u_fogRange;
 uniform float u_alpha;
 uniform float u_unlit;
 uniform float u_fogScale;
+uniform float u_sunScatter;
+uniform float u_saturation;
+uniform float u_specular;
 uniform int u_lightCount;
 uniform vec4 u_lightPosition[8];
 uniform vec4 u_lightColour[8];
@@ -125,12 +128,19 @@ void main() {
   float rim = pow(1.0 - max(dot(n, toCamera), 0.0), 3.0) * 0.18;
   vec3 lit = v_color * (ambient * 0.62 + u_sunColor * sun * 0.85) + rim * u_skyColor;
   lit += townLight(v_color);
+  // A glint of the sun on water: zero unless the draw asks for it.
+  lit += u_sunColor * u_specular * pow(max(dot(reflect(-toCamera, n), u_sunDirection), 0.0), 60.0) * sunVisibility();
   lit = mix(lit, v_color, u_unlit);
   float distance = length(v_world - u_cameraPosition);
   float fog = smoothstep(u_fogRange.x, u_fogRange.y, distance);
   // Height fog: distant valleys get hazier than mountain tops.
   fog = clamp(fog * (1.15 - 0.3 * smoothstep(0.0, 250.0, v_world.y - u_cameraPosition.y)), 0.0, 1.0) * u_fogScale;
-  outColor = vec4(mix(toneMap(lit), u_fogColor, fog), u_alpha);
+  // Sunward haze: the fog leans to the sun's colour when looking towards the sun.
+  vec3 viewDirection = normalize(v_world - u_cameraPosition);
+  vec3 fogTint = mix(u_fogColor, u_sunColor, u_sunScatter * pow(max(dot(viewDirection, u_sunDirection), 0.0), 6.0));
+  vec3 mapped = toneMap(lit);
+  mapped = mix(vec3(dot(mapped, vec3(0.299, 0.587, 0.114))), mapped, u_saturation);
+  outColor = vec4(mix(mapped, fogTint, fog), u_alpha);
 }`;
 
 const DEPTH_VERTEX = `#version 300 es
@@ -171,6 +181,7 @@ uniform vec3 u_sunDirection;
 uniform vec3 u_zenithColor;
 uniform vec3 u_horizonColor;
 uniform vec3 u_sunColor;
+uniform float u_sunScatter;
 out vec4 outColor;
 void main() {
   vec4 far = u_inverseViewProjection * vec4(v_ndc, 1.0, 1.0);
@@ -178,7 +189,7 @@ void main() {
   float height = clamp(direction.y, -0.1, 1.0);
   vec3 sky = mix(u_horizonColor, u_zenithColor, pow(max(height, 0.0), 0.55));
   float sunAmount = max(dot(direction, u_sunDirection), 0.0);
-  sky += u_sunColor * (pow(sunAmount, 900.0) * 1.4 + pow(sunAmount, 12.0) * 0.18);
+  sky += u_sunColor * (pow(sunAmount, 600.0) * 1.6 + pow(sunAmount, 8.0) * (0.12 + 0.25 * u_sunScatter));
   outColor = vec4(sky, 1.0);
 }`;
 
@@ -238,6 +249,9 @@ const MESH_UNIFORMS = Object.freeze([
   "u_alpha",
   "u_unlit",
   "u_fogScale",
+  "u_sunScatter",
+  "u_saturation",
+  "u_specular",
   "u_lightViewProjection",
   "u_shadowMap",
   "u_shadowStrength",
@@ -305,6 +319,7 @@ export class Renderer {
       "u_zenithColor",
       "u_horizonColor",
       "u_sunColor",
+      "u_sunScatter",
     ]);
     this.emptyVao = gl.createVertexArray();
     gl.enable(gl.DEPTH_TEST);
@@ -527,9 +542,9 @@ export class Renderer {
    * Starts a frame: clears, draws the sky and sets the shared uniforms.
    * @param {{viewProjection: Float32Array, inverseViewProjection: Float32Array, camera: number[],
    *          zenith: number[], horizon: number[], ground: number[], sun: number[], sunColor: number[], fog: number[],
-   *          shadowStrength?: number}} frame
+   *          shadowStrength?: number, sunScatter?: number, saturation?: number}} frame
    */
-  begin({ viewProjection, inverseViewProjection, camera, zenith, horizon, ground, sun, sunColor, fog, shadowStrength = 0.6 }) {
+  begin({ viewProjection, inverseViewProjection, camera, zenith, horizon, ground, sun, sunColor, fog, shadowStrength = 0.6, sunScatter = 0, saturation = 1 }) {
     const gl = this.gl;
     gl.clearColor(horizon[0], horizon[1], horizon[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -542,6 +557,7 @@ export class Renderer {
     gl.uniform3fv(s.u_zenithColor, zenith);
     gl.uniform3fv(s.u_horizonColor, horizon);
     gl.uniform3fv(s.u_sunColor, sunColor);
+    gl.uniform1f(s.u_sunScatter, sunScatter);
     gl.depthMask(false);
     gl.bindVertexArray(this.emptyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -563,6 +579,9 @@ export class Renderer {
       gl.uniform1f(u.u_alpha, 1);
       gl.uniform1f(u.u_unlit, 0);
       gl.uniform1f(u.u_fogScale, 1);
+      gl.uniform1f(u.u_sunScatter, sunScatter);
+      gl.uniform1f(u.u_saturation, saturation);
+      gl.uniform1f(u.u_specular, 0);
       gl.uniform1i(u.u_shadowMap, 0);
       gl.uniform1f(u.u_shadowStrength, shadow?.lightViewProjection ? shadowStrength : 0);
       gl.uniform1f(u.u_shadowTexel, shadow ? 1 / shadow.size : 0);
@@ -694,7 +713,7 @@ export class Renderer {
    * Draws a blended mesh (shadows, water). Call after all opaque meshes.
    * `unlit` = 1 uses the vertex colour as is (shadows), 0 applies lighting.
    */
-  drawTransparent(handle, model, { alpha, unlit = 0, tint = [1, 1, 1] }) {
+  drawTransparent(handle, model, { alpha, unlit = 0, tint = [1, 1, 1], specular = 0 }) {
     const gl = this.gl;
     gl.useProgram(this.program);
     gl.enable(gl.BLEND);
@@ -703,9 +722,11 @@ export class Renderer {
     gl.polygonOffset(-1, -2);
     gl.uniform1f(this.uniforms.u_alpha, alpha);
     gl.uniform1f(this.uniforms.u_unlit, unlit);
+    gl.uniform1f(this.uniforms.u_specular, specular);
     this.draw(handle, model, tint);
     gl.uniform1f(this.uniforms.u_alpha, 1);
     gl.uniform1f(this.uniforms.u_unlit, 0);
+    gl.uniform1f(this.uniforms.u_specular, 0);
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.depthMask(true);
     gl.disable(gl.BLEND);
