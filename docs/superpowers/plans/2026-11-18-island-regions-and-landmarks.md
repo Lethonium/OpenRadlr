@@ -228,7 +228,7 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 - [x] **Step 2–4:** FAIL, implement, PASS. Map entry: `{"id":"cape-light","kind":"lighthouse","x":4850,"y":-3900,"yaw":0,"apron":25}` — move it to the nearest high, dry point on the cape if the data test fails.
 - [x] **Step 5: Commit** `feat: Build landmarks from the map, starting with the cape lighthouse (#117)`.
 
-> Done: lighthouse stays at map `x 4850, y -3900` (world z +3900; 21 m, dry, no road within 999 m). Best shot: `--route cape-loop --at 4000` (726 m, dead ahead).
+> Done: lighthouse moved to map `x 4500, y -2960` (world z +2960; plateau edge, apron 60, seen from cape-loop at 5080-5660 m).
 
 ### Task 11: Castle ruin on the crag
 

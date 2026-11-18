@@ -17,7 +17,7 @@
     {"id":"high-country","kind":"highCountry","x":390,"y":2380,"radius":1100}
   ],
   "landmarks": [
-    { "id": "cape-light", "kind": "lighthouse", "x": 4850, "y": -3900, "yaw": 0, "apron": 25 }
+    { "id": "cape-light", "kind": "lighthouse", "x": 4500, "y": -2960, "yaw": 0, "apron": 60 }
   ],
   "settlements": [
     {

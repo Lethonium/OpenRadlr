@@ -12,6 +12,7 @@ import { ChunkedMesh } from "../public/js/view3d/chunks.js";
 import { Occupancy } from "../public/js/view3d/features.js";
 import { LANDMARKS, buildLandmarks } from "../public/js/view3d/landmarks.js";
 import { seededRandom } from "../public/js/view3d/noise.js";
+import { forestAt } from "../public/js/land/land.js";
 import { buildWorld } from "../public/js/view3d/world.js";
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
@@ -101,7 +102,7 @@ const lighthouse = network.landmarks.find((l) => l.kind === "lighthouse");
 
 test("the map has a lighthouse on the cape", () => {
   assert.ok(lighthouse, "a lighthouse is in the map");
-  assert.deepEqual(lighthouse.center, [4850, 3900], "map y is north-up, world z is −y");
+  assert.deepEqual(lighthouse.center, [4500, 2960], "map y is north-up, world z is −y");
 });
 
 test("every landmark stands on dry ground clear of the roads", () => {
@@ -132,6 +133,43 @@ test("no tree, cover or prop stands within the lighthouse's apron", () => {
       }
     }
   }
+});
+
+test("the lighthouse stands near the sea, on dry ground", () => {
+  const [cx, cz] = lighthouse.center;
+  const sea = Array.from({ length: 12 }, (_, i) => [Math.cos((i / 12) * Math.PI * 2), Math.sin((i / 12) * Math.PI * 2)])
+    .some(([dx, dz]) => [100, 200, 300].some((r) => on.terrain.height(cx + dx * r, cz + dz * r) < on.waterLevel));
+  assert.ok(sea, "open water within 300 m");
+});
+
+test("a stretch of cape-loop sees the lighthouse across open ground or water", () => {
+  const [cx, cz] = lighthouse.center;
+  const ground = on.terrain.height(cx, cz);
+  const lamp = ground + 30;
+  const seed = network.seed;
+  const route = new RouteGeometry(read("../../routes/cape-loop.json"));
+  const sees = (x, z, eye) => {
+    const dist = Math.hypot(cx - x, cz - z);
+    const steps = Math.floor(dist / 10);
+    for (let i = 1; i < steps; i += 1) {
+      const f = i / steps;
+      const px = x + (cx - x) * f;
+      const pz = z + (cz - z) * f;
+      const line = eye + (lamp - eye) * f;
+      if (on.terrain.height(px, pz) > line - 1) return false;
+      // The lighthouse's own apron keeps the wood back; beyond it a wood blocks.
+      if (dist * (1 - f) > lighthouse.apron && forestAt(px, pz, seed) > 0.5) return false;
+    }
+    return true;
+  };
+  let seen = 0;
+  for (let d = 0; d < route.length; d += 20) {
+    const p = route.positionAt(d);
+    const range = Math.hypot(p.x - cx, -p.y - cz);
+    if (range < 150 || range > 600) continue;
+    if (sees(p.x, -p.y, on.terrain.height(p.x, -p.y) + 3)) seen += 1;
+  }
+  assert.ok(seen * 20 >= 200, `cape-loop sees it along ${seen * 20} m of road`);
 });
 
 test("scenery off builds no landmarks and no movers", () => {

@@ -35,10 +35,10 @@ function footprint(terrain, [x, z], radius) {
 
 /** The lighthouse: a tapering white tower with red bands, gallery and a lit lantern. */
 function buildLighthouse({ terrain, center }) {
-  const { low, high } = footprint(terrain, center, 6);
+  const { low, high } = footprint(terrain, center, 7);
   const at = [center[0], high, center[1]];
   const sink = high - low + 1.5;
-  const tower = { base: 3.6, top: 2.3, height: 26 };
+  const tower = { base: 4.2, top: 2.7, height: 30 };
   const radiusAt = (y) => tower.base + (tower.top - tower.base) * (y / tower.height);
   // Bands bottom to top, as fractions of the tower: white, red, white, red.
   const bands = [[0, 0.25, WHITE], [0.25, 0.5, RED], [0.5, 0.75, WHITE], [0.75, 1, RED]];
@@ -48,7 +48,7 @@ function buildLighthouse({ terrain, center }) {
   const bright = new MeshBuilder();
 
   // Stone foot reaching down into the slope.
-  near.cylinder([0, -sink, 0], 5.4, sink + 1.2, STONE, 10, 4.6, true);
+  near.cylinder([0, -sink, 0], 6.2, sink + 1.2, STONE, 10, 5.2, true);
   for (const [from, to, color] of bands) {
     const y0 = from * tower.height;
     const y1 = to * tower.height;
@@ -57,8 +57,8 @@ function buildLighthouse({ terrain, center }) {
   }
   // Gallery, lantern room, lamp and roof.
   const top = tower.height;
-  near.cylinder([0, top, 0], 3.7, 0.5, IRON, 10, 3.7, true);
-  near.cylinder([0, top + 0.5, 0], 2.5, 3.4, [0.55, 0.7, 0.75], 8, 2.3, false);
+  near.cylinder([0, top, 0], 4.1, 0.5, IRON, 10, 4.1, true);
+  near.cylinder([0, top + 0.5, 0], 2.5, 3.6, [0.55, 0.7, 0.75], 8, 2.3, false);
   bright.cylinder([0, top + 0.9, 0], 1.3, 2.4, LAMP, 8, 1.3, true);
   near.cone([0, top + 3.9, 0], 3, 2.6, ROOF, 8);
   near.cylinder([0, top + 6.4, 0], 0.15, 1.2, IRON, 4, 0.15, true);
