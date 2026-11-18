@@ -14,7 +14,7 @@ export const TIME_PRESETS = Object.freeze({
     sun: normalize([0.55, 0.62, 0.32]),
     sunColor: [1.0, 0.92, 0.78],
     zenith: [0.28, 0.48, 0.86],
-    horizon: [0.86, 0.84, 0.82],
+    horizon: [0.78, 0.86, 0.93],
     ground: [0.4, 0.38, 0.3],
     cloudTint: [1, 1, 1],
     fog: [260, 4200],
