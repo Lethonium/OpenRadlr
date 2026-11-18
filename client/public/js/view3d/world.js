@@ -41,6 +41,7 @@ import { buildSettlement } from "./settlement.js";
 import { buildTownLight, planTownLight } from "./townLight.js";
 import { regionAt } from "../land/regions.js";
 import { PLANTS } from "./regions/plants.js";
+import { PROPS } from "./regions/props.js";
 import { regionStyle } from "./regions/styles.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
@@ -1132,6 +1133,68 @@ export function buildCover(route, terrain, { regionsAt = null, into = null, wate
   return { mesh: own ? mesh.build() : mesh, count: items.length, items };
 }
 
+const PROP_BAND = Object.freeze({ from: 7, to: 12 });
+/** How far from the road's edge a boardwalk lies, and the water it needs within reach of the road. */
+const BOARDWALK = Object.freeze({ offset: 4, waterReach: 12 });
+
+/**
+ * The region's own roadside props (#117): every `props.every` metres along the
+ * road, per side, one of the style's kinds 7-12 m beyond the road's edge, laid
+ * parallel to the road. Each prop is added to `occupancy`. None stand on the
+ * sea side (water within 18 m of the edge), in blocked spots (settlements,
+ * landmark aprons, rivers), or on the road; a boardwalk only where water lies
+ * within 12 m of the road's edge. Returns the props placed as `items`.
+ */
+export function buildRegionProps(route, terrain, { regionsAt = null, into = null, occupancy = null, water = -Infinity, blocked = () => false, seed = 0, biome = temperate } = {}) {
+  const { mesh, own } = target(into);
+  const items = [];
+  if (!regionsAt) return { mesh: own ? mesh.build() : mesh, count: 0, items };
+  const random = seededRandom(((seed ^ route.seed) >>> 0) ^ 0x9209);
+  const half = roadHalfWidth(route.lanes) + VERGE;
+  const free = (x, z, radius) => terrain.distanceToRoad(x, z) >= half + 1.5 + radius * 0.5 && !blocked(x, z) && !occupancy?.blocked(x, z, radius);
+  const edgeAt = (frame, side, offset) => add(frame.center, scale(frame.right, side * (half + offset)));
+  // The first spacing is drawn per side so the two sides do not line up.
+  const next = { [-1]: random() * 30, 1: random() * 30 };
+  for (let d = 0; d < route.length; d += 2) {
+    for (const side of [-1, 1]) {
+      if (d < next[side]) continue;
+      // Draw everything first, so the spots do not move when a style changes.
+      const offset = PROP_BAND.from + random() * (PROP_BAND.to - PROP_BAND.from);
+      const pick = random();
+      const keep = random();
+      const frame = roadFrame(route, d);
+      const [px, , pz] = edgeAt(frame, side, offset);
+      const top = regionsAt(px, pz)[0];
+      const style = top ? regionStyle(top.kind, biome) : null;
+      if (!style?.props || style.props.kinds.length === 0) {
+        next[side] = d + 20;
+        continue;
+      }
+      next[side] = d + style.props.every * (0.75 + random() * 0.5);
+      if (keep >= top.weight) continue;
+      const name = style.props.kinds[Math.floor(pick * style.props.kinds.length)];
+      const prop = PROPS[name];
+      if (!prop) continue;
+      const wet = name === "boardwalk";
+      const [x, , z] = wet ? edgeAt(frame, side, BOARDWALK.offset) : [px, 0, pz];
+      if (wet) {
+        const [wx, , wz] = edgeAt(frame, side, BOARDWALK.waterReach);
+        if (terrain.height(wx, wz) >= water + 0.5) continue;
+      } else if (seaSide(route, terrain, water, d, side)) continue;
+      const ground = terrain.height(x, z);
+      if (ground < water + 1 || slopeAt(terrain, x, z) > 0.7) continue;
+      const yaw = Math.atan2(frame.forward[2], frame.forward[0]);
+      // Both ends of a panel keep clear of the road too, on a bend.
+      const reach = [Math.cos(yaw), Math.sin(yaw)];
+      if (!free(x, z, 1) || ![-3, 3].every((k) => free(x + reach[0] * k, z + reach[1] * k, 0.5))) continue;
+      const { radius } = prop({ mesh, x, y: ground, z, yaw, random });
+      occupancy?.add(x, z, radius);
+      items.push({ x, z, prop: name, side });
+    }
+  }
+  return { mesh: own ? mesh.build() : mesh, count: items.length, items };
+}
+
 const COVER_BANDS = Object.freeze([
   Object.freeze({ from: 3, to: 7, items: 2, chance: 1 }),
   Object.freeze({ from: 7, to: 16, items: 1, chance: 0.6 }),
@@ -1562,6 +1625,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land, nearTown: nearTown, regionsAt, far: true });
     }
     if (scenery) {
+      buildRegionProps(r, terrain, { regionsAt: network ? regionsAt : null, into: chunks.structures, occupancy, water: ground.water, blocked, seed, biome });
       buildCover(r, terrain, { regionsAt: network ? regionsAt : null, into: chunks.cover, water: ground.water, blocked: detailBlocked, seed, biome });
     }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
