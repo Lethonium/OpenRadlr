@@ -343,6 +343,50 @@ description.
     continued samples, reconnection and End/save. Returning restores the recorded
     ride. Test on physical hardware as well as the emulator.
 
+## Android release optimisation
+
+Release builds enable R8 code shrinking, optimisation and obfuscation, plus
+[optimised resource shrinking](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization)
+with AGP 8.13. Debug builds retain readable code.
+Capacitor supplies its reflection/annotation consumer rules; avoid broad package
+keep rules, which defeat optimisation. Add a rule only for a reproduced failure.
+
+After building the bundle, audit its embedded R8 report and retrace mapping:
+
+```bash
+cd app
+./android/gradlew -p android :app:bundleRelease
+node scripts/check-android-optimization.mjs
+```
+
+CI runs this audit too. Keep the bundle and its matching
+`android/app/build/outputs/mapping/release/mapping.txt` for each shipped release.
+The bundle includes the mapping for Google Play crash deobfuscation. R8 report
+percentages describe compiler coverage, not measured startup, RAM or frame rate.
+
+Test the **signed, optimised release APK**, in addition to the debug service tests
+above, on an Android 12+ emulator with WebView 140+ and network access (the client
+loads from the configured server). Older WebViews use Capacitor's protective
+native insets, so the zero-padding edge-to-edge assertion does not apply there. Use an explicit device serial for every adb command:
+
+```bash
+cd app/android
+./gradlew -PandroidTestBuildType=release :app:assembleRelease :app:assembleReleaseAndroidTest
+adb -s SERIAL install -r app/build/outputs/apk/release/app-release.apk
+adb -s SERIAL install -r app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+adb -s SERIAL shell pm grant com.openradlr.app android.permission.BLUETOOTH_SCAN
+adb -s SERIAL shell pm grant com.openradlr.app android.permission.BLUETOOTH_CONNECT
+adb -s SERIAL shell am instrument -w com.openradlr.app.test/com.openradlr.app.ReleaseSmokeRunner
+```
+
+Both APKs must have the same signing certificate. Debug and release certificates
+usually differ: use a dedicated emulator rather than uninstalling a rider's app
+and losing their data. The release runner uses platform instrumentation to avoid
+sharing AndroidX/Kotlin test-helper ABIs with R8-optimised target code. It checks
+native plugin dispatch, filesystem round trips and edge-to-edge insets. The native
+document picker and OAuth UI still need manual checks. It does not establish
+physical Bluetooth radio reliability; repeat the ride/background/reconnect checklist on a trainer before shipping.
+
 ## Known limitations
 
 - **iOS background:** `bluetooth-central` keeps fitness-device connections
