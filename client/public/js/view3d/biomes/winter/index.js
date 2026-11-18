@@ -156,6 +156,16 @@ export const winter = Object.freeze({
     }),
   }),
   terrainColor,
+  /** Region looks that differ under snow; every other region keeps its temperate style (#117). */
+  regions: Object.freeze({
+    blossomValley: Object.freeze({
+      trees: Object.freeze({ canopy: Object.freeze([0.62, 0.6, 0.62]) }),
+      mass: Object.freeze({ colour: SNOW }),
+    }),
+    lavenderFields: Object.freeze({
+      mass: Object.freeze({ colour: Object.freeze([0.9, 0.92, 0.96]) }),
+    }),
+  }),
   flora: Object.freeze({
     /** Sparse under the snow: fewer trees than summer, no flowers at all. */
     density: Object.freeze({ trees: 230, tufts: 700, flowers: 0, elsewhere: 0.4 }),
