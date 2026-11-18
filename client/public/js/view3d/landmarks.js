@@ -171,18 +171,23 @@ function buildCastle({ terrain, center, yaw, random }) {
   return { near: finish(near), far: finish(far), at, walls, gaps, wallHeight, towerHeight, corners };
 }
 
-const LIMESTONE = [[0.97, 0.92, 0.8], [1, 0.96, 0.85], [0.92, 0.86, 0.74]];
-const WET_ROCK = [0.6, 0.57, 0.5];
+const LIMESTONE = [[1, 0.9, 0.68], [0.98, 0.86, 0.62], [0.92, 0.8, 0.58], [1, 0.93, 0.74]];
+const OCHRE = [0.82, 0.58, 0.3];
+const SUBMERGED = [0.5, 0.4, 0.28];
 
 /**
- * The sea arch: a limestone half-ellipse of rock blocks on two pillars that
- * run down to the seabed. Local zero is the water line.
+ * The sea arch (after Es Pontas): a heavy, irregular limestone body, two thick
+ * legs wider at the foot under a thick deck, with a boat-sized hole between,
+ * and a broken rock or two beside it. Local zero is the water line; the legs
+ * run down to the seabed.
  */
 function buildSeaArch({ terrain, center, yaw, water, random }) {
-  const rx = 28;
-  const ry = 34;
-  const thick = 8;
-  const depth = 12;
+  const gap = 20; // the opening at the water
+  const leg = 15; // a leg's width at the water
+  const deckBase = 17;
+  const deckTop = 30;
+  const depth = 22;
+  const span = gap + leg * 2;
   const at = [center[0], water, center[1]];
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
@@ -190,30 +195,61 @@ function buildSeaArch({ terrain, center, yaw, water, random }) {
 
   const near = new MeshBuilder();
   const far = new MeshBuilder();
-  const point = (angle) => [Math.cos(angle) * rx, Math.sin(angle) * ry];
-  const block = (b, a0, a1, jitter) => {
-    const [x0, y0] = point(a0);
-    const [x1, y1] = point(a1);
-    const tx = x1 - x0;
-    const ty = y1 - y0;
-    const len = Math.hypot(tx, ty);
-    const k = jitter ? 0.9 + random() * 0.2 : 1;
-    const normal = [(-ty / len) * thick * k, (tx / len) * thick * k, 0];
-    const color = LIMESTONE[Math.floor(random() * LIMESTONE.length)];
-    b.orientedBox([(x0 + x1) / 2, (y0 + y1) / 2, 0], [tx * 1.12, ty * 1.12, 0], normal, [0, 0, depth * k], color);
+  const jitter = (amount) => (random() - 0.5) * 2 * amount;
+  const pale = () => LIMESTONE[Math.floor(random() * LIMESTONE.length)];
+  // A faceted block: size, slightly turned about the vertical and leaned.
+  const block = (b, [x, y, z], [sx, sy2, sz], color, turn = 0.12) => {
+    const a = jitter(turn);
+    const lean = jitter(0.06);
+    b.orientedBox([x, y, z], [Math.cos(a) * sx, lean * sy2, -Math.sin(a) * sx], [lean * sx, sy2, 0], [Math.sin(a) * sz, 0, Math.cos(a) * sz], color);
   };
-  const segments = 7;
-  for (let i = 0; i < segments; i += 1) block(near, (i / segments) * Math.PI, ((i + 1) / segments) * Math.PI, true);
-  for (let i = 0; i < 3; i += 1) block(far, (i / 3) * Math.PI, ((i + 1) / 3) * Math.PI, false);
+
   for (const side of [-1, 1]) {
-    const x = side * rx;
-    const bottom = seabed(x);
-    // Wet, dark foot below the surface; pale rock above, up to where the arch springs.
-    near.box([x, bottom / 2 - 0.4, 0], [thick * 1.05, -bottom + 0.8, depth * 1.05], WET_ROCK);
-    near.box([x, 1.5, 0], [thick, 3, depth], LIMESTONE[2]);
-    far.cylinder([x, bottom, 0], thick / 2 + 1, -bottom + 3, WET_ROCK, 5, thick / 2, false);
+    const inner = side * gap / 2;
+    const bottom = seabed(side * (gap / 2 + leg / 2));
+    // Submerged root: broad, dark, wider than the leg.
+    block(near, [side * (gap / 2 + leg / 2 + 1), (bottom - 4) / 2, 0], [leg + 6, -bottom - 4 + 0.5, depth + 4], SUBMERGED, 0.05);
+    // Ochre waterline band, then pale layers narrowing upward.
+    const layers = [[-4, 4, 1.18, OCHRE], [0, 6, 1.1, null], [6, 6, 1.0, null], [12, deckBase - 12 + 1, 0.92, null]];
+    for (const [y0, h, widen, tone] of layers) {
+      const w = leg * widen;
+      const halves = [0, 1];
+      for (const k of halves) {
+        const width = (w / 2) * (0.9 + random() * 0.25);
+        const x = inner + side * (k === 0 ? width / 2 - 1 + jitter(0.8) : w - width / 2 + jitter(1));
+        const d = depth * (0.82 + random() * 0.25);
+        block(near, [x, y0 + h / 2, jitter(1.5)], [width, h, d], tone ?? pale());
+      }
+    }
+    // A tall pale sliver on the outer face.
+    block(near, [side * (gap / 2 + leg + 1.5), 7, jitter(3)], [4, 13, depth * 0.6], pale(), 0.2);
   }
-  return { near: finish(near), far: finish(far), at, span: rx * 2 };
+  // The deck: thick, in uneven blocks, overhanging the legs.
+  const parts = 5;
+  const total = span + 8;
+  for (let i = 0; i < parts; i += 1) {
+    const w = (total / parts) * (1 + random() * 0.15);
+    const x = -total / 2 + (i + 0.5) * (total / parts);
+    const h = deckTop - deckBase + jitter(1.5);
+    const edge = i === 0 || i === parts - 1;
+    block(near, [x, deckBase + h / 2 - (edge ? 1 : 0), jitter(1.2)], [w, h - (edge ? 2 : 0), depth * (0.85 + random() * 0.25)], pale(), 0.1);
+  }
+  // Broken rocks in the water to the sides.
+  const rocks = [[-span / 2 - 16, 9, -8, 7, 9, 7], [span / 2 + 20, 7, 10, 9, 6, 8]];
+  for (const [x, , z, sx, sy2, sz] of rocks) {
+    block(near, [x, sy2 / 2 - 1, z], [sx, sy2, sz], pale(), 0.5);
+    block(near, [x, -1.5, z], [sx + 3, 3, sz + 3], OCHRE, 0.3);
+  }
+
+  // Far twin: two legs, the deck and one rock.
+  for (const side of [-1, 1]) {
+    const x = side * (gap / 2 + leg / 2);
+    const bottom = seabed(x);
+    far.box([x, (bottom + deckBase) / 2, 0], [leg * 1.05, deckBase - bottom, depth], LIMESTONE[1]);
+  }
+  far.box([0, (deckBase + deckTop) / 2, 0], [span + 6, deckTop - deckBase, depth], LIMESTONE[0]);
+  far.box([span / 2 + 20, 2, 10], [9, 6, 8], LIMESTONE[2]);
+  return { near: finish(near), far: finish(far), at, span };
 }
 
 /** Landmark kinds by name. Tasks add the rest here. */
