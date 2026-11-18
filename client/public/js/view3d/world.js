@@ -39,6 +39,7 @@ import { canGrowTree, slopeAt } from "../land/mountains.js";
 import { layoutSettlement } from "../land/settlement.js";
 import { buildSettlement } from "./settlement.js";
 import { buildTownLight, planTownLight } from "./townLight.js";
+import { regionAt } from "../land/regions.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -1199,6 +1200,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // The same seeded land for the scenery, the ground colour and the canopy, so
   // a wood is a dark wood on the ground and full behind its first trees (#117).
   const landUse = landOf(seed);
+  // Regions (#117) are a place in the network's map: only with a kit, only on a network.
+  const regions = scenery && network ? network.regions : [];
+  // eslint-disable-next-line no-unused-vars -- handed to the region builders in the next tasks
+  const regionsAt = (x, z) => regionAt(x, z, regions, seed);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
   const base = network ? networkTerrain(network, [...roads, ...tracks], { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
   const sea = waterLevel(base.index);
@@ -1519,6 +1524,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // Town light (#117): every lamp and market light of every settlement; the
     // view uploads the nearest eight to the shader each frame.
     ...(townLights.length ? { lights: townLights } : {}),
+    // The map's regions, for the 2D map (#117); only with scenery on a network.
+    ...(scenery && network ? { regions: network.regions } : {}),
     waterLevel: ground.water,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
