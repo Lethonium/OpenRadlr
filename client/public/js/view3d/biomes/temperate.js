@@ -115,13 +115,16 @@ const smoothstep = (edge0, edge1, x) => {
  */
 function massAt(mass, x, z, seed) {
   if (!mass || !mass.kind || mass.cover <= 0) return 0;
-  const edge = 0.08;
   const level = 1 - mass.cover;
   if (mass.kind === "stripes") {
+    // The ground grid is ~16 m, so a band of 40 m would alias into blocks: wide
+    // soft edges, and a slow noise bends and breaks the bands up.
     const angle = mass.angle ?? 0;
     const wave = 0.5 + 0.5 * Math.sin((2 * Math.PI * (x * Math.cos(angle) + z * Math.sin(angle))) / mass.scale);
-    return smoothstep(level - edge, level + edge, wave);
+    const broken = wave + (valueNoise(x / 55, z / 55, seed + 0x51) - 0.5) * 0.4;
+    return smoothstep(level - 0.22, level + 0.22, broken);
   }
+  const edge = 0.08;
   return smoothstep(level - edge, level + edge, valueNoise(x / mass.scale, z / mass.scale, seed + 0x77));
 }
 

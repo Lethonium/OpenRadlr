@@ -20,6 +20,10 @@ const BROOM_LEAF = [0.35, 0.5, 0.25];
 const FLOWERS = [[0.92, 0.85, 0.35], [0.9, 0.5, 0.55], [0.95, 0.95, 0.9], [0.55, 0.6, 0.9]];
 const ALPINE = [[0.95, 0.9, 0.5], [0.7, 0.55, 0.9], [0.95, 0.95, 0.95]];
 const GRASS = [0.4, 0.52, 0.25];
+const SHRUB = [0.38, 0.46, 0.24];
+const SHRUB_LIGHT = [0.5, 0.56, 0.3];
+const WHEAT = [0.88, 0.74, 0.36];
+const WHEAT_STALK = [0.74, 0.64, 0.3];
 
 /** A flat two-triangle trunk for the far silhouettes. */
 function trunkCard(mesh, x, y, z, height, width) {
@@ -37,23 +41,33 @@ function spike(mesh, x, y, z, dx, dz, height, width, color) {
 function umbrellaPine({ mesh, x, y, z, random, colours, far }) {
   const height = 10 + random() * 5;
   const leaf = colours.canopy ?? PINE_LEAF;
-  const crownHeight = height * 0.14;
+  // A stocky trunk to about two thirds of the height, then a wide flat crown
+  // of two or three lobes that sits on its branches like a mushroom cap.
+  const base = height * (0.6 + random() * 0.1);
+  const crownHeight = (height - base) * 0.75;
   const radius = height * (0.42 + random() * 0.1);
   const rotation = random() * Math.PI;
-  const crownY = y + height - crownHeight * 0.4;
+  const bend = lean(random) * 1.4;
+  const crownY = y + base + crownHeight * 0.6;
   if (far) {
-    trunkCard(mesh, x, y, z, height - crownHeight, 0.3);
-    mesh.ellipsoid([x, crownY, z], [radius, crownHeight, radius], leaf, 2, 4, rotation);
+    trunkCard(mesh, x, y, z, base, 0.45);
+    mesh.ellipsoid([x + bend, crownY, z], [radius, crownHeight, radius], leaf, 2, 4, rotation);
     return;
   }
-  const bend = lean(random);
-  mesh.segment([x, y, z], [x + bend, y + height * 0.7, z], 0.5, 0.5, TRUNK);
-  mesh.segment([x + bend, y + height * 0.7, z], [x + bend * 1.6, y + height - crownHeight, z], 0.4, 0.4, TRUNK);
-  const cx = x + bend * 1.6;
-  mesh.ellipsoid([cx, crownY, z], [radius, crownHeight, radius], leaf, 3, 8, rotation);
-  const side = radius * 0.45;
-  mesh.ellipsoid([cx + side, crownY - crownHeight * 0.25, z + side * 0.5], [radius * 0.55, crownHeight * 0.8, radius * 0.55], leaf, 2, 6, random() * Math.PI);
-  mesh.ellipsoid([cx - side, crownY - crownHeight * 0.3, z - side * 0.4], [radius * 0.5, crownHeight * 0.75, radius * 0.5], leaf, 2, 6, random() * Math.PI);
+  const fork = [x + bend, y + base, z];
+  mesh.segment([x, y, z], fork, 0.9, 0.65, TRUNK);
+  const lobes = random() < 0.5 ? 2 : 3;
+  const spread = random() * Math.PI;
+  mesh.ellipsoid([fork[0], crownY, z], [radius * 0.8, crownHeight, radius * 0.8], leaf, 3, 8, rotation);
+  for (let i = 0; i < lobes; i += 1) {
+    const a = spread + (i / lobes) * Math.PI * 2;
+    const r = radius * 0.5;
+    const lx = fork[0] + Math.cos(a) * r;
+    const lz = z + Math.sin(a) * r;
+    const ly = crownY - crownHeight * (0.1 + random() * 0.25);
+    mesh.segment(fork, [lx, ly - crownHeight * 0.5, lz], 0.3, 0.2, TRUNK);
+    mesh.ellipsoid([lx, ly, lz], [radius * 0.55, crownHeight * 0.85, radius * 0.55], leaf, 2, 6, random() * Math.PI);
+  }
 }
 
 function olive({ mesh, x, y, z, random, colours, far }) {
@@ -130,7 +144,10 @@ function lavender({ mesh, x, y, z, random, far }) {
     mesh.ellipsoid([x, y + height * 0.4, z], [0.45, height * 0.45, 0.45], LAVENDER, 2, 5, rotation);
     return;
   }
-  mesh.ellipsoid([x, y + height * 0.25, z], [0.4, height * 0.28, 0.4], LAVENDER_LEAF, 2, 6, rotation);
+  // Grey-green leaves at the foot, under a dome of purple flower heads with a
+  // few spikes standing out of it, so a row reads as lavender from the saddle.
+  mesh.ellipsoid([x, y + height * 0.2, z], [0.4, height * 0.24, 0.4], LAVENDER_LEAF, 2, 5, rotation);
+  mesh.ellipsoid([x, y + height * 0.55, z], [0.42, height * 0.24, 0.42], LAVENDER, 2, 6, rotation + 0.3);
   for (let i = 0; i < 9; i += 1) {
     const a = rotation + (i / 9) * Math.PI * 2;
     const r = 0.12 + random() * 0.2;
@@ -138,8 +155,8 @@ function lavender({ mesh, x, y, z, random, far }) {
   }
 }
 
-function wildflower({ mesh, x, y, z, random, far }) {
-  const color = pick(FLOWERS, random);
+function wildflower({ mesh, x, y, z, random, colours, far }) {
+  const color = pick(colours?.flowers ?? FLOWERS, random);
   const height = 0.35 + random() * 0.25;
   if (far) {
     mesh.triangle([x - 0.2, y, z], [x + 0.2, y, z], [x, y + height, z], color);
@@ -203,6 +220,51 @@ function broom({ mesh, x, y, z, random, far }) {
   }
 }
 
+/** A tuft of grass blades: green or, with `colours.grass`, dry; a flat triangle far off. */
+function grass({ mesh, x, y, z, random, colours, far }) {
+  const color = colours?.grass ?? GRASS;
+  const height = 0.3 + random() * 0.3;
+  if (far) {
+    mesh.triangle([x - 0.25, y, z], [x + 0.25, y, z], [x, y + height, z], color);
+    return;
+  }
+  for (let i = 0; i < 7; i += 1) {
+    const a = random() * Math.PI * 2;
+    const r = random() * 0.22;
+    spike(mesh, x + Math.cos(a) * r, y, z + Math.sin(a) * r, lean(random) * 0.8, lean(random) * 0.8, height * (0.6 + random() * 0.6), 0.035, color);
+  }
+}
+
+/** A low rounded shrub in the dry green of the coast, a few small leaf clumps on it. */
+function shrub({ mesh, x, y, z, random, colours, far }) {
+  const size = 0.5 + random() * 0.5;
+  const rotation = random() * Math.PI;
+  const color = colours?.shrub ?? SHRUB;
+  if (far) {
+    mesh.ellipsoid([x, y + size * 0.3, z], [size, size * 0.5, size], color, 2, 5, rotation);
+    return;
+  }
+  mesh.ellipsoid([x, y + size * 0.3, z], [size, size * 0.5, size], color, 2, 7, rotation);
+  mesh.ellipsoid([x + size * 0.45, y + size * 0.25, z + size * 0.2], [size * 0.55, size * 0.35, size * 0.55], SHRUB_LIGHT, 2, 6, rotation + 1);
+  mesh.ellipsoid([x - size * 0.4, y + size * 0.3, z - size * 0.3], [size * 0.5, size * 0.32, size * 0.5], color, 2, 6, rotation + 2);
+}
+
+/** A stand of ripe wheat: tall golden stalks, each topped with a small ear. */
+function wheat({ mesh, x, y, z, random, far }) {
+  const height = 0.8 + random() * 0.25;
+  if (far) {
+    mesh.triangle([x - 0.35, y, z], [x + 0.35, y, z], [x, y + height, z], WHEAT);
+    return;
+  }
+  for (let i = 0; i < 7; i += 1) {
+    const px = x + (random() - 0.5) * 0.6;
+    const pz = z + (random() - 0.5) * 0.6;
+    const h = height * (0.85 + random() * 0.3);
+    spike(mesh, px, y, pz, lean(random) * 0.5, lean(random) * 0.5, h, 0.03, WHEAT_STALK);
+    mesh.ellipsoid([px, y + h, pz], [0.04, 0.1, 0.04], WHEAT, 2, 3, 0);
+  }
+}
+
 /** Plant builders by name: `({ mesh, x, y, z, random, colours, far })`. */
 export const PLANTS = Object.freeze({
   umbrellaPine,
@@ -214,4 +276,7 @@ export const PLANTS = Object.freeze({
   alpineFlower,
   reeds,
   broom,
+  grass,
+  shrub,
+  wheat,
 });

@@ -1075,7 +1075,7 @@ export function buildGroundDetail(
 /** How far out from the road's edge the sea is looked for (#117). */
 const SEA_REACH = 18;
 /** The cover plants small enough to stand where the ground drops to the sea. */
-const LOW_COVER = new Set(["lavender", "wildflower", "reeds"]);
+const LOW_COVER = new Set(["lavender", "wildflower", "reeds", "grass", "shrub"]);
 
 /**
  * Whether the verge on `side` (-1 or 1) of the road at distance `d` ends in
@@ -1090,10 +1090,12 @@ export function seaSide(route, terrain, water, d, side) {
 
 /**
  * The region's own low plants along the verge, near the camera only (#117).
- * Two bands beside the road's edge: 3-7 m holds two plants per 2 m of road,
- * 7-16 m one at 60 %, both scaled by the style's `perMetre` (0.2 is full);
- * the first 3 m stay bare. Outside a region the biome's tufts are all there is.
- * Returns the plants placed as `items` with the chosen side.
+ * Three bands beside the road's edge: a strip of low grass and flowers 3 m
+ * beyond the paved shoulder, then 3-7 m with four clumps per 2 m of road and
+ * 7-16 m with two at 70 %, all scaled by the style's `perMetre` (0.2 is
+ * full); the first 3 m stay bare. A clump is one to three plants close
+ * together, always on the outer side of its centre so none lean toward the
+ * road. Outside a region the biome's tufts are all there is. Returns the clump centres as `items` with the chosen side.
  */
 export function buildCover(route, terrain, { regionsAt = null, into = null, water = -Infinity, blocked = () => false, seed = 0, biome = temperate } = {}) {
   const { mesh, own } = target(into);
@@ -1109,22 +1111,34 @@ export function buildCover(route, terrain, { regionsAt = null, into = null, wate
         for (let k = 0; k < band.items; k += 1) {
           // Draw everything first, so the spots do not move when a style changes.
           const at = d + random() * STEP;
-          const offset = half + band.from + random() * (band.to - band.from);
+          const across = band.from + random() * (band.to - band.from);
           const keep = random();
           const pick = random();
+          const members = 1 + Math.floor(random() * 3);
           const frame = roadFrame(route, at);
-          const [x, , z] = add(frame.center, scale(frame.right, side * offset));
-          const top = regionsAt(x, z)[0];
+          const probe = add(frame.center, scale(frame.right, side * (half + across)));
+          const top = regionsAt(probe[0], probe[2])[0];
           const style = top ? regionStyle(top.kind, biome) : null;
           if (!style?.cover || style.cover.plants.length === 0) continue;
           if (keep >= band.chance * Math.min(1, style.cover.perMetre * 5) * top.weight) continue;
-          if (terrain.distanceToRoad(x, z) < half + 2.5 || blocked(x, z)) continue;
+          const [x, , z] = add(frame.center, scale(frame.right, side * (half + across)));
+          if (terrain.distanceToRoad(x, z) < half + Math.min(2.5, band.from - 0.1) || blocked(x, z)) continue;
           const ground = terrain.height(x, z);
           if (ground < water + 2.5 || !canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
           sea ??= seaSide(route, terrain, water, at, side);
-          const plants = sea ? style.cover.plants.filter((name) => LOW_COVER.has(name)) : style.cover.plants;
+          const all = band.strip && style.cover.strip?.length > 0 ? style.cover.strip : style.cover.plants;
+          const plants = sea ? all.filter((name) => LOW_COVER.has(name)) : all;
           const plant = (plants.length > 0 ? plants : ["wildflower"])[Math.floor(pick * (plants.length || 1))];
-          PLANTS[plant]({ mesh, x, y: ground - 0.05, z, random, colours: {}, far: false });
+          const colours = style.cover.colours ?? {};
+          for (let m = 0; m < members; m += 1) {
+            // Scattered along the road and outward from the centre.
+            const along = (random() - 0.5) * 1.2;
+            const out = m === 0 ? 0 : random() * 0.7;
+            const px = x + frame.forward[0] * along + frame.right[0] * side * out;
+            const pz = z + frame.forward[2] * along + frame.right[2] * side * out;
+            const py = m === 0 ? ground : terrain.height(px, pz);
+            PLANTS[plant]({ mesh, x: px, y: py - 0.05, z: pz, random, colours, far: false });
+          }
           items.push({ x, z, plant, side });
         }
       }
@@ -1187,7 +1201,7 @@ export function buildRegionProps(route, terrain, { regionsAt = null, into = null
       // Both ends of a panel keep clear of the road too, on a bend.
       const reach = [Math.cos(yaw), Math.sin(yaw)];
       if (!free(x, z, 1) || ![-3, 3].every((k) => free(x + reach[0] * k, z + reach[1] * k, 0.5))) continue;
-      const { radius } = prop({ mesh, x, y: ground, z, yaw, random });
+      const { radius } = prop({ mesh, x, y: ground, z, yaw, random, groundAt: terrain.height });
       occupancy?.add(x, z, radius);
       items.push({ x, z, prop: name, side });
     }
@@ -1195,9 +1209,11 @@ export function buildRegionProps(route, terrain, { regionsAt = null, into = null
   return { mesh: own ? mesh.build() : mesh, count: items.length, items };
 }
 
+// The strip starts 3 m beyond the paved shoulder (`roadHalfWidth`), which is VERGE short of `half`.
 const COVER_BANDS = Object.freeze([
-  Object.freeze({ from: 3, to: 7, items: 2, chance: 1 }),
-  Object.freeze({ from: 7, to: 16, items: 1, chance: 0.6 }),
+  Object.freeze({ from: 3 - VERGE, to: 3, items: 2, chance: 1, strip: true }),
+  Object.freeze({ from: 3, to: 7, items: 4, chance: 1 }),
+  Object.freeze({ from: 7, to: 16, items: 2, chance: 0.7 }),
 ]);
 
 /**

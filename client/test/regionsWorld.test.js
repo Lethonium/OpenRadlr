@@ -170,19 +170,34 @@ const lavenderAll = () => [{ kind: "lavenderFields", weight: 1 }];
 const coverOn = (terrain, options = {}) => buildCover(LINE, terrain, { regionsAt: lavenderAll, seed: 4, ...options });
 const edgeOf = (item) => Math.abs(item.z) - HALF;
 
-test("cover keeps off the road's edge: nothing within 3 m of it", () => {
+test("cover keeps off the road: nothing within 3 m of the paved shoulder", () => {
   const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
   assert.ok(items.length > 100);
-  assert.ok(items.every((item) => edgeOf(item) >= 3 - 1e-6), `closest ${Math.min(...items.map(edgeOf))}`);
+  const shoulder = (item) => Math.abs(item.z) - roadHalfWidth(2);
+  assert.ok(items.every((item) => shoulder(item) >= 3 - 1e-6), `closest ${Math.min(...items.map(shoulder))}`);
+});
+
+test("a strip of low grass and flowers grows 3 m beyond the shoulder, never the tall plants", () => {
+  const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
+  const strip = items.filter((item) => edgeOf(item) < 3);
+  assert.ok(strip.length / (LINE.length * 2) >= 0.4, `${strip.length} in the strip`);
+  assert.ok(strip.every((item) => ["grass", "wildflower"].includes(item.plant)), "low plants only");
+  assert.ok(items.filter((item) => edgeOf(item) >= 3).every((item) => item.plant === "lavender"));
+});
+
+test("the lavender grows scattered, not in rows along the road", () => {
+  const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
+  const near = items.filter((item) => item.plant === "lavender" && edgeOf(item) < 7);
+  const offsets = new Set(near.map((item) => (Math.abs(item.z) - HALF).toFixed(1)));
+  assert.ok(offsets.size >= 30, `${offsets.size} distinct distances from the road`);
 });
 
 test("the lavender region's near band holds at least 0.8 plants per metre per side", () => {
   const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
-  const band = items.filter((item) => edgeOf(item) < 7);
+  const band = items.filter((item) => edgeOf(item) >= 3 && edgeOf(item) < 7);
   assert.ok(band.length / (LINE.length * 2) >= 0.8, `${band.length} in ${LINE.length} m`);
   assert.ok(items.some((item) => edgeOf(item) >= 7), "a thinner outer band");
   assert.ok(items.every((item) => edgeOf(item) <= 16 + 1e-6));
-  assert.ok(items.every((item) => item.plant === "lavender"));
 });
 
 test("outside a region there is no cover, and blocked or drowned spots get none", () => {
@@ -209,8 +224,8 @@ test("on the sea side only low cover grows, within 18 m of the water", () => {
   const coast = (terrain) => buildCover(LINE, terrain, { regionsAt: () => [{ kind: "pineCoast", weight: 1 }], water: 0, seed: 4 });
   const { items } = coast(sea);
   assert.ok(items.filter(wet).length > 20 && items.filter((item) => !wet(item)).length > 20);
-  assert.ok(items.filter(wet).every((item) => item.plant === "wildflower"), "low cover on the sea side");
-  assert.ok(items.filter((item) => !wet(item)).every((item) => item.plant === "broom"), "the region's plant inland");
+  assert.ok(items.filter(wet).every((item) => ["wildflower", "grass", "shrub"].includes(item.plant)), "low cover on the sea side");
+  assert.ok(items.filter((item) => !wet(item)).some((item) => item.plant === "broom"), "the region's tall plant inland");
   assert.equal(seaSide(LINE, sea, 0, 100, 1), true);
   assert.equal(seaSide(LINE, sea, 0, 100, -1), false);
 });

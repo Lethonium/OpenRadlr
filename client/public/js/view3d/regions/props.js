@@ -7,6 +7,8 @@
  */
 
 const STONES = [[0.62, 0.58, 0.5], [0.55, 0.51, 0.44], [0.68, 0.63, 0.54]];
+/** Dry-stone walls are a light warm grey-beige, every stone a little different. */
+const WALL_STONES = [[0.8, 0.75, 0.66], [0.72, 0.68, 0.6], [0.86, 0.81, 0.72], [0.76, 0.7, 0.62], [0.68, 0.65, 0.58]];
 const WOOD = [0.5, 0.36, 0.22];
 const DARK_WOOD = [0.34, 0.25, 0.17];
 const WHITE = [0.94, 0.93, 0.88];
@@ -31,21 +33,30 @@ function post(mesh, at, [along, across], height, width, color, sink = 0) {
   part(mesh, at, [along, (height - sink) / 2, across], [width, height + sink, width], color);
 }
 
-function stoneWall({ mesh, x, y, z, yaw, random }) {
-  const at = { x, y, z, yaw };
-  // Three pieces of the 6 m panel, each a little different in height and colour,
-  // sunk into the ground so a slope does not show a gap below.
-  for (let i = 0; i < 3; i += 1) {
-    const height = 0.82 + random() * 0.14;
-    const tone = STONES[Math.floor(random() * STONES.length)];
-    part(mesh, at, [(i - 1) * 2, (height - 0.5) / 2, 0], [2, height + 0.5, 0.6], tone);
-    part(mesh, at, [(i - 1) * 2 + (random() - 0.5) * 0.2, height + 0.03, 0], [1.9, 0.14, 0.7], STONES[(i + 1) % STONES.length]);
+function stoneWall({ mesh, x, y, z, yaw, random, groundAt }) {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  // The 6 m panel is built from stones in two courses, each section standing
+  // on the ground under it and sunk into it, so a slope shows no gap below.
+  for (let i = 0; i < 6; i += 1) {
+    const along = (i - 2.5) * 1;
+    const base = groundAt ? groundAt(x + c * along, z + s * along) : y;
+    const at = { x, y: base, z, yaw };
+    const height = 0.7 + random() * 0.14;
+    const sink = 0.5;
+    part(mesh, at, [along, (height - sink) / 2, 0], [1.02, height + sink, 0.6], WALL_STONES[Math.floor(random() * WALL_STONES.length)]);
+    // The cap stones, offset a little along and across the wall.
+    part(mesh, at, [along + (random() - 0.5) * 0.2, height + 0.05, (random() - 0.5) * 0.08], [0.95, 0.14, 0.7], WALL_STONES[Math.floor(random() * WALL_STONES.length)]);
+    // A lighter and a darker stone laid proud on the face.
+    part(mesh, at, [along + (random() - 0.5) * 0.3, height * (0.3 + random() * 0.3), 0.3], [0.4 + random() * 0.3, 0.16 + random() * 0.1, 0.08], WALL_STONES[Math.floor(random() * WALL_STONES.length)]);
   }
   return { radius: 3.2 };
 }
 
-function picketFence({ mesh, x, y, z, yaw }) {
-  const at = { x, y, z, yaw };
+function picketFence({ mesh, x, y, z, yaw, groundAt }) {
+  // Stand on the lowest ground under the panel, the posts sunk 0.3 m, so a slope shows no gap.
+  const low = groundAt ? Math.min(y, ...[-3, 3].map((k) => groundAt(x + Math.cos(yaw) * k, z + Math.sin(yaw) * k))) : y;
+  const at = { x, y: low, z, yaw };
   for (const along of [-3, 0, 3]) post(mesh, at, [along, 0], 1.1, 0.12, WHITE, 0.3);
   for (const up of [0.4, 0.8]) part(mesh, at, [0, up, 0.07], [6, 0.08, 0.05], WHITE);
   for (let i = 0; i < 12; i += 1) part(mesh, at, [-2.75 + i * 0.5, 0.5, 0.1], [0.08, 0.9, 0.03], WHITE);

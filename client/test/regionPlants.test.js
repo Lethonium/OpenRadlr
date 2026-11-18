@@ -5,7 +5,7 @@ import { PLANTS } from "../public/js/view3d/regions/plants.js";
 import { REGION_STYLES } from "../public/js/view3d/regions/styles.js";
 
 const TREES = ["umbrellaPine", "olive", "almond", "willow"];
-const COVER = ["lavender", "wildflower", "alpineFlower", "reeds", "broom"];
+const COVER = ["lavender", "wildflower", "alpineFlower", "reeds", "broom", "grass", "shrub", "wheat"];
 const PINK = [0.95, 0.72, 0.78];
 
 function lcg(seed) {
@@ -78,4 +78,11 @@ test("trees stand in real metres", () => {
     for (let i = 1; i < pos.length; i += 3) top = Math.max(top, pos[i] - 2);
     assert.ok(top >= lo && top <= hi, `${name} ${top}`);
   }
+});
+
+test("lavender reads purple up close: most of its vertices are flower-coloured", () => {
+  const col = draw("lavender").colors.toFloat32();
+  let purple = 0;
+  for (let i = 0; i < col.length / 4; i += 1) if (col[i * 4 + 2] > col[i * 4 + 1] + 0.15) purple += 1;
+  assert.ok(purple / (col.length / 4) >= 0.6, `${purple} of ${col.length / 4}`);
 });
