@@ -178,6 +178,9 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 - [ ] **Step 1: Failing tests:** `terrainColor` with `region: null` equals Task 2's output exactly; inside the lavender region on open land, some cells along a line across the stripes are lavender-coloured and some are not; blossom region canopy crowns carry the pink; a tree point in `lavenderFields` is ≤ 0.2 × as likely as outside (count trees in a 200 m box at the centre vs a meadow box); no region plant within `half + 3` m of a road or inside a settlement's `0.65 × radius` (Review Focus 4).
 - [ ] **Step 2–4:** FAIL, implement, PASS; Task 4's scenery-off hash still passes.
 - [ ] **Step 5: Screenshots** at a point in each of: lavender meadow, almond valley, olive terraces, south coast (find route distances with `client/worldMap.mjs` or by sampling `route.positionAt`). Note the distances in the plan.
+  - Shot at (route, metres; day, quaternius, chase + drone; `~/.cache/openradlr/screenshots/regions/task7/f3-*` and `f4-*`): lavender meadow `rolling-hills` 4500; almond valley `riverside-flats` 8150; olive terraces `balcony-road` 4400; south coast `cape-loop` 1000. Other runs inside regions: lavender `riverside-flats` 1200–2100, olive `island-tour` 21000–22650, coast `island-tour` 8100–10900.
+  - A server started before `valley.json` gained `regions` serves the old map (no regions, no error): restart it after changing the map.
+  - Tuned: colour-mass stripes were 9–22 m apart, finer than the 16 m ground grid (aliased into facets), now 40–48 m; lavender colour less blue.
 - [ ] **Step 6: Commit** `feat: Colour, plant and fill the canopy by region (#117)`.
 
 ### Task 8: Near-only cover in verge bands

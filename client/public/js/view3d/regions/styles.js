@@ -29,7 +29,7 @@ export const REGION_STYLES = frozen({
   [REGION_KIND.oliveTerraces]: {
     ground: { open: rgb(0.76, 0.66, 0.38), field: rgb(0.7, 0.62, 0.36), forest: rgb(0.4, 0.44, 0.24) },
     trees: { plants: list("olive"), density: 0.55 },
-    mass: { kind: "stripes", colour: rgb(0.52, 0.58, 0.4), cover: 0.45, scale: 14, angle: 0.5 },
+    mass: { kind: "stripes", colour: rgb(0.52, 0.58, 0.4), cover: 0.45, scale: 40, angle: 0.5 },
     cover: { plants: list("wildflower"), perMetre: 0.08 },
     props: { kinds: list("stoneWall", "cart"), every: 45 },
   },
@@ -43,14 +43,14 @@ export const REGION_STYLES = frozen({
   [REGION_KIND.lavenderFields]: {
     ground: { open: rgb(0.6, 0.56, 0.5), field: rgb(0.55, 0.5, 0.52), forest: rgb(0.38, 0.5, 0.28) },
     trees: { plants: list("olive"), density: 0.1 },
-    mass: { kind: "stripes", colour: rgb(0.55, 0.42, 0.75), cover: 0.6, scale: 9, angle: 0.3 },
+    mass: { kind: "stripes", colour: rgb(0.62, 0.48, 0.76), cover: 0.6, scale: 40, angle: 0.3 },
     cover: { plants: list("lavender"), perMetre: 0.2 },
     props: { kinds: list("picketFence", "bench"), every: 45 },
   },
   [REGION_KIND.farmBelt]: {
     ground: { open: rgb(0.7, 0.66, 0.38), field: rgb(0.86, 0.72, 0.34), forest: rgb(0.36, 0.48, 0.24) },
     trees: { plants: list("olive", "almond"), density: 0.4 },
-    mass: { kind: "stripes", colour: rgb(0.86, 0.72, 0.34), cover: 0.55, scale: 22, angle: 1.2 },
+    mass: { kind: "stripes", colour: rgb(0.86, 0.72, 0.34), cover: 0.55, scale: 48, angle: 1.2 },
     cover: { plants: list("wildflower"), perMetre: 0.06 },
     props: { kinds: list("hayBale", "picketFence"), every: 50 },
   },

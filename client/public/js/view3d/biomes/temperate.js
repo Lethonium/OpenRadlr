@@ -108,11 +108,29 @@ const smoothstep = (edge0, edge1, x) => {
 };
 
 /**
+ * A region's colour mass (#117): stripes (rows of lavender, terraces, crops)
+ * or patches (blossom drifts, reeds, flowers) painted over open land. Returns
+ * how much of `mass.colour` shows at a spot, 0-1, with soft edges so the
+ * vertex colours do not alias into moire between grid points.
+ */
+function massAt(mass, x, z, seed) {
+  if (!mass || !mass.kind || mass.cover <= 0) return 0;
+  const edge = 0.08;
+  const level = 1 - mass.cover;
+  if (mass.kind === "stripes") {
+    const angle = mass.angle ?? 0;
+    const wave = 0.5 + 0.5 * Math.sin((2 * Math.PI * (x * Math.cos(angle) + z * Math.sin(angle))) / mass.scale);
+    return smoothstep(level - edge, level + edge, wave);
+  }
+  return smoothstep(level - edge, level + edge, valueNoise(x / mass.scale, z / mass.scale, seed + 0x77));
+}
+
+/**
  * Ground colour at a point. `ctx` carries the noise seed, the sea level and
  * the distance to the nearest river; heights are the terrain's, not the
  * biome's, so seasons only recolour the same land.
  */
-function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infinity, riverHalfWidth = 9, forest = null, field = null }) {
+function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infinity, riverHalfWidth = 9, forest = null, field = null, region = null }) {
   if (height < water - 0.2) return SAND.map((c, i) => c + (SEA_FLOOR[i] - c) * smoothstep(0, 14, water - height)); // sea floor
   if (height < water + 2.4 && steep < 0.5) return SAND.map((c) => c * (0.95 + 0.1 * valueNoise(x / 9, z / 9, seed + 3))); // beach
   if (riverDistance < riverHalfWidth + 3) return RIVER_BED; // river bed and muddy banks
@@ -142,6 +160,16 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
   } else if (crop > 0) {
     const crops = [0.66, 0.6, 0.32];
     out = colour.map((c, i) => c * (1 - crop) + crops[i] * shade * crop);
+  }
+  // A region (#117) re-colours the land by its weight: its own open, field and
+  // forest ground, then its colour mass on the open land only.
+  if (region?.style) {
+    const { ground, mass } = region.style;
+    const open = 1 - wood - crop;
+    const w = region.weight;
+    out = out.map((c, i) => c + ((ground.open[i] * open + ground.field[i] * crop + ground.forest[i] * wood) * shade - c) * w);
+    const paint = massAt(mass, x, z, seed) * w * (1 - Math.min(1, wood / 0.35));
+    if (paint > 0) out = out.map((c, i) => c + (mass.colour[i] * shade - c) * paint);
   }
   // Permanent snow on the peaks (#117): the same line the tree scatter and
   // the top-down map use, so the high country reads the same in all three.

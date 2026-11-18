@@ -40,6 +40,8 @@ import { layoutSettlement } from "../land/settlement.js";
 import { buildSettlement } from "./settlement.js";
 import { buildTownLight, planTownLight } from "./townLight.js";
 import { regionAt } from "../land/regions.js";
+import { PLANTS } from "./regions/plants.js";
+import { regionStyle } from "./regions/styles.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
@@ -468,7 +470,7 @@ export const TERRAIN_LAYERS = Object.freeze({ sink: 40, floorGap: 20 });
 /** Above this many fine-grid nodes an island is "huge" (a 180 km route): built lazily, in big far blocks, with a horizon around all of it. */
 export const HUGE_ISLAND_NODES = 1_500_000;
 
-export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate, land = null } = {}) {
+export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate, land = null, regionsAt = null } = {}) {
   const { minX, maxX, minY, maxY } = terrain.bounds;
   const seed = terrain.seed;
   const water = waterLevel(terrain.index);
@@ -485,12 +487,18 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   // With scenery on, the ground follows the land: dark forest floor under the
   // woods, calm crop greens in the fields, meadow elsewhere. With scenery off
   // `land` is null and every colour is exactly what it was before (#117).
+  const regionOf = (x, z) => {
+    const top = regionsAt?.(x, z)[0];
+    const style = top ? regionStyle(top.kind, biome) : null;
+    return style ? { style, weight: top.weight } : null;
+  };
   const color = (x, z, y, steep) => biome.terrainColor({
     x, z, height: y, steep, seed, water,
     riverDistance: riverDistance(x, z),
     riverHalfWidth: RIVER.halfWidth,
     forest: land ? land.forestAt(x, z) : null,
     field: land ? land.fieldAt(x, z) : null,
+    region: regionOf(x, z),
   });
 
   const fine = into ?? new MeshBuilder();
@@ -840,7 +848,7 @@ export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null, land = null, nearTown = null } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null, land = null, nearTown = null, regionsAt = null, far = false } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -905,13 +913,24 @@ export function buildScenery(
     // rock faces (#117). The map and the ground use the same line.
     if (!canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
     const y = ground - 0.3;
-    positions.push([x, y, z]);
 
     // In a wood the trees are mostly tall firs and leafies; in the open there
     // is room for rocks and bushes too.
     const wood = inForest || (land ? land.forestAt(x, z) > 0.5 : false);
     // A wood is trees, with the odd bush or fallen rock under them.
     const kind = wood ? 0.28 + random() * 0.72 : random();
+    // A region (#117) thins or fills its trees and plants its own. Its draws
+    // come from the spot, not from `random`, so no other tree moves.
+    const top = flora && kind >= 0.28 ? regionsAt?.(x, z)[0] : undefined;
+    const style = top ? regionStyle(top.kind, biome) : null;
+    if (style && spotHash(x, z, seed ^ 0x7e61) < top.weight * (1 - style.trees.density)) continue;
+    positions.push([x, y, z]);
+    const region = style && spotHash(x, z, seed ^ 0x51ab) < top.weight && !(nearTown && nearTown(x, z) < TOWN_FADE);
+    if (region) {
+      const name = style.trees.plants[Math.floor(spotHash(x, z, seed ^ 0x1d3f) * style.trees.plants.length)];
+      PLANTS[name]({ mesh, x, y, z, random, colours: style.trees.canopy ? { canopy: style.trees.canopy } : {}, far });
+      continue;
+    }
     // A kit draws its own models; without one the biome keeps drawing cones.
     if (flora && kind >= 0.28) {
       // Only a kit's trees are sized by where they stand (#117): the deep wood
@@ -939,7 +958,7 @@ export function buildScenery(
  * wood, between `reach[0]` and `reach[1]` metres from the nearest road. A
  * season without scenery colours (`flora.scenery`) grows none.
  */
-export function buildCanopy(terrain, box, { land, water = -Infinity, biome = temperate, into = null, blocked = () => false, step = 16, reach = [60, 420], seed = 0 } = {}) {
+export function buildCanopy(terrain, box, { land, water = -Infinity, biome = temperate, into = null, blocked = () => false, step = 16, reach = [60, 420], seed = 0, regionsAt = null } = {}) {
   const { mesh, own } = target(into);
   const colours = biome.flora?.scenery;
   const positions = [];
@@ -964,13 +983,19 @@ export function buildCanopy(terrain, box, { land, water = -Infinity, biome = tem
       if (ground < water + 2.5 || blocked(x, z)) continue;
       if (!canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
       const y = ground - 0.3;
+      // A region (#117) thins the wood to its tree density and paints its
+      // crowns its canopy colour, by weight.
+      const top = regionsAt?.(x, z)[0];
+      const style = top ? regionStyle(top.kind, biome) : null;
+      if (style && spotHash(x, z, seed ^ 0x7e61) < top.weight * (1 - style.trees.density)) continue;
+      const tint = style?.trees.canopy && spotHash(x, z, seed ^ 0x51ab) < top.weight ? style.trees.canopy : null;
       positions.push([x, y, z]);
-      if (pick < 0.55 * wood) {
+      if (pick < 0.55 * wood && !tint) {
         const height = 9 + size * 7;
         mesh.cone([x, y + height * 0.15, z], height * 0.3, height * 0.85, colours.firs.foliage, 5, size * Math.PI);
       } else {
         const crown = 3.2 + size * 2.4;
-        mesh.ellipsoid([x, y + crown * 1.3, z], [crown, crown * 0.9, crown], colours.leafy.foliage, 3, 5, size * Math.PI);
+        mesh.ellipsoid([x, y + crown * 1.3, z], [crown, crown * 0.9, crown], tint ?? colours.leafy.foliage, 3, 5, size * Math.PI);
       }
     }
   }
@@ -1202,7 +1227,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const landUse = landOf(seed);
   // Regions (#117) are a place in the network's map: only with a kit, only on a network.
   const regions = scenery && network ? network.regions : [];
-  // eslint-disable-next-line no-unused-vars -- handed to the region builders in the next tasks
   const regionsAt = (x, z) => regionAt(x, z, regions, seed);
   const zonesOf = new Map(routes.map((r) => [r, resolveZones(r)]));
   const base = network ? networkTerrain(network, [...roads, ...tracks], { keepClear: mapRoutes }) : terrainModel(ordered, { seed });
@@ -1252,6 +1276,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // Only a modelled world gets the land-aware ground; scenery off keeps the
     // ground it has always had.
     land: scenery ? landUse : null,
+    regionsAt: scenery && network ? regionsAt : null,
     ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}),
   });
 
@@ -1462,13 +1487,13 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
     const count = Math.round(density.trees * km * (long ? LONG.trees : 1));
     const land = landUse;
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land, nearTown: scenery ? nearTown : null });
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land, nearTown: scenery ? nearTown : null, regionsAt: scenery ? regionsAt : null });
     // The same wood again with each model's cheap twin, so trees far from the
     // camera cost a fraction of what they do up close (#117). The far pass runs
     // the same seed, so the trees land in the same spots at the same sizes.
     const far = scenery?.far?.() ?? null;
     if (far) {
-      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land, nearTown: nearTown });
+      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land, nearTown: nearTown, regionsAt, far: true });
     }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
@@ -1507,6 +1532,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       step: 15,
       reach: [60, 420],
       seed,
+      regionsAt,
     });
   }
 
