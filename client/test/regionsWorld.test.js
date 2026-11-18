@@ -10,7 +10,8 @@ import { roadNetworkOf } from "../public/js/route/worldMap.js";
 import { floraOf } from "../public/js/view3d/scenery/flora.js";
 import { temperate } from "../public/js/view3d/biomes/index.js";
 import { regionStyle } from "../public/js/view3d/regions/styles.js";
-import { buildCanopy, buildScenery, buildWorld } from "../public/js/view3d/world.js";
+import { buildCanopy, buildCover, buildScenery, buildWorld, roadHalfWidth, seaSide } from "../public/js/view3d/world.js";
+import { VERGE } from "../public/js/view3d/roadWidth.js";
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
 const VALLEY = read("../../routes/maps/valley.json");
@@ -161,4 +162,63 @@ test("the world's ground carries the lavender stripes, and canopy and trees foll
     for (let i = 0; i < colors.length; i += 4) if (colors[i + 2] > colors[i + 1] + 0.15 && colors[i + 2] > colors[i] + 0.05) lavender += 1;
   }
   assert.ok(lavender > 100, `${lavender} lavender vertices`);
+});
+
+// Task 8: near-only cover in the verge bands.
+const HALF = roadHalfWidth(2) + VERGE;
+const lavenderAll = () => [{ kind: "lavenderFields", weight: 1 }];
+const coverOn = (terrain, options = {}) => buildCover(LINE, terrain, { regionsAt: lavenderAll, seed: 4, ...options });
+const edgeOf = (item) => Math.abs(item.z) - HALF;
+
+test("cover keeps off the road's edge: nothing within 3 m of it", () => {
+  const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
+  assert.ok(items.length > 100);
+  assert.ok(items.every((item) => edgeOf(item) >= 3 - 1e-6), `closest ${Math.min(...items.map(edgeOf))}`);
+});
+
+test("the lavender region's near band holds at least 0.8 plants per metre per side", () => {
+  const { items } = coverOn({ ...FLAT, distanceToRoad: (x, z) => Math.abs(z) });
+  const band = items.filter((item) => edgeOf(item) < 7);
+  assert.ok(band.length / (LINE.length * 2) >= 0.8, `${band.length} in ${LINE.length} m`);
+  assert.ok(items.some((item) => edgeOf(item) >= 7), "a thinner outer band");
+  assert.ok(items.every((item) => edgeOf(item) <= 16 + 1e-6));
+  assert.ok(items.every((item) => item.plant === "lavender"));
+});
+
+test("outside a region there is no cover, and blocked or drowned spots get none", () => {
+  const terrain = { ...FLAT, distanceToRoad: (x, z) => Math.abs(z) };
+  assert.equal(coverOn(terrain, { regionsAt: () => [] }).items.length, 0);
+  assert.equal(coverOn(terrain, { regionsAt: null }).items.length, 0);
+  assert.equal(coverOn(terrain, { blocked: () => true }).items.length, 0);
+  assert.equal(coverOn({ ...terrain, height: () => 0 }, { water: 0 }).items.length, 0);
+});
+
+test("cover draws into the mesh it is given, the same every time", () => {
+  const terrain = { ...FLAT, distanceToRoad: (x, z) => Math.abs(z) };
+  const a = coverOn(terrain);
+  const b = coverOn(terrain);
+  assert.deepEqual(a.items, b.items);
+  assert.ok(a.mesh.vertexCount > 0);
+  assert.equal(a.count, a.items.length);
+});
+
+test("on the sea side only low cover grows, within 18 m of the water", () => {
+  // The sea lies beyond 12 m of verge on the positive side.
+  const sea = { ...FLAT, height: (x, z) => (z > 0 && z > HALF + 12 ? -10 : 30), distanceToRoad: (x, z) => Math.abs(z) };
+  const wet = (item) => item.z > 0;
+  const coast = (terrain) => buildCover(LINE, terrain, { regionsAt: () => [{ kind: "pineCoast", weight: 1 }], water: 0, seed: 4 });
+  const { items } = coast(sea);
+  assert.ok(items.filter(wet).length > 20 && items.filter((item) => !wet(item)).length > 20);
+  assert.ok(items.filter(wet).every((item) => item.plant === "wildflower"), "low cover on the sea side");
+  assert.ok(items.filter((item) => !wet(item)).every((item) => item.plant === "broom"), "the region's plant inland");
+  assert.equal(seaSide(LINE, sea, 0, 100, 1), true);
+  assert.equal(seaSide(LINE, sea, 0, 100, -1), false);
+});
+
+test("the world has a cover group with scenery and none without", () => {
+  const network = roadNetworkOf(VALLEY);
+  const on = buildWorld(new RouteGeometry(ROUTE), { network, scenery: floraOf(SCENES, "temperate") });
+  assert.ok(Array.isArray(on.chunks.cover));
+  assert.ok(on.chunks.cover.some((chunk) => chunk.mesh.vertexCount > 0 || chunk.batches?.length > 0), "the lavender meadow has cover");
+  assert.equal("cover" in buildWorld(new RouteGeometry(ROUTE), { network }).chunks, false);
 });

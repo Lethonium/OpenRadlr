@@ -599,14 +599,14 @@ class RecordingRenderer extends StubRenderer {
   }
 }
 
-function sceneryInstanceView() {
+function sceneryInstanceView(group = "scenery") {
   const renderer = new RecordingRenderer();
   const mesh = { positions: new Float32Array(9), normals: new Float32Array(9), colors: new Float32Array(12), vertexCount: 3 };
   const matrices = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const baked = emptyMesh();
   const { view } = gymView([], "temperate", null, renderer, undefined, {
     instanceModels: [{ mesh }],
-    chunks: { scenery: [{ mesh: baked, center: [0, 0, 0], radius: 20, batches: [{ model: 0, matrices }] }], structures: [] },
+    chunks: { [group]: [{ mesh: baked, center: [0, 0, 0], radius: 20, batches: [{ model: 0, matrices }] }], structures: [] },
   });
   view.camera.eye = [0, 2, 50];
   view.camera.target = [0, 2, 0];
@@ -630,6 +630,17 @@ test("an instanced scenery batch casts shadows through the existing chunk rule",
   const casts = renderer.casters.filter((draw) => draw.instanced);
   assert.equal(casts.length, 1);
   assert.equal(casts[0].handle, batch);
+});
+
+test("near-only cover is drawn up close, not from 150 m, and casts no shadow", () => {
+  const near = sceneryInstanceView("cover");
+  near.view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(near.renderer.draws.filter((draw) => draw.instanced).length, 1);
+  assert.equal(near.renderer.casters.filter((draw) => draw.instanced).length, 0, "no shadow");
+  const far = sceneryInstanceView("cover");
+  far.view.camera.eye = [0, 2, 190];
+  far.view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(far.renderer.draws.filter((draw) => draw.instanced).length, 0, "beyond the cover's range");
 });
 
 test("disposing a view releases batch buffers before their shared model", () => {

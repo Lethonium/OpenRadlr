@@ -1071,6 +1071,72 @@ export function buildGroundDetail(
   return { mesh: own ? mesh.build() : mesh, count: placed };
 }
 
+/** How far out from the road's edge the sea is looked for (#117). */
+const SEA_REACH = 18;
+/** The cover plants small enough to stand where the ground drops to the sea. */
+const LOW_COVER = new Set(["lavender", "wildflower", "reeds"]);
+
+/**
+ * Whether the verge on `side` (-1 or 1) of the road at distance `d` ends in
+ * water: the ground 18 m beyond the road's edge there is below the sea.
+ * Roadside cover and props keep low and few on that side (#117).
+ */
+export function seaSide(route, terrain, water, d, side) {
+  const frame = roadFrame(route, d);
+  const [x, , z] = add(frame.center, scale(frame.right, side * (roadHalfWidth(route.lanes) + VERGE + SEA_REACH)));
+  return terrain.height(x, z) < water + 0.5;
+}
+
+/**
+ * The region's own low plants along the verge, near the camera only (#117).
+ * Two bands beside the road's edge: 3-7 m holds two plants per 2 m of road,
+ * 7-16 m one at 60 %, both scaled by the style's `perMetre` (0.2 is full);
+ * the first 3 m stay bare. Outside a region the biome's tufts are all there is.
+ * Returns the plants placed as `items` with the chosen side.
+ */
+export function buildCover(route, terrain, { regionsAt = null, into = null, water = -Infinity, blocked = () => false, seed = 0, biome = temperate } = {}) {
+  const { mesh, own } = target(into);
+  const items = [];
+  if (!regionsAt) return { mesh: own ? mesh.build() : mesh, count: 0, items };
+  const random = seededRandom(((seed ^ route.seed) >>> 0) ^ 0xc07e);
+  const half = roadHalfWidth(route.lanes) + VERGE;
+  const STEP = 2;
+  for (let d = 0; d < route.length; d += STEP) {
+    for (const side of [-1, 1]) {
+      let sea = null;
+      for (const band of COVER_BANDS) {
+        for (let k = 0; k < band.items; k += 1) {
+          // Draw everything first, so the spots do not move when a style changes.
+          const at = d + random() * STEP;
+          const offset = half + band.from + random() * (band.to - band.from);
+          const keep = random();
+          const pick = random();
+          const frame = roadFrame(route, at);
+          const [x, , z] = add(frame.center, scale(frame.right, side * offset));
+          const top = regionsAt(x, z)[0];
+          const style = top ? regionStyle(top.kind, biome) : null;
+          if (!style?.cover || style.cover.plants.length === 0) continue;
+          if (keep >= band.chance * Math.min(1, style.cover.perMetre * 5) * top.weight) continue;
+          if (terrain.distanceToRoad(x, z) < half + 2.5 || blocked(x, z)) continue;
+          const ground = terrain.height(x, z);
+          if (ground < water + 2.5 || !canGrowTree(ground, water, slopeAt(terrain, x, z))) continue;
+          sea ??= seaSide(route, terrain, water, at, side);
+          const plants = sea ? style.cover.plants.filter((name) => LOW_COVER.has(name)) : style.cover.plants;
+          const plant = (plants.length > 0 ? plants : ["wildflower"])[Math.floor(pick * (plants.length || 1))];
+          PLANTS[plant]({ mesh, x, y: ground - 0.05, z, random, colours: {}, far: false });
+          items.push({ x, z, plant, side });
+        }
+      }
+    }
+  }
+  return { mesh: own ? mesh.build() : mesh, count: items.length, items };
+}
+
+const COVER_BANDS = Object.freeze([
+  Object.freeze({ from: 3, to: 7, items: 2, chance: 1 }),
+  Object.freeze({ from: 7, to: 16, items: 1, chance: 0.6 }),
+]);
+
 /**
  * Far-off islands on the horizon, out at sea around the map's island: a few
  * hazy rocky hills, some in small groups.
@@ -1243,6 +1309,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     terrain: new ChunkedMesh(),
     road: new ChunkedMesh(),
     detail: instancedChunk(),
+    // The region's own low plants beside the road, near only (#117).
+    ...(scenery ? { cover: instancedChunk(64) } : {}),
     // The near wood uses 100 m chunks: a 300 m chunk can hold a whole dense
     // wood and is either all near or all far, which made the camera's chunk
     // alone several million vertices. The far copy stays coarse.
@@ -1492,6 +1560,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const far = scenery?.far?.() ?? null;
     if (far) {
       buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land, nearTown: nearTown, regionsAt, far: true });
+    }
+    if (scenery) {
+      buildCover(r, terrain, { regionsAt: network ? regionsAt : null, into: chunks.cover, water: ground.water, blocked: detailBlocked, seed, biome });
     }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
