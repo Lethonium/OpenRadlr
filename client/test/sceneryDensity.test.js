@@ -63,3 +63,13 @@ test("without land the ground keeps the colours it always had", () => {
   const spot = { x: 100, z: 100, height: 10, steep: 0, seed: 1, water: 0 };
   assert.deepEqual(temperate.terrainColor(spot), temperate.terrainColor({ ...spot, forest: null, field: null }));
 });
+
+test("the meadow is warmer than the old cool green", () => {
+  const [r, g] = temperate.terrainColor({ x: 0, z: 0, height: 30, steep: 0, seed: 1, water: 0, forest: 0, field: 0 });
+  assert.ok(r / g > 0.75, `meadow r/g ${(r / g).toFixed(2)}`);
+});
+
+test("crops read gold rather than green", () => {
+  const [r, g] = temperate.terrainColor({ x: 0, z: 0, height: 30, steep: 0, seed: 1, water: 0, forest: 0, field: 1 });
+  assert.ok(r > g * 0.85, `crops r ${r.toFixed(2)} vs g ${g.toFixed(2)}`);
+});
