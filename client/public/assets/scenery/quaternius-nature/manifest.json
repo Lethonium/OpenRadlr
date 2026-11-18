@@ -11,7 +11,7 @@
     "pine1": {
       "role": "firs",
       "file": "PineTree_1",
-      "height": 16,
+      "height": 7.04,
       "sizes": [
         0.55,
         1
@@ -22,7 +22,7 @@
     "pine2": {
       "role": "firs",
       "file": "PineTree_2",
-      "height": 13,
+      "height": 5.34,
       "sizes": [
         0.55,
         1
@@ -33,7 +33,7 @@
     "pine3": {
       "role": "firs",
       "file": "PineTree_3",
-      "height": 18,
+      "height": 5.76,
       "sizes": [
         0.55,
         1
@@ -44,7 +44,7 @@
     "common1": {
       "role": "leafy",
       "file": "CommonTree_1",
-      "height": 12,
+      "height": 7.66,
       "sizes": [
         0.55,
         1
@@ -55,7 +55,7 @@
     "common2": {
       "role": "leafy",
       "file": "CommonTree_2",
-      "height": 10,
+      "height": 6.09,
       "sizes": [
         0.55,
         1
@@ -66,7 +66,7 @@
     "common3": {
       "role": "leafy",
       "file": "CommonTree_3",
-      "height": 9,
+      "height": 5.49,
       "sizes": [
         0.55,
         1
@@ -77,7 +77,7 @@
     "common4": {
       "role": "leafy",
       "file": "CommonTree_4",
-      "height": 10,
+      "height": 6.83,
       "sizes": [
         0.55,
         1
@@ -88,9 +88,9 @@
     "birch1": {
       "role": "leafy",
       "file": "BirchTree_1",
-      "height": 12,
+      "height": 5.32,
       "sizes": [
-        0.6,
+        0.55,
         1
       ],
       "far": "BirchTree_1-far",
@@ -99,9 +99,9 @@
     "birch2": {
       "role": "leafy",
       "file": "BirchTree_2",
-      "height": 10,
+      "height": 4.71,
       "sizes": [
-        0.6,
+        0.55,
         1
       ],
       "far": "BirchTree_2-far",
@@ -110,9 +110,9 @@
     "willow1": {
       "role": "leafy",
       "file": "Willow_1",
-      "height": 9,
+      "height": 6.67,
       "sizes": [
-        0.6,
+        0.55,
         1
       ],
       "far": "Willow_1-far",
@@ -121,9 +121,9 @@
     "willow2": {
       "role": "leafy",
       "file": "Willow_2",
-      "height": 8,
+      "height": 5.72,
       "sizes": [
-        0.6,
+        0.55,
         1
       ],
       "far": "Willow_2-far",
@@ -132,9 +132,9 @@
     "willow3": {
       "role": "leafy",
       "file": "Willow_3",
-      "height": 8,
+      "height": 8.09,
       "sizes": [
-        0.6,
+        0.55,
         1
       ],
       "far": "Willow_3-far",

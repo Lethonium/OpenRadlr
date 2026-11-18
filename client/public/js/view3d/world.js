@@ -796,6 +796,35 @@ const roadDistance = (terrain, x, z, rings = 8) =>
  */
 const SCENERY_CHUNK = 100;
 
+/** How deep in a wood (`forestAt`) a tree may be a giant. */
+const DEEP_WOOD = 0.75;
+/** The share of the deep wood's trees that are giants, and how much taller they stand. */
+const GIANT_SHARE = 0.15;
+const GIANT_SCALE = 1.4;
+/** A tree this close to a town (metres from its built area) is garden-sized; it is full height from `TOWN_FADE`. */
+const TOWN_NEAR = 40;
+const TOWN_FADE = 120;
+const TOWN_TREE = 0.45;
+
+/**
+ * How much of its height a tree keeps this far (in metres) from a village's or
+ * town's built area: a town's trees stand in scale with its 6-9 m houses and
+ * grow linearly to full height by `TOWN_FADE`.
+ */
+export function townTreeScale(metres) {
+  if (metres <= TOWN_NEAR) return TOWN_TREE;
+  if (metres >= TOWN_FADE) return 1;
+  return TOWN_TREE + ((1 - TOWN_TREE) * (metres - TOWN_NEAR)) / (TOWN_FADE - TOWN_NEAR);
+}
+
+/** A number in [0, 1) from a spot and a seed: the same spot always gets the same one. */
+function spotHash(x, z, seed) {
+  let h = Math.imul(Math.round(x * 4) ^ seed, 0x85ebca6b) ^ Math.imul(Math.round(z * 4), 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+  return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+}
+
 /**
  * Trees (firs and leafy), bushes and rocks scattered deterministically:
  * denser near the road, clustered into small woods, never on the road and
@@ -810,7 +839,7 @@ export function buildScenery(
   route,
   terrain,
   bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null, land = null } = {},
+  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate, flora = null, land = null, nearTown = null } = {},
 ) {
   const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
   const seed = route.seed >>> 0;
@@ -883,7 +912,16 @@ export function buildScenery(
     // A wood is trees, with the odd bush or fallen rock under them.
     const kind = wood ? 0.28 + random() * 0.72 : random();
     // A kit draws its own models; without one the biome keeps drawing cones.
-    (flora ?? biome.flora).tree({ mesh, x, y, z, kind, random });
+    if (flora && kind >= 0.28) {
+      // Only a kit's trees are sized by where they stand (#117): the deep wood
+      // grows its giants, and a town's trees stay house-high. The giant comes
+      // from the spot, not from `random`, so no later tree moves.
+      const giant = land && land.forestAt(x, z) >= DEEP_WOOD && spotHash(x, z, seed) < GIANT_SHARE;
+      const scale = (giant ? GIANT_SCALE : 1) * (nearTown ? townTreeScale(nearTown(x, z)) : 1);
+      flora.tree({ mesh, x, y, z, kind, random, scale });
+    } else {
+      (flora ?? biome.flora).tree({ mesh, x, y, z, kind, random });
+    }
   }
   return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
 }
@@ -1393,6 +1431,23 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // builder plants the garden trees. Without this the tall firs grow through a
   // harbour's quay and hide the town from the road.
   const nearSettlement = (x, z) => settlements.some((s) => Math.hypot(x - s.center[0], z - s.center[1]) < s.radius * 0.65);
+  // How far (in metres) a spot is from the built area of a village on a road or
+  // a settlement, which sizes the wood's trees (#117). A village is the stretch
+  // of road it was zoned on, so the distance runs from the stretch's nearest end.
+  const nearTown = (x, z) => {
+    let metres = Infinity;
+    for (const s of settlements) metres = Math.min(metres, Math.max(0, Math.hypot(x - s.center[0], z - s.center[1]) - s.radius));
+    const near = terrain.index.nearest(x, z);
+    if (near !== null && near.distance < TOWN_FADE) {
+      const route = near.sample.route;
+      const d = route.wrap(near.sample.distance);
+      for (const v of zonesOf.get(route).villages) {
+        const gap = Math.max(0, v.from - d, d - v.to);
+        metres = Math.min(metres, Math.hypot(near.distance, gap));
+      }
+    }
+    return metres;
+  };
   const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || nearSettlement(x, z) || inVillage(x, z);
   const detailBlocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.7) || occupancy.blocked(x, z) || nearSettlement(x, z) || (inVillage(x, z) && terrain.distanceToRoad(x, z) < half + PAVEMENT + 1);
   for (const r of ordered) {
@@ -1402,13 +1457,13 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
     const count = Math.round(density.trees * km * (long ? LONG.trees : 1));
     const land = landUse;
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land });
+    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, flora: scenery, count, land, nearTown: scenery ? nearTown : null });
     // The same wood again with each model's cheap twin, so trees far from the
     // camera cost a fraction of what they do up close (#117). The far pass runs
     // the same seed, so the trees land in the same spots at the same sizes.
     const far = scenery?.far?.() ?? null;
     if (far) {
-      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land });
+      buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.sceneryFar, blocked, forests: zonesOf.get(r).forests, flora: far, count, land, nearTown: nearTown });
     }
     // Grass and flowers only show close up: thinner along the roads you don't ride.
     const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);

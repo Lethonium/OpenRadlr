@@ -11,160 +11,160 @@
     "pineTallD": {
       "role": "firs",
       "file": "tree_pineTallD",
-      "height": 6.25,
+      "height": 9.13,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 98
     },
     "pineTallB": {
       "role": "firs",
       "file": "tree_pineTallB",
-      "height": 6.74,
+      "height": 9.84,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 78
     },
     "pineTallC": {
       "role": "firs",
       "file": "tree_pineTallC",
-      "height": 7.78,
+      "height": 11.38,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 98
     },
     "pineDefaultA": {
       "role": "firs",
       "file": "tree_pineDefaultA",
-      "height": 8.39,
+      "height": 12.26,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 230
     },
     "pineTallA": {
       "role": "firs",
       "file": "tree_pineTallA",
-      "height": 8.5,
+      "height": 12.42,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 78
     },
     "pineSimple": {
       "role": "firs",
       "file": "tree_simple",
-      "height": 8.55,
+      "height": 12.5,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 62
     },
     "pineCone": {
       "role": "firs",
       "file": "tree_cone",
-      "height": 9.09,
+      "height": 13.29,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 132
     },
     "pineRoundA": {
       "role": "firs",
       "file": "tree_pineRoundA",
-      "height": 9.49,
+      "height": 13.87,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 204
     },
     "pineRoundC": {
       "role": "firs",
       "file": "tree_pineRoundC",
-      "height": 10.4,
+      "height": 15.2,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 206
     },
     "pineSmallA": {
       "role": "firs",
       "file": "tree_pineSmallA",
-      "height": 8.04,
+      "height": 19.59,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 164
     },
     "pineSmallC": {
       "role": "firs",
       "file": "tree_pineSmallC",
-      "height": 6.96,
+      "height": 16.96,
       "sizes": [
-        0.46,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 54
     },
     "leafyDefault": {
       "role": "leafy",
       "file": "tree_default",
-      "height": 5.85,
+      "height": 11.11,
       "sizes": [
-        0.5,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 114
     },
     "leafyTall": {
       "role": "leafy",
       "file": "tree_tall",
-      "height": 5.92,
+      "height": 11.24,
       "sizes": [
-        0.5,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 72
     },
     "leafyOak": {
       "role": "leafy",
       "file": "tree_oak",
-      "height": 8.13,
+      "height": 15.45,
       "sizes": [
-        0.5,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 196
     },
     "leafyDetailed": {
       "role": "leafy",
       "file": "tree_detailed",
-      "height": 7.52,
+      "height": 14.29,
       "sizes": [
-        0.5,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 402
     },
     "leafyBlocks": {
       "role": "leafy",
       "file": "tree_blocks",
-      "height": 8.4,
+      "height": 15.97,
       "sizes": [
-        0.5,
-        1.0
+        0.55,
+        1
       ],
       "triangles": 132
     },
@@ -174,7 +174,7 @@
       "height": 5.83,
       "sizes": [
         0.43,
-        1.0
+        1
       ],
       "triangles": 104
     },
@@ -184,17 +184,17 @@
       "height": 8.75,
       "sizes": [
         0.43,
-        1.0
+        1
       ],
       "triangles": 60
     },
     "bushTriangle": {
       "role": "bushes",
       "file": "plant_bushTriangle",
-      "height": 7.0,
+      "height": 7,
       "sizes": [
         0.43,
-        1.0
+        1
       ],
       "triangles": 30
     },
@@ -204,7 +204,7 @@
       "height": 4.91,
       "sizes": [
         0.29,
-        1.0
+        1
       ],
       "triangles": 80
     },
@@ -214,17 +214,17 @@
       "height": 6.51,
       "sizes": [
         0.29,
-        1.0
+        1
       ],
       "triangles": 85
     },
     "stump": {
       "role": "rocks",
       "file": "stump_round",
-      "height": 8.0,
+      "height": 8,
       "sizes": [
         0.29,
-        1.0
+        1
       ],
       "triangles": 56
     },
