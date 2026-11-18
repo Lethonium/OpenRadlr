@@ -20,7 +20,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 # Strava: token exchange and uploads over HTTPS (rustls with bundled roots, no system OpenSSL).
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 # Strava logins survive restarts: SQLite on a volume, refresh tokens encrypted, session ids hashed.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 aes-gcm = "0.11"
 sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
