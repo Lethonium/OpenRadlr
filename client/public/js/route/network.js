@@ -82,6 +82,17 @@ export class RoadNetwork {
       radius: Number(s.radius ?? 220),
       seed: Number(s.seed ?? this.seed) >>> 0,
     }));
+    // Regions and landmarks (#117): hand-placed in the map, same coordinates as settlements.
+    this.regions = (file.regions ?? []).map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      center: [Number(r.x), -Number(r.y)],
+      radius: Number(r.radius),
+    }));
+    this.landmarks = (file.landmarks ?? []).map(({ x, y, ...rest }) => ({
+      ...rest,
+      center: [Number(x), -Number(y)],
+    }));
   }
 
   /** Roads in file order (the order everything shared is built in). */
