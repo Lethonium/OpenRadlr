@@ -234,9 +234,11 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Files:** Modify `client/public/js/view3d/landmarks.js`, `routes/maps/valley.json`; Test `client/test/landmarks.test.js`
 
-- [ ] **Step 1: Failing tests:** `castle` builds a curtain wall with ≥ 2 gaps and one tower taller than the walls; its base follows the ground (lowest wall bottom ≤ `terrain.height` at every corner); it stands on the highest ground within 600 m of the SW village (a helper `highestNear(terrain, center, 600)` picks the map coordinates; the test asserts the map entry is within 30 m of it).
-- [ ] **Step 2–4:** FAIL, implement procedurally in the town kit's stone colours (Kenney Castle Kit only if its own `License.txt` says CC0 and it passes `scenery-check`; procedural is the default), PASS.
-- [ ] **Step 5: Commit** `feat: Raise a castle ruin on the crag above the southwest village (#117)`.
+- [x] **Step 1: Failing tests:** `castle` builds a curtain wall with ≥ 2 gaps and one tower taller than the walls; its base follows the ground (lowest wall bottom ≤ `terrain.height` at every corner); it stands on the highest ground within 600 m of the SW village (a helper `highestNear(terrain, center, 600)` picks the map coordinates; the test asserts the map entry is within 30 m of it).
+- [x] **Step 2–4:** FAIL, implement procedurally in the town kit's stone colours (Kenney Castle Kit only if its own `License.txt` says CC0 and it passes `scenery-check`; procedural is the default), PASS.
+- [x] **Step 5: Commit** `feat: Raise a castle ruin on the crag above the southwest village (#117)`.
+
+> Done: castle at map `x -225, y -1935` (apron 70, ~290 m from the village, 23 m ground; the highest knoll, 27 m at -920,2020, is deep in the wood and no road sees it, so the test asks for ground within 6 m of the highest and a road sightline: cape-loop and riverside-flats see it from ~330-540 m). Procedural, stone colours only.
 
 ### Task 12: Sea arch
 

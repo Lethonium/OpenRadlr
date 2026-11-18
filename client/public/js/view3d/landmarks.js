@@ -77,9 +77,104 @@ function buildLighthouse({ terrain, center }) {
   return { near: build(near), far: build(far), bright: build(bright), at };
 }
 
+const STONES = [[0.62, 0.6, 0.56], [0.68, 0.64, 0.55], [0.56, 0.54, 0.5]];
+const DARK = [0.23, 0.22, 0.21];
+
+const finish = (b) => {
+  const mesh = b.build();
+  b.release();
+  return mesh;
+};
+
+/**
+ * The castle ruin: a broken rectangular curtain wall with a gate and breaches,
+ * stub towers at three corners and one tall round keep. Every wall slab is
+ * founded on the ground under it, so the ring follows the crag's slope.
+ */
+function buildCastle({ terrain, center, yaw, random }) {
+  const half = [22, 16];
+  const { high } = footprint(terrain, center, 27);
+  const at = [center[0], high, center[1]];
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  // Ground height, relative to `at`, under a point of the castle's own frame.
+  const groundAt = (x, z) => terrain.height(center[0] + cy * x + sy * z, center[1] - sy * x + cy * z) - high;
+
+  const near = new MeshBuilder();
+  const far = new MeshBuilder();
+  const corners = [[-half[0], -half[1]], [half[0], -half[1]], [half[0], half[1]], [-half[0], half[1]]];
+  const sides = [
+    { a: corners[0], b: corners[1], runs: [[0, 0.35, 7], [0.35, 1, 5]] },
+    { a: corners[1], b: corners[2], runs: [[0, 0.4, 6.5], [0.4, 0.55, 0], [0.55, 1, 3.5]] },
+    { a: corners[3], b: corners[2], runs: [[0, 0.3, 6], [0.3, 0.45, 0], [0.45, 1, 7]] },
+    { a: corners[0], b: corners[3], runs: [[0, 0.6, 5], [0.6, 0.8, 0], [0.8, 1, 4]] },
+  ];
+  const thick = 2.4;
+  const slab = 3.2;
+  const walls = [];
+  let gaps = 0;
+  let wallHeight = 0;
+  for (const { a, b, runs } of sides) {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const alongX = Math.abs(b[0] - a[0]) > Math.abs(b[1] - a[1]);
+    for (const [from, to, height] of runs) {
+      if (height === 0) {
+        gaps += 1;
+        continue;
+      }
+      walls.push({ from: [a[0] + (b[0] - a[0]) * from, a[1] + (b[1] - a[1]) * from], to: [a[0] + (b[0] - a[0]) * to, a[1] + (b[1] - a[1]) * to], height });
+      wallHeight = Math.max(wallHeight, height);
+      const count = Math.max(1, Math.round(((to - from) * length) / slab));
+      for (let i = 0; i < count; i += 1) {
+        const f = from + ((i + 0.5) / count) * (to - from);
+        const len = ((to - from) * length) / count;
+        const x = a[0] + (b[0] - a[0]) * f;
+        const z = a[1] + (b[1] - a[1]) * f;
+        // The foot sits below the lowest ground under the slab; the top is ragged.
+        const reach = [-0.5, 0, 0.5].map((k) => groundAt(x + (alongX ? k * len : 0), z + (alongX ? 0 : k * len)));
+        const bottom = Math.min(...reach) - 1.2;
+        const top = groundAt(x, z) + height * (0.65 + random() * 0.35);
+        const size = alongX ? [len + 0.05, top - bottom, thick] : [thick, top - bottom, len + 0.05];
+        near.box([x, (top + bottom) / 2, z], size, STONES[Math.floor(random() * STONES.length)]);
+      }
+    }
+  }
+  // Stub towers at three corners, the keep at the fourth.
+  for (const [x, z] of [corners[0], corners[2], corners[3]]) {
+    const bottom = groundAt(x, z) - 2;
+    near.cylinder([x, bottom, z], 3.8, groundAt(x, z) + 7 + random() * 2 - bottom, STONES[0], 8, 3, true);
+  }
+  const [kx, kz] = corners[1];
+  const towerHeight = 20;
+  const keepTop = groundAt(kx, kz) + towerHeight;
+  const keepBase = groundAt(kx, kz) - 2.5;
+  near.cylinder([kx, keepBase, kz], 6, keepTop - keepBase, STONES[1], 12, 5, true);
+  for (let i = 0; i < 12; i += 1) {
+    if (i % 3 === 1) continue; // broken crenellation
+    const angle = (i / 12) * Math.PI * 2;
+    near.box([kx + Math.cos(angle) * 4.6, keepTop + 0.7, kz + Math.sin(angle) * 4.6], [1.5, 1.4, 1.5], STONES[2]);
+  }
+  for (const angle of [0.6, 2.4, 4.1]) {
+    near.box([kx + Math.cos(angle) * 5.2, groundAt(kx, kz) + towerHeight * 0.65, kz + Math.sin(angle) * 5.2], [0.9, 2.2, 0.9], DARK);
+  }
+
+  // Far twin: three wall blocks and the keep, under 60 triangles.
+  for (const { from, to, height } of [walls[0], walls[2], walls[5]]) {
+    const x = (from[0] + to[0]) / 2;
+    const z = (from[1] + to[1]) / 2;
+    const bottom = Math.min(groundAt(from[0], from[1]), groundAt(to[0], to[1])) - 1.5;
+    const size = [Math.abs(to[0] - from[0]) + thick, groundAt(x, z) + height * 0.8 - bottom, Math.abs(to[1] - from[1]) + thick];
+    far.box([x, bottom + size[1] / 2, z], size, STONES[0]);
+  }
+  far.cylinder([kx, keepBase, kz], 6, keepTop - keepBase, STONES[1], 6, 5, true);
+
+  return { near: finish(near), far: finish(far), at, walls, gaps, wallHeight, towerHeight, corners };
+}
+
 /** Landmark kinds by name. Tasks add the rest here. */
 export const LANDMARKS = {
   lighthouse: { build: buildLighthouse },
+  castle: { build: buildCastle },
 };
 
 /**

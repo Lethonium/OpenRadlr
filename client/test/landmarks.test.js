@@ -74,6 +74,29 @@ test("a lighthouse on a slope sinks its foot below the ground instead of floatin
   assert.ok(built.at[1] >= 10, "and the stand point is the high side of the footprint");
 });
 
+test("a castle ruin builds a curtain wall with gaps and one tower taller than the walls", () => {
+  const built = LANDMARKS.castle.build({ terrain: FLAT, center: [0, 0], yaw: 0, water: 0, random: seededRandom(1) });
+  assert.ok(built.walls.length >= 4, "a wall on every side");
+  assert.ok(built.gaps >= 2, `${built.gaps} gaps in the curtain`);
+  const top = Math.max(...heights(built.near));
+  assert.ok(top >= built.towerHeight - 0.01 && built.towerHeight > built.wallHeight * 1.8, "one tower stands well above the broken walls");
+  assert.ok(triangles(built.far) > 0 && triangles(built.far) <= 60, `far has ${triangles(built.far)} triangles`);
+  assert.ok(built.near.vertexCount > built.far.vertexCount);
+  assert.ok(colorsOf(built.near).every(([r, g, b]) => Math.abs(r - g) < 0.12 && b <= r + 0.01), "stone, not painted");
+});
+
+test("the castle's walls follow a slope: every corner is founded below the ground", () => {
+  const slope = { height: (x, z) => 10 + x * 0.25 + z * 0.1 };
+  const built = LANDMARKS.castle.build({ terrain: slope, center: [0, 0], yaw: 0, water: 0, random: seededRandom(1) });
+  for (const [cx, cz] of built.corners) {
+    const near = Array.from({ length: built.near.vertexCount }, (_, v) => v)
+      .filter((v) => Math.hypot(built.near.positions[v * 3] - cx, built.near.positions[v * 3 + 2] - cz) < 3)
+      .map((v) => built.near.positions[v * 3 + 1] + built.at[1]);
+    assert.ok(near.length > 0, "a wall reaches the corner");
+    assert.ok(Math.min(...near) <= slope.height(cx, cz), `corner ${cx},${cz} floats: lowest ${Math.min(...near)} over ground ${slope.height(cx, cz)}`);
+  }
+});
+
 test("buildLandmarks places each landmark, reserves its apron and returns the movers", () => {
   const near = new ChunkedMesh();
   const far = new ChunkedMesh();
@@ -142,12 +165,11 @@ test("the lighthouse stands near the sea, on dry ground", () => {
   assert.ok(sea, "open water within 300 m");
 });
 
-test("a stretch of cape-loop sees the lighthouse across open ground or water", () => {
-  const [cx, cz] = lighthouse.center;
-  const ground = on.terrain.height(cx, cz);
-  const lamp = ground + 30;
+/** Metres of `routeFile`'s road (sampled every 20 m) from which a point `top` m above its ground is in line of sight; woods beyond the apron block the view. */
+function seenAlong(routeFile, [cx, cz], ground, top, apron, minRange, maxRange) {
+  const lamp = ground + top;
   const seed = network.seed;
-  const route = new RouteGeometry(read("../../routes/cape-loop.json"));
+  const route = new RouteGeometry(read(`../../routes/${routeFile}`));
   const sees = (x, z, eye) => {
     const dist = Math.hypot(cx - x, cz - z);
     const steps = Math.floor(dist / 10);
@@ -156,9 +178,10 @@ test("a stretch of cape-loop sees the lighthouse across open ground or water", (
       const px = x + (cx - x) * f;
       const pz = z + (cz - z) * f;
       const line = eye + (lamp - eye) * f;
-      if (on.terrain.height(px, pz) > line - 1) return false;
-      // The lighthouse's own apron keeps the wood back; beyond it a wood blocks.
-      if (dist * (1 - f) > lighthouse.apron && forestAt(px, pz, seed) > 0.5) return false;
+      const land = on.terrain.height(px, pz);
+      if (land > line - 1) return false;
+      // The landmark's own apron keeps the wood back; beyond it, woods on land block.
+      if (dist * (1 - f) > apron && land > on.waterLevel && forestAt(px, pz, seed) > 0.5) return false;
     }
     return true;
   };
@@ -166,10 +189,52 @@ test("a stretch of cape-loop sees the lighthouse across open ground or water", (
   for (let d = 0; d < route.length; d += 20) {
     const p = route.positionAt(d);
     const range = Math.hypot(p.x - cx, -p.y - cz);
-    if (range < 150 || range > 600) continue;
+    if (range < minRange || range > maxRange) continue;
     if (sees(p.x, -p.y, on.terrain.height(p.x, -p.y) + 3)) seen += 1;
   }
-  assert.ok(seen * 20 >= 200, `cape-loop sees it along ${seen * 20} m of road`);
+  return seen * 20;
+}
+
+test("a stretch of cape-loop sees the lighthouse across open ground or water", () => {
+  const seen = seenAlong("cape-loop.json", lighthouse.center, on.terrain.height(...lighthouse.center), 30, lighthouse.apron, 150, 600);
+  assert.ok(seen >= 200, `cape-loop sees it along ${seen} m of road`);
+});
+
+const castle = network.landmarks.find((l) => l.kind === "castle");
+const southwest = network.settlements.find((s) => s.id === "southwest");
+
+/** The highest ground within `radius` of `center`, on a 10 m grid. */
+function highestNear(terrain, [cx, cz], radius) {
+  let best = { height: -Infinity, at: [cx, cz] };
+  for (let dx = -radius; dx <= radius; dx += 10) {
+    for (let dz = -radius; dz <= radius; dz += 10) {
+      if (Math.hypot(dx, dz) > radius) continue;
+      const height = terrain.height(cx + dx, cz + dz);
+      if (height > best.height) best = { height, at: [cx + dx, cz + dz] };
+    }
+  }
+  return best;
+}
+
+test("the castle crowns the crag above the southwest village", () => {
+  assert.ok(castle, "a castle is in the map");
+  assert.ok(Math.hypot(castle.center[0] - southwest.center[0], castle.center[1] - southwest.center[1]) <= 600, "within 600 m of the village");
+  const top = highestNear(on.terrain, southwest.center, 600);
+  const ground = on.terrain.height(...castle.center);
+  // The very highest knoll is deep in the wood and no road sees it: the crag is
+  // the highest ground a road can see, which is within a few metres of it.
+  assert.ok(ground >= top.height - 6, `crag ${ground.toFixed(1)} m, highest ground ${top.height.toFixed(1)} m`);
+});
+
+test("a road sees the castle's tower rise over the trees", () => {
+  const ground = on.terrain.height(...castle.center);
+  const seen = ["cape-loop.json", "riverside-flats.json"].map((f) => seenAlong(f, castle.center, ground, 22, castle.apron, 150, 1200));
+  assert.ok(Math.max(...seen) >= 200, `the best road sees it along ${Math.max(...seen)} m`);
+});
+
+test("the castle is in the village groups and reserves its apron", () => {
+  const near = (chunks) => (chunks ?? []).some((c) => Math.hypot(c.center[0] - castle.center[0], c.center[2] - castle.center[1]) < 80 && c.mesh.vertexCount > 0);
+  assert.ok(near(on.chunks.village) && near(on.chunks.villageFar));
 });
 
 test("scenery off builds no landmarks and no movers", () => {
