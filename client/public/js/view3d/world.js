@@ -46,11 +46,9 @@ import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { buildWeather } from "./weather.js";
 
-export const LANE_WIDTH = 1.4;
-export const SHOULDER = 0.9;
-export const VERGE = 1.1;
+import { LANE_WIDTH, SHOULDER, VERGE, roadHalfWidth } from "./roadWidth.js";
 
-export const roadHalfWidth = (lanes) => (lanes * LANE_WIDTH) / 2 + SHOULDER;
+export { LANE_WIDTH, SHOULDER, VERGE, roadHalfWidth };
 
 /**
  * Position and orientation of the road at a distance.

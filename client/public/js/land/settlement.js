@@ -14,6 +14,8 @@
  * faces. Everything is a pure function of the settlement seed and the roads.
  */
 
+import { roadHalfWidth } from "../view3d/roadWidth.js";
+
 /** The kinds of settlement the island knows. */
 export const SETTLEMENT_KIND = Object.freeze({
   city: "city",
@@ -241,6 +243,25 @@ function groundRange(terrain, x, z, size) {
   const low = Math.min(...values);
   const high = Math.max(...values);
   return { low, high, slope: (high - low) / size };
+}
+
+/**
+ * The road surface near a settlement as points with the clearance each needs:
+ * half width plus the settlement's pavement. Sampled once, every 3 m, within
+ * reach of the town (a crossing road may be any road of the network).
+ */
+function roadSamples(roads, center, reach, pavement) {
+  const samples = [];
+  for (const road of roads) {
+    const clear = roadHalfWidth(road.lanes ?? 2) + pavement;
+    for (let d = 0; d <= road.length; d += 3) {
+      const p = road.positionAt(d);
+      const x = p.x;
+      const z = -p.y;
+      if (Math.hypot(x - center[0], z - center[1]) < reach + clear) samples.push({ x, z, clear });
+    }
+  }
+  return samples;
 }
 
 /**
@@ -528,6 +549,23 @@ export function layoutSettlement({
     }
     return false;
   };
+  // Any road of the network, not just this layout's streets: a road that
+  // crosses the town must not run into a house. The rectangle is the plot's
+  // own footprint, so a plot next to the road is judged by its near edge.
+  const surface = roadSamples(roads, center, radius * 1.6, style.pavement);
+  const onRoad = (x, z, facing, width, depth) => {
+    const along = perp2(facing);
+    const reach = Math.hypot(width, depth) / 2;
+    for (const s of surface) {
+      const dx = s.x - x;
+      const dz = s.z - z;
+      if (Math.abs(dx) > reach + s.clear || Math.abs(dz) > reach + s.clear) continue;
+      const a = Math.max(Math.abs(dx * along[0] + dz * along[1]) - width / 2, 0);
+      const b = Math.max(Math.abs(dx * facing[0] + dz * facing[1]) - depth / 2, 0);
+      if (Math.hypot(a, b) < s.clear) return true;
+    }
+    return false;
+  };
   const inSquare = (x, z, margin = 2) => {
     if (!square) return false;
     const p = toLocal(x, z);
@@ -600,7 +638,7 @@ export function layoutSettlement({
         const box = footprint(x, z, facing, width, depth);
         const sea = terrain?.seaLevel ?? -Infinity;
         const wet = terrain && ground.low < sea + 2;
-        const fits = !wet && !nearStreet(x, z, 1.4) && !inSquare(x, z) && freeFootprint(box) && (ground.slope < (style.maxSlope ?? 0.35) || !terrain);
+        const fits = !wet && !nearStreet(x, z, 1.4) && !inSquare(x, z) && !onRoad(x, z, facing, width, depth) && freeFootprint(box) && (ground.slope < (style.maxSlope ?? 0.35) || !terrain);
         if (fits) {
           markFootprint(box);
           plots.push({
@@ -640,7 +678,9 @@ export function layoutSettlement({
 
   // A prop the build would skip for standing in the water is not part of the
   // layout either, so the map and the world agree.
-  const dryProps = props.filter((prop) => onLand(prop.x, prop.z));
+  // Likewise a prop on a road that crosses the town (a bench on the asphalt).
+  const offRoad = (prop) => !surface.some((s) => Math.hypot(s.x - prop.x, s.z - prop.z) < s.clear + (prop.radius ?? 2));
+  const dryProps = props.filter((prop) => onLand(prop.x, prop.z) && offRoad(prop));
 
   return {
     id,

@@ -10,6 +10,7 @@
 import { MeshBuilder, appendInstance } from "./meshBuilder.js";
 import { placement } from "./math.js";
 import { seededRandom } from "./noise.js";
+import { roadHalfWidth } from "./roadWidth.js";
 import { facadeWindows } from "./scenery/windows.js";
 
 const TAU = Math.PI * 2;
@@ -227,6 +228,9 @@ export function buildSettlement(layout, {
       plot.z + facing[1] * (plot.depth - depth) / 2,
     ];
     if (occupancy?.blocked?.(pos[0], pos[1], Math.max(width, depth) * 0.45)) continue;
+    // The layout keeps plots off the roads it knows; the terrain knows every
+    // road of the network, so a house never stands on one either way.
+    if (terrain.distanceToRoad(pos[0], pos[1]) < roadHalfWidth(2) + pavement + Math.max(width, depth) / 2) continue;
     const y = groundUnder(terrain, pos[0], pos[1], plot.yaw, width, depth);
     // A coastal plot can be on land at its centre and over the drop at its
     // seaward corner; a house standing in the water is never right.
