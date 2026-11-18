@@ -224,9 +224,11 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 - Produces: `LANDMARKS: Record<kind, { build({terrain, center, yaw, water, random}) -> {near: Mesh, far: Mesh, bright?: Mesh, at: [x,y,z], movers?: Mover[]} }>`; `buildLandmarks(list, opts) -> { movers: Mover[] }`; each landmark `occupancy.add(x, z, apron)` before any scatter.
 - `Mover = { kind: "sails"|"balloon", at: [x,y,z], yaw, phase, speed, ...kindData }` — returned by `buildWorld` as `movers` (next to `rotors`).
 
-- [ ] **Step 1: Failing tests:** a lighthouse builds near and far meshes, far ≤ 60 triangles, white and red bands present; its lamp is in `bright`; no tree/cover/prop within its apron after `buildWorld`; every landmark in `valley.json` except `seaArch` stands above `water + 2` and ≥ apron from every road centre line (data test over the real map).
-- [ ] **Step 2–4:** FAIL, implement, PASS. Map entry: `{"id":"cape-light","kind":"lighthouse","x":4850,"y":-3900,"yaw":0,"apron":25}` — move it to the nearest high, dry point on the cape if the data test fails.
-- [ ] **Step 5: Commit** `feat: Build landmarks from the map, starting with the cape lighthouse (#117)`.
+- [x] **Step 1: Failing tests:** a lighthouse builds near and far meshes, far ≤ 60 triangles, white and red bands present; its lamp is in `bright`; no tree/cover/prop within its apron after `buildWorld`; every landmark in `valley.json` except `seaArch` stands above `water + 2` and ≥ apron from every road centre line (data test over the real map).
+- [x] **Step 2–4:** FAIL, implement, PASS. Map entry: `{"id":"cape-light","kind":"lighthouse","x":4850,"y":-3900,"yaw":0,"apron":25}` — move it to the nearest high, dry point on the cape if the data test fails.
+- [x] **Step 5: Commit** `feat: Build landmarks from the map, starting with the cape lighthouse (#117)`.
+
+> Done: lighthouse stays at map `x 4850, y -3900` (world z +3900; 21 m, dry, no road within 999 m). Best shot: `--route cape-loop --at 4000` (726 m, dead ahead).
 
 ### Task 11: Castle ruin on the crag
 

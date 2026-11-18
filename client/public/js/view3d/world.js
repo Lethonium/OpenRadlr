@@ -38,6 +38,7 @@ import { fieldAt, forestAt, kindAt, treeFactor } from "../land/land.js";
 import { canGrowTree, slopeAt } from "../land/mountains.js";
 import { layoutSettlement } from "../land/settlement.js";
 import { buildSettlement } from "./settlement.js";
+import { buildLandmarks } from "./landmarks.js";
 import { buildTownLight, planTownLight } from "./townLight.js";
 import { regionAt } from "../land/regions.js";
 import { PLANTS } from "./regions/plants.js";
@@ -1553,6 +1554,11 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     buildTownLight(plan, { bright: chunks.bright, glow: chunks.glow, structures: chunks.structures, height: lightSurface });
     townLights.push(...plan.lights);
   }
+  // Landmarks (#117): hand-placed in the map, built once with their apron
+  // reserved so nothing scatters over them. Scenery off has none.
+  const landmarks = scenery && network?.landmarks?.length
+    ? buildLandmarks(network.landmarks, { terrain, near: chunks.village ?? chunks.structures, far: chunks.villageFar ?? null, bright: chunks.bright, occupancy, water: ground.water })
+    : { movers: [] };
   // Route files: seven farms each. Network roads: about one per kilometre.
   const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
   for (const r of ordered) {
@@ -1718,6 +1724,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     water: buildWater(terrain, ground.water, Math.max(40000, ground.horizon * 4), biome),
     rivers: rivers3d.build(),
     rotors,
+    // Moving parts of landmarks (sails, balloons), animated by the view (#117).
+    ...(scenery && network ? { movers: landmarks.movers } : {}),
     spectators,
     spectatorMeshes,
   };
