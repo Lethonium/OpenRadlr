@@ -28,6 +28,7 @@ import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
+import { balloonAt, buildBalloon, buildSails } from "../public/js/view3d/structures.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
@@ -367,7 +368,10 @@ class StubRenderer {
     this.draws.push({ handle, model, tint, pass: this.pass });
   }
   drawBright() {}
-  drawCloudLayer() {}
+  cloudDraws = [];
+  drawCloudLayer(handle, model, tint, unlit) {
+    this.cloudDraws.push({ handle, model, tint, unlit });
+  }
   drawTransparent() {}
   uploadWeather(data) {
     return { data };
@@ -406,6 +410,59 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("a windmill's sails turn with the clock, and only within the rotor distance", () => {
+  const mills = [
+    { kind: "sails", at: [100, 12, 30], yaw: 0.4, phase: 0.7, speed: 0.3 },
+    { kind: "sails", at: [90000, 12, 30], yaw: 0, phase: 0, speed: 0.3 },
+  ];
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), undefined, { movers: mills });
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  assert.deepEqual(view.sails.mesh, buildSails(), "the sail wheel is uploaded");
+  const drawn = () => renderer.draws.filter((d) => d.handle === view.sails).map((d) => d.model);
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  const first = drawn();
+  assert.equal(first.length, 1, "the far wheel is not drawn");
+  renderer.draws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS: 12, colors });
+  const second = drawn();
+  closeVec(first[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 10 * 0.3)));
+  closeVec(second[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 12 * 0.3)));
+  assert.notDeepEqual(Array.from(first[0]), Array.from(second[0]));
+});
+
+test("balloons fly their loops with the clock, drawn far like clouds, up to the fog", () => {
+  const near = { kind: "balloon", center: [0, 0], radius: 700, altitude: 300, phase: 0.4, speed: 0.01, palette: 2 };
+  const lost = { kind: "balloon", center: [90000, 0], radius: 700, altitude: 300, phase: 0, speed: 0.01, palette: 2 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), undefined, { movers: [near, lost] });
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  assert.deepEqual(view.balloons[2].mesh, buildBalloon(2), "its colour scheme is uploaded");
+  assert.deepEqual(Object.keys(view.balloons), ["2"], "one mesh per scheme in the air, not per balloon");
+  const drawn = () => renderer.cloudDraws.filter((d) => Object.values(view.balloons).includes(d.handle));
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  const first = drawn();
+  assert.equal(first.length, 1, "the balloon beyond the fog is not drawn");
+  assert.equal(first[0].handle, view.balloons[2]);
+  renderer.cloudDraws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS: 70, colors });
+  const second = drawn();
+  closeVec(first[0].model.slice(12, 15), balloonAt(near, 10), 1e-3);
+  closeVec(second[0].model.slice(12, 15), balloonAt(near, 70), 1e-3);
+  assert.notDeepEqual(Array.from(first[0].model), Array.from(second[0].model));
+});
+
+test("a world without balloons uploads none", () => {
+  const { view } = gymView([]);
+  assert.deepEqual(view.balloons, {});
+});
+
+test("a world without movers draws no sails", () => {
+  const { view, renderer } = gymView([]);
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  assert.equal(view.sails, null);
+  assert.ok(!renderer.draws.some((d) => d.handle === view.sails));
+});
 
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");
@@ -599,14 +656,14 @@ class RecordingRenderer extends StubRenderer {
   }
 }
 
-function sceneryInstanceView() {
+function sceneryInstanceView(group = "scenery") {
   const renderer = new RecordingRenderer();
   const mesh = { positions: new Float32Array(9), normals: new Float32Array(9), colors: new Float32Array(12), vertexCount: 3 };
   const matrices = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const baked = emptyMesh();
   const { view } = gymView([], "temperate", null, renderer, undefined, {
     instanceModels: [{ mesh }],
-    chunks: { scenery: [{ mesh: baked, center: [0, 0, 0], radius: 20, batches: [{ model: 0, matrices }] }], structures: [] },
+    chunks: { [group]: [{ mesh: baked, center: [0, 0, 0], radius: 20, batches: [{ model: 0, matrices }] }], structures: [] },
   });
   view.camera.eye = [0, 2, 50];
   view.camera.target = [0, 2, 0];
@@ -630,6 +687,17 @@ test("an instanced scenery batch casts shadows through the existing chunk rule",
   const casts = renderer.casters.filter((draw) => draw.instanced);
   assert.equal(casts.length, 1);
   assert.equal(casts[0].handle, batch);
+});
+
+test("near-only cover is drawn up close, not from 150 m, and casts no shadow", () => {
+  const near = sceneryInstanceView("cover");
+  near.view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(near.renderer.draws.filter((draw) => draw.instanced).length, 1);
+  assert.equal(near.renderer.casters.filter((draw) => draw.instanced).length, 0, "no shadow");
+  const far = sceneryInstanceView("cover");
+  far.view.camera.eye = [0, 2, 190];
+  far.view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(far.renderer.draws.filter((draw) => draw.instanced).length, 0, "beyond the cover's range");
 });
 
 test("disposing a view releases batch buffers before their shared model", () => {

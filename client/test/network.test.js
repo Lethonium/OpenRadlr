@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { NETWORK_LANES, RoadNetwork, hashSeed } from "../public/js/route/network.js";
 import { fetchMapNetwork, roadNetworkOf } from "../public/js/route/worldMap.js";
@@ -150,4 +151,24 @@ test("the menu map draws the island and every road of the network", () => {
   drawMapPreview(canvas, { routes: [loop], selectedId: loop.id, network: tinyNetworkFile() });
   assert.ok(calls.lineTo > 200, "coast, roads and the route");
   assert.equal(calls.arcs, 1, "the start");
+});
+
+// --- regions and landmarks (#117) ---------------------------------------------------
+
+test("regions and landmarks map y to -z like settlements; a file without them gives none", () => {
+  const withThem = new RoadNetwork({
+    ...tinyNetworkFile(),
+    regions: [{ id: "r", kind: "pineCoast", x: 100, y: 200, radius: 500 }],
+    landmarks: [{ id: "l", kind: "lighthouse", x: 10, y: -20, yaw: 1.5, apron: 40, height: 30 }],
+  });
+  assert.deepEqual(withThem.regions, [{ id: "r", kind: "pineCoast", center: [100, -200], radius: 500 }]);
+  assert.deepEqual(withThem.landmarks, [{ id: "l", kind: "lighthouse", center: [10, 20], yaw: 1.5, apron: 40, height: 30 }]);
+  assert.deepEqual(network.regions, []);
+  assert.deepEqual(network.landmarks, []);
+});
+
+test("routes off the network build with no network, so no regions", async () => {
+  const velodrome = JSON.parse(readFileSync(new URL("../../routes/velodrome.json", import.meta.url), "utf8"));
+  assert.equal(await fetchMapNetwork(velodrome, async () => tinyNetworkFile()), null);
+  assert.doesNotThrow(() => buildWorld(new RouteGeometry(velodrome)));
 });

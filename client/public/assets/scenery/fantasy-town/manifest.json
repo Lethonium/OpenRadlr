@@ -5,7 +5,7 @@
     "pack": "https://kenney.nl/assets/fantasy-town-kit",
     "licence": "https://creativecommons.org/publicdomain/zero/1.0/",
     "taken": "2026-11-16",
-    "note": "Kenney's Fantasy Town Kit 2.0, whose own License.txt says CC0 1.0. Cottages, the church and the windmill are assembled from the pack's parts by tools/scenery/assemble.mjs and recoloured; the props are the pack's models as they are."
+    "note": "Kenney's Fantasy Town Kit 2.0, whose own License.txt says CC0 1.0. Cottages, the church and the windmill are assembled from the pack's parts by tools/scenery/assemble.mjs and recoloured; the props are the pack's models as they are. The cathedral is drawn in assemble.mjs in the same stone and slate, not taken from the pack."
   },
   "models": {
     "cottage-a": {
@@ -93,6 +93,11 @@
     "cart": {
       "role": "carts",
       "file": "cart"
+    },
+    "cathedral": {
+      "role": "cathedral",
+      "file": "cathedral",
+      "far": "cathedral-far"
     }
   }
 }

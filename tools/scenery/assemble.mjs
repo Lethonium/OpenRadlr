@@ -1,6 +1,7 @@
 // Builds the village kit from Kenney's Fantasy Town Kit (#117).
 //
 //   node tools/scenery/assemble.mjs <pack "GLB format" dir> <out dir>
+//   node tools/scenery/assemble.mjs --cathedral-only <kit dir>   (adds just the cathedral, no pack needed)
 //
 // The pack is a modular kit on a one-unit grid: a wall panel stands on the +x
 // edge of its tile, one panel is one storey, and a roof tile is one slope with
@@ -234,11 +235,11 @@ export function farTwin({ bounds, eaves, top, ridge = "x", wall, roof }) {
 
 const q = (v) => Math.round(v * 100) / 100 + 0;
 
-/** Triangles in tile units → a model in metres, standing on the ground, centred on its footprint. */
-export function modelOf(name, tris, scale = TILE) {
+/** Triangles in tile units → a model in metres, standing on the ground, centred on its footprint (of `frame`, when a twin shares its original's). */
+export function modelOf(name, tris, scale = TILE, frame = tris) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
-  for (const v of tris) {
+  for (const v of frame) {
     for (let k = 0; k < 3; k += 1) {
       min[k] = Math.min(min[k], v[k]);
       max[k] = Math.max(max[k], v[k]);
@@ -266,6 +267,164 @@ export function building(name, tris, { floors, high = false, ridge = "x", wall, 
   const top = Math.min(near.bounds.max[1], eaves + (high ? 1.11 : 0.63) * TILE);
   const triangles = farTwin({ bounds, eaves, top, ridge, wall, roof });
   return { near, far: { name: `${name}-far`, triangles, bounds: near.bounds, vertices: triangles.length } };
+}
+
+/** What the cathedral's glass and portal are made of. */
+const GLASS = [0.32, 0.4, 0.55];
+const OAK = [0.35, 0.2, 0.12];
+
+/**
+ * The market city's cathedral, in metres: one oversized church, about twice
+ * the village church's height. The pack has no such building, so it is drawn
+ * here in the kit's own stone and slate rather than from its tiles: a long
+ * nave under a steep slate roof, a transept with a small spire over the
+ * crossing, an eight-sided apse at +z and two west towers with spires at -z
+ * around a portal and a rose window, the way the church's door faces the
+ * square.
+ *
+ * @returns {{near: number[][], far: number[][]}} triangles in metres, origin where it was drawn
+ */
+export function cathedralTriangles({ wall = WALLS.stone, roof = ROOFS.slate } = {}) {
+  const edge = roof.map((c) => c * 0.82);
+  const dark = wall.map((c) => c * 0.88);
+  const light = wall.map((c) => Math.min(1, c * 1.06));
+  const near = [];
+  const far = [];
+  const NAVE = 5;
+  const WALL_TOP = 11;
+  const RIDGE = 17;
+  const TOWERS = [1.5, 6.5];
+  const APSE = { z: 12, r: 5 };
+
+  /** The shapes, drawn into `out`; counter-clockwise from outside. */
+  const shapes = (out) => {
+    const tri = (a, b, c, colour) => out.push([...a, ...colour], [...b, ...colour], [...c, ...colour]);
+    const quad = (a, b, c, d, colour) => {
+      tri(a, b, c, colour);
+      tri(a, c, d, colour);
+    };
+    return {
+      tri,
+      quad,
+      /** Four walls, and the top when `cap`. */
+      box(x0, x1, y0, y1, z0, z1, colour, cap = false) {
+        quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], colour);
+        quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], colour);
+        quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], colour);
+        quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], colour);
+        if (cap) quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], colour);
+      },
+      /** A four-sided spire over a square. */
+      spire(x0, x1, z0, z1, y0, apex) {
+        const xm = (x0 + x1) / 2;
+        const zm = (z0 + z1) / 2;
+        tri([x0, y0, z1], [x1, y0, z1], [xm, apex, zm], roof);
+        tri([x1, y0, z0], [x0, y0, z0], [xm, apex, zm], roof);
+        tri([x1, y0, z1], [x1, y0, z0], [xm, apex, zm], edge);
+        tri([x0, y0, z0], [x0, y0, z1], [xm, apex, zm], edge);
+      },
+      /** A gabled roof from `base` to `top`; the ridge runs along z or x, the gable walls are stone. */
+      gable(x0, x1, z0, z1, base, top, ridge) {
+        const o = 0.35;
+        if (ridge === "z") {
+          const xm = (x0 + x1) / 2;
+          quad([x1 + o, base - 0.3, z1], [x1 + o, base - 0.3, z0], [xm, top, z0], [xm, top, z1], roof);
+          quad([x0 - o, base - 0.3, z0], [x0 - o, base - 0.3, z1], [xm, top, z1], [xm, top, z0], edge);
+          tri([x0, base, z1], [x1, base, z1], [xm, top, z1], wall);
+          tri([x1, base, z0], [x0, base, z0], [xm, top, z0], wall);
+        } else {
+          const zm = (z0 + z1) / 2;
+          quad([x0, base - 0.3, z1 + o], [x1, base - 0.3, z1 + o], [x1, top, zm], [x0, top, zm], roof);
+          quad([x1, base - 0.3, z0 - o], [x0, base - 0.3, z0 - o], [x0, top, zm], [x1, top, zm], edge);
+          tri([x1, base, z1], [x1, base, z0], [x1, top, zm], wall);
+          tri([x0, base, z0], [x0, base, z1], [x0, top, zm], wall);
+        }
+      },
+      /**
+       * A pointed window flat on a wall: `centre` is a point on the wall at the
+       * sill, `normal` its outward horizontal unit vector.
+       */
+      window(centre, normal, y0, y1, half, colour = GLASS) {
+        const u = [normal[2], 0, -normal[0]]; // up x normal: to the viewer's right
+        const at = (s, y) => [centre[0] + normal[0] * 0.06 + u[0] * s, y, centre[2] + normal[2] * 0.06 + u[2] * s];
+        const shoulder = y1 - half * 1.3;
+        quad(at(-half, y0), at(half, y0), at(half, shoulder), at(-half, shoulder), colour);
+        tri(at(-half, shoulder), at(half, shoulder), at(0, y1), colour);
+      },
+    };
+  };
+
+  const n = shapes(near);
+  // Nave z -11..12 and transept z 2..10 under the same ridge.
+  n.box(-NAVE, NAVE, 0, WALL_TOP, -11, 12, wall);
+  n.gable(-NAVE, NAVE, -11, 12, WALL_TOP, RIDGE, "z");
+  n.box(-9, 9, 0, WALL_TOP, 2, 10, wall);
+  n.gable(-9, 9, 2, 10, WALL_TOP, RIDGE, "x");
+  for (const z of [-9.5, -5.5, -1.5]) {
+    n.box(NAVE, NAVE + 0.7, 0, 9, z - 0.3, z + 0.3, dark, true);
+    n.box(-NAVE - 0.7, -NAVE, 0, 9, z - 0.3, z + 0.3, dark, true);
+  }
+  for (const z of [-7.5, -3.5, 0.5]) {
+    n.window([NAVE, 0, z], [1, 0, 0], 3.2, 9.4, 0.8);
+    n.window([-NAVE, 0, z], [-1, 0, 0], 3.2, 9.4, 0.8);
+  }
+  for (const side of [-1, 1]) n.window([side * 9, 0, 6], [side, 0, 0], 3.5, 12.5, 1.1);
+  // The apse: half an octagon of wall under a cone.
+  const ring = (a) => [Math.cos(a) * APSE.r, Math.sin(a) * APSE.r + APSE.z];
+  for (let i = 0; i < 4; i += 1) {
+    const [x0, z0] = ring((i * Math.PI) / 4);
+    const [x1, z1] = ring(((i + 1) * Math.PI) / 4);
+    n.quad([x1, 0, z1], [x0, 0, z0], [x0, WALL_TOP, z0], [x1, WALL_TOP, z1], wall);
+    const grow = (x, z) => [x * 1.08, WALL_TOP - 0.3, APSE.z + (z - APSE.z) * 1.08];
+    n.tri(...[[x1, z1], [x0, z0]].map(([x, z]) => grow(x, z)), [0, 17.5, APSE.z], i % 2 ? edge : roof);
+    const mid = ((i + 0.5) * Math.PI) / 4;
+    const [mx, mz] = ring(mid);
+    n.window([mx, 0, mz], [Math.cos(mid), 0, Math.sin(mid)], 3.5, 8.8, 0.7);
+  }
+  // A lantern and small spire over the crossing.
+  n.box(-1.6, 1.6, RIDGE - 0.5, RIDGE + 4, 4.4, 7.6, light, true);
+  n.spire(-1.9, 1.9, 4.1, 7.9, RIDGE + 4, RIDGE + 11);
+  // The west front: a narthex between the towers with the portal and a rose window.
+  n.box(-TOWERS[0], TOWERS[0], 0, 9, -16, -11, wall);
+  n.gable(-TOWERS[0], TOWERS[0], -16, -11, 9, 13.5, "z");
+  n.quad([-1, 0, -16.05], [-1, 4.2, -16.05], [1, 4.2, -16.05], [1, 0, -16.05], OAK);
+  n.tri([-1, 4.2, -16.05], [1, 4.2, -16.05], [0, 5.6, -16.05], OAK);
+  for (let i = 0; i < 8; i += 1) {
+    const [a0, a1] = [(i * Math.PI) / 4, ((i + 1) * Math.PI) / 4];
+    n.tri([0, 10.6, -16.06], [Math.sin(a0) * 1.6, 10.6 + Math.cos(a0) * 1.6, -16.06], [Math.sin(a1) * 1.6, 10.6 + Math.cos(a1) * 1.6, -16.06], GLASS);
+  }
+  // The towers: stone to 24 m, light string courses, slits and belfry openings, a slate spire to 34 m.
+  for (const side of [-1, 1]) {
+    const [x0, x1] = [Math.min(side * TOWERS[0], side * TOWERS[1]), Math.max(side * TOWERS[0], side * TOWERS[1])];
+    const xm = (x0 + x1) / 2;
+    n.box(x0, x1, 0, 24, -16, -11, wall);
+    for (const y of [11.6, 22.6]) n.box(x0 - 0.15, x1 + 0.15, y, y + 0.4, -16.15, -10.85, light, true);
+    n.spire(x0 - 0.35, x1 + 0.35, -16.35, -10.65, 24, 34);
+    for (const [y0, y1, half] of [[5, 9.5, 0.45], [16.5, 21.5, 0.9]]) {
+      n.window([xm, 0, -16], [0, 0, -1], y0, y1, half);
+      n.window([side > 0 ? x1 : x0, 0, -13.5], [side, 0, 0], y0, y1, half);
+    }
+  }
+
+  // The far twin: the same masses with no detail, 52 triangles.
+  const f = shapes(far);
+  f.box(-NAVE, NAVE, 0, WALL_TOP, -11, 12, wall);
+  f.gable(-NAVE, NAVE, -11, 12, WALL_TOP, RIDGE, "z");
+  f.box(-9, 9, 0, WALL_TOP, 2, 10, wall);
+  f.gable(-9, 9, 2, 10, WALL_TOP, RIDGE, "x");
+  for (const side of [-1, 1]) {
+    const [x0, x1] = [Math.min(side * TOWERS[0], side * TOWERS[1]), Math.max(side * TOWERS[0], side * TOWERS[1])];
+    f.box(x0, x1, 0, 24, -16, -11, wall);
+    f.spire(x0 - 0.35, x1 + 0.35, -16.35, -10.65, 24, 34);
+  }
+  return { near, far };
+}
+
+/** The cathedral and its far twin as kit models, both in the near model's frame. */
+export function cathedral(options) {
+  const { near, far } = cathedralTriangles(options);
+  const model = modelOf("cathedral", near, 1);
+  return { near: model, far: modelOf("cathedral-far", far, 1, near) };
 }
 
 /**
@@ -301,7 +460,7 @@ export const PROVENANCE = Object.freeze({
   pack: "https://kenney.nl/assets/fantasy-town-kit",
   licence: "https://creativecommons.org/publicdomain/zero/1.0/",
   taken: "2026-11-16",
-  note: "Kenney's Fantasy Town Kit 2.0, whose own License.txt says CC0 1.0. Cottages, the church and the windmill are assembled from the pack's parts by tools/scenery/assemble.mjs and recoloured; the props are the pack's models as they are.",
+  note: "Kenney's Fantasy Town Kit 2.0, whose own License.txt says CC0 1.0. Cottages, the church and the windmill are assembled from the pack's parts by tools/scenery/assemble.mjs and recoloured; the props are the pack's models as they are. The cathedral is drawn in assemble.mjs in the same stone and slate, not taken from the pack.",
 });
 
 /** Every model of the kit and its manifest, built from the pack's GLB folder. */
@@ -322,11 +481,34 @@ export function buildKit(packDir) {
     files.push(model);
     models[prop.name] = { role: prop.role, file: prop.name };
   }
+  const crown = cathedral();
+  files.push(crown.near, crown.far);
+  models.cathedral = { role: "cathedral", file: crown.near.name, far: crown.far.name };
   return { files, manifest: { name: "fantasy-town", licence: "CC0-1.0", provenance: PROVENANCE, models } };
+}
+
+/**
+ * Adds the cathedral to a kit already written to `outDir`, with no pack: it is
+ * drawn here, not taken from the pack's tiles, so nothing else is touched.
+ */
+export function addCathedral(outDir) {
+  const manifestPath = join(outDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const crown = cathedral();
+  for (const model of [crown.near, crown.far]) writeModel(model, join(outDir, `${model.name}.geo.json`));
+  manifest.provenance = PROVENANCE;
+  manifest.models.cathedral = { role: "cathedral", file: crown.near.name, far: crown.far.name };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return crown;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [packDir, outDir] = process.argv.slice(2);
+  if (packDir === "--cathedral-only" && outDir) {
+    const { near, far } = addCathedral(outDir);
+    console.log(`cathedral: ${near.triangles.length / 3} triangles, far ${far.triangles.length / 3}`);
+    process.exit(0);
+  }
   if (!packDir || !outDir) {
     console.error('usage: node tools/scenery/assemble.mjs <pack "GLB format" dir> <out dir>');
     process.exit(1);

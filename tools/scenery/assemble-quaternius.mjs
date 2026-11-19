@@ -20,8 +20,10 @@ const CC0 = "https://creativecommons.org/publicdomain/zero/1.0/";
  * scenery builder applies (`height` multiplies the model's own size, and
  * `sizes` multiplies that again).
  *
- * Quaternius nature models are authored around 3 m tall; the world's trees are
- * 6-12 m, so `height` is what turns a model into a tree rather than a shrub.
+ * Quaternius nature models are authored 2.3-4 units tall, and `height`
+ * multiplies that, not metres: each tree's `height` is 19 over its own
+ * height, so a tree is 19 m at size 1 and 10-19 m with `sizes`, in scale
+ * with the 6-9 m houses (see `treeHeights.test.js`).
  * The farm models are already the right size and `planFlora.model` does not
  * apply `height`, so they carry none.
  */
@@ -35,18 +37,18 @@ export const PACKS = Object.freeze({
       note: "Ultimate Nature Pack by Quaternius. The pack's own License.txt, in its Google Drive folder, says CC0 1.0 Universal. OBJ folder, 19 of the 150 models.",
     }),
     models: Object.freeze({
-      pine1: { file: "PineTree_1", role: "firs", height: 4.4, sizes: [0.55, 1] },
-      pine2: { file: "PineTree_2", role: "firs", height: 4.0, sizes: [0.55, 1] },
-      pine3: { file: "PineTree_3", role: "firs", height: 4.0, sizes: [0.55, 1] },
-      common1: { file: "CommonTree_1", role: "leafy", height: 4.0, sizes: [0.55, 1] },
-      common2: { file: "CommonTree_2", role: "leafy", height: 3.5, sizes: [0.55, 1] },
-      common3: { file: "CommonTree_3", role: "leafy", height: 3.2, sizes: [0.55, 1] },
-      common4: { file: "CommonTree_4", role: "leafy", height: 3.3, sizes: [0.55, 1] },
-      birch1: { file: "BirchTree_1", role: "leafy", height: 3.1, sizes: [0.6, 1] },
-      birch2: { file: "BirchTree_2", role: "leafy", height: 2.8, sizes: [0.6, 1] },
-      willow1: { file: "Willow_1", role: "leafy", height: 3.9, sizes: [0.6, 1] },
-      willow2: { file: "Willow_2", role: "leafy", height: 3.6, sizes: [0.6, 1] },
-      willow3: { file: "Willow_3", role: "leafy", height: 3.1, sizes: [0.6, 1] },
+      pine1: { file: "PineTree_1", role: "firs", height: 7.04, sizes: [0.55, 1] },
+      pine2: { file: "PineTree_2", role: "firs", height: 5.34, sizes: [0.55, 1] },
+      pine3: { file: "PineTree_3", role: "firs", height: 5.76, sizes: [0.55, 1] },
+      common1: { file: "CommonTree_1", role: "leafy", height: 7.66, sizes: [0.55, 1] },
+      common2: { file: "CommonTree_2", role: "leafy", height: 6.09, sizes: [0.55, 1] },
+      common3: { file: "CommonTree_3", role: "leafy", height: 5.49, sizes: [0.55, 1] },
+      common4: { file: "CommonTree_4", role: "leafy", height: 6.83, sizes: [0.55, 1] },
+      birch1: { file: "BirchTree_1", role: "leafy", height: 5.32, sizes: [0.55, 1] },
+      birch2: { file: "BirchTree_2", role: "leafy", height: 4.71, sizes: [0.55, 1] },
+      willow1: { file: "Willow_1", role: "leafy", height: 6.67, sizes: [0.55, 1] },
+      willow2: { file: "Willow_2", role: "leafy", height: 5.72, sizes: [0.55, 1] },
+      willow3: { file: "Willow_3", role: "leafy", height: 8.09, sizes: [0.55, 1] },
       bush1: { file: "Bush_1", role: "bushes", height: 1.6, sizes: [0.7, 1] },
       bush2: { file: "Bush_2", role: "bushes", height: 1.4, sizes: [0.7, 1] },
       bushBerries: { file: "BushBerries_1", role: "bushes", height: 1.6, sizes: [0.8, 1] },

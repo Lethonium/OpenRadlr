@@ -219,6 +219,85 @@ export function buildRotor(radius = 24) {
   return m.build();
 }
 
+const SAIL_CLOTH = [0.97, 0.94, 0.85];
+const SAIL_WOOD = [0.38, 0.27, 0.18];
+
+/**
+ * A Mallorcan windmill's wheel: eight triangular cloth sails on wooden spars,
+ * in the YZ plane facing +X and spinning around X, hub at the origin. The
+ * cloth is a fan, so the wheel reads as a pinwheel from far off.
+ */
+export function buildSails(radius = 10, count = 8) {
+  const m = new MeshBuilder();
+  m.ellipsoid([0.3, 0, 0], [1.3, 1, 1], SAIL_WOOD, 3, 8);
+  const at = (angle, along, across = 0) => [0, Math.cos(angle) * along - Math.sin(angle) * across, Math.sin(angle) * along + Math.cos(angle) * across];
+  for (let i = 0; i < count; i += 1) {
+    const angle = (i / count) * Math.PI * 2;
+    m.segment(at(angle, 0.5), at(angle, radius), 0.28, 0.28, SAIL_WOOD);
+    const root = at(angle, 1.8);
+    const tip = at(angle, radius);
+    const edge = at(angle, 1.8, radius * 0.38);
+    // Two faces a hair apart, each lit from its own side (coplanar ones would z-fight).
+    for (const x of [0.05, -0.05]) m.triangleFacing([x, root[1], root[2]], [x, tip[1], tip[2]], [x, edge[1], edge[2]], SAIL_CLOTH, [x, 0, 0]);
+  }
+  return m.build();
+}
+
+/** Envelope colours of the hot-air balloons: two bright gores each (#117). */
+export const BALLOON_PALETTES = Object.freeze([
+  [[0.92, 0.2, 0.14], [1, 0.86, 0.22]],
+  [[0.14, 0.4, 0.86], [0.97, 0.97, 0.95]],
+  [[0.96, 0.52, 0.1], [0.2, 0.66, 0.36]],
+  [[0.82, 0.2, 0.56], [0.96, 0.92, 0.6]],
+]);
+const BALLOON_GORES = 10;
+/** Height and radius of the envelope's rings from the mouth up, a pear that is widest high up. */
+const BALLOON_RINGS = [[4, 1.7], [7, 5], [11, 7.8], [16, 9], [21, 7.2], [24.5, 3.6], [26.5, 0]];
+
+/**
+ * A hot-air balloon about 27 m tall, its basket's floor at y = -2.8 and the
+ * envelope's mouth at y = 4: a ten-gore pear in two bright colours, a flame
+ * under the mouth, a basket on four ropes. 180 triangles.
+ */
+export function buildBalloon(palette = 0) {
+  const colours = BALLOON_PALETTES[palette % BALLOON_PALETTES.length];
+  const m = new MeshBuilder();
+  const ring = (i, k) => {
+    const [y, r] = BALLOON_RINGS[i];
+    const a = (k / BALLOON_GORES) * Math.PI * 2;
+    return [Math.cos(a) * r, y, Math.sin(a) * r];
+  };
+  const outward = (...points) => [points.reduce((sum, p) => sum + p[0], 0), 0, points.reduce((sum, p) => sum + p[2], 0)];
+  for (let i = 0; i < BALLOON_RINGS.length - 1; i += 1) {
+    const last = i === BALLOON_RINGS.length - 2;
+    for (let k = 0; k < BALLOON_GORES; k += 1) {
+      const colour = colours[k % 2];
+      const [a, b, c, d] = [ring(i, k), ring(i, k + 1), ring(i + 1, k + 1), ring(i + 1, k)];
+      if (last) {
+        m.triangleFacing(a, b, c, colour, outward(a, b, c));
+        continue;
+      }
+      m.triangleFacing(a, b, c, colour, outward(a, b, c));
+      m.triangleFacing(a, c, d, colour, outward(a, c, d));
+    }
+  }
+  // The flame glowing under the mouth, and the basket on its ropes.
+  for (let k = 0; k < BALLOON_GORES; k += 1) m.triangleFacing(ring(0, k), ring(0, k + 1), [0, 4, 0], [1, 0.62, 0.2], [0, -1, 0]);
+  m.box([0, -2, 0], [2.2, 1.6, 2.2], [0.5, 0.34, 0.2]);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) m.segment([sx * 1, -1.2, sz * 1], [sx * 1.4, 4, sz * 1.4], 0.12, 0.12, [0.25, 0.2, 0.15]);
+  return m.build();
+}
+
+/**
+ * Where a balloon is `timeS` into its loop: round `center` at `radius`, from
+ * the clock alone, bobbing a few metres as it goes. Visual only; clients need
+ * not agree (#117).
+ */
+export function balloonAt({ center, radius, altitude, phase, speed }, timeS) {
+  const angle = phase + timeS * speed;
+  return [center[0] + Math.cos(angle) * radius, altitude + Math.sin(timeS * 0.21 + phase * 3) * 3, center[1] + Math.sin(angle) * radius];
+}
+
 export function buildCow(brown = false) {
   const m = new MeshBuilder();
   const coat = brown ? PALETTE.cowBrown : PALETTE.cowWhite;

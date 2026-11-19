@@ -9,6 +9,9 @@ import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
 import { buildPenguin, penguinWorkoutParts } from "./people.js";
 import { terrainColor } from "./terrain.js";
 
+/** Dry grass standing out of the snow. */
+const STRAW = Object.freeze([0.66, 0.62, 0.5]);
+
 /** Muted winter coats; the crowd and the penguins' scarves take these colours. */
 const SHIRTS = Object.freeze([
   Object.freeze([0.72, 0.22, 0.18]),
@@ -156,6 +159,18 @@ export const winter = Object.freeze({
     }),
   }),
   terrainColor,
+  /** Region looks that differ under snow; every other region keeps its temperate style (#117). */
+  regions: Object.freeze({
+    blossomValley: Object.freeze({
+      trees: Object.freeze({ canopy: Object.freeze([0.62, 0.6, 0.62]), bare: true }),
+      mass: Object.freeze({ colour: SNOW }),
+      cover: Object.freeze({ colours: Object.freeze({ grass: STRAW }) }),
+    }),
+    lavenderFields: Object.freeze({
+      mass: Object.freeze({ colour: Object.freeze([0.9, 0.92, 0.96]) }),
+      cover: Object.freeze({ plants: Object.freeze(["grass"]), colours: Object.freeze({ grass: STRAW }) }),
+    }),
+  }),
   flora: Object.freeze({
     /** Sparse under the snow: fewer trees than summer, no flowers at all. */
     density: Object.freeze({ trees: 230, tufts: 700, flowers: 0, elsewhere: 0.4 }),
