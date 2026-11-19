@@ -32,7 +32,7 @@ import {
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { buildLemon } from "./lemonModel.js";
-import { buildFlag, buildRotor, buildSails, buildSpectator } from "./structures.js";
+import { balloonAt, buildBalloon, buildFlag, buildRotor, buildSails, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { INSTRUCTOR } from "./studioLayout.js";
 import { StudioLayer } from "./studioLayer.js";
@@ -64,6 +64,11 @@ const VILLAGE_NEAR = 350;
  * reads as a box from this far.
  */
 const FARM_NEAR = 300;
+
+/** How much of a balloon's colour is flat, unshaded light: bright against the haze, a little shaded. */
+const BALLOON_UNLIT = 0.55;
+/** Balloons are drawn larger than life (about 45 m tall) so they still read from a few kilometres. */
+const BALLOON_SIZE = 1.7;
 
 const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
@@ -430,6 +435,9 @@ export class View3D {
     /** Moving parts of landmarks (#117): the windmills' sails, turned from the clock. */
     this.movers = world.movers ?? [];
     this.sails = this.movers.some((m) => m.kind === "sails") ? this.renderer.upload(buildSails()) : null;
+    /** One mesh per colour scheme in the air: the balloons drifting over the valley. */
+    this.balloons = {};
+    for (const m of this.movers) if (m.kind === "balloon" && !(m.palette in this.balloons)) this.balloons[m.palette] = this.renderer.upload(buildBalloon(m.palette));
     this.lemonMesh = this.renderer.upload(buildLemon());
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
@@ -837,6 +845,12 @@ export class View3D {
           .filter((m) => m.kind === "sails" && Math.hypot(m.at[0] - eye[0], m.at[2] - eye[2]) < SCENE.rotorDistance)
           .map((m) => multiply(placement(m.at, m.yaw), rotationXAbout([0, 0, 0], m.phase + timeS * m.speed)))
       : [];
+    // Balloons are drawn as far as the fog reaches, like clouds, so they read from anywhere.
+    const balloonDraws = this.movers
+      .filter((m) => m.kind === "balloon")
+      .map((m) => ({ m, at: balloonAt(m, timeS) }))
+      .filter(({ at }) => Math.hypot(at[0] - eye[0], at[2] - eye[2]) < light.fog[1])
+      .map(({ m, at }) => ({ handle: this.balloons[m.palette], model: multiply(placement(at, m.phase + timeS * m.speed), scaling(BALLOON_SIZE)) }));
     // More riders online, more of the crowd out; the ones near a rider cheer it on.
     const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
     const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
@@ -900,7 +914,7 @@ export class View3D {
     }
 
     // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
-    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices, sailMatrices };
+    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices, sailMatrices, balloonDraws };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -950,7 +964,7 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices, sailMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
+  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices, sailMatrices, balloonDraws }, { viewProjection, inverseViewProjection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
     // Town light (#117): the nearest lamps and market lights light the walls
     // and asphalt on High. Low keeps the emissive windows and drops them.
@@ -985,6 +999,7 @@ export class View3D {
     this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const model of sailMatrices) this.renderer.draw(this.sails, model);
+    for (const balloon of balloonDraws) this.renderer.drawCloudLayer(balloon.handle, balloon.model, [1, 1, 1], BALLOON_UNLIT);
     for (const p of crowd) {
       this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
       if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
@@ -1117,7 +1132,7 @@ export class View3D {
     this.#studio?.dispose();
     const instanceHandles = Object.values(this.chunks).flatMap((list) => list.flatMap((chunk) => chunk.instanceHandles));
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle).filter(Boolean));
-    const handles = [...instanceHandles, ...Object.values(this.meshes), ...chunkHandles, ...this.instanceMeshes, this.clouds, this.water, this.rivers, this.rotor, ...(this.sails ? [this.sails] : []), this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...instanceHandles, ...Object.values(this.meshes), ...chunkHandles, ...this.instanceMeshes, this.clouds, this.water, this.rivers, this.rotor, ...(this.sails ? [this.sails] : []), ...Object.values(this.balloons), this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

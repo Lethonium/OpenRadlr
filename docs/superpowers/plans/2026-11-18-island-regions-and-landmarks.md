@@ -286,9 +286,11 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Files:** Modify `client/public/js/view3d/landmarks.js`, `client/public/js/view3d/view3d.js`, `routes/maps/valley.json`; Test `client/test/landmarks.test.js`, `client/test/view3d.test.js`
 
-- [ ] **Step 1: Failing tests:** `balloons` with `count: 4` yields 4 `balloon` movers on loops of 600–1,500 m radius at 250–450 m altitude around the entry's centre; the view moves each along its loop with the clock and draws it with fog scale 0.35 (like clouds) so it reads from far; drawn up to `light.fog[1]`.
-- [ ] **Step 2–4:** FAIL, implement (envelope as a 10-segment ellipsoid in two bright colour bands, basket box, ≤ 200 triangles); map entry at the valley centre (`x 600, y −300`), PASS.
-- [ ] **Step 5: Commit** `feat: Float hot-air balloons over the valley (#117)`.
+- [x] **Step 1: Failing tests:** `balloons` with `count: 4` yields 4 `balloon` movers on loops of 600–1,500 m radius at 250–450 m altitude around the entry's centre; the view moves each along its loop with the clock and draws it with fog scale 0.35 (like clouds) so it reads from far; drawn up to `light.fog[1]`.
+- [x] **Step 2–4:** FAIL, implement (envelope as a 10-segment ellipsoid in two bright colour bands, basket box, ≤ 200 triangles); map entry at the valley centre (`x 600, y −300`), PASS.
+- [x] **Step 5: Commit** `feat: Float hot-air balloons over the valley (#117)`.
+
+> Done: four `balloon` movers (`balloons` landmark, no baked mesh, no apron) on concentric loops of 600, 900, 1,200 and 1,500 m round map (600, -300) at 250-450 m, 6.5-9 m/s (a loop takes 7-26 minutes), alternating direction; `balloonAt` in `structures.js` gives the place from the clock (with a 3 m bob). `buildBalloon(palette)` is a ten-gore pear in two bright colours with flame, basket and four ropes, 180 triangles. `view3d.js` draws them with `drawCloudLayer` (fog scale 0.35, now taking an `unlit` argument) up to `light.fog[1]`, 1.7 times life size so they read from a few kilometres.
 
 ### Task 17: Winter pass and the 2D map
 

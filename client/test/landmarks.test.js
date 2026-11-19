@@ -11,6 +11,7 @@ import { floraOf } from "../public/js/view3d/scenery/flora.js";
 import { ChunkedMesh } from "../public/js/view3d/chunks.js";
 import { Occupancy } from "../public/js/view3d/features.js";
 import { LANDMARKS, buildLandmarks } from "../public/js/view3d/landmarks.js";
+import { balloonAt, buildBalloon } from "../public/js/view3d/structures.js";
 import { seededRandom } from "../public/js/view3d/noise.js";
 import { forestAt } from "../public/js/land/land.js";
 import { buildWorld } from "../public/js/view3d/world.js";
@@ -227,7 +228,7 @@ test("the lighthouse is in the village groups and its lamp in the bright group",
   assert.ok(near(on.chunks.village), "near twin");
   assert.ok(near(on.chunks.villageFar), "far twin");
   assert.ok(near(on.chunks.bright), "lamp");
-  assert.ok(on.movers.every((m) => m.kind === "sails"), "the only movers are the windmills' sails");
+  assert.ok(on.movers.every((m) => m.kind === "sails" || m.kind === "balloon"), "the only movers are the windmills' sails and the balloons");
 });
 
 test("no tree, cover or prop stands within the lighthouse's apron", () => {
@@ -370,4 +371,73 @@ test("scenery off builds no landmarks and no movers", () => {
   const off = buildWorld(new RouteGeometry(ROUTE), { network });
   assert.equal(off.movers, undefined);
   assert.equal(off.chunks.village, undefined);
+});
+
+// Balloons (#117).
+const balloons = (count = 4, center = [600, 300]) => LANDMARKS.balloons.build({ terrain: FLAT, center, yaw: 0, water: 0, random: seededRandom(5), count });
+
+test("balloons are movers on loops of 600 to 1,500 m round the entry's centre at 250 to 450 m", () => {
+  const built = balloons(4);
+  assert.equal(built.movers.length, 4);
+  for (const m of built.movers) {
+    assert.equal(m.kind, "balloon");
+    assert.deepEqual(m.center, [600, 300]);
+    assert.ok(m.radius >= 600 && m.radius <= 1500, `loop radius ${m.radius}`);
+    assert.ok(m.altitude >= 250 && m.altitude <= 450, `altitude ${m.altitude}`);
+    // A loop takes several minutes, not seconds and not hours.
+    const period = (Math.PI * 2) / Math.abs(m.speed);
+    assert.ok(period >= 240 && period <= 1800, `a loop takes ${period.toFixed(0)} s`);
+  }
+  assert.equal(new Set(built.movers.map((m) => m.radius)).size, 4, "no two on the same loop");
+  assert.equal(new Set(built.movers.map((m) => m.phase)).size, 4, "no two in step");
+  assert.equal(new Set(built.movers.map((m) => m.palette)).size, 4, "four colour schemes");
+});
+
+test("a balloon's loop is clock-driven: the same time gives the same place, a later one a different place", () => {
+  const [m] = balloons(1).movers;
+  assert.deepEqual(balloonAt(m, 100), balloonAt(m, 100));
+  assert.notDeepEqual(balloonAt(m, 100), balloonAt(m, 160));
+  for (const t of [0, 97, 2000]) {
+    const [x, y, z] = balloonAt(m, t);
+    assert.ok(Math.abs(Math.hypot(x - 600, z - 300) - m.radius) < 1e-6, "on its loop");
+    assert.ok(Math.abs(y - m.altitude) <= 4, "near its altitude");
+  }
+  const period = (Math.PI * 2) / Math.abs(m.speed);
+  const [a, , c] = balloonAt(m, 10);
+  const [b, , d] = balloonAt(m, 10 + period);
+  assert.ok(Math.hypot(a - b, c - d) < 1e-6, "back where it started after one loop");
+});
+
+test("a balloon is a pear of ten gores in two bright colours, a basket and ropes, in 200 triangles", () => {
+  for (let palette = 0; palette < 4; palette += 1) {
+    const mesh = buildBalloon(palette);
+    assert.ok(mesh.vertexCount / 3 <= 200, `${mesh.vertexCount / 3} triangles`);
+    assert.ok(mesh.vertexCount / 3 >= 100, "not a stub");
+    const colours = new Set(colorsOf(mesh).map((c) => c.map((v) => v.toFixed(2)).join()));
+    const bright = [...colours].filter((c) => Math.max(...c.split(",").map(Number)) > 0.85);
+    assert.ok(bright.length >= 2, `two bright envelope colours in ${[...colours]}`);
+    const ys = [];
+    for (let i = 1; i < mesh.positions.length; i += 3) ys.push(mesh.positions[i]);
+    assert.ok(Math.min(...ys) < -2, "the basket hangs below the envelope's mouth");
+    assert.ok(Math.max(...ys) > 14, "an envelope some 20 m tall");
+  }
+});
+
+test("balloons reserve no ground and add no baked mesh", () => {
+  const near = new ChunkedMesh();
+  const occupancy = new Occupancy();
+  const result = buildLandmarks([{ id: "b", kind: "balloons", center: [600, 300], yaw: 0, apron: 0, count: 4 }], { terrain: FLAT, near, far: new ChunkedMesh(), bright: null, occupancy, water: 0 });
+  assert.equal(result.movers.length, 4);
+  assert.equal(near.vertexCount, 0);
+  assert.ok(!occupancy.blocked(600, 300));
+});
+
+const balloonEntry = network.landmarks.find((l) => l.kind === "balloons");
+
+test("the valley has four balloons over its centre, and the scene carries them", () => {
+  assert.ok(balloonEntry, "balloons are in the map");
+  assert.deepEqual(balloonEntry.center, [600, 300], "map y is north-up, world z is −y");
+  const flying = on.movers.filter((m) => m.kind === "balloon");
+  assert.equal(flying.length, 4);
+  assert.deepEqual(sceneOf(on).movers.filter((m) => m.kind === "balloon"), flying);
 });

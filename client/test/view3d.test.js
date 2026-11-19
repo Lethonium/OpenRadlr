@@ -28,7 +28,7 @@ import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
-import { buildSails } from "../public/js/view3d/structures.js";
+import { balloonAt, buildBalloon, buildSails } from "../public/js/view3d/structures.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
@@ -368,7 +368,10 @@ class StubRenderer {
     this.draws.push({ handle, model, tint, pass: this.pass });
   }
   drawBright() {}
-  drawCloudLayer() {}
+  cloudDraws = [];
+  drawCloudLayer(handle, model, tint, unlit) {
+    this.cloudDraws.push({ handle, model, tint, unlit });
+  }
   drawTransparent() {}
   uploadWeather(data) {
     return { data };
@@ -426,6 +429,31 @@ test("a windmill's sails turn with the clock, and only within the rotor distance
   closeVec(first[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 10 * 0.3)));
   closeVec(second[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 12 * 0.3)));
   assert.notDeepEqual(Array.from(first[0]), Array.from(second[0]));
+});
+
+test("balloons fly their loops with the clock, drawn far like clouds, up to the fog", () => {
+  const near = { kind: "balloon", center: [0, 0], radius: 700, altitude: 300, phase: 0.4, speed: 0.01, palette: 2 };
+  const lost = { kind: "balloon", center: [90000, 0], radius: 700, altitude: 300, phase: 0, speed: 0.01, palette: 2 };
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), undefined, { movers: [near, lost] });
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  assert.deepEqual(view.balloons[2].mesh, buildBalloon(2), "its colour scheme is uploaded");
+  assert.deepEqual(Object.keys(view.balloons), ["2"], "one mesh per scheme in the air, not per balloon");
+  const drawn = () => renderer.cloudDraws.filter((d) => Object.values(view.balloons).includes(d.handle));
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  const first = drawn();
+  assert.equal(first.length, 1, "the balloon beyond the fog is not drawn");
+  assert.equal(first[0].handle, view.balloons[2]);
+  renderer.cloudDraws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS: 70, colors });
+  const second = drawn();
+  closeVec(first[0].model.slice(12, 15), balloonAt(near, 10), 1e-3);
+  closeVec(second[0].model.slice(12, 15), balloonAt(near, 70), 1e-3);
+  assert.notDeepEqual(Array.from(first[0].model), Array.from(second[0].model));
+});
+
+test("a world without balloons uploads none", () => {
+  const { view } = gymView([]);
+  assert.deepEqual(view.balloons, {});
 });
 
 test("a world without movers draws no sails", () => {

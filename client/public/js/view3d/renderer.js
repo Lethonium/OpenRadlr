@@ -655,12 +655,12 @@ export class Renderer {
     gl.drawArraysInstanced(gl.TRIANGLES, 0, handle.count, handle.instances);
   }
 
-  /** Clouds: bright, softly lit and only lightly fogged so they stay visible far away. */
-  drawCloudLayer(handle, model, tint = [1, 1, 1]) {
+  /** Clouds (and balloons): bright, softly lit and only lightly fogged so they stay visible far away. */
+  drawCloudLayer(handle, model, tint = [1, 1, 1], unlit = 0.8) {
     const gl = this.gl;
     gl.useProgram(this.program);
     gl.uniform1f(this.uniforms.u_fogScale, 0.35);
-    gl.uniform1f(this.uniforms.u_unlit, 0.8);
+    gl.uniform1f(this.uniforms.u_unlit, unlit);
     this.draw(handle, model, tint);
     gl.uniform1f(this.uniforms.u_fogScale, 1);
     gl.uniform1f(this.uniforms.u_unlit, 0);

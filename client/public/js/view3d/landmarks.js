@@ -331,12 +331,39 @@ function buildWindmills({ terrain, center, yaw, random, count = 5 }) {
   return { near: finish(near), far: finish(far), at, mills: stand, movers, keeps };
 }
 
+/**
+ * Hot-air balloons: no baked geometry, only `balloon` movers the view flies
+ * from the clock, each on its own loop round the landmark's centre. Radii
+ * spread over 600 to 1,500 m, altitudes over 250 to 450 m, and a loop takes
+ * a quarter of an hour or so; the direction alternates.
+ */
+function buildBalloons({ center, random, count = 4 }) {
+  const n = Math.max(1, Math.min(Math.floor(count), 8));
+  const movers = [];
+  for (let i = 0; i < n; i += 1) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const radius = 600 + t * 900;
+    const metresPerSecond = 6.5 + random() * 2.5;
+    movers.push({
+      kind: "balloon",
+      center: [center[0], center[1]],
+      radius: Math.round(radius),
+      altitude: Math.round(250 + ((i * 0.37 + random() * 0.15) % 1) * 200),
+      phase: random() * Math.PI * 2,
+      speed: ((i % 2 === 0 ? 1 : -1) * metresPerSecond) / radius,
+      palette: i % 4,
+    });
+  }
+  return { near: finish(new MeshBuilder()), far: null, at: [center[0], 0, center[1]], movers, keeps: [] };
+}
+
 /** Landmark kinds by name. Tasks add the rest here. */
 export const LANDMARKS = {
   lighthouse: { build: buildLighthouse },
   castle: { build: buildCastle },
   seaArch: { build: buildSeaArch },
   windmills: { build: buildWindmills },
+  balloons: { build: buildBalloons },
 };
 
 /**
