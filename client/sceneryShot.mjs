@@ -15,13 +15,14 @@ import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
 /** Settings written before the app starts, so it reads them on load. */
-export function settingsFor({ scenery, camera, route = null, view = "3d", time = null, quality = null }) {
+export function settingsFor({ scenery, camera, route = null, view = "3d", time = null, quality = null, biome = null }) {
   const settings = { "openride.view": view, "openradlr.showFps": "on" };
   if (scenery) settings["openradlr.scenery"] = scenery;
   if (camera) settings["openride.camera"] = camera;
   if (route) settings["openride.route"] = route;
   if (time) settings["openride.time"] = time;
   if (quality) settings["openride.quality"] = quality;
+  if (biome) settings["openride.biome"] = biome;
   return settings;
 }
 
@@ -48,7 +49,7 @@ export function pinCamera(source, eye, target) {
 
 /** `--name value` pairs, with defaults for a scenery shot. */
 export function parseShotArgs(argv) {
-  const opts = { url: "http://localhost:8080", out: null, at: "0", camera: "drone", scenery: "models", route: null, time: null, quality: null, eye: null, target: null, width: 1600, height: 900, wait: 9000, name: null };
+  const opts = { url: "http://localhost:8080", out: null, at: "0", camera: "drone", scenery: "models", route: null, time: null, quality: null, biome: null, eye: null, target: null, width: 1600, height: 900, wait: 9000, name: null };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const key = arg.startsWith("--") ? arg.slice(2) : null;

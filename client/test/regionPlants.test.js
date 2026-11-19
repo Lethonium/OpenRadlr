@@ -86,3 +86,14 @@ test("lavender reads purple up close: most of its vertices are flower-coloured",
   for (let i = 0; i < col.length / 4; i += 1) if (col[i * 4 + 2] > col[i * 4 + 1] + 0.15) purple += 1;
   assert.ok(purple / (col.length / 4) >= 0.6, `${purple} of ${col.length / 4}`);
 });
+
+test("a bare almond is branches only: no leaf or blossom colour", () => {
+  const bare = draw("almond", { colours: { bare: true, canopy: PINK } });
+  const col = bare.colors.toFloat32();
+  for (let i = 0; i < col.length; i += 4) assert.ok(!(col[i] > 0.9 && col[i + 1] > 0.7), "blossom pink in a bare tree");
+  assert.ok(triangles(bare) > 0 && triangles(bare) < triangles(draw("almond")));
+});
+
+test("a bare almond far away is still a trunk", () => {
+  assert.ok(triangles(draw("almond", { far: true, colours: { bare: true } })) > 0);
+});

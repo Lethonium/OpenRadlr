@@ -928,7 +928,7 @@ export function buildScenery(
     const region = style && spotHash(x, z, seed ^ 0x51ab) < top.weight && !(nearTown && nearTown(x, z) < TOWN_FADE);
     if (region) {
       const name = style.trees.plants[Math.floor(spotHash(x, z, seed ^ 0x1d3f) * style.trees.plants.length)];
-      PLANTS[name]({ mesh, x, y, z, random, colours: style.trees.canopy ? { canopy: style.trees.canopy } : {}, far });
+      PLANTS[name]({ mesh, x, y, z, random, colours: { ...(style.trees.canopy ? { canopy: style.trees.canopy } : {}), ...(style.trees.bare ? { bare: true } : {}) }, far });
       continue;
     }
     // A kit draws its own models; without one the biome keeps drawing cones.

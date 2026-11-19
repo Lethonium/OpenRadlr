@@ -50,3 +50,25 @@ test("an override merges into the style rather than replacing it", () => {
 test("an unknown kind has no style", () => {
   assert.equal(regionStyle("nope", temperate), null);
 });
+
+test("winter's bare blossom trees are marked bare", () => {
+  assert.equal(regionStyle("blossomValley", winter).trees.bare, true);
+  assert.notEqual(regionStyle("blossomValley", temperate).trees.bare, true);
+});
+
+test("under snow no region keeps flowers in its cover or its verge strip", () => {
+  const flowering = ["lavender", "wildflower", "alpineFlower"];
+  for (const kind of Object.values(REGION_KIND)) {
+    const cover = regionStyle(kind, winter)?.cover;
+    if (!cover) continue;
+    for (const plant of [...cover.plants, ...(cover.strip ?? [])]) assert.ok(!flowering.includes(plant), `${kind} keeps ${plant}`);
+  }
+});
+
+test("summer cover keeps its flowers", () => {
+  assert.ok(regionStyle("lavenderFields", temperate).cover.plants.includes("lavender"));
+});
+
+test("under snow the lavender fields keep some cover to draw", () => {
+  assert.ok(regionStyle("lavenderFields", winter).cover.plants.length > 0);
+});

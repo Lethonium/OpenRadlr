@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseShotArgs, pinCamera } from "../sceneryShot.mjs";
+import { parseShotArgs, pinCamera, settingsFor } from "../sceneryShot.mjs";
 
 test("--eye and --target take world points as x,y,z", () => {
   const opts = parseShotArgs(["--eye", "1,2.5,-3", "--target", "4,5,6"]);
@@ -19,4 +19,9 @@ test("pinCamera makes the chase camera hold the given eye and target", async () 
   const camera = new ChaseCamera().update();
   assert.deepEqual(camera.eye, [1, 2, 3]);
   assert.deepEqual(camera.target, [4, 5, 6]);
+});
+
+test("--biome is written as the rider's saved season", () => {
+  const opts = parseShotArgs(["--biome", "winter"]);
+  assert.equal(settingsFor(opts)["openride.biome"], "winter");
 });

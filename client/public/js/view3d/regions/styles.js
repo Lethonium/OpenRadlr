@@ -18,6 +18,9 @@ const frozen = (value) => {
   return value;
 };
 
+/** Cover plants that bloom: they have no place under snow. */
+const FLOWERING = new Set(["lavender", "wildflower", "alpineFlower"]);
+
 export const REGION_STYLES = frozen({
   [REGION_KIND.pineCoast]: {
     ground: { open: rgb(0.5, 0.52, 0.3), field: rgb(0.54, 0.54, 0.3), forest: rgb(0.3, 0.38, 0.2) },
@@ -91,5 +94,11 @@ function merge(base, override) {
 export function regionStyle(kind, biome) {
   const base = REGION_STYLES[kind];
   if (!base) return null;
-  return merge(base, biome?.regions?.[kind]);
+  const style = merge(base, biome?.regions?.[kind]);
+  // A biome with no flowers (snow) leaves the flowering plants out of the cover.
+  if (style.cover && biome?.flora?.density?.flowers === 0) {
+    const bare = (plants) => plants && Object.freeze(plants.filter((name) => !FLOWERING.has(name)));
+    return { ...style, cover: { ...style.cover, plants: bare(style.cover.plants), strip: bare(style.cover.strip) } };
+  }
+  return style;
 }

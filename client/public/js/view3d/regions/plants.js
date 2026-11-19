@@ -97,6 +97,17 @@ function almond({ mesh, x, y, z, random, colours, far }) {
   const leaf = colours.canopy ?? ALMOND_LEAF;
   const crown = height * (0.38 + random() * 0.08);
   const rotation = random() * Math.PI;
+  if (colours.bare) {
+    // Under snow: a trunk and a few bare limbs, no crown. The draws above are
+    // the same, so it stands where the leafy tree would.
+    mesh.box([x, y + height * 0.25, z], [0.4, height * 0.5, 0.4], TRUNK);
+    if (far) return;
+    for (let i = 0; i < 4; i += 1) {
+      const a = rotation + (i / 4) * Math.PI * 2;
+      mesh.segment([x, y + height * 0.45, z], [x + Math.cos(a) * crown, y + height * (0.75 + 0.1 * (i % 2)), z + Math.sin(a) * crown], 0.2, 0.2, TRUNK);
+    }
+    return;
+  }
   if (far) {
     trunkCard(mesh, x, y, z, height * 0.45, 0.25);
     mesh.ellipsoid([x, y + height * 0.7, z], [crown, crown * 0.8, crown], leaf, 2, 5, rotation);
