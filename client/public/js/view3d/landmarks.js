@@ -272,11 +272,71 @@ function buildSeaArch({ terrain, center, yaw, water, random }) {
   return { near: finish(near), far: finish(far), at, span };
 }
 
+const SANDSTONE = [[0.83, 0.7, 0.5], [0.79, 0.66, 0.46], [0.86, 0.74, 0.54]];
+const THATCH = [0.42, 0.31, 0.2];
+const MILL_SPACING = 75;
+const MILL_HEIGHT = 10.5;
+/** The far twin of a row has this many mills at most, to stay under 60 triangles. */
+const MILL_FAR_MAX = 5;
+
+/**
+ * A row of Mallorcan stone windmills: round, slightly tapering sandstone
+ * towers with a thatched cone cap, a door and a sail wheel (a `sails` mover,
+ * turned by the view). The row runs along the landmark's own x axis, the
+ * wheels face along its z axis; every tower is founded on its own ground.
+ */
+function buildWindmills({ terrain, center, yaw, random, count = 5 }) {
+  const mills = Math.max(1, Math.min(Math.floor(count), 9));
+  const { high } = footprint(terrain, center, 4);
+  const at = [center[0], high, center[1]];
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const world = (x, z) => [center[0] + cy * x + sy * z, center[1] - sy * x + cy * z];
+
+  const near = new MeshBuilder();
+  const far = new MeshBuilder();
+  const stand = [];
+  const movers = [];
+  for (let i = 0; i < mills; i += 1) {
+    const x = (i - (mills - 1) / 2) * MILL_SPACING;
+    const [wx, wz] = world(x, 0);
+    const ground = footprint(terrain, [wx, wz], 3.4);
+    const sink = ground.high - ground.low + 1.5;
+    const base = ground.high - high; // foot of the tower, in the frame of the row
+    stand.push([wx, ground.high, wz]);
+    const stone = SANDSTONE[i % SANDSTONE.length];
+
+    near.cylinder([x, base - sink, 0], 3.7, sink + 1.2, SANDSTONE[1], 12, 3.6, true);
+    near.cylinder([x, base, 0], 3.5, MILL_HEIGHT, stone, 12, 2.4, true);
+    near.cylinder([x, base + MILL_HEIGHT, 0], 3, 0.35, SANDSTONE[1], 12, 3, true);
+    near.cone([x, base + MILL_HEIGHT + 0.3, 0], 3.1, 2.8, THATCH, 12);
+    near.box([x, base + 1.2, -3.35], [1.1, 2.4, 0.5], DARK);
+    near.box([x + 0.2, base + 6.4, 3.0], [0.7, 1.1, 0.5], DARK);
+    // The axle runs from the cap out to the wheel.
+    near.box([x, base + 9.4, 2.7], [0.5, 0.5, 1.8], DARK);
+    if (i < MILL_FAR_MAX) {
+      far.cylinder([x, base, 0], 3.5, MILL_HEIGHT, stone, 4, 2.4, false);
+      const tip = [x, base + MILL_HEIGHT + 2.8, 0];
+      for (let k = 0; k < 4; k += 1) {
+        const a0 = ((k + 0.5) / 4) * Math.PI * 2;
+        const a1 = ((k + 1.5) / 4) * Math.PI * 2;
+        far.triangle([x + Math.cos(a0) * 3.1, base + MILL_HEIGHT, Math.sin(a0) * 3.1], tip, [x + Math.cos(a1) * 3.1, base + MILL_HEIGHT, Math.sin(a1) * 3.1], THATCH);
+      }
+    }
+    const [hx, hz] = world(x, 3.6);
+    movers.push({ kind: "sails", at: [hx, ground.high + MILL_HEIGHT - 1.1, hz], yaw: yaw - Math.PI / 2, phase: random() * Math.PI * 2, speed: 0.28 + random() * 0.12 });
+  }
+  // Each mill keeps its own patch clear; the row's centre apron would swallow the fields between.
+  const keeps = stand.map(([x, , z]) => [x, z, 13]);
+  return { near: finish(near), far: finish(far), at, mills: stand, movers, keeps };
+}
+
 /** Landmark kinds by name. Tasks add the rest here. */
 export const LANDMARKS = {
   lighthouse: { build: buildLighthouse },
   castle: { build: buildCastle },
   seaArch: { build: buildSeaArch },
+  windmills: { build: buildWindmills },
 };
 
 /**
@@ -292,8 +352,9 @@ export function buildLandmarks(list, { terrain, near, far = null, bright = null,
     const [x, z] = landmark.center;
     const yaw = Number(landmark.yaw ?? 0);
     const random = seededRandom(hashOf(landmark.id ?? landmark.kind));
-    const built = kind.build({ terrain, center: landmark.center, yaw, water, random });
-    occupancy?.add(x, z, landmark.apron ?? 25);
+    const built = kind.build({ terrain, center: landmark.center, yaw, water, random, count: landmark.count });
+    // A landmark may reserve several patches of its own; otherwise one apron round its centre.
+    for (const [kx, kz, radius] of built.keeps ?? [[x, z, landmark.apron ?? 25]]) occupancy?.add(kx, kz, radius);
     const matrix = placement(built.at, yaw);
     near.append(built.near, matrix);
     if (far && built.far) far.append(built.far, matrix);

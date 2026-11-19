@@ -14,6 +14,7 @@ import { LANDMARKS, buildLandmarks } from "../public/js/view3d/landmarks.js";
 import { seededRandom } from "../public/js/view3d/noise.js";
 import { forestAt } from "../public/js/land/land.js";
 import { buildWorld } from "../public/js/view3d/world.js";
+import { sceneOf } from "../public/js/view3d/worldScene.js";
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
 const VALLEY = read("../../routes/maps/valley.json");
@@ -140,6 +141,69 @@ test("an unknown landmark kind is skipped, not fatal", () => {
   assert.equal(near.vertexCount, 0);
 });
 
+
+const windmills = (terrain = FLAT, count = 5, yaw = 0) => LANDMARKS.windmills.build({ terrain, center: [0, 0], yaw, water: 0, random: seededRandom(1), count });
+
+test("windmills build a row of stone towers 60 to 90 m apart, each with sails at the cap", () => {
+  const built = windmills();
+  assert.equal(built.mills.length, 5);
+  assert.equal(built.movers.length, 5);
+  for (let i = 1; i < built.mills.length; i += 1) {
+    const gap = Math.hypot(built.mills[i][0] - built.mills[i - 1][0], built.mills[i][2] - built.mills[i - 1][2]);
+    assert.ok(gap >= 60 && gap <= 90, `gap ${gap.toFixed(1)} m`);
+  }
+  const first = built.mills[0];
+  const last = built.mills[4];
+  for (const mill of built.mills) {
+    const cross = (last[0] - first[0]) * (mill[2] - first[2]) - (last[2] - first[2]) * (mill[0] - first[0]);
+    assert.ok(Math.abs(cross) < 1, "the mills stand on one line");
+  }
+  built.mills.forEach((mill, i) => {
+    const mover = built.movers[i];
+    assert.equal(mover.kind, "sails");
+    assert.ok(Math.hypot(mover.at[0] - mill[0], mover.at[2] - mill[2]) < 6, "the sails are at their own tower");
+    assert.ok(mover.at[1] - mill[1] > 7 && mover.at[1] - mill[1] < 13, "up at the cap");
+    assert.ok(mover.speed > 0 && mover.speed < 0.6, "slowly");
+  });
+  assert.equal(new Set(built.movers.map((m) => m.phase)).size, 5, "no two wheels in step");
+});
+
+test("a windmill tower is round, tapers, and is warm sandstone", () => {
+  const built = windmills();
+  const [mx, world, mz] = built.mills[2];
+  const my = world - built.at[1]; // the mill's ground in the mesh's own frame
+  const p = built.near.positions;
+  const near = Array.from({ length: built.near.vertexCount }, (_, v) => v).filter((v) => Math.hypot(p[v * 3] - mx, p[v * 3 + 2] - mz) < 4.2);
+  const reach = (from, to) => Math.max(...near.filter((v) => p[v * 3 + 1] - my >= from && p[v * 3 + 1] - my <= to).map((v) => Math.hypot(p[v * 3] - mx, p[v * 3 + 2] - mz)));
+  assert.ok(reach(0, 1) > reach(7.5, 8.5) + 0.5, "narrower at the top");
+  assert.ok(Math.max(...near.map((v) => p[v * 3 + 1] - my)) >= 10, "10 m or more tall");
+  const sandstone = colorsOf(built.near).filter(([r, g, b]) => r > 0.7 && r > g && g > b + 0.1 && r < 0.95);
+  assert.ok(sandstone.length > 50, "sandstone");
+});
+
+test("the far twin of a windmill row stays under 60 triangles", () => {
+  const built = windmills();
+  assert.ok(triangles(built.far) > 0 && triangles(built.far) <= 60, `far has ${triangles(built.far)} triangles`);
+  assert.ok(built.near.vertexCount > built.far.vertexCount);
+  assert.ok(triangles(windmills(FLAT, 9).far) <= 60, "however many are asked for");
+});
+
+test("each windmill is founded on the ground under it on a slope", () => {
+  const slope = { height: (x, z) => 10 + x * 0.08 + z * 0.02 };
+  const built = windmills(slope);
+  built.mills.forEach(([x, y, z]) => assert.ok(Math.abs(y - slope.height(x, z)) < 0.5, "the stand point is the ground"));
+  const bottom = Math.min(...heights(built.near)) + built.at[1];
+  assert.ok(bottom < slope.height(built.mills[0][0], built.mills[0][2]), "the foot reaches into the slope");
+});
+
+test("buildLandmarks keeps every windmill clear and returns its sails as movers", () => {
+  const occupancy = new Occupancy();
+  const list = [{ id: "w", kind: "windmills", center: [0, 0], yaw: 0, apron: 14, count: 5 }];
+  const result = buildLandmarks(list, { terrain: FLAT, near: new ChunkedMesh(), far: new ChunkedMesh(), bright: null, occupancy, water: 0 });
+  assert.equal(result.movers.length, 5);
+  for (const mover of result.movers) assert.ok(occupancy.blocked(mover.at[0], mover.at[2]), "a mill's ground is reserved");
+});
+
 // The real map.
 const network = roadNetworkOf(VALLEY);
 const on = buildWorld(new RouteGeometry(ROUTE), { network, scenery: floraOf(SCENES, "temperate") });
@@ -163,7 +227,7 @@ test("the lighthouse is in the village groups and its lamp in the bright group",
   assert.ok(near(on.chunks.village), "near twin");
   assert.ok(near(on.chunks.villageFar), "far twin");
   assert.ok(near(on.chunks.bright), "lamp");
-  assert.deepEqual(on.movers, []);
+  assert.ok(on.movers.every((m) => m.kind === "sails"), "the only movers are the windmills' sails");
 });
 
 test("no tree, cover or prop stands within the lighthouse's apron", () => {
@@ -275,6 +339,31 @@ test("the sea arch is in the village groups", () => {
   const [ax, az] = seaArch.center;
   const near = (chunks) => (chunks ?? []).some((c) => Math.hypot(c.center[0] - ax, c.center[2] - az) < 100 && c.mesh.vertexCount > 0);
   assert.ok(near(on.chunks.village) && near(on.chunks.villageFar));
+});
+
+const windmillRow = network.landmarks.find((l) => l.kind === "windmills");
+
+test("the farm belt has a row of five windmills on dry ground clear of the roads", () => {
+  assert.ok(windmillRow, "windmills are in the map");
+  assert.equal(windmillRow.count, 5);
+  const mills = on.movers.filter((m) => m.kind === "sails");
+  assert.equal(mills.length, 5);
+  for (const m of mills) {
+    assert.ok(on.terrain.height(m.at[0], m.at[2]) > on.waterLevel + 2, "dry");
+    assert.ok(on.terrain.distanceToRoad(m.at[0], m.at[2]) >= 16, "clear of the road");
+  }
+});
+
+test("a road sees the windmills' sails turn over the trees", () => {
+  const ground = on.terrain.height(...windmillRow.center);
+  const seen = ["riverside-flats.json", "cape-loop.json", "island-tour.json", "balcony-road.json", "col-de-la-forge.json"].map((f) => seenAlong(f, windmillRow.center, ground, 18, windmillRow.apron, 100, 1200));
+  assert.ok(Math.max(...seen) >= 200, `the best road sees them along ${Math.max(...seen)} m`);
+});
+
+test("the windmills are in the village groups and the scene carries their sails", () => {
+  const near = (chunks) => (chunks ?? []).some((c) => Math.hypot(c.center[0] - windmillRow.center[0], c.center[2] - windmillRow.center[1]) < 200 && c.mesh.vertexCount > 0);
+  assert.ok(near(on.chunks.village) && near(on.chunks.villageFar));
+  assert.deepEqual(sceneOf(on).movers, on.movers);
 });
 
 test("scenery off builds no landmarks and no movers", () => {

@@ -28,6 +28,7 @@ import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
+import { buildSails } from "../public/js/view3d/structures.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
@@ -406,6 +407,34 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("a windmill's sails turn with the clock, and only within the rotor distance", () => {
+  const mills = [
+    { kind: "sails", at: [100, 12, 30], yaw: 0.4, phase: 0.7, speed: 0.3 },
+    { kind: "sails", at: [90000, 12, 30], yaw: 0, phase: 0, speed: 0.3 },
+  ];
+  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), undefined, { movers: mills });
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  assert.deepEqual(view.sails.mesh, buildSails(), "the sail wheel is uploaded");
+  const drawn = () => renderer.draws.filter((d) => d.handle === view.sails).map((d) => d.model);
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  const first = drawn();
+  assert.equal(first.length, 1, "the far wheel is not drawn");
+  renderer.draws.length = 0;
+  view.render({ riders: [rider], myId: 7, timeS: 12, colors });
+  const second = drawn();
+  closeVec(first[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 10 * 0.3)));
+  closeVec(second[0], multiply(placement(mills[0].at, 0.4), rotationXAbout([0, 0, 0], 0.7 + 12 * 0.3)));
+  assert.notDeepEqual(Array.from(first[0]), Array.from(second[0]));
+});
+
+test("a world without movers draws no sails", () => {
+  const { view, renderer } = gymView([]);
+  const rider = { ...workoutRider, device: "road", exercise: null };
+  view.render({ riders: [rider], myId: 7, timeS: 10, colors });
+  assert.equal(view.sails, null);
+  assert.ok(!renderer.draws.some((d) => d.handle === view.sails));
+});
 
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");

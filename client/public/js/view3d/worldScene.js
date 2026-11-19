@@ -15,6 +15,7 @@ export function sceneOf(world) {
   const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio, lights } = world;
   const scene = { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio };
   if (lights?.length) scene.lights = lights;
+  if (world.movers) scene.movers = world.movers;
   if (world.instanceModels) scene.instanceModels = world.instanceModels;
   if (world.sceneryNearRange !== null && world.sceneryNearRange !== undefined) scene.sceneryNearRange = world.sceneryNearRange;
   return scene;

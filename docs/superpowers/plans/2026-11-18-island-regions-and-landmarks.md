@@ -256,17 +256,21 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Interfaces:** `findViaductSite(roads, terrain, rivers, { minDeck = 12 }) -> {road, from, to, deck} | null` — a stretch over a river or valley where the road is ≥ `minDeck` m above the ground for ≥ 60 m. Not a map entry: found from the data. Road heights never change.
 
-- [ ] **Step 1: Failing tests:** on a synthetic road over a dip 20 m deep it returns that stretch; on flat ground it returns null; the arches' tops sit ≤ 0.4 m under the road surface and the piers reach the ground.
-- [ ] **Step 2–4:** FAIL, implement, PASS. On the real map: if null, log it in the plan and skip — do not move the road.
-- [ ] **Step 5: Commit** `feat: Carry a high road crossing on stone arches (#117)` (or record "no site" in the plan with no commit).
+- [x] **Step 1: Failing tests:** on a synthetic road over a dip 20 m deep it returns that stretch; on flat ground it returns null; the arches' tops sit ≤ 0.4 m under the road surface and the piers reach the ground.
+- [x] **Step 2–4:** FAIL, implement, PASS. On the real map: if null, log it in the plan and skip — do not move the road.
+- [x] **Step 5: Commit** `feat: Carry a high road crossing on stone arches (#117)` (or record "no site" in the plan with no commit).
+
+> Done: **no site**, no commit and no finder. Every route of the valley, probed at 10 m with the ground read 16 and 24 m to each side of the road (the higher side counts, so a road on a hillside does not pass as a crossing), has a deck at most 11 m above it, and only along ~20 m at the river bridges (cape-loop 10040, riverside-flats 4250, island-tour 12120, col-de-la-forge 12540); the hillside roads (forge-circuit 600-880 m, col-de-la-forge 5700-6000 m) are 13-17 m over the low side but cut into the slope. Nothing reaches `minDeck` 12 m for 60 m, and road heights do not move. A finder with no site on the map would be dead code, so none was committed.
 
 ### Task 14: Windmill row with turning sails
 
 **Files:** Modify `client/public/js/view3d/landmarks.js`, `client/public/js/view3d/view3d.js` (draw `movers` of kind `sails` like `rotors`, within `SCENE.rotorDistance`), `routes/maps/valley.json`; Test `client/test/landmarks.test.js`, `client/test/view3d.test.js`
 
-- [ ] **Step 1: Failing tests:** `windmills` with `count: 5` builds 5 stone towers on a line 60–90 m apart, each with a `sails` mover at the cap; the view turns a mover's sails by `speed × t + phase` (fake clock, two frames, different matrices); movers beyond `rotorDistance` are not drawn.
-- [ ] **Step 2–4:** FAIL, implement; map entry in the west farm belt (`x −1130, y −1540`, `count 5`), PASS.
-- [ ] **Step 5: Commit** `feat: Line the farm belt with Mallorcan windmills (#117)`.
+- [x] **Step 1: Failing tests:** `windmills` with `count: 5` builds 5 stone towers on a line 60–90 m apart, each with a `sails` mover at the cap; the view turns a mover's sails by `speed × t + phase` (fake clock, two frames, different matrices); movers beyond `rotorDistance` are not drawn.
+- [x] **Step 2–4:** FAIL, implement; map entry in the west farm belt (`x −1130, y −1540`, `count 5`), PASS.
+- [x] **Step 5: Commit** `feat: Line the farm belt with Mallorcan windmills (#117)`.
+
+> Done: windmills moved from map `x -1130, y -1540` (in a wood, no road sees it) to `x -1170, y -2000` (open farmland; row along world x from -1320 to -1020, z +2000; riverside-flats at 5560 m and cape-loop at 11360 m pass ~100 m away, ~220 m of road sees the row over the trees). Apron 16 per mill (the landmark reserves one patch per tower, not the row's centre); `windmills` takes `count` from the map (far twin covers at most 5 mills, 55 triangles). Sails are `buildSails` in `structures.js`, drawn by `view3d.js` within `SCENE.rotorDistance`; `sceneOf` carries `movers`.
 
 ### Task 15: Cathedral in the market city
 

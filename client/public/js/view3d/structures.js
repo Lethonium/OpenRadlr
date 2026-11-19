@@ -219,6 +219,30 @@ export function buildRotor(radius = 24) {
   return m.build();
 }
 
+const SAIL_CLOTH = [0.97, 0.94, 0.85];
+const SAIL_WOOD = [0.38, 0.27, 0.18];
+
+/**
+ * A Mallorcan windmill's wheel: eight triangular cloth sails on wooden spars,
+ * in the YZ plane facing +X and spinning around X, hub at the origin. The
+ * cloth is a fan, so the wheel reads as a pinwheel from far off.
+ */
+export function buildSails(radius = 10, count = 8) {
+  const m = new MeshBuilder();
+  m.ellipsoid([0.3, 0, 0], [1.3, 1, 1], SAIL_WOOD, 3, 8);
+  const at = (angle, along, across = 0) => [0, Math.cos(angle) * along - Math.sin(angle) * across, Math.sin(angle) * along + Math.cos(angle) * across];
+  for (let i = 0; i < count; i += 1) {
+    const angle = (i / count) * Math.PI * 2;
+    m.segment(at(angle, 0.5), at(angle, radius), 0.28, 0.28, SAIL_WOOD);
+    const root = at(angle, 1.8);
+    const tip = at(angle, radius);
+    const edge = at(angle, 1.8, radius * 0.38);
+    // Two faces a hair apart, each lit from its own side (coplanar ones would z-fight).
+    for (const x of [0.05, -0.05]) m.triangleFacing([x, root[1], root[2]], [x, tip[1], tip[2]], [x, edge[1], edge[2]], SAIL_CLOTH, [x, 0, 0]);
+  }
+  return m.build();
+}
+
 export function buildCow(brown = false) {
   const m = new MeshBuilder();
   const coat = brown ? PALETTE.cowBrown : PALETTE.cowWhite;
