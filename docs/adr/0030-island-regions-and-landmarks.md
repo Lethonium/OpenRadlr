@@ -71,8 +71,9 @@ budget ceiling for a phone.
   vertices, and the lavender, olive and almond views are over it in both: they
   are open, built-up views (farmland, houses, cover along both verges) that were
   already heavier than the wood before regions. For lavender the same spot
-  without regions was 1,682 calls and 4,829,664 vertices, so regions make it
-  lighter; no without-regions figure was taken for the olive and almond views.
+  without regions was 1,682 calls and 4,829,664 vertices, the olive view
+  1,559 and 4,795,830, the almond view 1,732 and 4,136,148: regions make every
+  open view lighter.
   The levers if a phone struggles are the cover densities, then the cover's
   near range.
 - Scenery off is unchanged: no regions, landmarks, cover or movers, and its
