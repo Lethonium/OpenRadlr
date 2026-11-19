@@ -19,6 +19,7 @@ import { floraOf } from "./public/js/view3d/scenery/flora.js";
 import { loadScenery } from "./public/js/view3d/scenery/load.js";
 import { buildWorld, landOf } from "./public/js/view3d/world.js";
 import { islandShape } from "./public/js/view3d/island.js";
+import { regionAt } from "./public/js/land/regions.js";
 import { ROCK_SLOPE, TREELINE, slopeAt, snowAt } from "./public/js/land/mountains.js";
 
 const args = process.argv.slice(2);
@@ -107,6 +108,19 @@ const roadLines = routes.map((route) => {
   }
   return { id: route.id, points, selected: route.id === ridden.id };
 });
+// The map's regions (#117) as the world reads them: the strongest region and its
+// weight per cell, so the wandering, blended edges show and no circle does.
+const roadNet = roadNetworkOf(network);
+const REGION_KINDS = ["pineCoast", "oliveTerraces", "blossomValley", "lavenderFields", "farmBelt", "deepWood", "wetland", "highCountry"];
+const regionCell = cell * 2;
+const regionCells = [];
+for (let z = bounds.z0 + regionCell / 2; z < bounds.z1; z += regionCell) {
+  for (let x = bounds.x0 + regionCell / 2; x < bounds.x1; x += regionCell) {
+    const top = regionAt(x, z, roadNet.regions, seed)[0];
+    if (top) regionCells.push([x - regionCell / 2, z - regionCell / 2, REGION_KINDS.indexOf(top.kind), top.weight]);
+  }
+}
+const landmarks = roadNet.landmarks.map((l) => ({ kind: l.kind, id: l.id, x: l.center[0], z: l.center[1], count: l.count ?? 1 }));
 const villages = (scene.chunks.village ?? []).map((chunk) => chunk.center.slice(0, 3));
 const farms = (scene.chunks.farm ?? []).map((chunk) => chunk.center.slice(0, 3));
 
@@ -220,6 +234,9 @@ const data = {
   roadLines,
   villages,
   farms,
+  regionCells,
+  regionCellSize: regionCell,
+  landmarks,
   water,
   selected: ridden.id,
   zones: proposal ? zones.map((zone) => ({ ...zone, ...zoneStyle[zone.kind] })) : [],
@@ -235,7 +252,7 @@ try {
   await page.evaluate((data) => {
     const canvas = globalThis.document.getElementById("map");
     const ctx = canvas.getContext("2d");
-    const { proposal, coast, bounds, cell, columns, rows, cells, roadLines, villages, farms, selected, zones, harbourLane } = data;
+    const { proposal, coast, bounds, cell, columns, rows, cells, roadLines, villages, farms, selected, zones, harbourLane, regionCells, regionCellSize, landmarks } = data;
     const width = canvas.width;
     const height = canvas.height;
     const panel = proposal ? 400 : 0;
@@ -272,6 +289,15 @@ try {
         ctx.fillRect(px, py, Math.ceil(cell * scale) + 1, Math.ceil(cell * scale) + 1);
       }
     }
+    // Region colour masses, blended by weight, over the land use.
+    const massColours = ["#2f7d5a", "#9c8a3a", "#e58aa8", "#8a5fc4", "#e0c24a", "#0f4a2a", "#2aa8a0", "#f2f4f8"];
+    for (const [x, z, kind, weight] of regionCells) {
+      const [px, py] = screen(x, z);
+      ctx.globalAlpha = Math.min(0.62, weight * 0.62);
+      ctx.fillStyle = massColours[kind];
+      ctx.fillRect(px, py, Math.ceil(regionCellSize * scale) + 1, Math.ceil(regionCellSize * scale) + 1);
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
     ctx.beginPath();
     coast.forEach(([x, z], i) => { const [px, py] = screen(x, z); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
@@ -306,6 +332,37 @@ try {
       ctx.strokeStyle = "#2b1d14";
       ctx.lineWidth = 2;
       ctx.stroke();
+    }
+
+    // Landmark symbols, drawn after the roads so they sit on top.
+    const symbol = (kind, px, py) => {
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#16120c";
+      ctx.fillStyle = "#fff6d8";
+      ctx.beginPath();
+      if (kind === "lighthouse") { ctx.moveTo(px, py - 15); ctx.lineTo(px + 10, py + 11); ctx.lineTo(px - 10, py + 11); ctx.closePath(); }
+      else if (kind === "castle") { ctx.rect(px - 11, py - 11, 22, 22); }
+      else if (kind === "seaArch") { ctx.moveTo(px - 12, py + 11); ctx.lineTo(px - 12, py - 2); ctx.arc(px, py - 2, 12, Math.PI, 0); ctx.lineTo(px + 12, py + 11); ctx.closePath(); }
+      else if (kind === "windmills") { ctx.moveTo(px, py - 14); ctx.lineTo(px + 14, py); ctx.lineTo(px, py + 14); ctx.lineTo(px - 14, py); ctx.closePath(); }
+      else if (kind === "balloons") { ctx.arc(px, py, 14, 0, Math.PI * 2); }
+      else { ctx.arc(px, py, 11, 0, Math.PI * 2); }
+      ctx.fill();
+      ctx.stroke();
+    };
+    for (const l of landmarks) {
+      const [px, py] = screen(l.x, l.z);
+      if (l.kind === "balloons") {
+        // The loops the balloons float on, 600 to 1,500 m round the centre.
+        ctx.setLineDash([6, 8]);
+        ctx.strokeStyle = "rgba(255, 246, 216, 0.7)";
+        ctx.lineWidth = 2;
+        for (const r of [600, 1500]) { ctx.beginPath(); ctx.arc(px, py, r * scale, 0, Math.PI * 2); ctx.stroke(); }
+        ctx.setLineDash([]);
+      }
+      symbol(l.kind, px, py);
+      ctx.fillStyle = "#fff6d8";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText(l.kind, px + 18, py + 5);
     }
 
     if (proposal) {
@@ -453,11 +510,20 @@ try {
         ["#ff8a3d", selected],
         ["#e07a45", "village"],
         ["#d8c06a", "farm"],
+        ["#2f7d5a", "pine coast"],
+        ["#9c8a3a", "olive terraces"],
+        ["#e58aa8", "blossom valley"],
+        ["#8a5fc4", "lavender"],
+        ["#e0c24a", "farm belt"],
+        ["#0f4a2a", "deep wood"],
+        ["#2aa8a0", "wetland"],
+        ["#f2f4f8", "high country"],
       ];
       let lx = pad;
-      const ly = height - 46;
+      let ly = height - 76;
       ctx.font = "17px sans-serif";
       for (const [colour, label] of legend) {
+        if (lx > width - 220) { lx = pad; ly += 30; }
         ctx.fillStyle = colour;
         ctx.fillRect(lx, ly - 15, 22, 16);
         ctx.fillStyle = "#f0ecdf";
