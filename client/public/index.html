@@ -630,6 +630,19 @@
               </div>
             </div>
           </div>
+          <!-- A locked rider asks for the PIN here (view/pinDialog.js); a lock in the UI, not encryption -->
+          <div id="pin-dialog" class="delete-confirm pin-dialog" role="dialog" aria-modal="true" aria-labelledby="pin-dialog-title" aria-describedby="pin-dialog-hint" hidden>
+            <form id="pin-dialog-form" class="delete-card" novalidate autocomplete="off">
+              <h2 id="pin-dialog-title"></h2>
+              <p id="pin-dialog-hint" class="field-hint"></p>
+              <input id="pin-dialog-input" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="PIN" data-i18n-attr="aria-label:pin.input" />
+              <p id="pin-dialog-error" class="error" role="alert" hidden></p>
+              <div class="delete-actions">
+                <button type="button" id="pin-dialog-cancel" class="secondary" data-i18n="pin.cancel">Cancel</button>
+                <button type="submit" id="pin-dialog-go" class="primary"></button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
 

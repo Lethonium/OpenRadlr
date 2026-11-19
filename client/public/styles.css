@@ -7331,3 +7331,19 @@ body.working-out #paddles {
 .goal-image-row {
   margin-top: 16px;
 }
+
+/* The PIN card reuses the delete card's layout, without its red warning border. */
+.pin-dialog .delete-card {
+  border-color: var(--border);
+}
+
+.pin-dialog .pin-input {
+  width: 100%;
+  text-align: center;
+  font-size: 24px;
+  letter-spacing: 0.4em;
+}
+
+.pin-dialog .delete-actions .primary {
+  width: auto;
+}
