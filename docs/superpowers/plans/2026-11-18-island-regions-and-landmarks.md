@@ -296,19 +296,22 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Files:** Modify `client/worldMap.mjs` (draw regions' colour masses and landmark symbols), `client/public/js/view3d/biomes/winter/index.js` if Task 5's overrides need visual tuning; Test `client/test/regionStyles.test.js`
 
-- [ ] **Step 1:** Screenshots of the almond valley and lavender meadow in winter; fix anything that reads wrong (Review Focus 3) with a test first.
-- [ ] **Step 2:** Regenerate the land-use map with regions and landmarks for the PR.
-- [ ] **Step 3: Commit** `fix: Bare the blossom and snow the lavender in winter (#117)` / `chore: Draw regions and landmarks on the land-use map (#117)`.
+- [x] **Step 1:** Screenshots of the almond valley and lavender meadow in winter; fix anything that reads wrong (Review Focus 3) with a test first.
+- [x] **Step 2:** Regenerate the land-use map with regions and landmarks for the PR.
+- [x] **Step 3: Commit** `fix: Bare the blossom and snow the lavender in winter (#117)` / `chore: Draw regions and landmarks on the land-use map (#117)`.
+
+> Done: winter showed full purple lavender and pink wildflowers on snow, and the almonds as grey crowns. Fixed with tests first: `regionStyle` drops lavender, wildflower and alpineFlower from the cover of any biome whose `flora.density.flowers` is 0; winter's lavender fields keep dry-grass cover and the blossom valley gets bare almonds (`trees.bare`, trunk and four limbs). Shots (`--biome winter --time day`, new option): `~/.cache/openradlr/screenshots/regions/winter-almond.png` and `winter-lavender.png` before, `winter-almond2.png` and `winter-lavender2.png` after. Land-use map with region masses and landmarks: `~/.cache/openradlr/screenshots/regions/landuse.png`.
 
 ### Task 18: Budget, ADR, PR
 
 **Files:** Create `docs/adr/0030-island-regions-and-landmarks.md`; Modify `docs/architecture.md` (regions and landmarks beside the settlement layer), this plan (Baseline and results)
 
-- [ ] **Step 1: Bench** each region view and the dense wood against the baseline; record a table here. Over budget → lower densities first, then shorten `cover` range, before anything else.
+- [x] **Step 1: Bench** each region view and the dense wood against the baseline; record a table here. Over budget → lower densities first, then shorten `cover` range, before anything else.
   - Baseline (Task 1): `sceneryBench.mjs --at 6490 --camera chase --scenery quaternius --frames 300` on rolling-hills (software WebGL): opaque 957 draw calls and 1,527,246 visible vertices (shadow 6 calls, 44,100 vertices); 1.88 fps (low 1.57), mean render CPU 3.1 ms; scene build 11.2 s.
   - Task 8 (cover): dense wood 6490: opaque 866 calls, 1,235,895 vertices (under baseline). Lavender meadow 4500: opaque 1,404 calls, 2,760,705 vertices; the same spot with cover disabled is 1,399 calls and 2,727,858 vertices, so the cover costs 5 calls and 33k vertices and the overage is the existing scene there — without regions the same spot is 1,682 calls and 4,829,664 vertices, so the regions make it lighter; the budget is met spot for spot.
   - Roadside tuning (after Task 9, owner's go): grass, shrub and wheat cover, a grass-and-flower strip 3 m beyond the shoulder, clumps of one to three plants, denser bands; stockier umbrella pines with a lobed crown; light dry-stone walls that follow the ground; greener pine coast; softer lavender stripes; a purple flower dome on each lavender, scattered (the owner turned down rows along the road as too straight). Dense wood 6490: 885 calls, 1,324,779 vertices (under baseline). Lavender meadow 4500: 1,421 calls, 3,219,099 vertices (Task 8 was 2,760,705; still far under the 4,829,664 without regions).
-- [ ] **Step 2: ADR 0030** — context (variety, Cykelapp lessons), decision (map regions + style tables + landmarks + movers), consequences (budget numbers, scenery off unchanged, winter overrides).
+  - Final (Task 18, `--frames 120`, chase, quaternius, software WebGL, opaque calls / vertices / fps): dense wood rolling-hills 6490: 894 / 1,329,213 / 1.95 (under baseline). City rolling-hills 300: 661 / 1,467,585 / 1.36 (under). Coast cape-loop 1000: 766 / 1,645,200 / 1.13 (calls under, vertices 8% over). Lavender rolling-hills 4500: 1,430 / 3,223,533 / 0.70. Olive balcony-road 4400: 1,274 / 3,252,756 / 0.72. Almond riverside-flats 8150: 1,438 / 3,160,956 / 0.73. The last three are over the wood baseline in both; they are open, built-up views (lavender is far under its no-regions 4.83M). Not tuned.
+- [x] **Step 2: ADR 0030** — context (variety, Cykelapp lessons), decision (map regions + style tables + landmarks + movers), consequences (budget numbers, scenery off unchanged, winter overrides).
 - [ ] **Step 3:** `make check` equivalent: lint, full client tests, `cargo test`, scenery-check — all green.
 - [ ] **Step 4:** Push `feat/island-regions`, open a **draft** PR against `feat/scenery-kit` titled `feat(client): Give the island regions, landmarks and warmer light`, screenshots via the `pr-screenshots` branch (gh contents API, 1× scale), assign RalfLeonFasler.
-- [ ] **Step 5: Commit** `docs: Record the region layer and its costs (#117)`.
+- [x] **Step 5: Commit** `docs: Record the region layer and its costs (#117)`.
