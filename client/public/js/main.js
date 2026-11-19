@@ -15,6 +15,7 @@ import { ControllerInput, MergedControllers, alternatives, controllerNavigates }
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
+import { createPinDialog } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
@@ -38,7 +39,8 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { addRider, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
+import { addRider, isLocked, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
+import { canOpen, unlock } from "./profile/pinLock.js";
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -290,6 +292,9 @@ const rawStorage = (() => {
  */
 let riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
 const activeRider = () => riders.active;
+/** The rider whose PIN was entered in this session, or who has none: a locked rider asks again after a reload or a switch (#114). */
+let unlockedRider = isLocked(riders, riders.active) ? null : riders.active;
+
 /** Everything that belongs to the active rider; device keys go through `rawStorage`. */
 const riderStore = riderStorage(rawStorage, activeRider);
 
@@ -1080,7 +1085,7 @@ function renderRiderSwitcher() {
   $("rider-picker").setAttribute("role", "radiogroup");
   $("rider-picker").setAttribute("aria-label", t("riders.switch"));
   $("rider-picker").replaceChildren(
-    ...rows.map((row) => choice(row.name, row.initial, () => switchRider(row.id), row.active)),
+    ...rows.map((row) => choice(row.name, row.initial, () => requestSwitch(row.id), row.active)),
     choice(t("riders.add"), "+", () => addNewRider()),
   );
 }
@@ -1105,6 +1110,7 @@ const canSwitchRider = () => !app.ride && !panels.isOpen && !$("setup").hidden;
  */
 function applyRoster(roster) {
   riders = roster;
+  unlockedRider = roster.active; // only called for a rider that may be opened (#114)
   saveRiders(rawStorage, riders);
   // The ride stores follow the active rider; those of the previous one stay with the
   // saves still using them (#115).
@@ -1148,11 +1154,32 @@ function applyRoster(roster) {
 
 /** Switches to rider `id` in place; false when a ride or a dialog is open or the rider is unknown. */
 function switchRider(id) {
-  if (!canSwitchRider() || !riders.ids.includes(id)) return false;
+  if (!canSwitchRider() || !riders.ids.includes(id) || !canOpen(riders, id, unlockedRider)) return false;
   if (id !== riders.active) applyRoster(setActive(riders, id));
   else toggleRiderPicker(false);
+  unlockedRider = id;
   $("rider-switch").focus();
   return true;
+}
+
+/** The picker's choice: a locked rider asks for the PIN first. */
+async function requestSwitch(id) {
+  if (!canOpen(riders, id, unlockedRider) && (await askForPin(id)) === null) return;
+  // Only a rider that really opens counts as unlocked.
+  const before = unlockedRider;
+  unlockedRider = id;
+  if (!switchRider(id)) unlockedRider = before;
+}
+
+/** Asks for rider `id`'s PIN: resolves to the PIN once it is right, or null when the rider backs out. */
+function askForPin(id) {
+  return app.pinDialog.ask({
+    title: t("pin.ask.title", { name: nameOf(id) }),
+    hint: t("pin.ask.hint"),
+    action: t("pin.ask.action"),
+    failed: t("pin.error.failed"),
+    check: async (pin) => ((await unlock(riders, id, pin, { subtle: globalThis.crypto?.subtle })) ? null : t("pin.error.wrong")),
+  });
 }
 
 /** Adds a rider with the current language and defaults, switches to them and asks for their name. */
@@ -3090,6 +3117,20 @@ function initProfile() {
     },
     stack: panels,
     fallbackFocus: () => root.querySelector("[data-menu-close]"),
+  });
+  app.pinDialog = createPinDialog({
+    els: {
+      root: $("pin-dialog"),
+      form: $("pin-dialog-form"),
+      title: $("pin-dialog-title"),
+      hint: $("pin-dialog-hint"),
+      input: $("pin-dialog-input"),
+      error: $("pin-dialog-error"),
+      cancel: $("pin-dialog-cancel"),
+      go: $("pin-dialog-go"),
+    },
+    stack: panels,
+    fallbackFocus: () => $("rider-switch"),
   });
   $("open-profile").addEventListener("click", () => openProfile());
   $("profile-export").addEventListener("click", exportProfileData);
