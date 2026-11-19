@@ -7,6 +7,7 @@
  * worker, so it has no DOM and no clock, and the layout it receives is the
  * only source of randomness that matters.
  */
+import { SETTLEMENT_KIND } from "../land/settlement.js";
 import { MeshBuilder, appendInstance } from "./meshBuilder.js";
 import { placement } from "./math.js";
 import { seededRandom } from "./noise.js";
@@ -275,26 +276,37 @@ export function buildSettlement(layout, {
 
   // Props: the square, the church, the windmill.
   for (const prop of layout.props) {
+    // The city's church slot takes the cathedral when the kit has one; the
+    // layout is untouched, the bigger building is pushed back from the square.
+    const cathedral = prop.role === "church" && layout.kind === SETTLEMENT_KIND.city && kit?.has?.("cathedral") ? kit.model("cathedral", random) : null;
+    let place = prop;
+    if (cathedral) {
+      const back = (cathedral.bounds.max[2] - cathedral.bounds.min[2]) / 2 - 7.6;
+      const from = layout.square?.center ?? layout.center;
+      const away = Math.hypot(prop.x - from[0], prop.z - from[1]) || 1;
+      place = { ...prop, x: prop.x + ((prop.x - from[0]) / away) * Math.max(0, back), z: prop.z + ((prop.z - from[1]) / away) * Math.max(0, back), radius: 12 };
+    }
+    // The church's own spot decides whether there is room; the cathedral then stands a little further back.
     if (occupancy?.blocked?.(prop.x, prop.z, prop.radius ?? 2)) continue;
-    const picked = kit?.model?.(prop.role, random) ?? null;
+    const picked = cathedral ?? kit?.model?.(prop.role, random) ?? null;
     if (!picked) {
       if (prop.role === "church" && biome.models.church) {
-        const y = groundUnder(terrain, prop.x, prop.z, prop.yaw, 10, 18);
+        const y = groundUnder(terrain, place.x, place.z, place.yaw, 10, 18);
         if (Number.isFinite(water) && y < water + 1) continue;
-        structures.append(biome.models.church(), placement([prop.x, y, prop.z], prop.yaw));
-        occupancy?.add?.(prop.x, prop.z, prop.radius ?? 7);
+        structures.append(biome.models.church(), placement([place.x, y, place.z], place.yaw));
+        occupancy?.add?.(place.x, place.z, place.radius ?? 7);
         props += 1;
       }
       continue;
     }
     const width = picked.bounds.max[0] - picked.bounds.min[0];
     const depth = picked.bounds.max[2] - picked.bounds.min[2];
-    const y = groundUnder(terrain, prop.x, prop.z, prop.yaw, width, depth);
+    const y = groundUnder(terrain, place.x, place.z, place.yaw, width, depth);
     if (Number.isFinite(water) && y < water + 1) continue;
-    const matrix = placement([prop.x, y, prop.z], prop.yaw);
+    const matrix = placement([place.x, y, place.z], place.yaw);
     appendInstance(into.near, picked.near, matrix);
     if (picked.far && into.far) appendInstance(into.far, picked.far, matrix);
-    occupancy?.add?.(prop.x, prop.z, Math.max(width, depth) * 0.5);
+    occupancy?.add?.(place.x, place.z, Math.max(width, depth) * 0.5);
     props += 1;
   }
 

@@ -23,19 +23,23 @@ function meshBox(w, h, d) {
 }
 const HOUSE = meshBox(7, 5, 6);
 const CHURCH = meshBox(9, 9, 15);
+const CATHEDRAL = meshBox(18, 30, 34);
 const KIT = {
-  has: (role) => ["houses", "church", "fountains", "stalls", "benches", "windmills"].includes(role),
+  has: (role) => ["houses", "church", "cathedral", "fountains", "stalls", "benches", "windmills"].includes(role),
   model: (role) => {
     if (role === "houses") return { near: HOUSE, far: HOUSE, bounds: { min: [-3.5, 0, -3], max: [3.5, 5, 3] } };
+    if (role === "cathedral") return { near: CATHEDRAL, far: CATHEDRAL, bounds: { min: [-9, 0, -17], max: [9, 30, 17] } };
     if (role === "church") return { near: CHURCH, far: CHURCH, bounds: { min: [-4.5, 0, -7.5], max: [4.5, 9, 7.5] } };
     return { near: HOUSE, far: null, bounds: { min: [-1, 0, -1], max: [1, 1, 1] } };
   },
 };
+/** A kit that has no cathedral: the church slot falls back to the church. */
+const KIT_NO_CATHEDRAL = { ...KIT, has: (role) => role !== "cathedral" && KIT.has(role), model: (role, r) => (role === "cathedral" ? null : KIT.model(role, r)) };
 const FLORA = {
   tree: ({ mesh, x, y, z }) => mesh.box([x, y + 1, z], [1, 2, 1], [0.2, 0.5, 0.2]),
 };
 
-const build = (layout = LAYOUT, terrain = TERRAIN, water = 0) => {
+const build = (layout = LAYOUT, terrain = TERRAIN, water = 0, kit = KIT) => {
   const structures = new MeshBuilder();
   const bright = new MeshBuilder();
   const near = new MeshBuilder();
@@ -47,7 +51,7 @@ const build = (layout = LAYOUT, terrain = TERRAIN, water = 0) => {
     bright,
     into: { near, far, trees },
     biome: temperate,
-    kit: KIT,
+    kit,
     flora: FLORA,
     water,
   });
@@ -102,4 +106,24 @@ test("a harbour builds its quay and boats", () => {
   const withQuay = build(harbour);
   const without = build({ ...harbour, quay: null, boats: [] });
   assert.ok(withQuay.structures.vertexCount > without.structures.vertexCount, "the quay and boats add geometry");
+});
+
+test("a city's church slot takes the cathedral when the kit has one", () => {
+  const withCathedral = build();
+  const without = build(LAYOUT, TERRAIN, 0, KIT_NO_CATHEDRAL);
+  const top = (built) => Math.max(...[...built.near.positions.data.slice(0, built.near.positions.length)].filter((_, i) => i % 3 === 1));
+  assert.ok(top(withCathedral) >= 30 - 1e-6, "the cathedral's 30 m shows");
+  assert.ok(top(without) < 30, "without it the church is the tallest");
+});
+
+test("a village keeps its church even when the kit has a cathedral", () => {
+  const village = layoutSettlement({ id: "southwest", kind: SETTLEMENT_KIND.village, center: [0, 0], radius: 220, seed: 2026, terrain: TERRAIN, roads: [ROAD] });
+  const built = build(village);
+  const top = Math.max(...[...built.near.positions.data.slice(0, built.near.positions.length)].filter((_, i) => i % 3 === 1));
+  assert.ok(top < 30);
+});
+
+test("the cathedral does not move the city's layout", () => {
+  const again = layoutSettlement({ id: "hilltop", kind: SETTLEMENT_KIND.city, center: [0, 0], radius: 400, seed: 2026, terrain: TERRAIN, roads: [ROAD] });
+  assert.deepEqual(again, LAYOUT);
 });

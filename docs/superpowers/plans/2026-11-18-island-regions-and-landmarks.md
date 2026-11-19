@@ -276,9 +276,11 @@ docker run --rm --network host -v $PWD/client:/app -v $HOME/.cache/openradlr:/ro
 
 **Files:** Modify `tools/scenery/assemble.mjs` (a `cathedral` model with role `cathedral`, ~2× the church, nave + two towers, with a `-far` twin), `client/public/assets/scenery/fantasy-town/*` (regenerated), `client/public/js/view3d/settlement.js:272-280` (kind `city` prefers role `cathedral` for the church slot); Test `client/test/sceneryAssemble.test.js`, `client/test/settlementBuild.test.js`
 
-- [ ] **Step 1: Failing tests:** the assembled cathedral is ≥ 1.8× the church's height and has a far twin; in a city with a kit holding `cathedral`, the church slot uses it; `layoutSettlement` output for the city is deep-equal to before (layout untouched).
-- [ ] **Step 2–4:** FAIL, implement, regenerate the kit (`node tools/scenery/assemble.mjs "<pack>/Models/GLB format" client/public/assets/scenery/fantasy-town`; the pack is under `/tmp/opencode/packs` or re-download Kenney Fantasy Town Kit), `make scenery-check`, PASS.
-- [ ] **Step 5: Commit** `feat: Crown the market city with a cathedral (#117)`.
+- [x] **Step 1: Failing tests:** the assembled cathedral is ≥ 1.8× the church's height and has a far twin; in a city with a kit holding `cathedral`, the church slot uses it; `layoutSettlement` output for the city is deep-equal to before (layout untouched).
+- [x] **Step 2–4:** FAIL, implement, regenerate the kit (`node tools/scenery/assemble.mjs "<pack>/Models/GLB format" client/public/assets/scenery/fantasy-town`; the pack is under `/tmp/opencode/packs` or re-download Kenney Fantasy Town Kit), `make scenery-check`, PASS.
+- [x] **Step 5: Commit** `feat: Crown the market city with a cathedral (#117)`.
+
+> Done: the Kenney pack could not be downloaded (kenney.nl answers 403), so the cathedral is drawn in `assemble.mjs` (`cathedral()`, 263 triangles, far twin 52) in the kit's stone and slate rather than from its tiles: nave, transept with a crossing spire, eight-sided apse, two west towers with spires, portal and rose window, 34 m against the church's 15 m. Add it to a kit with `node tools/scenery/assemble.mjs --cathedral-only <kit dir>` (no pack needed); no other model's file changed. The city's church slot takes it in `settlement.js`, stood back from the square by half its extra length; the layout is untouched.
 
 ### Task 16: Hot-air balloons
 

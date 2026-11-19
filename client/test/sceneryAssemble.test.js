@@ -5,7 +5,8 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PARTS, ROOFS, TILE, WALLS, building, cottage, farTwin, modelOf, put, recoloured } from "../../tools/scenery/assemble.mjs";
+import { readFileSync } from "node:fs";
+import { PARTS, ROOFS, TILE, WALLS, building, cathedral, cottage, farTwin, modelOf, put, recoloured } from "../../tools/scenery/assemble.mjs";
 
 const PACK_WALL = [0.77, 0.81, 0.97];
 const PACK_ROOF = [0.4, 0.78, 0.7];
@@ -88,4 +89,26 @@ test("a building's far twin is as tall as the building at most", () => {
   const { near, far } = building("c", cottage(fakeParts(), { floors: 2 }), { floors: 2, wall: WALLS.cream, roof: ROOFS.tile });
   assert.ok(Math.max(...far.triangles.map((t) => t[1])) <= near.bounds.max[1]);
   assert.equal(far.name, "c-far");
+});
+
+const KIT_DIR = new URL("../public/assets/scenery/fantasy-town/", import.meta.url);
+const kitFile = (name) => JSON.parse(readFileSync(new URL(`${name}.geo.json`, KIT_DIR), "utf8"));
+
+test("the cathedral stands at least 1.8 times the church's height, with two towers and a nave", () => {
+  const { near, far } = cathedral();
+  const church = kitFile("church");
+  assert.ok(near.bounds.max[1] >= 1.8 * church.bounds.max[1], `${near.bounds.max[1]} m against the church's ${church.bounds.max[1]} m`);
+  // Two towers: the highest points sit on both sides of the nave's axis.
+  const top = near.triangles.filter((t) => t[1] > near.bounds.max[1] - 0.5);
+  assert.ok(top.some((t) => t[0] < -1) && top.some((t) => t[0] > 1), "a tower on each side");
+  // A nave longer than the church, towers at its -z end like the church's.
+  assert.ok(near.bounds.max[2] - near.bounds.min[2] > 28);
+  assert.ok(far.triangles.length / 3 <= 60, "far twin within the far budget");
+  assert.equal(far.name, "cathedral-far");
+});
+
+test("the cathedral is written into the committed kit with role cathedral and a far twin", () => {
+  const manifest = JSON.parse(readFileSync(new URL("manifest.json", KIT_DIR), "utf8"));
+  assert.deepEqual(manifest.models.cathedral, { role: "cathedral", file: "cathedral", far: "cathedral-far" });
+  assert.ok(kitFile("cathedral").triangles.length > 0 && kitFile("cathedral-far").triangles.length > 0);
 });
