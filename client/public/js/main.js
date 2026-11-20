@@ -41,6 +41,7 @@ import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/l
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
 import { addRider, isLocked, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
 import { canOpen, unlock } from "./profile/pinLock.js";
+import { changePinFlow, removePinFlow, setPinFlow } from "./profile/pinFlows.js";
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -1180,6 +1181,45 @@ function askForPin(id) {
     failed: t("pin.error.failed"),
     check: async (pin) => ((await unlock(riders, id, pin, { subtle: globalThis.crypto?.subtle })) ? null : t("pin.error.wrong")),
   });
+}
+
+const pinDeps = () => ({ subtle: globalThis.crypto?.subtle });
+
+const pinTexts = () => ({
+  newTitle: t("pin.new.title"),
+  newHint: t("pin.new.hint"),
+  next: t("pin.new.next"),
+  confirmTitle: t("pin.confirm.title"),
+  confirmHint: t("pin.confirm.hint"),
+  save: t("pin.confirm.save"),
+  invalid: t("pin.error.invalid"),
+  mismatch: t("pin.error.mismatch"),
+  currentTitle: t("pin.current.title"),
+  wrong: t("pin.error.wrong"),
+  failed: t("pin.error.failed"),
+  removeTitle: t("pin.remove.title"),
+  remove: t("pin.remove.action"),
+});
+
+/** The PIN controls on the "Your data" page: set when the rider has none, change and remove when it has. */
+function renderPinSettings() {
+  const locked = isLocked(riders, riders.active);
+  $("pin-status").textContent = t(locked ? "pin.settings.on" : "pin.settings.off");
+  $("pin-set").hidden = locked;
+  $("pin-change").hidden = !locked;
+  $("pin-remove").hidden = !locked;
+}
+
+/** Runs one of the PIN flows for the active rider and keeps the result. */
+async function changeRiderPin(flow) {
+  const id = riders.active;
+  const next = await flow({ roster: riders, id, ask: (options) => app.pinDialog.ask(options), deps: pinDeps(), texts: pinTexts() });
+  if (!next || id !== riders.active) return;
+  riders = next;
+  saveRiders(rawStorage, riders);
+  // The rider just set or proved their PIN, so this rider stays open for the session.
+  unlockedRider = id;
+  renderPinSettings();
 }
 
 /** Adds a rider with the current language and defaults, switches to them and asks for their name. */
@@ -3133,6 +3173,9 @@ function initProfile() {
     fallbackFocus: () => $("rider-switch"),
   });
   $("open-profile").addEventListener("click", () => openProfile());
+  $("pin-set").addEventListener("click", () => changeRiderPin(setPinFlow));
+  $("pin-change").addEventListener("click", () => changeRiderPin(changePinFlow));
+  $("pin-remove").addEventListener("click", () => changeRiderPin(removePinFlow));
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
@@ -3630,6 +3673,7 @@ function dataSources() {
 
 /** The "Your data" page: each item with its count, export and delete. */
 function renderProfileData() {
+  renderPinSettings();
   const { items } = app.profileData;
   const rows = dataRows(items);
   $("profile-data").replaceChildren(...rows.map((row) => {

@@ -7347,3 +7347,9 @@ body.working-out #paddles {
 .pin-dialog .delete-actions .primary {
   width: auto;
 }
+
+.pin-settings {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
