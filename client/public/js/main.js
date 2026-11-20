@@ -759,6 +759,8 @@ function initSetup() {
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    // A locked rider starts nothing until their PIN was entered (#114).
+    if (!canOpen(riders, riders.active, unlockedRider)) return;
     const action = $("join").dataset.action;
     // The server rides with Strava accounts only: the button takes the rider there.
     if (action === "strava") return nativeApp?.signIn ? connectStravaInApp() : location.assign("/auth/strava");
@@ -1190,7 +1192,7 @@ function askForPin(id, { canForget = true } = {}) {
     hint: t("pin.ask.hint"),
     action: t("pin.ask.action"),
     failed: t("pin.error.failed"),
-    forgot: canForget && riders.ids.length > 1 ? t("pin.forgot") : "",
+    forgot: canForget ? t("pin.forgot") : "",
     check: async (pin) => ((await unlock(riders, id, pin, pinDeps())) ? null : t("pin.error.wrong")),
   });
 }
@@ -1199,27 +1201,43 @@ const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradl
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
- * the only way out of a forgotten PIN. If it was the active rider, the next one takes over.
+ * the only way out of a forgotten PIN. If it was the active rider, the next one takes over; if it
+ * was the only rider, a new rider with defaults takes their place (the last rider can't go).
  */
 async function forgetRider(id) {
-  const next = removeRider(riders, id);
-  if (!next || !canSwitchRider()) return;
+  if (!canSwitchRider() || !riders.ids.includes(id)) return;
+  const alone = riders.ids.length === 1;
   const own = riderStorage(rawStorage, () => id);
   // No export offer: a locked rider's data leaves only with their PIN.
-  const confirmed = await app.deleteConfirm.ask({
+  await app.deleteConfirm.ask({
     texts: deleteTexts("rider", { name: nameOf(id) }),
     onConfirm: async () => {
-      if (id === riders.active) applyRoster(setActive(riders, next.active));
+      let fresh = null;
+      if (alone) {
+        const locale = getLocale();
+        fresh = addRider(riders);
+        riders = fresh.roster;
+        saveLocale(locale, browserStorage());
+        applyRoster(fresh.roster);
+      } else if (id === riders.active) {
+        applyRoster(setActive(riders, removeRider(riders, id).active));
+      }
       const { roster, ok } = await deleteRiderFromRoster(riders, id, { storage: own, dbNames: riderDbNames(id), deleteDb: deleteIndexedDb });
       if (ok) {
         riders = roster;
         saveRiders(rawStorage, riders);
         renderRiderSwitcher();
       }
+      if (fresh) {
+        // Like a fresh install: stored defaults and a key pair for the new rider.
+        const generation = app.riderGeneration;
+        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id) });
+        const profile = await store.ensureKeys(store.save(store.load()));
+        if (generation === app.riderGeneration) app.profile = profile;
+      }
       return ok;
     },
   });
-  if (confirmed) await gateActiveRider();
 }
 
 /**
@@ -1231,8 +1249,11 @@ async function gateActiveRider() {
   while (!canOpen(riders, riders.active, unlockedRider)) {
     const id = riders.active;
     const card = $("pin-dialog");
+    const page = $("setup");
+    page.inert = true;
     card.classList.add("cover");
     const answer = await askForPin(id);
+    page.inert = false;
     card.classList.remove("cover");
     if (answer === PIN_FORGOTTEN) {
       await forgetRider(id);
