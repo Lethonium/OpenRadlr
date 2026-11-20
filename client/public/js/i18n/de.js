@@ -54,6 +54,7 @@ export default {
   "pin.remove.action": "PIN entfernen",
   "pin.error.invalid": "Nimm vier oder mehr Ziffern.",
   "pin.error.mismatch": "Die beiden PINs sind nicht gleich.",
+  "pin.forgot": "PIN vergessen? Fahrer löschen",
   "rider.name": "Name",
   "rider.weight": "Gewicht",
   "rider.ftp": "FTP (W)",

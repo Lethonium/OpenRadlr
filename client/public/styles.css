@@ -7353,3 +7353,10 @@ body.working-out #paddles {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+
+/* At startup the card covers the page, so a locked rider's data is not in view behind it. */
+.pin-dialog.cover {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

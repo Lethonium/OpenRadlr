@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPinDialog } from "../public/js/view/pinDialog.js";
+import { createPinDialog, PIN_FORGOTTEN } from "../public/js/view/pinDialog.js";
 
 const fakeEl = (extra = {}) => {
   const handlers = {};
@@ -32,8 +32,10 @@ const setup = () => {
     input: fakeEl(),
     error: fakeEl(),
     cancel: fakeEl(),
+    forgot: fakeEl(),
     go: fakeEl(),
   };
+
   const pushed = [];
   const stack = {
     push(panel) {
@@ -147,4 +149,18 @@ test("a_second_ask_closes_the_first_with_null", async () => {
   els.input.value = "1111";
   await els.form.fire("submit");
   assert.equal(await second, "1111");
+});
+
+test("the_forgot_button_shows_only_when_asked_for_and_resolves_to_the_forgotten_marker", async () => {
+  const { els, dialog } = setup();
+  const first = dialog.ask({ title: "PIN", action: "Open" });
+  assert.equal(els.forgot.hidden, true);
+  els.cancel.fire("click");
+  await first;
+  const second = dialog.ask({ title: "PIN", action: "Open", forgot: "Forgot your PIN?" });
+  assert.equal(els.forgot.hidden, false);
+  assert.equal(els.forgot.textContent, "Forgot your PIN?");
+  els.forgot.fire("click");
+  assert.equal(await second, PIN_FORGOTTEN);
+  assert.equal(els.root.hidden, true);
 });
