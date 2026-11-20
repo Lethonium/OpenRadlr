@@ -1,13 +1,17 @@
 /**
  * The card that asks for a rider's PIN (#114), over the start menu. It reuses the delete
  * confirmation's pattern: the DOM elements, the panel stack (Esc) and the document are
- * injected. `ask` resolves to the typed PIN, or to null when the rider backs out. The
- * caller's `check(pin)` returns a problem text to keep the card open (a wrong PIN), or
+ * injected. `ask` resolves to the typed PIN, to null when the rider backs out, or to
+ * PIN_FORGOTTEN when they chose the forgot link (only shown when the caller gives it a text).
+ * The caller's `check(pin)` returns a problem text to keep the card open (a wrong PIN), or
  * null to accept; the PIN itself never leaves this function except as the answer.
  */
 
+/** The answer when the rider says they forgot the PIN. */
+export const PIN_FORGOTTEN = Symbol("pin forgotten");
+
 /**
- * @param {{els: Record<"root" | "form" | "title" | "hint" | "input" | "error" | "cancel" | "go", any>, stack: {push: (panel: {close: () => void}) => () => void}, doc?: Document, fallbackFocus?: () => any}} options
+ * @param {{els: Record<"root" | "form" | "title" | "hint" | "input" | "error" | "cancel" | "forgot" | "go", any>, stack: {push: (panel: {close: () => void}) => () => void}, doc?: Document, fallbackFocus?: () => any}} options
  */
 export function createPinDialog({ els, stack, doc = globalThis.document, fallbackFocus = () => null }) {
   let current = null;
@@ -22,7 +26,7 @@ export function createPinDialog({ els, stack, doc = globalThis.document, fallbac
     remove();
     els.root.hidden = true;
     els.input.value = "";
-    if (answer === null) (opener?.isConnected ? opener : fallbackFocus())?.focus();
+    if (answer === null || answer === PIN_FORGOTTEN) (opener?.isConnected ? opener : fallbackFocus())?.focus();
     resolve(answer);
   }
 
@@ -31,6 +35,7 @@ export function createPinDialog({ els, stack, doc = globalThis.document, fallbac
     els.input.value = els.input.value.replace(/\D/g, "");
   });
   els.cancel.addEventListener("click", () => finish(null));
+  els.forgot.addEventListener("click", () => finish(PIN_FORGOTTEN));
   els.root.addEventListener("click", (event) => {
     if (event.target === els.root) finish(null);
   });
@@ -61,14 +66,16 @@ export function createPinDialog({ els, stack, doc = globalThis.document, fallbac
   });
 
   return {
-    /** Shows the card; resolves to the accepted PIN, or null when the rider backed out. */
-    ask({ title, hint = "", action, check = async () => null, failed = "" }) {
+    /** Shows the card; resolves to the accepted PIN, null when the rider backed out, or PIN_FORGOTTEN. */
+    ask({ title, hint = "", action, check = async () => null, failed = "", forgot = "" }) {
       finish(null);
       return new Promise((resolve) => {
         current = { check, failed, resolve, opener: doc.activeElement, remove: stack.push({ close: () => finish(null) }) };
         els.title.textContent = title;
         els.hint.textContent = hint;
         els.hint.hidden = hint === "";
+        els.forgot.textContent = forgot;
+        els.forgot.hidden = forgot === "";
         els.go.textContent = action;
         els.error.hidden = true;
         els.error.textContent = "";
