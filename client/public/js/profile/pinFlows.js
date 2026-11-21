@@ -30,9 +30,9 @@ async function askNewPin({ ask, texts }) {
 }
 
 /** The rider's current PIN, checked. Null when the rider backs out. */
-const askCurrentPin = ({ roster, id, ask, deps, texts, action }) =>
+const askCurrentPin = ({ roster, id, ask, deps, texts, title, action }) =>
   ask({
-    title: texts.currentTitle,
+    title,
     action,
     failed: texts.failed,
     check: async (pin) => ((await unlock(roster, id, pin, deps)) ? null : texts.wrong),
@@ -44,13 +44,13 @@ export async function setPinFlow({ roster, id, ask, deps, texts }) {
 }
 
 export async function changePinFlow({ roster, id, ask, deps, texts }) {
-  const current = await askCurrentPin({ roster, id, ask, deps, texts, action: texts.next });
+  const current = await askCurrentPin({ roster, id, ask, deps, texts, title: texts.currentTitle, action: texts.next });
   if (current === null) return null;
   const pin = await askNewPin({ ask, texts });
   return pin === null ? null : changePin(roster, id, current, pin, deps);
 }
 
 export async function removePinFlow({ roster, id, ask, deps, texts }) {
-  const current = await askCurrentPin({ roster, id, ask, deps, texts, action: texts.remove });
+  const current = await askCurrentPin({ roster, id, ask, deps, texts, title: texts.removeTitle, action: texts.remove });
   return current === null ? null : removePin(roster, id, current, deps);
 }
