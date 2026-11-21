@@ -15,6 +15,7 @@ import { ControllerInput, MergedControllers, alternatives, controllerNavigates }
 import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
+import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
@@ -38,7 +39,9 @@ import { UploadReceipts, uploadKey } from "./net/stravaUpload.js";
 import { bindStravaUpload } from "./view/stravaUploadView.js";
 import { levelAfterRace, levelAfterRide, levelLabel, levelOf } from "./profile/level.js";
 import { eventBanner, groupGapLine, eventResultRows, eventRideName, eventRows, renderEventList, sharingLine } from "./view/events.js";
-import { addRider, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
+import { addRider, isLocked, loadRiders, removeRider, saveRiders, setActive } from "./profile/riders.js";
+import { canOpen, unlock } from "./profile/pinLock.js";
+import { changePinFlow, removePinFlow, setPinFlow } from "./profile/pinFlows.js";
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
@@ -290,6 +293,9 @@ const rawStorage = (() => {
  */
 let riders = loadRiders(rawStorage, { orphanIds: riderIdsInStorage(rawStorage) });
 const activeRider = () => riders.active;
+/** The rider whose PIN was entered in this session, or who has none: a locked rider asks again after a reload or a switch (#114). */
+let unlockedRider = isLocked(riders, riders.active) ? null : riders.active;
+
 /** Everything that belongs to the active rider; device keys go through `rawStorage`. */
 const riderStore = riderStorage(rawStorage, activeRider);
 
@@ -753,6 +759,8 @@ function initSetup() {
   initRecovery();
   $("profile-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    // A locked rider starts nothing until their PIN was entered (#114).
+    if (!canOpen(riders, riders.active, unlockedRider)) return;
     const action = $("join").dataset.action;
     // The server rides with Strava accounts only: the button takes the rider there.
     if (action === "strava") return nativeApp?.signIn ? connectStravaInApp() : location.assign("/auth/strava");
@@ -1080,7 +1088,7 @@ function renderRiderSwitcher() {
   $("rider-picker").setAttribute("role", "radiogroup");
   $("rider-picker").setAttribute("aria-label", t("riders.switch"));
   $("rider-picker").replaceChildren(
-    ...rows.map((row) => choice(row.name, row.initial, () => switchRider(row.id), row.active)),
+    ...rows.map((row) => choice(row.name, row.initial, () => requestSwitch(row.id), row.active)),
     choice(t("riders.add"), "+", () => addNewRider()),
   );
 }
@@ -1105,6 +1113,8 @@ const canSwitchRider = () => !app.ride && !panels.isOpen && !$("setup").hidden;
  */
 function applyRoster(roster) {
   riders = roster;
+  // A locked rider stays locked unless their PIN was just entered; a rider with no PIN is open.
+  unlockedRider = canOpen(roster, roster.active, unlockedRider) ? roster.active : null;
   saveRiders(rawStorage, riders);
   // The ride stores follow the active rider; those of the previous one stay with the
   // saves still using them (#115).
@@ -1148,11 +1158,157 @@ function applyRoster(roster) {
 
 /** Switches to rider `id` in place; false when a ride or a dialog is open or the rider is unknown. */
 function switchRider(id) {
-  if (!canSwitchRider() || !riders.ids.includes(id)) return false;
+  if (!canSwitchRider() || !riders.ids.includes(id) || !canOpen(riders, id, unlockedRider)) return false;
   if (id !== riders.active) applyRoster(setActive(riders, id));
   else toggleRiderPicker(false);
+  unlockedRider = id;
   $("rider-switch").focus();
   return true;
+}
+
+/** The picker's choice: a locked rider asks for the PIN first. */
+async function requestSwitch(id) {
+  if (!canOpen(riders, id, unlockedRider)) {
+    const answer = await askForPin(id);
+    if (answer === PIN_FORGOTTEN) {
+      await forgetRider(id);
+      return;
+    }
+    if (answer === null) return;
+  }
+  // Only a rider that really opens counts as unlocked.
+  const before = unlockedRider;
+  unlockedRider = id;
+  if (!switchRider(id)) unlockedRider = before;
+}
+
+/**
+ * Asks for rider `id`'s PIN: resolves to the PIN once it is right, to null when the rider backs
+ * out, or to PIN_FORGOTTEN. The forgot link needs another rider to remain after the delete.
+ */
+function askForPin(id, { canForget = true } = {}) {
+  return app.pinDialog.ask({
+    title: t("pin.ask.title", { name: nameOf(id) }),
+    hint: t("pin.ask.hint"),
+    action: t("pin.ask.action"),
+    failed: t("pin.error.failed"),
+    forgot: canForget ? t("pin.forgot") : "",
+    check: async (pin) => ((await unlock(riders, id, pin, pinDeps())) ? null : t("pin.error.wrong")),
+  });
+}
+
+const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id));
+
+/**
+ * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
+ * the only way out of a forgotten PIN. If it was the active rider, the next one takes over; if it
+ * was the only rider, a new rider with defaults takes their place (the last rider can't go).
+ */
+async function forgetRider(id) {
+  if (!canSwitchRider() || !riders.ids.includes(id)) return;
+  const alone = riders.ids.length === 1;
+  const own = riderStorage(rawStorage, () => id);
+  // No export offer: a locked rider's data leaves only with their PIN.
+  await app.deleteConfirm.ask({
+    texts: deleteTexts("rider", { name: nameOf(id) }),
+    onConfirm: async () => {
+      let fresh = null;
+      if (alone) {
+        const locale = getLocale();
+        fresh = addRider(riders);
+        riders = fresh.roster;
+        saveLocale(locale, browserStorage());
+        applyRoster(fresh.roster);
+      } else if (id === riders.active) {
+        applyRoster(setActive(riders, removeRider(riders, id).active));
+      }
+      const { roster, ok } = await deleteRiderFromRoster(riders, id, { storage: own, dbNames: riderDbNames(id), deleteDb: deleteIndexedDb });
+      if (ok) {
+        riders = roster;
+        saveRiders(rawStorage, riders);
+        renderRiderSwitcher();
+      }
+      if (fresh) {
+        // Like a fresh install: stored defaults and a key pair for the new rider.
+        const generation = app.riderGeneration;
+        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id) });
+        const profile = await store.ensureKeys(store.save(store.load()));
+        if (generation === app.riderGeneration) app.profile = profile;
+      }
+      return ok;
+    },
+  });
+}
+
+/**
+ * A locked active rider opens only with their PIN: at startup, and after a delete lands on one.
+ * The card covers the page meanwhile. Backing out opens another rider that has no PIN; with
+ * none, the card asks again.
+ */
+async function gateActiveRider() {
+  if (canOpen(riders, riders.active, unlockedRider)) return;
+  coverPage(true);
+  try {
+    while (!canOpen(riders, riders.active, unlockedRider)) {
+      const id = riders.active;
+      const answer = await askForPin(id);
+      if (answer === PIN_FORGOTTEN) {
+        await forgetRider(id);
+      } else if (typeof answer === "string") {
+        unlockedRider = id;
+      } else {
+        const open = riders.ids.find((other) => canOpen(riders, other, unlockedRider));
+        if (open) await requestSwitch(open);
+      }
+    }
+  } finally {
+    coverPage(false);
+  }
+}
+
+/** Hides and disables the start menu, so a locked rider's data is never in view or usable meanwhile. */
+function coverPage(on) {
+  $("setup").inert = on;
+  document.body.classList.toggle("pin-gate", on);
+}
+
+const pinDeps = () => ({ subtle: globalThis.crypto?.subtle });
+
+const pinTexts = () => ({
+  newTitle: t("pin.new.title"),
+  newHint: t("pin.new.hint"),
+  next: t("pin.new.next"),
+  confirmTitle: t("pin.confirm.title"),
+  confirmHint: t("pin.confirm.hint"),
+  save: t("pin.confirm.save"),
+  invalid: t("pin.error.invalid"),
+  mismatch: t("pin.error.mismatch"),
+  currentTitle: t("pin.current.title"),
+  wrong: t("pin.error.wrong"),
+  failed: t("pin.error.failed"),
+  removeTitle: t("pin.remove.title"),
+  remove: t("pin.remove.action"),
+});
+
+/** The PIN controls on the "Your data" page: set when the rider has none, change and remove when it has. */
+function renderPinSettings() {
+  const locked = isLocked(riders, riders.active);
+  $("pin-status").textContent = t(locked ? "pin.settings.on" : "pin.settings.off");
+  $("pin-set").hidden = locked;
+  $("pin-change").hidden = !locked;
+  $("pin-remove").hidden = !locked;
+}
+
+/** Runs one of the PIN flows for the active rider and keeps the result. */
+async function changeRiderPin(flow) {
+  const id = riders.active;
+  const next = await flow({ roster: riders, id, ask: (options) => app.pinDialog.ask(options), deps: pinDeps(), texts: pinTexts() });
+  if (!next || id !== riders.active) return;
+  riders = next;
+  saveRiders(rawStorage, riders);
+  // The rider just set or proved their PIN, so this rider stays open for the session.
+  unlockedRider = id;
+  renderPinSettings();
 }
 
 /** Adds a rider with the current language and defaults, switches to them and asks for their name. */
@@ -3091,7 +3247,25 @@ function initProfile() {
     stack: panels,
     fallbackFocus: () => root.querySelector("[data-menu-close]"),
   });
+  app.pinDialog = createPinDialog({
+    els: {
+      root: $("pin-dialog"),
+      form: $("pin-dialog-form"),
+      title: $("pin-dialog-title"),
+      hint: $("pin-dialog-hint"),
+      input: $("pin-dialog-input"),
+      error: $("pin-dialog-error"),
+      cancel: $("pin-dialog-cancel"),
+      forgot: $("pin-dialog-forgot"),
+      go: $("pin-dialog-go"),
+    },
+    stack: panels,
+    fallbackFocus: () => $("rider-switch"),
+  });
   $("open-profile").addEventListener("click", () => openProfile());
+  $("pin-set").addEventListener("click", () => changeRiderPin(setPinFlow));
+  $("pin-change").addEventListener("click", () => changeRiderPin(changePinFlow));
+  $("pin-remove").addEventListener("click", () => changeRiderPin(removePinFlow));
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
@@ -3589,6 +3763,7 @@ function dataSources() {
 
 /** The "Your data" page: each item with its count, export and delete. */
 function renderProfileData() {
+  renderPinSettings();
   const { items } = app.profileData;
   const rows = dataRows(items);
   $("profile-data").replaceChildren(...rows.map((row) => {
@@ -3623,6 +3798,8 @@ function renderProfileData() {
 
 /** Downloads everything as one file; false (with the error on the page) when the storage couldn't be read. */
 async function exportProfileData() {
+  // A locked rider's data leaves the browser only with their PIN.
+  if (isLocked(riders, riders.active) && (await askForPin(riders.active, { canForget: false })) === null) return null;
   const now = Date.now();
   $("profile-data-error").hidden = true;
   try {
@@ -3687,22 +3864,32 @@ async function deleteActiveRider() {
   });
   if (!confirmed) return;
   app.profileDialog.close();
-  if (!switchRider(next.active)) return;
-  const { roster, ok } = await deleteRiderFromRoster(riders, id, {
-    storage: own,
-    dbNames: ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id)),
-    deleteDb: deleteIndexedDb,
-  });
-  if (!ok) {
-    switchRider(id);
-    await openProfile("data");
-    $("profile-data-error").textContent = t("profilePage.delete.failed");
-    $("profile-data-error").hidden = false;
-    return;
+  if (!canSwitchRider()) return;
+  // The next rider may have a PIN: their start menu stays out of view until it is asked for.
+  coverPage(isLocked(next, next.active));
+  try {
+    applyRoster(setActive(riders, next.active));
+    const { roster, ok } = await deleteRiderFromRoster(riders, id, {
+      storage: own,
+      dbNames: riderDbNames(id),
+      deleteDb: deleteIndexedDb,
+    });
+    if (!ok) {
+      unlockedRider = id; // the rider was open when the delete began
+      switchRider(id);
+      await openProfile("data");
+      $("profile-data-error").textContent = t("profilePage.delete.failed");
+      $("profile-data-error").hidden = false;
+      return;
+    }
+    riders = roster;
+    saveRiders(rawStorage, riders);
+    renderRiderSwitcher();
+  } finally {
+    coverPage(false);
   }
-  riders = roster;
-  saveRiders(rawStorage, riders);
-  renderRiderSwitcher();
+  // Covers the page again at once if the rider who took over has a PIN.
+  await gateActiveRider();
 }
 
 function textElement(tag, text) {
@@ -5696,6 +5883,7 @@ function frame() {
 initLocale({ storage: browserStorage(), languages: navigator.languages });
 relocalise();
 initSetup();
+gateActiveRider();
 
 // Installable app (PWA). Service workers need https:// or localhost.
 if ("serviceWorker" in navigator && globalThis.isSecureContext) {

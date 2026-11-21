@@ -7331,3 +7331,37 @@ body.working-out #paddles {
 .goal-image-row {
   margin-top: 16px;
 }
+
+/* The PIN card reuses the delete card's layout, without its red warning border. */
+.pin-dialog .delete-card {
+  border-color: var(--border);
+}
+
+.pin-dialog .pin-input {
+  width: 100%;
+  text-align: center;
+  font-size: 24px;
+  letter-spacing: 0.4em;
+}
+
+.pin-dialog .delete-actions .primary {
+  width: auto;
+}
+
+.pin-settings {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* At startup the card covers the page, so a locked rider's data is not in view behind it. */
+.pin-dialog.cover {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* While a locked rider's PIN is pending, the start menu is not drawn at all. */
+.pin-gate #setup {
+  visibility: hidden;
+}
