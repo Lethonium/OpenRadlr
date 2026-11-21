@@ -1246,24 +1246,30 @@ async function forgetRider(id) {
  * none, the card asks again.
  */
 async function gateActiveRider() {
-  while (!canOpen(riders, riders.active, unlockedRider)) {
-    const id = riders.active;
-    const card = $("pin-dialog");
-    const page = $("setup");
-    page.inert = true;
-    card.classList.add("cover");
-    const answer = await askForPin(id);
-    page.inert = false;
-    card.classList.remove("cover");
-    if (answer === PIN_FORGOTTEN) {
-      await forgetRider(id);
-    } else if (typeof answer === "string") {
-      unlockedRider = id;
-    } else {
-      const open = riders.ids.find((other) => canOpen(riders, other, unlockedRider));
-      if (open) await requestSwitch(open);
+  if (canOpen(riders, riders.active, unlockedRider)) return;
+  coverPage(true);
+  try {
+    while (!canOpen(riders, riders.active, unlockedRider)) {
+      const id = riders.active;
+      const answer = await askForPin(id);
+      if (answer === PIN_FORGOTTEN) {
+        await forgetRider(id);
+      } else if (typeof answer === "string") {
+        unlockedRider = id;
+      } else {
+        const open = riders.ids.find((other) => canOpen(riders, other, unlockedRider));
+        if (open) await requestSwitch(open);
+      }
     }
+  } finally {
+    coverPage(false);
   }
+}
+
+/** Hides and disables the start menu, so a locked rider's data is never in view or usable meanwhile. */
+function coverPage(on) {
+  $("setup").inert = on;
+  document.body.classList.toggle("pin-gate", on);
 }
 
 const pinDeps = () => ({ subtle: globalThis.crypto?.subtle });
@@ -3859,23 +3865,30 @@ async function deleteActiveRider() {
   if (!confirmed) return;
   app.profileDialog.close();
   if (!canSwitchRider()) return;
-  applyRoster(setActive(riders, next.active));
-  const { roster, ok } = await deleteRiderFromRoster(riders, id, {
-    storage: own,
-    dbNames: ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id)),
-    deleteDb: deleteIndexedDb,
-  });
-  if (!ok) {
-    unlockedRider = id; // the rider was open when the delete began
-    switchRider(id);
-    await openProfile("data");
-    $("profile-data-error").textContent = t("profilePage.delete.failed");
-    $("profile-data-error").hidden = false;
-    return;
+  // The next rider may have a PIN: their start menu stays out of view until it is asked for.
+  coverPage(isLocked(next, next.active));
+  try {
+    applyRoster(setActive(riders, next.active));
+    const { roster, ok } = await deleteRiderFromRoster(riders, id, {
+      storage: own,
+      dbNames: riderDbNames(id),
+      deleteDb: deleteIndexedDb,
+    });
+    if (!ok) {
+      unlockedRider = id; // the rider was open when the delete began
+      switchRider(id);
+      await openProfile("data");
+      $("profile-data-error").textContent = t("profilePage.delete.failed");
+      $("profile-data-error").hidden = false;
+      return;
+    }
+    riders = roster;
+    saveRiders(rawStorage, riders);
+    renderRiderSwitcher();
+  } finally {
+    coverPage(false);
   }
-  riders = roster;
-  saveRiders(rawStorage, riders);
-  renderRiderSwitcher();
+  // Covers the page again at once if the rider who took over has a PIN.
   await gateActiveRider();
 }
 

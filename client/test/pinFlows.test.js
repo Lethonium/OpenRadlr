@@ -111,3 +111,12 @@ test("removePinFlow_needs_the_current_pin", async () => {
 test("removePinFlow_backing_out_keeps_the_pin", async () => {
   assert.equal(await removePinFlow({ roster: await locked(), id: "main", ask: scripted([]).ask, deps: deps(), texts }), null);
 });
+
+test("removePinFlow_asks_with_the_remove_title_and_changePinFlow_with_the_current_one", async () => {
+  const removing = scripted(["1234"]);
+  await removePinFlow({ roster: await locked(), id: "main", ask: removing.ask, deps: deps(), texts });
+  assert.deepEqual(removing.asked, ["remove"]);
+  const changing = scripted(["1234"]);
+  await changePinFlow({ roster: await locked(), id: "main", ask: changing.ask, deps: deps(), texts });
+  assert.equal(changing.asked[0], "current");
+});

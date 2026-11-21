@@ -7360,3 +7360,8 @@ body.working-out #paddles {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* While a locked rider's PIN is pending, the start menu is not drawn at all. */
+.pin-gate #setup {
+  visibility: hidden;
+}
