@@ -69,7 +69,8 @@ jobs:
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
       - run: npm ci --no-audit --no-fund
       - run: npx cap sync android
-      - run: ./android/gradlew -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - run: ./android/gradlew -p android :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:bundleRelease
+      - run: node scripts/check-android-optimization.mjs
 
   image:
     name: Docker image
