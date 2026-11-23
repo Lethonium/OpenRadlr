@@ -1,6 +1,6 @@
 # 5. Own small WebGL renderer for the 3D view
 
-Date: 2026-10-14 · Status: accepted
+Date: 2026-10-14 · Status: superseded by [0030](0030-three-js-renderer.md)
 
 ## Context
 
