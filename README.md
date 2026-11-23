@@ -243,6 +243,7 @@ All settings live in `.env`; see [`.env.example`](.env.example) for descriptions
 - [Decisions](docs/adr/) — architecture decision records
 - [Contributing](CONTRIBUTING.md) — workflow, TDD, conventions
 - [Code of conduct](CODE_OF_CONDUCT.md) and [security policy](SECURITY.md)
+- [OpenSSF Best Practices assessment](docs/openssf-best-practices.md) — evidence and maintainer completion steps
 
 ## License
 
