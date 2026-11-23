@@ -11,7 +11,7 @@
  * meshes in call order, then transparent ones in call order.
  */
 import * as THREE from "../three.js";
-import { MESH_FRAGMENT, MESH_VERTEX, SKY_FRAGMENT, SKY_VERTEX } from "./shaders.js";
+import { DEPTH_FRAGMENT, DEPTH_VERTEX, MESH_FRAGMENT, MESH_VERTEX, SKY_FRAGMENT, SKY_VERTEX, WEATHER_FRAGMENT, WEATHER_VERTEX } from "./shaders.js";
 
 /** Three prepends the version itself for GLSL3, so the source must not carry it. */
 const glsl3 = (source) => source.replace(/^#version 300 es\n/, "");
@@ -59,6 +59,8 @@ function meshMaterial(transparent) {
   material.onBeforeRender = beforeRender;
   return material;
 }
+
+const IDENTITY = new THREE.Matrix4();
 
 export class ThreeRenderer {
   #pool = [];
@@ -109,6 +111,61 @@ export class ThreeRenderer {
     this.viewportRect = null;
     this.pending = null;
     this.clearColor = new THREE.Color();
+
+    this.depthMaterial = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: glsl3(DEPTH_VERTEX),
+      fragmentShader: glsl3(DEPTH_FRAGMENT),
+      uniforms: {
+        u_lightViewProjection: { value: new THREE.Matrix4() },
+        u_model: { value: new THREE.Matrix4() },
+      },
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1.5,
+      polygonOffsetUnits: 3,
+    });
+    this.depthMaterial.onBeforeRender = (renderer, scene, camera, geometry, object) => {
+      object.material.uniforms.u_model.value.fromArray(object.userData.model);
+    };
+    this.shadowScene = new THREE.Scene();
+    this.shadowCamera = new THREE.Camera();
+    this.shadow = null;
+
+    this.weatherMaterial = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: glsl3(WEATHER_VERTEX),
+      fragmentShader: glsl3(WEATHER_FRAGMENT),
+      uniforms: {
+        u_viewProjection: { value: new THREE.Matrix4() },
+        u_cameraPosition: { value: new THREE.Vector3() },
+        u_cameraRight: { value: new THREE.Vector3() },
+        u_cameraUp: { value: new THREE.Vector3() },
+        u_box: { value: new THREE.Vector3() },
+        u_fall: { value: new THREE.Vector2() },
+        u_drift: { value: new THREE.Vector2() },
+        u_size: { value: new THREE.Vector2() },
+        u_time: { value: 0 },
+        u_color: { value: new THREE.Vector4() },
+      },
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.weatherMaterial.onBeforeRender = (renderer, scene, camera, geometry, object) => {
+      const uniforms = object.material.uniforms;
+      const draw = object.userData;
+      uniforms.u_viewProjection.value.fromArray(draw.viewProjection);
+      uniforms.u_cameraPosition.value.fromArray(draw.camera);
+      uniforms.u_cameraRight.value.fromArray(draw.right);
+      uniforms.u_cameraUp.value.fromArray(draw.up);
+      uniforms.u_box.value.fromArray(draw.style.box);
+      uniforms.u_fall.value.fromArray(draw.style.fall);
+      uniforms.u_drift.value.fromArray(draw.style.drift);
+      uniforms.u_size.value.fromArray(draw.style.size);
+      uniforms.u_time.value = draw.timeS;
+      uniforms.u_color.value.fromArray(draw.style.color);
+    };
   }
 
   /** Uploads a mesh from MeshBuilder.build() and returns a handle. */
@@ -122,6 +179,69 @@ export class ThreeRenderer {
 
   dispose(handle) {
     handle.geometry.dispose();
+  }
+
+  /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
+  createShadowMap(size = 2048) {
+    const depthTexture = new THREE.DepthTexture(size, size);
+    depthTexture.type = THREE.UnsignedIntType;
+    depthTexture.minFilter = THREE.LinearFilter;
+    depthTexture.magFilter = THREE.LinearFilter;
+    depthTexture.compareFunction = THREE.LessEqualCompare;
+    const target = new THREE.WebGLRenderTarget(size, size, { depthTexture, depthBuffer: true });
+    this.shadow = { target, depthTexture, size, lightViewProjection: null, drawn: false, casters: null };
+    return true;
+  }
+
+  /** Starts rendering shadow casters into the shadow map. */
+  beginShadows(lightViewProjection) {
+    if (!this.shadow) return false;
+    this.flush();
+    this.shadow.lightViewProjection = lightViewProjection;
+    this.shadow.drawn = false;
+    this.shadow.casters = [];
+    this.depthMaterial.uniforms.u_lightViewProjection.value.fromArray(lightViewProjection);
+    return true;
+  }
+
+  drawShadowCaster(handle, model) {
+    this.shadow?.casters?.push({ handle, data: { model } });
+  }
+
+  endShadows() {
+    const shadow = this.shadow;
+    const casters = shadow?.casters;
+    if (!shadow || !casters) return;
+    shadow.casters = null;
+    this.#used = 0;
+    this.renderer.setRenderTarget(shadow.target);
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, shadow.size, shadow.size);
+    this.clearColor.setRGB(0, 0, 0);
+    this.renderer.setClearColor(this.clearColor, 1);
+    this.renderer.clear(true, true, false);
+    this.shadowScene.clear();
+    for (const draw of casters) this.shadowScene.add(this.#meshFor(draw, this.depthMaterial, 0));
+    this.renderer.render(this.shadowScene, this.shadowCamera);
+    this.renderer.setRenderTarget(null);
+    shadow.drawn = true;
+  }
+
+  /** Uploads camera-local weather particles: six vertices per flake, six floats each. */
+  uploadWeather(data) {
+    const geometry = new THREE.BufferGeometry();
+    const buffer = new THREE.InterleavedBuffer(data, 6);
+    geometry.setAttribute("a_corner", new THREE.InterleavedBufferAttribute(buffer, 2, 0));
+    geometry.setAttribute("a_seed", new THREE.InterleavedBufferAttribute(buffer, 4, 2));
+    const count = data.length / 6;
+    geometry.setDrawRange(0, count);
+    return { geometry, count, name: "weather" };
+  }
+
+  /** Draws the weather field around the camera; `style` is the biome's weather data. */
+  drawWeather(handle, draw) {
+    if (!this.pending) return;
+    this.pending.weather.push({ handle, data: draw });
   }
 
   resize(width, height) {
@@ -149,7 +269,7 @@ export class ThreeRenderer {
     this.flush();
     this.#setCamera(frame);
     this.#setFrameUniforms(frame);
-    this.pending = { viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [] };
+    this.pending = { viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [], weather: [] };
   }
 
   end() {
@@ -200,8 +320,9 @@ export class ThreeRenderer {
 
     this.scene.clear();
     this.scene.add(this.sky);
-    for (const draw of pass.opaque) this.scene.add(this.#meshFor(draw, this.meshMaterial));
-    for (const draw of pass.transparent) this.scene.add(this.#meshFor(draw, this.transparentMaterial));
+    pass.opaque.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.meshMaterial, index)));
+    pass.transparent.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.transparentMaterial, 1000 + index)));
+    pass.weather.forEach((draw) => this.scene.add(this.#meshFor(draw, this.weatherMaterial, 10000)));
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -210,7 +331,7 @@ export class ThreeRenderer {
     (transparent ? this.pending.transparent : this.pending.opaque).push({ handle, data });
   }
 
-  #meshFor({ handle, data }, material) {
+  #meshFor({ handle, data }, material, renderOrder) {
     let mesh = this.#pool[this.#used];
     if (!mesh) {
       mesh = new THREE.Mesh();
@@ -221,6 +342,7 @@ export class ThreeRenderer {
     mesh.geometry = handle.geometry;
     mesh.material = material;
     mesh.name = handle.name ?? "";
+    mesh.renderOrder = renderOrder;
     mesh.userData = data;
     return mesh;
   }
@@ -233,6 +355,8 @@ export class ThreeRenderer {
   }
 
   #setFrameUniforms(frame) {
+    const shadow = this.shadow;
+    const shadowStrength = shadow?.drawn ? (frame.shadowStrength ?? 0.6) : 0;
     for (const material of [this.meshMaterial, this.transparentMaterial]) {
       const u = material.uniforms;
       u.u_viewProjection.value.fromArray(frame.viewProjection);
@@ -246,8 +370,11 @@ export class ThreeRenderer {
       u.u_alpha.value = 1;
       u.u_unlit.value = 0;
       u.u_fogScale.value = 1;
-      u.u_shadowStrength.value = 0;
-      u.u_shadowTexel.value = 0;
+      u.u_shadowMap.value = shadow?.depthTexture ?? null;
+      u.u_shadowStrength.value = shadowStrength;
+      u.u_shadowTexel.value = shadow ? 1 / shadow.size : 0;
+      u.u_lightViewProjection.value.copy(IDENTITY);
+      if (shadow?.lightViewProjection) u.u_lightViewProjection.value.fromArray(shadow.lightViewProjection);
     }
     const s = this.skyMaterial.uniforms;
     s.u_inverseViewProjection.value.fromArray(frame.inverseViewProjection);

@@ -32,14 +32,18 @@ const mesh = (name) => ({
 
 /** A stand-in for Three's WebGLRenderer that records what it is asked to do. */
 function fakeRenderer() {
-  const calls = { clears: [], renders: [], viewports: [], scissors: [] };
-  const state = { scissorTest: false, scissor: null, viewport: null };
+  const calls = { clears: [], renders: [], viewports: [], scissors: [], targets: [], renderTargets: [] };
+  const state = { scissorTest: false, scissor: null, viewport: null, target: null };
   return {
     calls,
     autoClear: true,
     setPixelRatio() {},
     setSize() {},
     setClearColor() {},
+    setRenderTarget(target) {
+      state.target = target;
+      calls.targets.push(target);
+    },
     setViewport(x, y, width, height) {
       state.viewport = [x, y, width, height];
       calls.viewports.push(state.viewport);
@@ -56,6 +60,7 @@ function fakeRenderer() {
     },
     render(scene) {
       calls.renders.push(scene.children.map((child) => child.name));
+      calls.renderTargets.push(state.target);
     },
   };
 }
@@ -126,4 +131,63 @@ test("the camera uses the frame's view and projection", () => {
   renderer.begin(frame());
   assert.deepEqual([...renderer.camera.matrixWorldInverse.elements], [...view]);
   assert.deepEqual([...renderer.camera.projectionMatrix.elements], [...projection]);
+});
+
+const weatherData = () => new Float32Array(6 * 6 * 4);
+
+const weatherStyle = {
+  box: [40, 20, 40],
+  fall: [1, 2],
+  drift: [0.1, 0.2],
+  size: [0.1, 0.3],
+  color: [1, 1, 1, 0.8],
+};
+
+test("shadow casters render into the shadow target before the main pass", () => {
+  const { renderer, fake } = make();
+  assert.equal(renderer.createShadowMap(1024), true);
+  const target = renderer.shadow.target;
+  renderer.beginShadows(identity);
+  renderer.drawShadowCaster(renderer.upload(mesh("caster")), identity);
+  renderer.endShadows();
+  renderer.begin(frame());
+  renderer.end();
+  assert.deepEqual(fake.calls.renders, [["caster"], ["sky"]]);
+  assert.deepEqual(fake.calls.targets, [target, null]);
+  assert.deepEqual(fake.calls.renderTargets, [target, null]);
+});
+
+test("without a shadow pass the strength is zero", () => {
+  const { renderer } = make();
+  renderer.createShadowMap();
+  renderer.begin(frame({ shadowStrength: 0.6 }));
+  assert.equal(renderer.meshMaterial.uniforms.u_shadowStrength.value, 0);
+  renderer.end();
+});
+
+test("a shadow pass turns the strength on for the main pass", () => {
+  const { renderer } = make();
+  renderer.createShadowMap();
+  renderer.beginShadows(identity);
+  renderer.endShadows();
+  renderer.begin(frame({ shadowStrength: 0.6 }));
+  assert.equal(renderer.meshMaterial.uniforms.u_shadowStrength.value, 0.6);
+  renderer.end();
+});
+
+test("weather draws after transparent meshes", () => {
+  const { renderer, fake } = make();
+  renderer.begin(frame());
+  renderer.draw(renderer.upload(mesh("A")), identity);
+  renderer.drawTransparent(renderer.upload(mesh("B")), identity, { alpha: 0.5 });
+  renderer.drawWeather(renderer.uploadWeather(weatherData()), {
+    viewProjection: identity,
+    camera: [0, 0, 0],
+    right: [1, 0, 0],
+    up: [0, 1, 0],
+    timeS: 1,
+    style: weatherStyle,
+  });
+  renderer.end();
+  assert.deepEqual(fake.calls.renders, [["sky", "A", "B", "weather"]]);
 });
