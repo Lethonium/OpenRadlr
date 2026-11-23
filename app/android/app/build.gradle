@@ -27,7 +27,9 @@ android {
         versionCode 3
         versionName "0.1.0"
         buildConfigField 'boolean', 'BUNDLED_PREVIEW', 'false'
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner providers.gradleProperty('androidTestBuildType').getOrElse('debug') == 'release'
+            ? 'com.openradlr.app.ReleaseSmokeRunner' : 'androidx.test.runner.AndroidJUnitRunner'
+        testProguardFiles 'proguard-test-rules.pro'
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -52,11 +54,18 @@ android {
             if (uploadStoreFile) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     sourceSets.debug.assets.srcDir(layout.buildDirectory.dir('generated/previewAssets'))
+    // Opt in to a minimal runner against the exact optimized release APK.
+    // Avoid linking AndroidX test helpers against the target's R8-rewritten Kotlin runtime.
+    testBuildType providers.gradleProperty('androidTestBuildType').getOrElse('debug')
+    if (testBuildType == 'release') {
+        sourceSets.androidTest.java.exclude('**/*.java')
+    }
     sourceSets.test.resources.srcDir('../../../client/test/fixtures')
 }
 
