@@ -28,7 +28,7 @@ import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
-import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
+import { WEATHER_VERTEX } from "../public/js/view3d/shaders.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 
