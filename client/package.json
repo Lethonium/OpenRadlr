@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "screenshot": "node screenshot.mjs",
+    "world-shots": "node worldShots.mjs",
     "preload": "node preload.mjs"
   },
   "devDependencies": {
