@@ -25,3 +25,8 @@ install malicious software on their own machine.
 ## Supported versions
 
 OpenRadlr is a proof of concept. Only the latest release and `main` get fixes.
+
+## Dependency advisories
+
+See [dependency advisory status](docs/security-dependencies.md) for the reviewed
+findings, patched versions, and remaining upstream work.

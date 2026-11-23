@@ -6,7 +6,7 @@ members = ["crates/sim", "crates/server"]
 version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
-rust-version = "1.87"
+rust-version = "1.89"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
