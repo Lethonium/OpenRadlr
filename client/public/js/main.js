@@ -31,6 +31,7 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, appLoginResult, stravaMessage } from "./net/strava.js";
@@ -1988,6 +1989,7 @@ async function joinRide(restored = null) {
   wireConnection(connection);
   app.connection = connection;
   if (app.trainer instanceof PaddleTrainer) app.trainer.setFtp(app.profile.ftp);
+  const joinAt = joinAtMetres(location.search);
   app.riderId = await connection.join({
     ...app.profile,
     vehicleCode,
@@ -1997,7 +1999,14 @@ async function joinRide(restored = null) {
     screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
-    resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
+    // `?at=<metres>` joins part-way along the route instead of pedalling there first, so a
+    // screenshot can be taken at a chosen spot in one page load. Studio routes never take one.
+    resume:
+      joinAt !== null && route?.kind !== "studio"
+        ? { routeId: app.route.id, distanceM: joinAt }
+        : restored && route?.kind !== "studio"
+          ? restored.snapshot.resumePoint
+          : null,
   });
   const studio = route?.kind === "studio";
   closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
