@@ -113,7 +113,7 @@ shot again on the new world. Shots at 1× (software GL; see the screenshot notes
 - other riders on the road with name labels; the crowd at a sprint or summit
 - the spin studio (outside and inside), a statue, an outdoor gym with the workout rider
 - beer bike and tandem
-- winter biome, night/dusk preset, rain
+- winter biome with snowfall, the dusk preset (the old world has no rain)
 
 The script lives with the other shot helpers (`client/screenshot.mjs` style), takes a camera list, and is
 reused unchanged for the after shots in step 5.
@@ -123,8 +123,10 @@ reused unchanged for the after shots in step 5.
 - Vendor Three.js and the needed addons; solve the `three` specifier for browser and node (see
   Constraints).
 - New ADR (0030) superseding ADR 0005: Three.js as the renderer, vendored, and what stays pure and tested.
-- A Three.js scene in `view3d.js`'s place that draws the current terrain, road and a rider, so the app runs
-  on the new renderer from here on (rough look is fine; step 3 replaces it).
+- A `ThreeRenderer` with the same interface as today's `Renderer`, on Three.js with today's shaders, so the
+  whole app (menu, ride, studio) runs on Three.js from here on with the same look, and `renderer.js` is
+  deleted. Steps 3 and 4 replace these calls with a real scene graph. Riders' labels lose occlusion until
+  step 4.
 - Quality levels defined in one place (see Quality levels).
 
 ### Step 3: The new world (own design and plan)
