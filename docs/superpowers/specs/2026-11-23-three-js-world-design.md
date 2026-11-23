@@ -137,6 +137,12 @@ point for techniques, not its layout. The asset previewer replaces the model gal
 asset workbench. World generation runs off the main thread (as `worldWorker.js` does today). The winter biome
 becomes the island's winter season.
 
+**Earlier attempts are a source, not discarded (owner, 2026-11-23).** The scenery kit work in draft PR #127
+(and #119 under it) tried village placement, regions, landmarks and variety along the road. Step 3's design
+reviews it alongside the reference and takes what fits, ideas or code. Nothing from it is required: where
+another style or decision suits the new world better, that wins. Closing #127 at the end does not mean its
+ideas were rejected.
+
 ### Step 4: Move the features (own design and plan)
 
 Everything under Scope, onto the new world. Logic modules stay and keep their tests; only their drawing is
