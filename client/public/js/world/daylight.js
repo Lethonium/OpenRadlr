@@ -117,6 +117,10 @@ const FOG_SKY_MIX = 0.15;
 const OVERCAST = Object.freeze({ showers: 0.5, rain: 0.8, storm: 1, snow: 0.7 });
 const SUN_DIM = 0.75;
 const MAX_GREY = 0.6;
+/** Under cloud the sky carries more of the light (its share grows by this much) and the sun turns to this cool white (linear), by this much. */
+const SKY_FILL = 0.5;
+const OVERCAST_SUN = Object.freeze([0.7, 0.82, 1].map(toLinear));
+const SUN_COOL = 0.6;
 const OVERCAST_GREY = Object.freeze([0.5, 0.54, 0.6].map(toLinear));
 
 /**
@@ -134,6 +138,7 @@ const OVERCAST_GREY = Object.freeze([0.5, 0.54, 0.6].map(toLinear));
  * @property {number[]} fogColor linear RGB
  * @property {number} sunIntensity
  * @property {number} hemiIntensity
+ * @property {number} sunShare 1 in clear weather, less as cloud cuts the sun: the scale for shaders' own sun terms
  * @property {number} fogDensity
  * @property {number} exposure
  * @property {number} stars 0..1
@@ -173,7 +178,7 @@ export function environmentAt(preset, season, { haze = 1, weather, precipitation
     sun: Object.freeze(sun),
     moon: Object.freeze(moon),
     night,
-    sunColor: linear(preset.sunColor),
+    sunColor: Object.freeze(mix(linear(preset.sunColor), OVERCAST_SUN, overcast * SUN_COOL)),
     skyTop: greyed(linear(preset.zenith)),
     skyHorizon: greyed(horizon),
     skyBottom: Object.freeze(mix(horizon, linear(preset.ground), 0.6)),
@@ -181,7 +186,8 @@ export function environmentAt(preset, season, { haze = 1, weather, precipitation
     hemiGround: linear(preset.ground),
     fogColor: greyed(mix(horizon, linear(preset.zenith), FOG_SKY_MIX)),
     sunIntensity: look.sun * (1 - SUN_DIM * overcast),
-    hemiIntensity: look.hemi,
+    sunShare: 1 - SUN_DIM * overcast,
+    hemiIntensity: look.hemi * (1 + SKY_FILL * overcast),
     fogDensity,
     exposure: look.exposure,
     stars: night,

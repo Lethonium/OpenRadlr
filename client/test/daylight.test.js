@@ -97,6 +97,19 @@ test("an overcast environment has a weaker sun and greyer sky", () => {
   assert.ok(spread(grey.fogColor) < spread(clear.fogColor));
 });
 
+test("overcast light is a dull wet day: cooler sun, fuller sky light, less direct share", () => {
+  const preset = resolvePreset("day");
+  const clear = environmentAt(preset, "autumn");
+  const grey = environmentAt(preset, "autumn", { weather: { kind: "storm", strength: 1 } });
+  assert.equal(clear.sunShare, 1);
+  assert.ok(Math.abs(grey.sunShare - 0.25) < 1e-9);
+  assert.ok(grey.sunColor[2] / grey.sunColor[0] > clear.sunColor[2] / clear.sunColor[0], "cooler sun");
+  assert.ok(grey.hemiIntensity > clear.hemiIntensity, "more of the light is the sky's");
+  const lit = (e) => e.sunIntensity * 0.7 + e.hemiIntensity; // a ground facing the sky, sun at about 45 degrees
+  const ratio = lit(grey) / lit(clear);
+  assert.ok(ratio > 0.55 && ratio < 0.72, `ground at ${ratio} of clear day`);
+});
+
 test("without weather the environment is unchanged", () => {
   const preset = resolvePreset("day");
   const e = environmentAt(preset, "summer");

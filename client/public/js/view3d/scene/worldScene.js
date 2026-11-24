@@ -191,7 +191,7 @@ export function createWorldScene(world, { settings, track }) {
     },
     setEnvironment(env) {
       environment = env;
-      uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH);
+      uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH * (env.sunShare ?? 1));
       const key = env.night ? env.moon : env.sun;
       keyDirection.fromArray(key);
       sun.color.setRGB(...env.sunColor);

@@ -127,6 +127,6 @@ test("a lightning flash brightens the hemisphere for a moment", () => {
   world.update({ dt: 0.05, t: 31, camera: camera(), focus: [0, 0, 0] });
   world.setEnvironment(env("clear"));
   world.update({ dt: 1, t: 33, camera: camera(), focus: [0, 0, 0] });
-  assert.equal(hemisphere.intensity, base, "back to normal");
+  assert.equal(hemisphere.intensity, env("clear").hemiIntensity, "back to normal");
   world.dispose();
 });
