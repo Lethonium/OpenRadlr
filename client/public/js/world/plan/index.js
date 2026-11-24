@@ -5,11 +5,14 @@
  * world worker and returns typed arrays that transfer without copying.
  */
 import { waterLevel } from "../roads.js";
+import { planFarms } from "./farms.js";
 import { planFields } from "./fields.js";
+import { planFarIslands } from "./islands.js";
 import { planLandmarks } from "./landmarks.js";
 import { buildMasks } from "./masks.js";
 import { planRoadside } from "./roadside.js";
 import { planSettlements } from "./settlements/plan.js";
+import { planTurbines } from "./turbines.js";
 import { planWoods } from "./woods.js";
 
 /** Most trees and roadside items per detail level (the quality levels' names). */
@@ -27,6 +30,9 @@ export const PLAN_BUDGET = Object.freeze({
  * @property {Record<string, Float32Array>} roadside per plant or prop id, like `trees`
  * @property {ReturnType<typeof planSettlements>} settlements towns, villages and harbours: plots, streets, props
  * @property {import("./landmarks.js").Landmark[]} landmarks
+ * @property {import("./farms.js").Farm[]} farms
+ * @property {import("./turbines.js").Turbine[]} turbines
+ * @property {import("./islands.js").FarIsland[]} islands far hills at sea
  * @property {import("./masks.js").Masks} masks 0 free, 1 road, 2 river, 3 field, 4 verge, 5 built
  */
 
@@ -42,7 +48,10 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
   const fields = planFields({ terrain, roads, regions, seed, season, masks, water });
+  const farms = planFarms({ fields, terrain, roads, regions, seed, masks, water, settlements: villages });
+  const turbines = planTurbines({ terrain, roads, seed, masks, water, bounds });
+  const islands = planFarIslands({ terrain, seed: terrain.seed ?? seed });
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
   const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside });
-  return { trees, fields, roadside, settlements: villages, landmarks: places, masks };
+  return { trees, fields, roadside, settlements: villages, landmarks: places, farms, turbines, islands, masks };
 }

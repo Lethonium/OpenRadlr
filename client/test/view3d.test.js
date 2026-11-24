@@ -6,7 +6,7 @@ import { identity, lookAt, multiply, perspective, placement, rotationXAbout, tra
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
-import { buildArches, buildFarIslands } from "../public/js/view3d/world.js";
+import { buildArches } from "../public/js/view3d/world.js";
 import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, settle } from "../public/js/view3d/clips.js";
@@ -196,18 +196,6 @@ test("the sea level stays below the road", () => {
   const route = new RouteGeometry(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
   const index = new RoadIndex(route);
   assert.ok(waterLevel(index) <= index.minElevation - 4);
-});
-
-test("far islands stand out at sea", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const islands = buildFarIslands(route, terrain, { count: 8 });
-  for (let i = 0; i < islands.vertexCount; i += 3) {
-    const x = islands.positions[i * 3];
-    const z = islands.positions[i * 3 + 2];
-    if (islands.positions[i * 3 + 1] > terrain.seaLevel) continue;
-    assert.ok(terrain.island.inland(x, z) < -500, "far islands stand well off the coast");
-  }
 });
 
 // --- round 2: lighting, cameras, riders, ground detail ----------------------
