@@ -64,3 +64,9 @@ test("golden hour and dusk tint the map, and auto follows the clock", () => {
 test("an unknown biome falls back to the temperate theme", () => {
   assert.equal(rideMapTheme({ biome: "not-a-biome", timeMode: "day", colors: COLORS }).land, hex(MAP_COLORS.land));
 });
+
+test("the 2D map draws night as dusk", () => {
+  const night = rideMapTheme({ biome: "temperate", timeMode: "night", colors: COLORS });
+  const dusk = rideMapTheme({ biome: "temperate", timeMode: "dusk", colors: COLORS });
+  assert.deepEqual(night, dusk);
+});

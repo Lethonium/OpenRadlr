@@ -245,7 +245,7 @@ test("scenery avoids the lake", () => {
 // --- round 2: lighting, cameras, riders, ground detail ----------------------
 
 test("time-of-day presets are complete and auto follows the clock", async () => {
-  const { TIME_PRESETS, presetForHour, resolvePreset } = await import("../public/js/view3d/lighting.js");
+  const { TIME_PRESETS, presetForHour, resolvePreset } = await import("../public/js/world/daylight.js");
   for (const preset of Object.values(TIME_PRESETS)) {
     close(Math.hypot(...preset.sun), 1);
     assert.ok(preset.sun[1] > 0, "the sun is above the horizon");
@@ -254,13 +254,14 @@ test("time-of-day presets are complete and auto follows the clock", async () => 
   assert.equal(presetForHour(12), "day");
   assert.equal(presetForHour(7), "golden");
   assert.equal(presetForHour(18.5), "golden");
-  assert.equal(presetForHour(22), "dusk");
+  assert.equal(presetForHour(22), "night");
   assert.equal(resolvePreset("auto", new Date(2026, 0, 1, 13, 0)).key, "day");
   assert.equal(resolvePreset("bogus").label, "Day");
 });
 
 test("the shadow frustum contains the focus and is stable to small moves", async () => {
-  const { sunShadowMatrix, TIME_PRESETS } = await import("../public/js/view3d/lighting.js");
+  const { sunShadowMatrix } = await import("../public/js/view3d/lighting.js");
+  const { TIME_PRESETS } = await import("../public/js/world/daylight.js");
   const sun = TIME_PRESETS.golden.sun;
   const m = sunShadowMatrix(sun, [100, 50, -20], { halfSize: 60, mapSize: 2048 });
   const p = transformPoint(m, [100, 50, -20]);

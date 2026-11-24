@@ -212,6 +212,7 @@ export default {
   "drawer.timeDay": "Day",
   "drawer.timeGolden": "Golden hour",
   "drawer.timeDusk": "Dusk",
+  "drawer.timeNight": "Night",
   "drawer.biome": "Season",
   "drawer.biomeHint": "Season: changes how the world looks, not where anything is",
   "biome.temperate": "Temperate",

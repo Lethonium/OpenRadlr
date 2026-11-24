@@ -212,6 +212,7 @@ export default {
   "drawer.timeDay": "Tag",
   "drawer.timeGolden": "Goldene Stunde",
   "drawer.timeDusk": "Dämmerung",
+  "drawer.timeNight": "Nacht",
   "drawer.biome": "Jahreszeit",
   "drawer.biomeHint": "Jahreszeit: ändert nur das Aussehen der Welt, nicht wo etwas steht",
   "biome.temperate": "Gemäßigt",

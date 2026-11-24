@@ -154,6 +154,15 @@ export const winter = Object.freeze({
       fog: Object.freeze([190, 2700]),
       shadowStrength: 0.45,
     }),
+    night: Object.freeze({
+      sunColor: Object.freeze([0.36, 0.44, 0.66]),
+      zenith: Object.freeze([0.03, 0.05, 0.14]),
+      horizon: Object.freeze([0.09, 0.12, 0.22]),
+      ground: Object.freeze([0.1, 0.12, 0.18]),
+      cloudTint: Object.freeze([0.2, 0.24, 0.36]),
+      fog: Object.freeze([110, 2200]),
+      shadowStrength: 0.3,
+    }),
   }),
   terrainColor,
   flora: Object.freeze({

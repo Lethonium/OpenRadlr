@@ -2,7 +2,7 @@
 // of day. Pure: no DOM; labels come translated from i18n.
 import { t } from "../i18n/i18n.js";
 import { CAMERA_MODES } from "../view3d/chaseCamera.js";
-import { TIME_MODES } from "../view3d/lighting.js";
+import { TIME_MODES } from "../world/daylight.js";
 import { STUDIO_CAMERAS } from "../view3d/studioScene.js";
 import { LAYOUT_CHOICES, LAYOUT_LABELS } from "./hud.js";
 
@@ -10,7 +10,7 @@ const CAMERA_KEYS = {
   chase: "camera.chase", close: "camera.close", drone: "camera.drone", side: "camera.side",
   seat: "camera.seat", pov: "camera.pov", wide: "camera.wide", coach: "camera.coach",
 };
-const TIME_KEYS = { auto: "viewPopover.timeAuto", day: "drawer.timeDay", golden: "drawer.timeGolden", dusk: "drawer.timeDusk" };
+const TIME_KEYS = { auto: "viewPopover.timeAuto", day: "drawer.timeDay", golden: "drawer.timeGolden", dusk: "drawer.timeDusk", night: "drawer.timeNight" };
 
 const option = (id, label) => ({ id, label });
 

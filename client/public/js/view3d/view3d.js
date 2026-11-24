@@ -7,7 +7,8 @@ import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
-import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
+import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset } from "../world/daylight.js";
+import { sunShadowMatrix } from "./lighting.js";
 import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { ThreeRenderer } from "./threeRenderer.js";
 import {
@@ -422,7 +423,7 @@ export class View3D {
     this.identity = placement([0, 0, 0]);
   }
 
-  /** "auto" (by local clock), "day", "golden" or "dusk". */
+  /** "auto" (by local clock), "day", "golden", "dusk" or "night". */
   setTimeMode(mode) {
     if (TIME_MODES.includes(mode)) this.timeMode = mode;
   }
@@ -917,7 +918,7 @@ export class View3D {
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
       for (const chunk of chunks) {
         if (!chunkVisible(chunk, eye, forward, range)) continue;
-        if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
+        if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" || light.key === "night" ? 0.95 : 0.55);
         else this.renderer.draw(chunk.handle, this.identity);
       }
     }

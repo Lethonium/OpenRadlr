@@ -123,7 +123,7 @@ test("only a biome with weather grows a particle field", () => {
 });
 
 test("winter changes the air, not the sun's direction", async () => {
-  const { TIME_PRESETS, resolvedLight } = await import("../public/js/view3d/lighting.js");
+  const { TIME_PRESETS, resolvedLight } = await import("../public/js/world/daylight.js");
   const temperate = resolveBiome("temperate");
   const winter = resolveBiome("winter");
   for (const key of Object.keys(TIME_PRESETS)) {
