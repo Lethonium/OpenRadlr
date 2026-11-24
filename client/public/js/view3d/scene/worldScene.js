@@ -13,6 +13,7 @@ import { createForestLayer } from "./forestLayer.js";
 import { createFarmLayer } from "./farmLayer.js";
 import { createGrassLayer } from "./grassLayer.js";
 import { createIslandLayer } from "./islandLayer.js";
+import { createNightLights } from "./nightLights.js";
 import { createLandmarkLayer } from "./landmarkLayer.js";
 import { createRiverLayer } from "./riverLayer.js";
 import { createRoadLayer } from "./roadLayer.js";
@@ -39,6 +40,7 @@ const LIGHTNING = 3;
  * @property {number} [utcSeconds] wall-clock seconds, passed in by the view (nothing here reads a clock)
  * @property {import("../../three.js").Camera} camera
  * @property {number[]} focus world point the shadow box is centred on
+ * @property {number[]} [heading] the rider's unit forward on the ground, [x, z] (the headlight aims along it)
  * @property {number} [shadowHalf] half the shadow box's edge, metres
  * @property {boolean} [shadows] false switches the sun's shadow off for this frame (the drone)
  */
@@ -73,6 +75,7 @@ export function createWorldScene(world, { settings, track }) {
     landmarks: () => createLandmarkLayer(plan, { ...plants(), grain }),
     islands: () => createIslandLayer(plan, plants()),
     weather: () => createWeatherLayer(plants()),
+    nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
   const layers = [createSky({ uniforms, track })];
   if (world.ground) {
@@ -82,7 +85,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.weather());
+  layers.push(makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -128,7 +131,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "weather");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "weather", "nightLights");
   };
   setQuality(settings);
 

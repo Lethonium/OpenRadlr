@@ -36,14 +36,15 @@ export function nextQuality(level) {
  * own, larger is sparser), `reach` and `nearReach` how far (metres) the plants are drawn and how far as detailed ones
  * (cheap tufts beyond), `interiorReach` and `interiorSpacing` the plants across the field (0 = only the edges), `buildings` how far
  * (metres from a town's or farm's centre) its detailed mesh is drawn (`near`) and its cheap twin (`far`), `weather` the
- * rain streaks and snowflakes in the box round the camera.
+ * rain streaks and snowflakes in the box round the camera, `lampLights` the street lamps (nearest first) that
+ * light the ground at night, `headlightShadows` whether the rider's headlight casts shadows.
  * @typedef {Readonly<{pixelRatioMax: number, shadows: boolean, detail: boolean, shadowMapSize: number,
  *   msaa: number, ssao: Readonly<{samples: number, full: boolean}> | null, sunRays: number,
  *   bloom: boolean, depthOfField: boolean, resolutionFloor: number,
  *   grassRings: readonly Readonly<{r: number, dens: number, w: number, segs: number, h?: number}>[],
  *   treeLod: Readonly<{cards: number, hulls: number}>, leafShadows: boolean, roadsideReach: number,
  *   cropStalks: Readonly<{edgeBand: number, spacing: number, reach: number, nearReach: number, interiorReach: number, interiorSpacing: number}>,
- *   buildings: Readonly<{near: number, far: number}>, weather: Readonly<{rain: number, snow: number}>}>} QualitySettings
+ *   buildings: Readonly<{near: number, far: number}>, weather: Readonly<{rain: number, snow: number}>, lampLights: number, headlightShadows: boolean}>} QualitySettings
  */
 
 const rings = (...list) => Object.freeze(list.map((ring) => Object.freeze(ring)));
@@ -59,10 +60,10 @@ const RINGS = Object.freeze({
 });
 
 const SETTINGS = Object.freeze({
-  low: level({ weather: { rain: 1500, snow: 1500 }, pixelRatioMax: 1, shadows: false, detail: false, shadowMapSize: 0, msaa: 0, ssao: null, sunRays: 0, bloom: false, depthOfField: false, resolutionFloor: 0.6, grassRings: RINGS.low, treeLod: { cards: 420, hulls: 1400 }, leafShadows: false, roadsideReach: 120, cropStalks: { edgeBand: 2, spacing: 1.8, reach: 80, nearReach: 28, interiorReach: 0, interiorSpacing: 0 }, buildings: { near: 250, far: 1500 } }),
-  medium: level({ weather: { rain: 4000, snow: 3500 }, pixelRatioMax: 1.5, shadows: true, detail: true, shadowMapSize: 2048, msaa: 2, ssao: { samples: 10, full: false }, sunRays: 0, bloom: true, depthOfField: false, resolutionFloor: 0.7, grassRings: RINGS.medium, treeLod: { cards: 600, hulls: 2000 }, leafShadows: true, roadsideReach: 200, cropStalks: { edgeBand: 3, spacing: 1.3, reach: 130, nearReach: 40, interiorReach: 0, interiorSpacing: 0 }, buildings: { near: 400, far: 2500 } }),
-  high: level({ weather: { rain: 7000, snow: 6000 }, pixelRatioMax: 2, shadows: true, detail: true, shadowMapSize: 4096, msaa: 4, ssao: { samples: 12, full: false }, sunRays: 24, bloom: true, depthOfField: true, resolutionFloor: 0.75, grassRings: RINGS.high, treeLod: { cards: 750, hulls: 2600 }, leafShadows: true, roadsideReach: 300, cropStalks: { edgeBand: 4, spacing: 1, reach: 200, nearReach: 55, interiorReach: 35, interiorSpacing: 2.2 }, buildings: { near: 600, far: 4000 } }),
-  ultra: level({ weather: { rain: 12000, snow: 10000 }, pixelRatioMax: 2, shadows: true, detail: true, shadowMapSize: 4096, msaa: 8, ssao: { samples: 16, full: true }, sunRays: 40, bloom: true, depthOfField: true, resolutionFloor: 0.85, grassRings: RINGS.ultra, treeLod: { cards: 1300, hulls: 3600 }, leafShadows: true, roadsideReach: 400, cropStalks: { edgeBand: 5, spacing: 0.9, reach: 300, nearReach: 75, interiorReach: 55, interiorSpacing: 1.8 }, buildings: { near: 900, far: 6000 } }),
+  low: level({ lampLights: 0, headlightShadows: false, weather: { rain: 1500, snow: 1500 }, pixelRatioMax: 1, shadows: false, detail: false, shadowMapSize: 0, msaa: 0, ssao: null, sunRays: 0, bloom: false, depthOfField: false, resolutionFloor: 0.6, grassRings: RINGS.low, treeLod: { cards: 420, hulls: 1400 }, leafShadows: false, roadsideReach: 120, cropStalks: { edgeBand: 2, spacing: 1.8, reach: 80, nearReach: 28, interiorReach: 0, interiorSpacing: 0 }, buildings: { near: 250, far: 1500 } }),
+  medium: level({ lampLights: 4, headlightShadows: false, weather: { rain: 4000, snow: 3500 }, pixelRatioMax: 1.5, shadows: true, detail: true, shadowMapSize: 2048, msaa: 2, ssao: { samples: 10, full: false }, sunRays: 0, bloom: true, depthOfField: false, resolutionFloor: 0.7, grassRings: RINGS.medium, treeLod: { cards: 600, hulls: 2000 }, leafShadows: true, roadsideReach: 200, cropStalks: { edgeBand: 3, spacing: 1.3, reach: 130, nearReach: 40, interiorReach: 0, interiorSpacing: 0 }, buildings: { near: 400, far: 2500 } }),
+  high: level({ lampLights: 8, headlightShadows: true, weather: { rain: 7000, snow: 6000 }, pixelRatioMax: 2, shadows: true, detail: true, shadowMapSize: 4096, msaa: 4, ssao: { samples: 12, full: false }, sunRays: 24, bloom: true, depthOfField: true, resolutionFloor: 0.75, grassRings: RINGS.high, treeLod: { cards: 750, hulls: 2600 }, leafShadows: true, roadsideReach: 300, cropStalks: { edgeBand: 4, spacing: 1, reach: 200, nearReach: 55, interiorReach: 35, interiorSpacing: 2.2 }, buildings: { near: 600, far: 4000 } }),
+  ultra: level({ lampLights: 12, headlightShadows: true, weather: { rain: 12000, snow: 10000 }, pixelRatioMax: 2, shadows: true, detail: true, shadowMapSize: 4096, msaa: 8, ssao: { samples: 16, full: true }, sunRays: 40, bloom: true, depthOfField: true, resolutionFloor: 0.85, grassRings: RINGS.ultra, treeLod: { cards: 1300, hulls: 3600 }, leafShadows: true, roadsideReach: 400, cropStalks: { edgeBand: 5, spacing: 0.9, reach: 300, nearReach: 75, interiorReach: 55, interiorSpacing: 1.8 }, buildings: { near: 900, far: 6000 } }),
 });
 
 /**

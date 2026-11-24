@@ -18,6 +18,8 @@ const BALLOON_NEAR = 2;
 const BOB = Object.freeze({ height: 3, rate: 0.21, phase: 3 });
 /** The sails' turning speed, radians a second: 0.28 to 0.4 by mill. */
 const SAILS = Object.freeze({ base: 0.28, spread: 0.12 });
+/** The lighthouse beam: lantern height above the member's base, cone length and half-width, seconds a turn takes. */
+const BEAM = Object.freeze({ height: 28, length: 400, radius: 18, turn: 10, opacity: 0.16 });
 /** The building each landmark kind stands as. */
 const ASSET = Object.freeze({ lighthouse: "lighthouse", castle: "castle", seaArch: "seaArch", windmills: "windmill" });
 
@@ -47,6 +49,24 @@ export function createLandmarkLayer(plan, { season = "summer", settings, uniform
   const scratch = createScratch();
   const part = (asset, options) => asset.parts({ season, detail, ...options, own: scratch.own });
 
+  /** Two additive cones back to back, turning once per `BEAM.turn` seconds, standing at the lantern. */
+  const makeBeam = (member) => {
+    const beam = new THREE.Group();
+    beam.name = "lighthouse-beam";
+    beam.position.set(member.x, member.y + BEAM.height, member.z);
+    beam.visible = false;
+    const material = own(new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: BEAM.opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    for (const turn of [0, Math.PI]) {
+      const cone = own(new THREE.ConeGeometry(BEAM.radius, BEAM.length, 16, 1, true));
+      cone.translate(0, -BEAM.length / 2, 0).rotateZ(Math.PI / 2).rotateY(turn);
+      const mesh = new THREE.Mesh(cone, material);
+      mesh.frustumCulled = false;
+      beam.add(mesh);
+    }
+    object.add(beam);
+    return beam;
+  };
+
   const landmarks = plan.landmarks.filter((landmark) => ASSET[landmark.kind]).map((landmark, i) => {
     const asset = BUILDINGS[ASSET[landmark.kind]];
     const collector = createCollector();
@@ -58,7 +78,8 @@ export function createLandmarkLayer(plan, { season = "summer", settings, uniform
     });
     const lod = createLod(collector.merged(own), { materials, centre: [landmark.x, landmark.z], reach, name: `landmark-${landmark.id}` });
     object.add(lod.object);
-    return { id: landmark.id, kind: landmark.kind, x: landmark.x, z: landmark.z, near: lod.near, far: lod.far, glow: lod.glow, lod };
+    const beam = landmark.kind === "lighthouse" ? makeBeam(landmark.members[0]) : null;
+    return { id: landmark.id, kind: landmark.kind, x: landmark.x, z: landmark.z, near: lod.near, far: lod.far, glow: lod.glow, lod, beam };
   });
 
   const flights = plan.landmarks.filter((landmark) => landmark.kind === "balloons").flatMap((landmark) => landmark.members);
@@ -94,6 +115,10 @@ export function createLandmarkLayer(plan, { season = "summer", settings, uniform
       for (const entry of landmarks) {
         entry.lod.update(frame.camera);
         if (entry.kind === "lighthouse" && entry.glow) entry.glow.visible = lit && Math.hypot(x - entry.x, z - entry.z) < reach.far;
+        if (entry.beam) {
+          entry.beam.visible = lit && Math.hypot(x - entry.x, z - entry.z) < reach.far;
+          entry.beam.rotation.y = ((frame.t / BEAM.turn) * Math.PI * 2) % (Math.PI * 2);
+        }
       }
       for (const balloon of balloons) {
         const [bx, by, bz] = balloonAt(balloon.flight, frame.t);

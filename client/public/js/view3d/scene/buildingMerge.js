@@ -103,18 +103,18 @@ export function createLod(geometry, { materials, centre, reach, name }) {
     near,
     far,
     glow,
-    /** Shows the near mesh within `reach.near` of the centre, the far one out to `reach.far`. */
+    /** Shows the near mesh within `reach.near` of the centre, the far one out to `reach.far`; the glow (lit windows) shows with either, so far towns are lit at night. */
     update(camera) {
       const d = Math.hypot(camera.position.x - centre[0], camera.position.z - centre[1]);
       close = d < reach.near;
       if (near) near.visible = close;
       if (far) far.visible = !close && d < reach.far;
-      if (glow) glow.visible = close && lit;
+      if (glow) glow.visible = d < reach.far && lit;
     },
     /** Whether the glow shows at all (false by day). */
     light(on) {
       lit = on;
-      if (glow) glow.visible = close && lit;
+      if (glow) glow.visible = lit && (close || far?.visible === true);
     },
   };
 }

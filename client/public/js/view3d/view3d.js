@@ -238,6 +238,11 @@ export function gymCameraPose(gym, settings = GYM_CAMERA, focus = gym.center) {
 }
 
 /** The way a rider at `spot` faces: (−sin yaw, 0, −cos yaw). */
+/** The unit [x, z] of a forward vector on the ground (straight ahead of the world when it points up or down). */
+const groundHeading = ([x, , z]) => {
+  const length = Math.hypot(x, z);
+  return length > 1e-6 ? [x / length, z / length] : [0, -1];
+};
 const facingOf = (spot) => [-Math.sin(spot.yaw), 0, -Math.cos(spot.yaw)];
 
 /** How far ahead of `spot`, along the way it faces, the body parts (world model matrices) lie on average; 0 without parts. */
@@ -913,7 +918,7 @@ export class View3D {
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, shadows: shadows && lens.shadows });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
