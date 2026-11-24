@@ -13,6 +13,13 @@ import { OutputShader } from "../../../vendor/three/addons/shaders/OutputShader.
 import { QUAD_VERTEX, GRADE_GLSL, aoFragment, compositeFragment } from "./shaderChunks.js";
 import { atmosOptions, postPlan } from "./postPlan.js";
 
+/** Camera heights above the rider (metres) over which depth of field fades out. */
+const DOF_FADE = Object.freeze([15, 45]);
+const smoothstep = (edge0, edge1, x) => {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};
+
 /** Occlusion from depth (half or full resolution), sun rays and far depth of field in one pass. */
 class AtmosPass extends Pass {
   constructor({ aoSamples, aoFull, raySamples }) {
@@ -31,7 +38,7 @@ class AtmosPass extends Pass {
         tDiffuse: { value: null }, tDepth: { value: null }, tAO: { value: null }, uAORes: { value: new THREE.Vector2(1, 1) },
         uAOStr: { value: aoSamples > 0 ? 0.9 : 0 }, uAOFar: { value: 500 }, uNear: { value: 0.1 }, uFar: { value: 1000 },
         uSun: { value: new THREE.Vector2(0.5, 0.8) }, uRays: { value: 0 }, uRayCol: { value: new THREE.Color(1, 0.9, 0.75) },
-        uAspect: { value: 1 }, uDof: { value: 0 }, uDofA: { value: 220 }, uDofB: { value: 1600 }, uPx: { value: new THREE.Vector2(1, 1) },
+        uAspect: { value: 1 }, uDof: { value: 0 }, uDofA: { value: 320 }, uDofB: { value: 2200 }, uPx: { value: new THREE.Vector2(1, 1) },
       },
       vertexShader: QUAD_VERTEX,
       fragmentShader: compositeFragment(raySamples),
@@ -118,7 +125,7 @@ export function createPost(renderer, target, settings) {
   const sun = new THREE.Vector3();
   const eye = new THREE.Vector3();
   return {
-    render(camera, env, { ride = false } = {}) {
+    render(camera, env, { ride = false, height = 0 } = {}) {
       if (atmos) {
         atmos.camera = camera;
         const u = atmos.compositeMaterial.uniforms;
@@ -129,7 +136,8 @@ export function createPost(renderer, target, settings) {
         u.uRays.value = !env.night && facing > 0 && options.raySamples > 0 ? 1 : 0;
         const peak = Math.max(...env.sunColor, 1e-3);
         u.uRayCol.value.setRGB(env.sunColor[0] / peak, env.sunColor[1] / peak, env.sunColor[2] / peak);
-        u.uDof.value = ride && options.depthOfField ? 1 : 0;
+        // Far-only and mild, as in the reference's ride views; a camera high above the rider (a drone, a pinned view) is sharp.
+        u.uDof.value = ride && options.depthOfField ? 1 - smoothstep(DOF_FADE[0], DOF_FADE[1], height) : 0;
       }
       // The scene target is always the one the chain starts from; a frame with an odd
       // number of swaps would otherwise start the next one from the other buffer.

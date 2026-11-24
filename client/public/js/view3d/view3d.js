@@ -953,7 +953,7 @@ export class View3D {
     }
     // Closes the last pass (the side view, when a workout drew one), then the post chain draws the frame.
     this.renderer.end();
-    this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera });
+    this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
   }
 
   /** Points a Three.js camera where the adapter's matrices look, through the lens' near and far planes. */

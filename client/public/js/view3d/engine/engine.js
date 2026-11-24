@@ -116,7 +116,7 @@ export class Engine {
    * Runs the post chain to the screen: tone mapping and grade use the environment's exposure.
    * @param {import("../../three.js").PerspectiveCamera} camera
    * @param {{exposure: number}} env
-   * @param {{ride?: boolean}} [view]
+   * @param {{ride?: boolean, height?: number}} [view] `height` is the camera's height above the rider, metres
    */
   present(camera, env, view = {}) {
     const { renderer } = this;
