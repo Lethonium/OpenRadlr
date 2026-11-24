@@ -67,9 +67,11 @@ async function waitForWorkbench(page) {
   await page.waitForFunction(() => globalThis.Workbench?.ready === true, null, { timeout: TIMEOUT });
 }
 
-/** Joins a ride as "World Check", pauses at the join point and waits for its world. */
+/** Joins a ride as "World Check" on the simulator, pauses at the join point and waits for its world. */
 async function waitForRideWorld(page) {
   await page.locator("#name").fill("World Check");
+  // The simulator, not the thumb paddles a trainerless browser would pick: no paddles or trainer warning over the world.
+  await page.locator("#use-simulated").click({ timeout: TIMEOUT });
   await page.locator("button#join").click({ timeout: TIMEOUT });
   await page.locator("#hud").waitFor({ state: "visible", timeout: TIMEOUT });
   // Pause first, so the shot is taken where `at` asked and not wherever the
