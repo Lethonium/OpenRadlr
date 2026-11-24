@@ -5,7 +5,8 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { identity, lookAt, multiply, perspective, placement, rotationXAbout, transformPoint, yawFor } from "../public/js/view3d/math.js";
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
-import { buildArches, buildGroundDetail, buildFarIslands, buildRoad, buildScenery } from "../public/js/view3d/world.js";
+import { roadStrips } from "../public/js/world/plan/roadStrips.js";
+import { buildArches, buildGroundDetail, buildFarIslands, buildScenery } from "../public/js/view3d/world.js";
 import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, roadHalfWidth, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, settle } from "../public/js/view3d/clips.js";
@@ -113,10 +114,10 @@ test("road index finds the nearest sample", () => {
 
 test("road, arches and riders produce geometry", () => {
   const route = squareRoute();
-  const road = buildRoad(route);
-  assert.ok(road.vertexCount > 1000);
-  assert.equal(road.positions.length, road.vertexCount * 3);
-  assert.equal(road.colors.length, road.vertexCount * 4);
+  const road = roadStrips(route);
+  assert.ok(road.kinds.length > 1000);
+  assert.equal(road.positions.length, road.kinds.length * 3);
+  assert.equal(road.indices.length, (road.kinds.length / 4) * 6);
   assert.ok(buildArches(route).vertexCount >= 108, "start arch: two posts and a beam");
   assert.ok(buildBike().vertexCount > 100);
   for (const part of [buildThigh(), buildShin(), buildFoot(), buildCrankset()]) assert.ok(part.vertexCount > 0);
@@ -384,7 +385,6 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
     meshes: { islands: emptyMesh(), arches: emptyMesh() },
     chunks: { scenery: [], structures: [] },
     weather,
-    rivers: emptyMesh(),
     rotors: [],
     spectators: [],
     gyms,
@@ -1056,7 +1056,7 @@ function worldView({ timeMode = "day", sideView = null } = {}) {
   const renderer = new StubRenderer();
   renderer.calls = log;
   const gym = testGym();
-  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { islands: emptyMesh(), arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, rivers: emptyMesh(), rotors: [], spectators: [], gyms: [gym] };
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { islands: emptyMesh(), arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, rotors: [], spectators: [], gyms: [gym] };
   const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
   const view = new View3D(canvas, null, squareRoute(), world, { renderer, engine });
   view.setTimeMode(timeMode);

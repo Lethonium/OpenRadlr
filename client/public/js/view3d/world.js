@@ -16,12 +16,10 @@ import { ChunkedMesh } from "./chunks.js";
 import {
   Occupancy,
   PAVEMENT,
-  buildBridge,
   buildBikeCafe,
   buildOutdoorGym,
   studioSite,
   buildFarms,
-  buildRiverWater,
   buildRoadside,
   buildSpectators,
   buildVillage,
@@ -29,8 +27,6 @@ import {
 } from "./features.js";
 import { COAST } from "../world/island.js";
 import {
-  JUNCTION_LIFT,
-  LANE_WIDTH,
   ROAD_LIFT,
   VERGE,
   junctionBankAt,
@@ -45,11 +41,17 @@ import {
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/rivers.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
-import { add, normalize, placement, scale } from "./math.js";
+import { add, normalize, scale } from "./math.js";
 import { seededRandom, valueNoise } from "../world/noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
 import { planWorld } from "../world/plan/index.js";
+import { junctionPads, roadStrips } from "../world/plan/roadStrips.js";
+import { riverStrips } from "../world/plan/riverStrips.js";
+import { mergeStrips } from "../world/plan/strips.js";
+import { buildBridges } from "./bridges.js";
+import { buildRoadPosts } from "./roadPosts.js";
+import { roadStyle } from "./roadStyle.js";
 import { buildWeather } from "./weather.js";
 
 /** Box (world x/z) around the island's coast, with some sea around it. */
@@ -105,141 +107,8 @@ export function buildGroundGrids(terrain, ground, { season, long, regions, masks
   };
 }
 
-/** A round asphalt pad where roads of a network meet (`node` in route coordinates). */
-export function buildJunctionPad(node, into, { lanes = 4, sides = 20, biome = temperate } = {}) {
-  const radius = roadHalfWidth(lanes) + 0.3;
-  const center = [node.x, node.elevation + JUNCTION_LIFT, -node.y];
-  const at = (k) => {
-    const a = (k / sides) * 2 * Math.PI;
-    return [center[0] + Math.cos(a) * radius, center[1], center[2] + Math.sin(a) * radius];
-  };
-  for (let k = 0; k < sides; k += 1) into.triangleFacing(center, at(k), at(k + 1), biome.road.surface, [0, 1, 0]);
-}
-
 /** Wraps a target so builders can share the "own a mesh or write into one" pattern. */
 const target = (into) => ({ mesh: into ?? new MeshBuilder(), own: !into });
-
-const roadPostModels = new Map();
-
-/**
- * The biome's own roadside marker, if it has one (winter turns the posts into
- * snowmen). Built once per variant: every post reuses the same mesh.
- */
-function roadsideModel(biome, km) {
-  const build = biome.models?.post;
-  if (!build) return null;
-  const key = `${biome.id}:${km ? 1 : 0}`;
-  let model = roadPostModels.get(key);
-  if (!model) {
-    model = build(km);
-    roadPostModels.set(key, model);
-  }
-  return model;
-}
-
-/**
- * Asphalt, verges, markings and posts along a route. Other roads of the map
- * pass a lower `lift` (so the ridden road wins where they overlap at
- * junctions) and `skip` the stretches already drawn; `clear` keeps posts off
- * other roads. `bankAt` (0..1) flattens the season's ploughed bank near
- * junctions, where raised shoulders would cut across the other roads.
- */
-export function buildRoad(route, { step = 4, markingStep = 3, into = null, lift = ROAD_LIFT.ridden, skip = () => false, clear = () => false, detail = true, bankAt = null, biome = temperate } = {}) {
-  const halfWidth = roadHalfWidth(route.lanes);
-  const { mesh, own } = target(into);
-  const random = seededRandom((route.seed >>> 0) ^ 0xa5f);
-  const edgeAt = (frame, offset, extra = 0) => add(add(frame.center, scale(frame.right, offset)), [0, lift + extra, 0]);
-
-  const laneEdge = (route.lanes * LANE_WIDTH) / 2;
-  // Optional season detail on top of the same road: ploughed banks at the
-  // verge, worn ruts along the lanes, snow on the posts. Long routes keep the
-  // banks (they read from far away) and drop the close-up detail.
-  const bank = biome.road.bank;
-  const rut = detail ? biome.road.rut : null;
-  const postCap = detail ? biome.road.postCap : null;
-  // A ploughed bank fades from a flat verge (0) to full height (1), so the
-  // snow can open up where roads meet instead of cutting across them.
-  const shoulder = (k) => (bank ? -0.2 + (bank.height + 0.2) * k : -0.2);
-  const ploughed = (frame) => (bankAt ? bankAt(frame.center[0], frame.center[2]) : 1);
-  const steps = Math.ceil(route.length / step);
-  for (let i = 0; i < steps; i += 1) {
-    // Slight per-segment variation reads as patched asphalt.
-    const v = 0.97 + random() * 0.06;
-    if (skip(i * step) && skip(Math.min(route.length, (i + 1) * step))) continue;
-    const f0 = roadFrame(route, i * step);
-    const f1 = roadFrame(route, Math.min(route.length, (i + 1) * step));
-    const asphalt = biome.road.surface.map((c) => c * v);
-    mesh.quad(edgeAt(f0, -halfWidth), edgeAt(f0, halfWidth), edgeAt(f1, halfWidth), edgeAt(f1, -halfWidth), asphalt);
-    // Gravel verge on both sides, sloping down into the grass. In winter it
-    // is a raised snow shoulder closing into a small ploughed bank.
-    const bank0 = bank ? ploughed(f0) : 0;
-    const bank1 = bank ? ploughed(f1) : 0;
-    const drop0 = shoulder(bank0);
-    const drop1 = shoulder(bank1);
-    for (const side of [-1, 1]) {
-      const inner = side * halfWidth;
-      const outer = side * (halfWidth + VERGE);
-      const pts = side < 0 ? [edgeAt(f0, outer, drop0), edgeAt(f0, inner, -0.03), edgeAt(f1, inner, -0.03), edgeAt(f1, outer, drop1)] : [edgeAt(f0, inner, -0.03), edgeAt(f0, outer, drop0), edgeAt(f1, outer, drop1), edgeAt(f1, inner, -0.03)];
-      mesh.quad(...pts, biome.road.verge);
-      if (bank && (bank0 > 0 || bank1 > 0)) {
-        // Close the shoulder down to the ground so the bank has a face.
-        const top0 = edgeAt(f0, outer, drop0);
-        const top1 = edgeAt(f1, outer, drop1);
-        const down1 = edgeAt(f1, outer, -0.5);
-        const down0 = edgeAt(f0, outer, -0.5);
-        const facing = scale(f0.right, side);
-        mesh.triangleFacing(top0, top1, down1, bank.color, facing);
-        mesh.triangleFacing(top0, down1, down0, bank.color, facing);
-      }
-    }
-    // Two darker ruts per lane, worn through the snow.
-    if (rut) {
-      for (let lane = 0; lane < route.lanes; lane += 1) {
-        const offset = -laneEdge + (lane + 0.5) * LANE_WIDTH;
-        const at = (f, o) => edgeAt(f, o, 0.005);
-        mesh.quad(at(f0, offset - rut.width / 2), at(f0, offset + rut.width / 2), at(f1, offset + rut.width / 2), at(f1, offset - rut.width / 2), rut.color);
-      }
-    }
-  }
-
-  // Edge lines (solid) and lane dividers (dashed, 3 m on / 3 m off).
-  const stripe = (offset, width, dashed, color) => {
-    for (let d = 0; d < route.length; d += markingStep) {
-      if (dashed && Math.floor(d / markingStep) % 2 === 1) continue;
-      if (skip(d) && skip(Math.min(route.length, d + markingStep))) continue;
-      const f0 = roadFrame(route, d);
-      const f1 = roadFrame(route, Math.min(route.length, d + markingStep));
-      // Lines stop at a junction instead of running across the other road.
-      if (bankAt && (!ploughed(f0) || !ploughed(f1))) continue;
-      const at = (f, o) => edgeAt(f, o, ROAD_LIFT.marking);
-      mesh.quad(at(f0, offset - width / 2), at(f0, offset + width / 2), at(f1, offset + width / 2), at(f1, offset - width / 2), color);
-    }
-  };
-  stripe(-laneEdge, 0.12, false, biome.road.edge);
-  stripe(laneEdge, 0.12, false, biome.road.edge);
-  for (let lane = 1; lane < route.lanes; lane += 1) stripe(-laneEdge + lane * LANE_WIDTH, 0.1, true, biome.road.marking);
-
-  // Roadside posts every 50 m, alternating sides; every kilometre a pair with red tops.
-  for (let d = 25; d < route.length; d += 50) {
-    if (skip(d)) continue;
-    const frame = roadFrame(route, d);
-    const km = Math.abs((d % 1000) - 0) < 26 || Math.abs((d % 1000) - 1000) < 26;
-    const sides = km ? [-1, 1] : [Math.floor(d / 50) % 2 === 0 ? -1 : 1];
-    for (const side of sides) {
-      const foot = add(frame.center, scale(frame.right, side * (halfWidth + VERGE + 0.3)));
-      if (clear(foot[0], foot[2])) continue;
-      const marker = detail ? roadsideModel(biome, km) : null;
-      if (marker) {
-        mesh.append(marker, placement(foot, 0));
-        continue;
-      }
-      mesh.box(add(foot, [0, 0.5, 0]), [0.12, 1.0, 0.12], biome.road.postWhite);
-      mesh.box(add(foot, [0, 1.05, 0]), [0.13, 0.12, 0.13], km ? biome.road.postRed : biome.road.postDark);
-      if (postCap) mesh.box(add(foot, [0, 1.14, 0]), [0.16, 0.06, 0.16], postCap.color);
-    }
-  }
-  return own ? mesh.build() : mesh;
-}
 
 /** Arches at the start/finish line and at climb and sprint segments, with their names; banners counting down climbs and at halfway. */
 export function buildArches(route, { biome = temperate } = {}) {
@@ -460,6 +329,7 @@ const onStretches = (stretches, d) => stretches.some((s) => d >= s.from - 1e-6 &
  * detail, roads and far terrain get this much thinner instead.
  */
 export const LONG_ROUTE_M = 60_000;
+const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
 const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep: 6, railGrade: 6, railStep: 8 });
 
 /**
@@ -497,7 +367,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const half = roadHalfWidth(route.lanes) + VERGE;
 
   const chunks = {
-    road: new ChunkedMesh(),
     detail: new ChunkedMesh(),
     scenery: new ChunkedMesh(),
     structures: new ChunkedMesh(),
@@ -512,9 +381,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
-  // Nodes where a network's roads meet, for the junction pads.
-  const degree = new Map();
-  if (network) for (const road of roads) for (const id of [road.edge.from, road.edge.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
   // Ploughed banks flatten out near a fork or corner, so no road's snow
   // shoulder runs across another road's asphalt.
   const junctionPoints = junctionClearings(network);
@@ -525,21 +391,30 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const shared = new Map();
   // On a network the ridden route runs on roads of the index: those aren't "other" roads to it.
   const ridden = new Set(network ? roads.filter((road) => sharedStretches(road, [route]).length > 0) : []);
+  const strips = [];
+  const posts = new MeshBuilder();
   for (const [i, r] of routes.entries()) {
     const stretches = sharedStretches(r, routes.slice(0, i));
     shared.set(r, stretches);
     const other = (s) => s.route !== r && !(i === 0 && ridden.has(s.route));
     const otherRoad = (x, z) => base.index.nearest(x, z, 1, other)?.distance < roadHalfWidth(r.lanes) + VERGE;
-    buildRoad(r, { into: chunks.road, biome, ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep, detail: false } : {}), lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other, skip: (d) => onStretches(stretches, d), clear: otherRoad, ...(junctionPoints.length ? { bankAt } : {}) });
+    const skip = (d) => onStretches(stretches, d);
+    strips.push(
+      roadStrips(r, {
+        ...(long ? { step: LONG.roadStep, markingStep: LONG.markingStep } : {}),
+        bank: biome.road.bank ?? null,
+        rut: long ? null : (biome.road.rut ?? null),
+        lift: i === 0 ? ROAD_LIFT.ridden : ROAD_LIFT.other,
+        skip,
+        ...(junctionPoints.length ? { bankAt } : {}),
+      }),
+    );
+    buildRoadPosts(r, { biome, detail: !long, skip, clear: otherRoad, into: posts });
   }
 
   // Where roads of a network meet at an angle, an asphalt pad closes the
   // gap between their square ends (under every road, so markings stay on top).
-  if (network) {
-    for (const node of network.nodes.values()) {
-      if ((degree.get(node.id) ?? 0) >= 2) buildJunctionPad(node, chunks.road, { biome });
-    }
-  }
+  if (network) strips.unshift(junctionPads(network));
 
   // Places other features must keep clear of.
   const occupancy = new Occupancy();
@@ -548,7 +423,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const avoid = (x, z, radius = 0) => nearRiver(x, z, radius) || terrain.height(x, z) < ground.water + 2.5 || nearRoad(x, z, radius);
   const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
 
-  for (const river of rivers) buildBridge(river.route, terrain, river, chunks.structures, biome);
   for (const r of ordered) {
     for (const village of zonesOf.get(r).villages) {
       buildVillage(r, terrain, village, { structures: chunks.structures, bright: chunks.bright, occupancy, seed: r.seed >>> 0, avoid, biome });
@@ -639,8 +513,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     });
   }
 
-  const rivers3d = new MeshBuilder();
-  for (const river of rivers) buildRiverWater(river, rivers3d, biome.river ?? undefined);
+  // The river's colour is a bare colour or an object with colour, opacity and (frozen) ice patches.
+  const river = Array.isArray(biome.river) ? { color: biome.river } : (biome.river ?? {});
+  const riverStyle = { color: [...(river.color ?? DEFAULT_RIVER)], alpha: river.alpha ?? 0.85, ice: river.ice ?? null };
 
   return {
     // The view needs the biome to resolve its sky and lighting at render time.
@@ -661,7 +536,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       islands: buildFarIslands(route, terrain, { biome }),
     },
     weather: buildWeather(terrain, { biome }),
-    rivers: rivers3d.build(),
+    roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
+    rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
     rotors,
     spectators,
     spectatorMeshes,

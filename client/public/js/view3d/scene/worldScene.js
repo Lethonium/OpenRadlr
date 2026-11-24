@@ -11,6 +11,8 @@ import { NATURE } from "../assets/nature/index.js";
 import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createGrassLayer } from "./grassLayer.js";
+import { createRiverLayer } from "./riverLayer.js";
+import { createRoadLayer } from "./roadLayer.js";
 import { createRoadsideLayer } from "./roadsideLayer.js";
 import { createSky } from "./sky.js";
 import { createTerrainLayer } from "./terrainLayer.js";
@@ -35,7 +37,7 @@ const CLOUD_SHADOW = 0.24;
 
 /**
  * Builds the scene for a built world.
- * @param {{ground?: {near: object, far: object}, plan?: import("../../world/plan/index.js").WorldPlan, season?: string}} world the scene object from `buildScene`
+ * @param {{ground?: {near: object, far: object}, roads?: object, rivers?: object, plan?: import("../../world/plan/index.js").WorldPlan, season?: string}} world the scene object from `buildScene`
  * @param {{settings: import("../quality.js").QualitySettings, track: import("./tracker.js").Tracker["track"]}} options
  */
 export function createWorldScene(world, { settings, track }) {
@@ -64,6 +66,8 @@ export function createWorldScene(world, { settings, track }) {
     layers.push(createSea(world.ground, { uniforms, track }), makers.terrain());
     if (plan) layers.push(makers.forest(), makers.crops(), makers.roadside(), makers.grass());
   }
+  if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
+  if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */

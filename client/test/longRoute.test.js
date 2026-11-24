@@ -54,13 +54,18 @@ test("a 50 km route builds its terrain with the horizon around the whole island"
   }
 });
 
-const chunkTriangles = (scene) => Object.values(scene.chunks).reduce((sum, chunks) => sum + chunks.reduce((n, c) => n + c.mesh.positions.length / 9, 0), 0);
+/** Triangles of the adapter's chunks, the road's quads and its posts. */
+const chunkTriangles = (scene) =>
+  Object.values(scene.chunks).reduce((sum, chunks) => sum + chunks.reduce((n, c) => n + c.mesh.positions.length / 9, 0), 0) +
+  scene.roads.strips.indices.length / 3 +
+  scene.roads.posts.vertexCount / 3;
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
-  // 250070: 249302 plus the barriers at the sprint line (2 sides × 16 segments × 2 boxes × 12 triangles).
+  // 252122: the adapter's chunks, the road's quads and its posts. Was 250070 when the road was a chunk: the posts gained a reflector
+  // (12 triangles each) and the road's strips are quads without the old duplicate verge triangles.
   // The ground is no longer a chunk (the main thread tiles `scene.ground`).
-  assert.equal(chunkTriangles(scene), 250070);
+  assert.equal(chunkTriangles(scene), 252122);
 });
 
 test("a long route's world is thinned to a size a browser can build", () => {

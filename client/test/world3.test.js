@@ -162,7 +162,8 @@ test("the river crosses the road only at the bridge, below it and above the lake
   const valley = terrain.height(bridge[0], bridge[2]);
   assert.ok(bridge[1] - valley > 6, "the bridge spans a real valley");
   assert.ok(valley > world.waterLevel, "the river bed is above the sea");
-  assert.ok(world.rivers.vertexCount > 100);
+  assert.ok(world.rivers.strips.positions.length / 3 > 100);
+  assert.ok(world.rivers.bridges.vertexCount > 0, "a bridge carries the road");
 });
 
 test("the world has a village, farms, turbines and spectators off the road", () => {
@@ -368,15 +369,14 @@ const tracks = ["velodrome", "herne-hill", "herne-hill-clockwise"].map(loadRoute
 // As the client builds it: the map's network and its other routes.
 const mapWorld = buildWorld(hillsRoute, { network, others: [...valley, ...tracks] });
 
-/** Whether the road mesh of `world` has asphalt within 1.5 m of route coordinates (x, y) at height `elevation`. */
+/** Whether the road quads of `world` (lane lines included) lie within 1.5 m of route coordinates (x, y) at height `elevation`. */
 const asphaltAt = (world, x, y, elevation) =>
-  world.chunks.road.some(({ mesh }) => {
-    const p = mesh.positions;
-    for (let i = 0; i < p.length; i += 3) {
-      if (Math.hypot(p[i] - x, p[i + 2] + y) < 1.5 && Math.abs(p[i + 1] - elevation) < 0.5) return true;
+  (({ positions: p, kinds }) => {
+    for (let i = 0; i < kinds.length; i += 1) {
+      if (Math.hypot(p[i * 3] - x, p[i * 3 + 2] + y) < 1.5 && Math.abs(p[i * 3 + 1] - elevation) < 0.5) return true;
     }
     return false;
-  });
+  })(world.roads.strips);
 
 test("the tracks beside the roads are drawn and the ground is level under them", () => {
   for (const track of tracks) {
@@ -619,7 +619,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "plan", "rivers", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "plan", "rivers", "roads", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));

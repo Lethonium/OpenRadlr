@@ -10,6 +10,9 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `scene/terrainLayer.js` | `buildTerrain`: 64 x 64 cell tiles with vertex colours, the grain and cloud-shadow hooks |
 | `scene/sea.js` | `buildOcean`: the ocean shader (depth colour, fresnel sky, sun glints, shore foam, white caps) |
 | `scene/sky.js` | `buildSky`: the sky dome with sun, moon, stars and clouds (no aurora or rainbow) |
+| `scene/riverLayer.js` | `world.js` `buildRiver`: the river shader (flowing ripples, rapids, pale edge, sky sheen, fog) |
+| `scene/roadLayer.js`, `assets/road.js`, `roadPosts.js` | `world.js` `roadTexture`, `buildRoad`, `buildRoadFurniture` and `assets/props/road-furniture.js` `reflectorParts`: asphalt grain (as a data texture), the road mesh and the orange-faced reflector posts |
+| `../world/plan/roadStrips.js`, `../world/plan/riverStrips.js` | `world.js` `buildRoad`, `buildRiver`: cross-section strips and the river ribbon with its steepness attribute |
 | `scene/noiseGlsl.js` | `NOISE_GLSL` in `core/shared.js` |
 | `assets/materials.js`, `assets/hookChunks.js` | `core/shared.js` and `core/geo.js`: grain, cloud shadows and height fog hooks |
 | `engine/post.js`, `engine/shaderChunks.js` | `core/post.js`: the post chain (occlusion, sun rays, depth of field, bloom, grade) |

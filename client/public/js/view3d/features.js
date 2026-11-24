@@ -7,12 +7,10 @@
  * objects (turbine rotors, spectators) that the view animates per frame.
  */
 import { CROWD } from "./crowd.js";
-import { MeshBuilder } from "./meshBuilder.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
 import { seededRandom } from "../world/noise.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
-import { BRIDGE_HALF_LENGTH, RIVER } from "../world/rivers.js";
 
 export const PAVEMENT = 2.4;
 export const WIND = normalize([1, 0, 0.35]);
@@ -42,138 +40,6 @@ export class Occupancy {
     const key = cellKey(Math.floor(x / this.cell), Math.floor(z / this.cell));
     return (this.#cells.get(key) ?? []).some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius);
   }
-}
-
-const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
-
-/** Snow patches and cracks lying on top of a frozen river. */
-function addRiverIce(river, into, ice) {
-  const random = seededRandom((Math.round((river.at ?? 0) * 1000) ^ 0x1ce) >>> 0);
-  const w = RIVER.halfWidth + 1.5;
-  for (let i = 0; i + 1 < river.points.length; i += 1) {
-    if (random() >= ice.cover) continue;
-    const a = river.points[i];
-    const b = river.points[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const length = Math.hypot(dx, dz);
-    if (length < 1) continue;
-    const dir = [dx / length, 0, dz / length];
-    const side = [-dir[2], 0, dir[0]];
-    const half = RIVER.halfWidth * (0.35 + random() * 0.35);
-    const maxOffset = Math.max(0, w - half - 0.5);
-    const offset = (random() - 0.5) * 2 * maxOffset;
-    const t0 = 0.1 + random() * 0.15;
-    const t1 = 0.68 + random() * 0.22;
-    const at = (t, lateral) => {
-      const y = a.surface + (b.surface - a.surface) * t + 0.04;
-      return [a.x + dx * t + side[0] * (offset + lateral), y, a.z + dz * t + side[2] * (offset + lateral)];
-    };
-    const q0 = at(t0, -half);
-    const q1 = at(t1, -half);
-    const q2 = at(t1, half);
-    const q3 = at(t0, half);
-    into.triangleFacing(q0, q1, q2, ice.color, [0, 1, 0]);
-    into.triangleFacing(q0, q2, q3, ice.color, [0, 1, 0]);
-    if (ice.crack && random() < 0.45) {
-      const c0 = at(t0 + (t1 - t0) * 0.15, -half * 0.35);
-      const c1 = at(t1 - (t1 - t0) * 0.15, half * 0.25);
-      const cw = 0.08;
-      into.triangleFacing(add(c0, scale(side, -cw)), add(c0, scale(side, cw)), add(c1, scale(side, cw)), ice.crack, [0, 1, 0]);
-      into.triangleFacing(add(c0, scale(side, -cw)), add(c1, scale(side, cw)), add(c1, scale(side, -cw)), ice.crack, [0, 1, 0]);
-    }
-  }
-  // A few wind-blown snow patches on each frozen pond.
-  for (const pond of river.ponds) {
-    for (let k = 0; k < 2; k += 1) {
-      const angle = random() * Math.PI * 2;
-      const distance = random() * pond.radius * 0.45;
-      const x = pond.x + Math.cos(angle) * distance;
-      const z = pond.z + Math.sin(angle) * distance;
-      const radius = pond.radius * (0.16 + random() * 0.18);
-      into.disc([x, pond.surface + 0.04, z], [radius, radius], ice.color, 8);
-    }
-  }
-}
-
-/** Water ribbon along the river plus a disc for each pond. */
-export function buildRiverWater(river, into = new MeshBuilder(), style = null) {
-  const color = Array.isArray(style) ? style : (style?.color ?? DEFAULT_RIVER);
-  const w = RIVER.halfWidth + 1.5;
-  for (let i = 0; i + 1 < river.points.length; i += 1) {
-    const a = river.points[i];
-    const b = river.points[i + 1];
-    const dir = normalize([b.x - a.x, 0, b.z - a.z]);
-    const side = [-dir[2] * w, 0, dir[0] * w];
-    const pa = [a.x, a.surface, a.z];
-    const pb = [b.x, b.surface, b.z];
-    into.triangleFacing(sub(pa, side), add(pa, side), add(pb, side), color, [0, 1, 0]);
-    into.triangleFacing(sub(pa, side), add(pb, side), sub(pb, side), color, [0, 1, 0]);
-  }
-  for (const pond of river.ponds) into.disc([pond.x, pond.surface, pond.z], [pond.radius + 2, pond.radius + 2], color, 16);
-  if (style?.ice) addRiverIce(river, into, style.ice);
-  return into;
-}
-
-/** Stone arch bridge carrying the road over the river. */
-export function buildBridge(route, terrain, river, into, biome = temperate) {
-  const half = roadHalfWidth(route.lanes) + VERGE;
-  const L = BRIDGE_HALF_LENGTH;
-  const palette = biome.palette;
-  const stone = palette.stone;
-  const deckThickness = 1.4;
-  const frameAt = (s) => roadFrame(route, river.at + s);
-  const deckBottom = (s) => frameAt(s).center[1] - deckThickness;
-
-  for (let s = -L; s < L; s += 2) {
-    const f0 = frameAt(s);
-    const f1 = frameAt(s + 2);
-    const back = sub(f0.center, f1.center);
-    const mid = scale(add(f0.center, f1.center), 0.5);
-    into.orientedBox(add(mid, [0, -deckThickness / 2 + 0.02, 0]), scale(f0.right, 2 * half + 0.8), [0, deckThickness, 0], back, stone);
-    for (const side of [-1, 1]) {
-      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.38, 0]), scale(f0.right, 0.45), [0, 0.76, 0], back, palette.stone);
-      into.orientedBox(add(add(mid, scale(f0.right, side * (half + 0.2))), [0, 0.82, 0]), scale(f0.right, 0.6), [0, 0.12, 0], back, palette.stoneDark);
-    }
-  }
-
-  // Piers on the banks and arches between them and the abutments.
-  const piers = [-16, 16];
-  for (const s of piers) {
-    const f = frameAt(s);
-    const top = deckBottom(s);
-    const ground = terrain.height(f.center[0], f.center[2]) - 1;
-    const back = scale(f.forward, -2.4);
-    into.orientedBox(add(f.center, [0, (top + ground) / 2 - f.center[1], 0]), scale(f.right, 2 * half + 0.4), [0, top - ground, 0], [back[0], 0, back[2]], stone);
-  }
-  const spans = [
-    [-L, -16, 3.5],
-    [-16, 16, 6.5],
-    [16, L, 3.5],
-  ];
-  for (const [s0, s1, rise] of spans) {
-    const steps = Math.max(6, Math.round((s1 - s0) / 1.5));
-    for (let k = 0; k < steps; k += 1) {
-      const t0 = k / steps;
-      const t1 = (k + 1) / steps;
-      const sa = s0 + (s1 - s0) * t0;
-      const sb = s0 + (s1 - s0) * t1;
-      const tm = (t0 + t1) / 2;
-      const depth = Math.max(0.5, rise * (1 - Math.sin(Math.PI * tm)));
-      const fa = frameAt(sa);
-      const fb = frameAt(sb);
-      const mid = scale(add(fa.center, fb.center), 0.5);
-      const bottom = (deckBottom(sa) + deckBottom(sb)) / 2;
-      into.orientedBox(
-        [mid[0], bottom - depth / 2, mid[2]],
-        scale(fa.right, 2 * half + 0.3),
-        [0, depth, 0],
-        sub([fa.center[0], 0, fa.center[2]], [fb.center[0], 0, fb.center[2]]),
-        palette.stoneDark,
-      );
-    }
-  }
-  return into;
 }
 
 // ----------------------------------------------------------------- village ---

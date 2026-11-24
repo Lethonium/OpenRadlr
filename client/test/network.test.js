@@ -105,7 +105,7 @@ test("a route on a network rides its roads point for point", () => {
 test("the world on a network: every road once, the café, junction pads", () => {
   // Drawn once: the ridden route on top, the roads only where it doesn't run.
   const alone = buildWorld(loop, { network: new RoadNetwork({ ...tinyNetworkFile(), edges: tinyNetworkFile().edges.slice(0, 1), routes: [] }) });
-  const vertices = (w) => w.chunks.road.reduce((sum, c) => sum + c.mesh.vertexCount, 0);
+  const vertices = (w) => w.roads.strips.kinds.length;
   assert.ok(vertices(world) < vertices(alone) * 1.2, "roads under the ridden route are not drawn again");
   assert.equal(world.cafes.length, 1);
   assert.ok(Math.hypot(world.cafes[0][0], world.cafes[0][2]) < 80, "the café is at the café");
@@ -132,7 +132,7 @@ test("the scene is built with the network, in a worker too", async () => {
   await buildScene(tinyLoopFile(), [], { biome: { id: "temperate" }, createWorker: () => worker });
   assert.equal(posted.biome, "temperate", "a biome object is sent by id");
   const inPlace = await buildScene(tinyLoopFile(), [], { network: file, createWorker: () => null });
-  assert.ok(inPlace.chunks.road.length > 0);
+  assert.ok(inPlace.roads.strips.kinds.length > 0);
 });
 
 // --- the menu's map --------------------------------------------------------------------

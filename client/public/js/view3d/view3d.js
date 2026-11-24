@@ -62,7 +62,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
+  drawDistance: { structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -405,7 +405,6 @@ export class View3D {
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
     this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
-    this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
     this.lemonMesh = this.renderer.upload(buildLemon());
@@ -904,7 +903,7 @@ export class View3D {
     this.worldScene.update({ dt, t: timeS, camera: this.worldCamera, focus: me ? me.position : this.camera.target, shadows: shadows && lens.shadows });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
-    // Passes 1 and 2: the lit features and riders, then the blended rivers and soft contact shadows.
+    // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
     const scene = { light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
@@ -1014,8 +1013,7 @@ export class View3D {
 
     this.#studio?.draw("opaque", eye);
 
-    // Pass 2: blended — rivers and soft contact shadows under the bikes.
-    this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
+    // Pass 2: blended — soft contact shadows under the bikes.
     for (const part of visible) {
       if (part.ghost || part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
@@ -1117,7 +1115,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

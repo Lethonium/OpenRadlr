@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
-import { buildRiverWater } from "../public/js/view3d/features.js";
+import { riverStrips } from "../public/js/world/plan/riverStrips.js";
+import { roadStrips } from "../public/js/world/plan/roadStrips.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildWeather } from "../public/js/view3d/weather.js";
-import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
+import { buildWorld } from "../public/js/view3d/world.js";
 import { terrainModel } from "../public/js/world/roads.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
@@ -92,10 +93,11 @@ test("winter's river grows a surface, not a new course", () => {
   const river = { at: 123, points, ponds: [{ x: 300, z: 0, surface: 10.4, radius: 20 }] };
   const temperate = resolveBiome("temperate").river;
   const winter = resolveBiome("winter").river;
-  const calm = buildRiverWater(river, new MeshBuilder(), temperate).build();
-  const frozen = buildRiverWater(river, new MeshBuilder(), winter).build();
-  assert.ok(calm.vertexCount > 0 && frozen.vertexCount > calm.vertexCount, "the frozen river adds ice patches");
-  assert.deepEqual(Array.from(frozen.positions.slice(0, calm.positions.length)), Array.from(calm.positions), "the ice sits on the same course");
+  const calm = riverStrips([river], temperate);
+  const frozen = riverStrips([river], winter);
+  assert.ok(calm.indices.length > 0 && calm.ice.indices.length === 0, "open water has no ice");
+  assert.ok(frozen.ice.indices.length > 0, "the frozen river adds ice patches");
+  assert.deepEqual(Array.from(frozen.positions), Array.from(calm.positions), "the ice sits on the same course");
 });
 
 test("winter's sky is a lower, broader ceiling", () => {
@@ -181,8 +183,8 @@ test("a junction apron flattens winter's ploughed bank", () => {
     }
     return y;
   };
-  const full = buildRoad(road, { biome: winter, clear: () => true });
-  const apron = buildRoad(road, { biome: winter, clear: () => true, bankAt: (x) => (x > 100 && x < 200 ? 0 : 1) });
+  const full = roadStrips(road, { bank: winter.road.bank });
+  const apron = roadStrips(road, { bank: winter.road.bank, bankAt: (x) => (x > 100 && x < 200 ? 0 : 1) });
   assert.ok(highest(full, 110, 190) > 10.3, "the full bank stands above the road");
   assert.ok(highest(apron, 110, 190) < 10.1, "the junction apron is flat");
   assert.ok(highest(apron, 250, 350) > 10.3, "the bank comes back away from the junction");
@@ -229,11 +231,12 @@ test("winter changes the look, not the layout", () => {
   const total = (scene) =>
     Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
     (scene.weather ? scene.weather.count * 2 : 0) +
-    scene.rivers.positions.length / 9 +
+    scene.rivers.strips.indices.length / 3 +
+    scene.roads.strips.indices.length / 3 +
     Object.values(scene.meshes).reduce((a, mesh) => a + mesh.positions.length / 9, 0);
   const t = total(temperate);
   const w = total(winter);
-  assert.notEqual(winter.chunks.road[0].mesh.positions.length, temperate.chunks.road[0].mesh.positions.length, "the road itself is reshaped");
+  assert.notEqual(winter.roads.strips.positions.length, temperate.roads.strips.positions.length, "the road itself is reshaped");
   assert.ok(Math.abs(w - t) / t < 0.1, `winter stays within 10 % of temperate (${t} → ${w})`);
 });
 
