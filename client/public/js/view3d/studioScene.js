@@ -8,7 +8,7 @@ import { invert, lookAt, multiply, perspective, placement, rotationXAbout, scali
 import { buildStudioRoom } from "./studioRoom.js";
 import { INSTRUCTOR, ROOM, STAGE, seatPosition } from "./studioLayout.js";
 import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "./studioCamera.js";
-import { Renderer, createContext } from "./renderer.js";
+import { ThreeRenderer } from "./threeRenderer.js";
 import {
   RIDER_GEOMETRY,
   VARIANT_COUNT,
@@ -105,9 +105,7 @@ export class StudioView3D {
   }
 
   static #webGlRenderer(canvas) {
-    const gl = createContext(canvas);
-    if (!gl) throw new Error("WebGL 2 is not available");
-    return new Renderer(gl);
+    return new ThreeRenderer(canvas);
   }
 
   /** The camera for my seat; My view bobs with my cadence unless motion is reduced. */
@@ -169,7 +167,9 @@ export class StudioView3D {
 
     const me = riders.find((r) => r.id === myId);
     const { eye, target } = this.cameraPose(me?.seat, myCadence ?? 0, timeS);
-    const viewProjection = multiply(perspective(FOV_Y, width / height, 0.1, 60), lookAt(eye, target));
+    const projection = perspective(FOV_Y, width / height, 0.1, 60);
+    const view = lookAt(eye, target);
+    const viewProjection = multiply(projection, view);
     const inverseViewProjection = invert(viewProjection);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), coach: hexToRgb(colors.accent) };
@@ -193,7 +193,7 @@ export class StudioView3D {
       this.renderer.endShadows();
     }
 
-    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...STUDIO_LIGHT, shadowStrength: high ? STUDIO_LIGHT.shadowStrength : 0 });
+    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...STUDIO_LIGHT, shadowStrength: high ? STUDIO_LIGHT.shadowStrength : 0 });
     this.renderer.draw(this.room, this.identity);
     this.renderer.drawBright(this.accents, this.identity, 1);
     for (const part of drawn) {
@@ -210,6 +210,7 @@ export class StudioView3D {
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
       for (const id of phases.keys()) if (id !== INSTRUCTOR.id && !riders.some((r) => r.id === id)) phases.delete(id);
     }
+    this.renderer.end();
   }
 
   #updateLabels(placed, myId, eye, viewProjection, width, height) {

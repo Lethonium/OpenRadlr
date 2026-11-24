@@ -9,7 +9,7 @@ import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
 import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
 import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
-import { Renderer, createContext } from "./renderer.js";
+import { ThreeRenderer } from "./threeRenderer.js";
 import {
   RIDER_GEOMETRY,
   VARIANT_COUNT,
@@ -354,8 +354,6 @@ export class View3D {
    * @param {{renderer?: object}} [options] `renderer` replaces the WebGL one (tests)
    */
   constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null } = {}) {
-    const gl = renderer ? null : createContext(canvas);
-    if (!renderer && !gl) throw new Error("WebGL 2 is not available");
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -365,7 +363,7 @@ export class View3D {
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
-    this.renderer = renderer ?? new Renderer(gl);
+    this.renderer = renderer ?? new ThreeRenderer(canvas);
     // A biome's workout figure (winter: penguins): built meshes for `settle` and
     // uploaded handles to draw. Temperate keeps the human rider rig.
     const workout = this.biome.workout ?? null;
@@ -744,7 +742,8 @@ export class View3D {
     const [ox, oy] = this.viewOffset;
     const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
     const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
-    const viewProjection = multiply(projection, lookAt(this.camera.eye, this.camera.target));
+    const view = lookAt(this.camera.eye, this.camera.target);
+    const viewProjection = multiply(projection, view);
     const inverseViewProjection = invert(viewProjection);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
@@ -854,7 +853,7 @@ export class View3D {
 
     // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
     const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
-    this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
+    this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
     const probes = this.#labelProbes(placed, myId, seatHeads);
@@ -881,11 +880,13 @@ export class View3D {
         const ahead = bodyAhead(mine.flatMap((part) => part.torso.map((piece) => piece.model)), me.gym.spot);
         this.#sideAhead = this.#sideAhead === null ? ahead : this.#sideAhead + (ahead - this.#sideAhead) * Math.min(1, dt / SIDE_CAMERA.followS);
         const side = sideCameraPose(me.gym.spot, this.#sideAhead);
-        const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
+        const sideProjection = perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far);
+        const sideView = lookAt(side.eye, side.target);
+        const sideViewProjection = multiply(sideProjection, sideView);
         this.renderer.viewport(rect);
         this.#drawWorld(
           { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
-          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
+          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
         );
         this.renderer.viewport(null);
       }
@@ -897,14 +898,16 @@ export class View3D {
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
       for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
     }
+    // Closes the last pass (the side view, when a workout drew one).
+    this.renderer.end();
   }
 
   /**
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
+  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {

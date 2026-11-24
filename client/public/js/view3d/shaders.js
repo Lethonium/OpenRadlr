@@ -103,9 +103,12 @@ void main() {
   gl_Position = u_lightViewProjection * u_model * vec4(a_position, 1.0);
 }`;
 
+// Only the depth matters, but Three's shadow target has a colour attachment too,
+// and WebGL rejects a draw whose fragment shader writes nothing to it.
 export const DEPTH_FRAGMENT = `#version 300 es
 precision mediump float;
-void main() {}`;
+layout(location = 0) out vec4 o_unused;
+void main() { o_unused = vec4(1.0); }`;
 
 export const SKY_VERTEX = `#version 300 es
 const vec2 corners[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));

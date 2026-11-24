@@ -19,6 +19,9 @@ const glsl3 = (source) => source.replace(/^#version 300 es\n/, "");
 /** Per-draw values ride on the mesh, so one material can serve every draw. */
 function beforeRender(renderer, scene, camera, geometry, object) {
   const uniforms = object.material.uniforms;
+  // Three uploads a shared material's uniforms once, when the material changes;
+  // without this flag every mesh after the first draws with the first one's values.
+  object.material.uniformsNeedUpdate = true;
   uniforms.u_model.value.fromArray(object.userData.model);
   uniforms.u_tint.value.fromArray(object.userData.tint);
   uniforms.u_unlit.value = object.userData.unlit;
@@ -52,6 +55,7 @@ function meshMaterial(transparent) {
       u_shadowTexel: { value: 0 },
     },
     transparent,
+    depthFunc: DEPTH_FUNC,
     depthWrite: !transparent,
     side: THREE.DoubleSide,
     ...(transparent && { blending: THREE.NormalBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
@@ -61,6 +65,14 @@ function meshMaterial(transparent) {
 }
 
 const IDENTITY = new THREE.Matrix4();
+
+/**
+ * The own renderer left WebGL's default depth test, LESS; Three's is LESS_EQUAL.
+ * It matters for the sky, which is drawn at the far plane (depth exactly 1):
+ * with LESS it never shows, and the ride's sky is the flat horizon colour the
+ * baseline shots record. Every material keeps LESS so the look stays the same.
+ */
+const DEPTH_FUNC = THREE.LessDepth;
 
 export class ThreeRenderer {
   #pool = [];
@@ -96,12 +108,14 @@ export class ThreeRenderer {
         u_horizonColor: { value: new THREE.Vector3() },
         u_sunColor: { value: new THREE.Vector3(1, 1, 1) },
       },
+      depthFunc: DEPTH_FUNC,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
 
     const skyGeometry = new THREE.BufferGeometry();
     skyGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+    skyGeometry.setDrawRange(0, 3);
     this.sky = new THREE.Mesh(skyGeometry, this.skyMaterial);
     this.sky.name = "sky";
     this.sky.frustumCulled = false;
@@ -116,6 +130,8 @@ export class ThreeRenderer {
       glslVersion: THREE.GLSL3,
       vertexShader: glsl3(DEPTH_VERTEX),
       fragmentShader: glsl3(DEPTH_FRAGMENT),
+      colorWrite: false,
+      depthFunc: DEPTH_FUNC,
       uniforms: {
         u_lightViewProjection: { value: new THREE.Matrix4() },
         u_model: { value: new THREE.Matrix4() },
@@ -126,11 +142,14 @@ export class ThreeRenderer {
       polygonOffsetUnits: 3,
     });
     this.depthMaterial.onBeforeRender = (renderer, scene, camera, geometry, object) => {
+      object.material.uniformsNeedUpdate = true;
       object.material.uniforms.u_model.value.fromArray(object.userData.model);
     };
     this.shadowScene = new THREE.Scene();
     this.shadowCamera = new THREE.Camera();
-    this.shadow = null;
+    // A sampler2DShadow cannot be bound to an ordinary empty texture, so a tiny
+    // depth target stands in until the app asks for a real shadow map.
+    this.shadow = this.#shadowTarget(1);
 
     this.weatherMaterial = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -149,10 +168,12 @@ export class ThreeRenderer {
         u_color: { value: new THREE.Vector4() },
       },
       transparent: true,
+      depthFunc: DEPTH_FUNC,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     this.weatherMaterial.onBeforeRender = (renderer, scene, camera, geometry, object) => {
+      object.material.uniformsNeedUpdate = true;
       const uniforms = object.material.uniforms;
       const draw = object.userData;
       uniforms.u_viewProjection.value.fromArray(draw.viewProjection);
@@ -174,6 +195,8 @@ export class ThreeRenderer {
     geometry.setAttribute("a_position", new THREE.BufferAttribute(mesh.positions, 3));
     geometry.setAttribute("a_normal", new THREE.BufferAttribute(mesh.normals, 3));
     geometry.setAttribute("a_color", new THREE.BufferAttribute(mesh.colors, 4));
+    // Three takes the draw count from `position`; our attributes are named a_*.
+    geometry.setDrawRange(0, mesh.vertexCount);
     return { geometry, count: mesh.vertexCount, name: mesh.name };
   }
 
@@ -183,14 +206,25 @@ export class ThreeRenderer {
 
   /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
   createShadowMap(size = 2048) {
+    this.shadow?.target.dispose();
+    this.shadow = this.#shadowTarget(size);
+    return true;
+  }
+
+  /** A depth render target for shadows, cleared once so its texture can be sampled. */
+  #shadowTarget(size) {
     const depthTexture = new THREE.DepthTexture(size, size);
     depthTexture.type = THREE.UnsignedIntType;
     depthTexture.minFilter = THREE.LinearFilter;
     depthTexture.magFilter = THREE.LinearFilter;
     depthTexture.compareFunction = THREE.LessEqualCompare;
     const target = new THREE.WebGLRenderTarget(size, size, { depthTexture, depthBuffer: true });
-    this.shadow = { target, depthTexture, size, lightViewProjection: null, drawn: false, casters: null };
-    return true;
+    this.renderer.setRenderTarget(target);
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, size, size);
+    this.renderer.clear(true, true, false);
+    this.renderer.setRenderTarget(null);
+    return { target, depthTexture, size, lightViewProjection: null, drawn: false, casters: null };
   }
 
   /** Starts rendering shadow casters into the shadow map. */
@@ -217,7 +251,7 @@ export class ThreeRenderer {
     this.renderer.setRenderTarget(shadow.target);
     this.renderer.setScissorTest(false);
     this.renderer.setViewport(0, 0, shadow.size, shadow.size);
-    this.clearColor.setRGB(0, 0, 0);
+    this.clearColor.setRGB(0, 0, 0, THREE.SRGBColorSpace);
     this.renderer.setClearColor(this.clearColor, 1);
     this.renderer.clear(true, true, false);
     this.shadowScene.clear();
@@ -314,7 +348,9 @@ export class ThreeRenderer {
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, this.size.width, this.size.height);
     }
-    this.clearColor.setRGB(pass.horizon[0], pass.horizon[1], pass.horizon[2]);
+    // Three treats a Color as linear and encodes it for the screen on clear; the
+    // colours here are already display values, so say so and they come out unchanged.
+    this.clearColor.setRGB(pass.horizon[0], pass.horizon[1], pass.horizon[2], THREE.SRGBColorSpace);
     this.renderer.setClearColor(this.clearColor, 1);
     this.renderer.clear(true, true, false);
 

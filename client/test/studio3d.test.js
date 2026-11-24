@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
 import { buildStudioRoom } from "../public/js/view3d/studioRoom.js";
+import { lookAt } from "../public/js/view3d/math.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
   const front = [0, 1, 2, 3, 4, 5, 6, 7].map(seatPosition);
@@ -51,12 +52,24 @@ test("the room-only view leaves me out in my own point of view", () => {
 });
 
 class UploadOnlyRenderer {
+  frames = [];
+  ends = 0;
   createShadowMap() {
     return false;
   }
   upload(mesh) {
     return mesh;
   }
+  resize() {}
+  begin(frame) {
+    this.frames.push(frame);
+  }
+  end() {
+    this.ends += 1;
+  }
+  draw() {}
+  drawBright() {}
+  drawTransparent() {}
 }
 
 test("the room-only view keeps My view still with reduced motion", () => {
@@ -69,4 +82,24 @@ test("the room-only view bobs My view with cadence otherwise", () => {
   const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer() });
   view.cameraMode = "pov";
   assert.notDeepEqual(view.cameraPose(3, 90, 0.17), view.cameraPose(3, 90, 0));
+});
+
+test("a studio frame ends with end() and carries the seat camera's view", () => {
+  const renderer = new UploadOnlyRenderer();
+  const labels = { append() {} };
+  const realDocument = globalThis.document;
+  globalThis.document = { createElement: () => ({ className: "", style: {}, append() {}, remove() {}, hidden: false, textContent: "" }) };
+  const view = new StudioView3D({ clientWidth: 320, clientHeight: 200 }, labels, { renderer, reducedMotion: true });
+  view.render({
+    riders: [{ id: 7, name: "Me", is_bot: false, seat: 3, cadence: 80, speed: 5 }],
+    myId: 7,
+    myCadence: 80,
+    coachCadence: 90,
+    timeS: 1,
+    colors: { me: "#f00", human: "#0f0", bot: "#00f", accent: "#ff0" },
+  });
+  globalThis.document = realDocument;
+  assert.equal(renderer.ends, 1);
+  const { eye, target } = view.cameraPose(3, 80, 1);
+  assert.deepEqual([...renderer.frames[0].view], [...lookAt(eye, target)]);
 });

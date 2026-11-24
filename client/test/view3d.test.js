@@ -332,6 +332,9 @@ test("grass and flowers grow beside the road, not on it", () => {
 /** A renderer that draws nothing and remembers every draw call. */
 class StubRenderer {
   draws = [];
+  calls = [];
+  frames = [];
+  ends = 0;
   upload(mesh) {
     return { mesh };
   }
@@ -348,15 +351,28 @@ class StubRenderer {
   viewports = [];
   pass = null;
   begins = 0;
-  begin() {
+  begin(frame) {
     this.begins += 1;
+    this.frames.push(frame);
+    this.calls.push("begin");
+  }
+  end() {
+    this.ends += 1;
+    this.calls.push("end");
   }
   draw(handle, model, tint) {
     this.draws.push({ handle, model, tint, pass: this.pass });
+    this.calls.push("draw");
   }
-  drawBright() {}
-  drawCloudLayer() {}
-  drawTransparent() {}
+  drawBright() {
+    this.calls.push("draw");
+  }
+  drawCloudLayer() {
+    this.calls.push("draw");
+  }
+  drawTransparent() {
+    this.calls.push("draw");
+  }
   uploadWeather(data) {
     return { data };
   }
@@ -1009,4 +1025,24 @@ test("a studio camera follows my seat in the studio, without a road rider of min
   view.render({ riders: [{ id: 9, route: null, studio: { room: 1, seat: 7 }, power: 100 }], myId: 9, timeS: 1, colors });
   assert.ok(view.camera.eye[1] > before[1] + 4, "moved up a floor");
   assert.ok(renderer.draws.length > 0);
+});
+
+test("a rendered frame ends with end(), after the last draw", () => {
+  const renderer = new StubRenderer();
+  const { view } = gymView([], "temperate", null, renderer);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(renderer.ends, 1);
+  assert.equal(renderer.calls.at(-1), "end");
+  assert.ok(renderer.calls.includes("draw"));
+});
+
+test("the frame carries the camera's view and projection", () => {
+  const renderer = new StubRenderer();
+  const { view } = gymView([], "temperate", null, renderer);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  const frame = renderer.frames[0];
+  assert.deepEqual([...frame.view], [...lookAt(view.camera.eye, view.camera.target)]);
+  assert.deepEqual([...multiply(frame.projection, frame.view)], [...frame.viewProjection]);
 });

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import * as THREE from "../public/js/three.js";
 import { ThreeRenderer } from "../public/js/view3d/threeRenderer.js";
 
 const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -81,6 +82,30 @@ test("one pass renders once, on end", () => {
   assert.deepEqual(fake.calls.renders, [["sky", "one", "two"]]);
 });
 
+test("each mesh asks Three to re-upload the shared material's uniforms", () => {
+  const { renderer, fake } = make();
+  const seen = [];
+  fake.render = (scene) => {
+    for (const child of scene.children) {
+      child.material.uniformsNeedUpdate = false;
+      child.material.onBeforeRender(fake, scene, null, child.geometry, child);
+      seen.push(child.material.uniformsNeedUpdate);
+    }
+  };
+  renderer.begin(frame());
+  renderer.draw(renderer.upload(mesh("one")), identity);
+  renderer.drawTransparent(renderer.upload(mesh("two")), identity, { alpha: 0.5 });
+  renderer.end();
+  assert.deepEqual(seen.slice(1), [true, true]);
+});
+
+test("every material keeps the own renderer's LESS depth test, so the far-plane sky stays hidden", () => {
+  const { renderer } = make();
+  for (const material of [renderer.meshMaterial, renderer.transparentMaterial, renderer.skyMaterial, renderer.depthMaterial, renderer.weatherMaterial]) {
+    assert.equal(material.depthFunc, THREE.LessDepth);
+  }
+});
+
 test("transparent draws render after opaque ones", () => {
   const { renderer, fake } = make();
   renderer.begin(frame());
@@ -107,6 +132,7 @@ test("starting a new pass renders the pending one first", () => {
 
 test("an inset clears only inside its rectangle", () => {
   const { renderer, fake } = make();
+  fake.calls.clears.length = 0;
   renderer.viewport({ x: 10, y: 20, width: 300, height: 200 });
   renderer.begin(frame());
   renderer.end();
@@ -124,6 +150,12 @@ test("draws are not kept for the next frame", () => {
   renderer.draw(renderer.upload(mesh("two")), identity);
   renderer.end();
   assert.deepEqual(fake.calls.renders, [["sky", "one"], ["sky", "two"]]);
+});
+
+test("an uploaded mesh draws exactly its vertices", () => {
+  const { renderer } = make();
+  const handle = renderer.upload(mesh("one"));
+  assert.equal(handle.geometry.drawRange.count, 3);
 });
 
 test("the camera uses the frame's view and projection", () => {
@@ -147,6 +179,8 @@ test("shadow casters render into the shadow target before the main pass", () => 
   const { renderer, fake } = make();
   assert.equal(renderer.createShadowMap(1024), true);
   const target = renderer.shadow.target;
+  // Creating the map clears it once; the test is about the passes after that.
+  fake.calls.targets.length = 0;
   renderer.beginShadows(identity);
   renderer.drawShadowCaster(renderer.upload(mesh("caster")), identity);
   renderer.endShadows();
