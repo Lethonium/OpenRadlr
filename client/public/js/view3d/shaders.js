@@ -53,6 +53,7 @@ uniform vec2 u_fogRange;
 uniform float u_alpha;
 uniform float u_unlit;
 uniform float u_fogScale;
+uniform float u_linearOut;
 out vec4 outColor;
 
 vec3 toneMap(vec3 c) {
@@ -93,6 +94,8 @@ void main() {
   // Height fog: distant valleys get hazier than mountain tops.
   fog = clamp(fog * (1.15 - 0.3 * smoothstep(0.0, 250.0, v_world.y - u_cameraPosition.y)), 0.0, 1.0) * u_fogScale;
   outColor = vec4(mix(toneMap(lit), u_fogColor, fog), u_alpha);
+  // Overlay passes draw into the engine's linear target; the post chain encodes.
+  if (u_linearOut > 0.5) outColor.rgb = pow(outColor.rgb, vec3(2.2));
 }`;
 
 export const DEPTH_VERTEX = `#version 300 es
@@ -169,9 +172,11 @@ export const WEATHER_FRAGMENT = `#version 300 es
 precision highp float;
 in vec2 v_corner;
 uniform vec4 u_color;
+uniform float u_linearOut;
 out vec4 outColor;
 void main() {
   float d = length(v_corner);
   if (d > 1.0) discard;
-  outColor = vec4(u_color.rgb, u_color.a * (1.0 - smoothstep(0.55, 1.0, d)));
+  vec3 color = u_linearOut > 0.5 ? pow(u_color.rgb, vec3(2.2)) : u_color.rgb;
+  outColor = vec4(color, u_color.a * (1.0 - smoothstep(0.55, 1.0, d)));
 }`;

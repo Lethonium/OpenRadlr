@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import * as THREE from "../public/js/three.js";
 import { ThreeRenderer } from "../public/js/view3d/threeRenderer.js";
+import { fakeRenderer } from "./support/fakeRenderer.js";
 
 const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 const view = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, 3, 1]);
@@ -30,41 +31,6 @@ const mesh = (name) => ({
   colors: new Float32Array(12).fill(1),
   vertexCount: 3,
 });
-
-/** A stand-in for Three's WebGLRenderer that records what it is asked to do. */
-function fakeRenderer() {
-  const calls = { clears: [], renders: [], viewports: [], scissors: [], targets: [], renderTargets: [] };
-  const state = { scissorTest: false, scissor: null, viewport: null, target: null };
-  return {
-    calls,
-    autoClear: true,
-    setPixelRatio() {},
-    setSize() {},
-    setClearColor() {},
-    setRenderTarget(target) {
-      state.target = target;
-      calls.targets.push(target);
-    },
-    setViewport(x, y, width, height) {
-      state.viewport = [x, y, width, height];
-      calls.viewports.push(state.viewport);
-    },
-    setScissor(x, y, width, height) {
-      state.scissor = [x, y, width, height];
-      calls.scissors.push(state.scissor);
-    },
-    setScissorTest(on) {
-      state.scissorTest = on;
-    },
-    clear() {
-      calls.clears.push({ scissorTest: state.scissorTest, scissor: state.scissor, viewport: state.viewport });
-    },
-    render(scene) {
-      calls.renders.push(scene.children.map((child) => child.name));
-      calls.renderTargets.push(state.target);
-    },
-  };
-}
 
 function make() {
   const fake = fakeRenderer();
@@ -137,7 +103,7 @@ test("an inset clears only inside its rectangle", () => {
   renderer.begin(frame());
   renderer.end();
   assert.deepEqual(fake.calls.clears, [
-    { scissorTest: true, scissor: [10, 20, 300, 200], viewport: [10, 20, 300, 200] },
+    { scissorTest: true, scissor: [10, 20, 300, 200], viewport: [10, 20, 300, 200], target: null },
   ]);
 });
 
@@ -224,4 +190,71 @@ test("weather draws after transparent meshes", () => {
   });
   renderer.end();
   assert.deepEqual(fake.calls.renders, [["sky", "A", "B", "weather"]]);
+});
+
+test("an overlay pass neither clears nor draws the sky", () => {
+  const { renderer, fake } = make();
+  fake.calls.clears.length = 0;
+  renderer.begin(frame({ overlay: true }));
+  renderer.draw(renderer.upload(mesh("rider")), identity);
+  renderer.end();
+  assert.equal(fake.calls.clears.length, 0);
+  assert.deepEqual(fake.calls.renders, [["rider"]]);
+});
+
+test("an overlay pass draws into the engine's target", () => {
+  const { renderer, fake } = make();
+  const target = new THREE.WebGLRenderTarget(4, 4);
+  fake.setRenderTarget(target);
+  renderer.begin(frame({ overlay: true }));
+  renderer.end();
+  assert.deepEqual(fake.calls.renderTargets, [target]);
+});
+
+test("the shadow pass hands the target back", () => {
+  const { renderer, fake } = make();
+  renderer.createShadowMap(512);
+  const target = new THREE.WebGLRenderTarget(4, 4);
+  fake.setRenderTarget(target);
+  renderer.beginShadows(identity);
+  renderer.drawShadowCaster(renderer.upload(mesh("caster")), identity);
+  renderer.endShadows();
+  assert.equal(fake.calls.targets.at(-1), target);
+});
+
+test("a pass hands the target back as well", () => {
+  const { renderer, fake } = make();
+  const target = new THREE.WebGLRenderTarget(4, 4);
+  fake.setRenderTarget(target);
+  renderer.begin(frame({ overlay: true }));
+  renderer.end();
+  assert.equal(fake.calls.targets.at(-1), target);
+});
+
+test("overlay output is linear, a plain pass is display-ready", () => {
+  const { renderer } = make();
+  renderer.begin(frame({ overlay: true }));
+  assert.equal(renderer.meshMaterial.uniforms.u_linearOut.value, 1);
+  assert.equal(renderer.transparentMaterial.uniforms.u_linearOut.value, 1);
+  renderer.end();
+  renderer.begin(frame());
+  assert.equal(renderer.meshMaterial.uniforms.u_linearOut.value, 0);
+  renderer.end();
+});
+
+test("the mesh shader linearises its output when asked", () => {
+  const { renderer } = make();
+  assert.match(renderer.meshMaterial.fragmentShader, /u_linearOut > 0\.5\)\s*outColor\.rgb = pow\(outColor\.rgb, vec3\(2\.2\)\)/);
+});
+
+test("a shared renderer outlives the adapter", () => {
+  const fake = fakeRenderer();
+  new ThreeRenderer(null, { renderer: fake }).destroy();
+  assert.equal(fake.calls.disposed, 0);
+});
+
+test("an own renderer goes with the adapter", () => {
+  const { renderer, fake } = make();
+  renderer.destroy();
+  assert.equal(fake.calls.disposed, 1);
 });

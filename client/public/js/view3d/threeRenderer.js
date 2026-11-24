@@ -9,8 +9,13 @@
  * Passes: a pass is rendered when the next one starts (`begin`, `beginShadows`,
  * `viewport`) or on `end()`. Inside a pass the sky draws first, then opaque
  * meshes in call order, then transparent ones in call order.
+ *
+ * An overlay pass (`frame.overlay`) draws on top of what the engine has put in
+ * its scene target: no clear, no sky, linear output (the post chain encodes),
+ * and the engine's target is bound again afterwards.
  */
 import * as THREE from "../three.js";
+import { cameraFromMatrices } from "./engine/camera.js";
 import { DEPTH_FRAGMENT, DEPTH_VERTEX, MESH_FRAGMENT, MESH_VERTEX, SKY_FRAGMENT, SKY_VERTEX, WEATHER_FRAGMENT, WEATHER_VERTEX } from "./shaders.js";
 
 /** Three prepends the version itself for GLSL3, so the source must not carry it. */
@@ -50,6 +55,7 @@ function meshMaterial(transparent) {
       u_alpha: { value: 1 },
       u_unlit: { value: 0 },
       u_fogScale: { value: 1 },
+      u_linearOut: { value: 0 },
       u_shadowMap: { value: null },
       u_shadowStrength: { value: 0 },
       u_shadowTexel: { value: 0 },
@@ -80,19 +86,19 @@ export class ThreeRenderer {
 
   /**
    * @param {HTMLCanvasElement | null} canvas
-   * @param {{createRenderer?: (canvas: HTMLCanvasElement | null) => object}} [deps]
+   * @param {{createRenderer?: (canvas: HTMLCanvasElement | null) => object, renderer?: object}} [deps]
+   *   `renderer` is a shared renderer (the engine's); the adapter never disposes it
    */
-  constructor(canvas, { createRenderer = (canvas) => new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }) } = {}) {
+  constructor(canvas, { createRenderer = (canvas) => new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }), renderer } = {}) {
     this.canvas = canvas;
-    this.renderer = createRenderer(canvas);
+    this.ownsRenderer = !renderer;
+    this.renderer = renderer ?? createRenderer(canvas);
     this.renderer.autoClear = false;
     // Callers pass device pixels (the old renderer drew straight into them).
     this.renderer.setPixelRatio(1);
     this.size = { width: canvas?.width ?? 1, height: canvas?.height ?? 1 };
 
     this.camera = new THREE.Camera();
-    this.camera.matrixAutoUpdate = false;
-    this.camera.matrixWorldAutoUpdate = false;
 
     this.meshMaterial = meshMaterial(false);
     this.transparentMaterial = meshMaterial(true);
@@ -166,6 +172,7 @@ export class ThreeRenderer {
         u_size: { value: new THREE.Vector2() },
         u_time: { value: 0 },
         u_color: { value: new THREE.Vector4() },
+        u_linearOut: { value: 0 },
       },
       transparent: true,
       depthFunc: DEPTH_FUNC,
@@ -204,6 +211,15 @@ export class ThreeRenderer {
     handle.geometry.dispose();
   }
 
+  /** Releases the adapter's own GPU objects; a shared renderer is left to its engine. */
+  destroy() {
+    this.shadow?.target.dispose();
+    this.shadow = null;
+    for (const material of [this.meshMaterial, this.transparentMaterial, this.skyMaterial, this.depthMaterial, this.weatherMaterial]) material.dispose();
+    this.sky.geometry.dispose();
+    if (this.ownsRenderer) this.renderer.dispose();
+  }
+
   /** Creates the sun's depth texture. Returns false if the device cannot render depth. */
   createShadowMap(size = 2048) {
     this.shadow?.target.dispose();
@@ -219,11 +235,12 @@ export class ThreeRenderer {
     depthTexture.magFilter = THREE.LinearFilter;
     depthTexture.compareFunction = THREE.LessEqualCompare;
     const target = new THREE.WebGLRenderTarget(size, size, { depthTexture, depthBuffer: true });
+    const restore = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(target);
     this.renderer.setScissorTest(false);
     this.renderer.setViewport(0, 0, size, size);
     this.renderer.clear(true, true, false);
-    this.renderer.setRenderTarget(null);
+    this.renderer.setRenderTarget(restore);
     return { target, depthTexture, size, lightViewProjection: null, drawn: false, casters: null };
   }
 
@@ -248,6 +265,7 @@ export class ThreeRenderer {
     if (!shadow || !casters) return;
     shadow.casters = null;
     this.#used = 0;
+    const restore = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(shadow.target);
     this.renderer.setScissorTest(false);
     this.renderer.setViewport(0, 0, shadow.size, shadow.size);
@@ -257,7 +275,7 @@ export class ThreeRenderer {
     this.shadowScene.clear();
     for (const draw of casters) this.shadowScene.add(this.#meshFor(draw, this.depthMaterial, 0));
     this.renderer.render(this.shadowScene, this.shadowCamera);
-    this.renderer.setRenderTarget(null);
+    this.renderer.setRenderTarget(restore);
     shadow.drawn = true;
   }
 
@@ -297,13 +315,14 @@ export class ThreeRenderer {
    * Starts a pass: clears, draws the sky and sets the frame's uniforms.
    * @param {{view: Float32Array, projection: Float32Array, inverseViewProjection: Float32Array,
    *          camera: number[], zenith: number[], horizon: number[], ground: number[],
-   *          sun: number[], sunColor: number[], fog: number[], shadowStrength?: number}} frame
+   *          sun: number[], sunColor: number[], fog: number[], shadowStrength?: number,
+   *          overlay?: boolean}} frame
    */
   begin(frame) {
     this.flush();
-    this.#setCamera(frame);
+    cameraFromMatrices(this.camera, frame.view, frame.projection);
     this.#setFrameUniforms(frame);
-    this.pending = { viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [], weather: [] };
+    this.pending = { overlay: frame.overlay === true, viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [], weather: [] };
   }
 
   end() {
@@ -348,14 +367,16 @@ export class ThreeRenderer {
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, this.size.width, this.size.height);
     }
-    // Three treats a Color as linear and encodes it for the screen on clear; the
-    // colours here are already display values, so say so and they come out unchanged.
-    this.clearColor.setRGB(pass.horizon[0], pass.horizon[1], pass.horizon[2], THREE.SRGBColorSpace);
-    this.renderer.setClearColor(this.clearColor, 1);
-    this.renderer.clear(true, true, false);
+    if (!pass.overlay) {
+      // Three treats a Color as linear and encodes it for the screen on clear; the
+      // colours here are already display values, so say so and they come out unchanged.
+      this.clearColor.setRGB(pass.horizon[0], pass.horizon[1], pass.horizon[2], THREE.SRGBColorSpace);
+      this.renderer.setClearColor(this.clearColor, 1);
+      this.renderer.clear(true, true, false);
+    }
 
     this.scene.clear();
-    this.scene.add(this.sky);
+    if (!pass.overlay) this.scene.add(this.sky);
     pass.opaque.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.meshMaterial, index)));
     pass.transparent.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.transparentMaterial, 1000 + index)));
     pass.weather.forEach((draw) => this.scene.add(this.#meshFor(draw, this.weatherMaterial, 10000)));
@@ -383,13 +404,6 @@ export class ThreeRenderer {
     return mesh;
   }
 
-  #setCamera({ view, projection }) {
-    this.camera.matrixWorldInverse.fromArray(view);
-    this.camera.matrixWorld.copy(this.camera.matrixWorldInverse).invert();
-    this.camera.projectionMatrix.fromArray(projection);
-    this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
-  }
-
   #setFrameUniforms(frame) {
     const shadow = this.shadow;
     const shadowStrength = shadow?.drawn ? (frame.shadowStrength ?? 0.6) : 0;
@@ -406,12 +420,14 @@ export class ThreeRenderer {
       u.u_alpha.value = 1;
       u.u_unlit.value = 0;
       u.u_fogScale.value = 1;
+      u.u_linearOut.value = frame.overlay ? 1 : 0;
       u.u_shadowMap.value = shadow?.depthTexture ?? null;
       u.u_shadowStrength.value = shadowStrength;
       u.u_shadowTexel.value = shadow ? 1 / shadow.size : 0;
       u.u_lightViewProjection.value.copy(IDENTITY);
       if (shadow?.lightViewProjection) u.u_lightViewProjection.value.fromArray(shadow.lightViewProjection);
     }
+    this.weatherMaterial.uniforms.u_linearOut.value = frame.overlay ? 1 : 0;
     const s = this.skyMaterial.uniforms;
     s.u_inverseViewProjection.value.fromArray(frame.inverseViewProjection);
     s.u_cameraPosition.value.fromArray(frame.camera);

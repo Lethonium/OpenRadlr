@@ -25,11 +25,45 @@ test("the next level wraps from ultra to low", () => {
   assert.equal(nextQuality("ultra"), "low");
 });
 
-test("each level's settings", () => {
-  assert.deepEqual(qualitySettings("low"), { pixelRatioMax: 1, shadows: false, detail: false });
-  assert.deepEqual(qualitySettings("medium"), { pixelRatioMax: 1.5, shadows: true, detail: true });
-  assert.deepEqual(qualitySettings("high"), { pixelRatioMax: 2, shadows: true, detail: true });
-  assert.deepEqual(qualitySettings("ultra"), { pixelRatioMax: 2, shadows: true, detail: true });
+test("each level keeps its first three switches", () => {
+  const first = ({ pixelRatioMax, shadows, detail }) => ({ pixelRatioMax, shadows, detail });
+  assert.deepEqual(first(qualitySettings("low")), { pixelRatioMax: 1, shadows: false, detail: false });
+  assert.deepEqual(first(qualitySettings("medium")), { pixelRatioMax: 1.5, shadows: true, detail: true });
+  assert.deepEqual(first(qualitySettings("high")), { pixelRatioMax: 2, shadows: true, detail: true });
+  assert.deepEqual(first(qualitySettings("ultra")), { pixelRatioMax: 2, shadows: true, detail: true });
+});
+
+test("each level has every switch", () => {
+  for (const level of QUALITY_LEVELS) {
+    const settings = qualitySettings(level);
+    for (const key of ["shadowMapSize", "msaa", "ssao", "sunRays", "bloom", "depthOfField", "resolutionFloor"]) {
+      assert.ok(key in settings, `${level}.${key}`);
+    }
+    assert.ok(Object.isFrozen(settings), `${level} is frozen`);
+  }
+});
+
+test("the post switches of each level", () => {
+  const pick = (level) => {
+    const s = qualitySettings(level);
+    return [s.shadowMapSize, s.msaa, s.ssao, s.sunRays, s.bloom, s.depthOfField, s.resolutionFloor];
+  };
+  assert.deepEqual(pick("low"), [0, 0, null, 0, false, false, 0.6]);
+  assert.deepEqual(pick("medium"), [2048, 2, { samples: 10, full: false }, 0, true, false, 0.7]);
+  assert.deepEqual(pick("high"), [4096, 4, { samples: 12, full: false }, 24, true, true, 0.75]);
+  assert.deepEqual(pick("ultra"), [4096, 8, { samples: 16, full: true }, 40, true, true, 0.85]);
+});
+
+test("levels never get lighter going up", () => {
+  const cost = (level) => {
+    const s = qualitySettings(level);
+    return [s.shadowMapSize, s.msaa, s.ssao?.samples ?? 0, s.sunRays, s.pixelRatioMax, s.resolutionFloor];
+  };
+  for (let i = 1; i < QUALITY_LEVELS.length; i += 1) {
+    const lower = cost(QUALITY_LEVELS[i - 1]);
+    const upper = cost(QUALITY_LEVELS[i]);
+    lower.forEach((value, k) => assert.ok(upper[k] >= value, `${QUALITY_LEVELS[i]} column ${k}`));
+  }
 });
 
 test("an unknown level gets the high settings", () => {
