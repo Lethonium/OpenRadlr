@@ -3,16 +3,17 @@
  * Pure, so the page's composition root has no parsing of its own.
  */
 import { BUILDINGS } from "./view3d/assets/buildings/index.js";
+import { CREATURES } from "./view3d/assets/creatures/index.js";
 import { NATURE } from "./view3d/assets/nature/index.js";
 import { PROPS } from "./view3d/assets/props/index.js";
 import { SEASONS } from "./world/seasons.js";
 import { TIME_PRESETS } from "./world/daylight.js";
 
 /**
- * Every asset on the bench by id: the plants, the buildings and the props. All take `create({season, track, ...options})`;
+ * Every asset on the bench by id: the plants, the buildings, the props and the animals. All take `create({season, track, ...options})`;
  * the buildings ignore the plants' `uniforms`.
  */
-export const WORKBENCH_ASSETS = Object.freeze({ ...NATURE, ...BUILDINGS, ...PROPS });
+export const WORKBENCH_ASSETS = Object.freeze({ ...NATURE, ...BUILDINGS, ...PROPS, ...CREATURES });
 
 /** The times of day the workbench lights an asset with (no "auto": there is no clock here). */
 export const WORKBENCH_TIMES = Object.freeze(Object.keys(TIME_PRESETS));

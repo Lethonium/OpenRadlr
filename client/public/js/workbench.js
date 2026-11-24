@@ -236,6 +236,7 @@ function loop(now) {
   camera.far = 6000;
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld(true);
+  asset?.update?.(dt, now / 1000);
   world.update({ dt, t: now / 1000, camera, focus: frame.target.toArray(), shadowHalf: Math.max(6, frame.radius * 1.6) });
   engine.beginFrame();
   engine.renderer.info.reset();

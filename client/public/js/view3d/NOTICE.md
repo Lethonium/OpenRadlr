@@ -29,6 +29,7 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `assets/buildings/windmill.js` | `assets/buildings/windmill.js`: the lattice sails with canvas (the tower is #127's Mallorcan mill) |
 | `assets/buildings/windTurbine.js`, `windpump.js` | `assets/buildings/wind-turbine.js`, `windpump.js`: tapered blades and nacelle; lattice tower, multi-blade wheel, tank |
 | `assets/props/balloon.js`, `boat.js` | `props/balloon.js`, `props/boat.js`: the basket and ropes, the hull, cabin and sail |
+| `assets/creatures/*.js` | `assets/creatures/*.js`, `_walk.js`: cow, sheep, horse, pig, chicken, deer, rabbit, fox, bird, butterfly, dolphin, rebuilt as merged vertex-coloured parts with swinging limbs (seeded coats, no canvas wing texture) |
 
 `assets/buildings/castle.js`, `seaArch.js` and the windmill's tower are rebuilt on the geometry kit from #127's `landmarks.js` (castle ruin, `sweepRock` and `archRings`, Mallorcan mill), not from the reference. The roadside props in `assets/props/` (fence, wall, log pile, boardwalk, cairn, snow pole, cart, bench, mailbox, beehive) are new.
 
