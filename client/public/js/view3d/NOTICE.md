@@ -22,6 +22,11 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `assets/nature/grass.js`, `grassShader.js` | `grass-field.js`: grass rings with LOD cross-fade (ring tables are in `quality.js`) |
 | `assets/nature/crops.js`, `cropShader.js`, `hayBale.js` | `crop-field.js`, `pumpkin.js`, `hay-bale.js`: seasonal crop fields, pumpkins, bales |
 | `assets/materials.js` (`windify`, `translucent`, `noFlip`) | `core/geo.js` |
+| `assets/buildings/house.js`, `shapes.js` | `assets/buildings/house.js` (scenic palette) and `core/geo.js` `gable`: the house in cottage, whitewashed, timber and stone styles, the gabled roof prism |
+| `assets/buildings/farmstead.js`, `farmBuildings.js` | `assets/buildings/farmstead.js`: farmhouse, gambrel barn, silos, machine shed, bales, garden fence, with a small tractor in place of `props/tractor.js` |
+| `assets/buildings/streetLamp.js` | `assets/buildings/street-lamp.js`: the slim LED lamp post (scenic) |
+
+`assets/buildings/cathedral.js` is rebuilt on the geometry kit from the cathedral in #127's `tools/scenery/assemble.mjs`, not from the reference.
 
 `assets/nature/olive.js`, `umbrellaPine.js`, `almond.js` and `lavender.js` are new in this renderer, in the reference's style.
 
