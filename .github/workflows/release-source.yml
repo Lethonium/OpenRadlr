@@ -1,0 +1,91 @@
+name: Signed release source
+
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - .github/workflows/release-source.yml
+      - .github/scripts/release-source.cjs
+      - client/test/releaseSource.test.js
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-source-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: node --test client/test/releaseSource.test.js
+      - name: Build and check an unsigned source snapshot
+        env:
+          OUT_DIR: ${{ runner.temp }}/release-source
+          RELEASE_TAG: v0.0.0-test
+          SNAPSHOT: "true"
+        run: |
+          node .github/scripts/release-source.cjs
+          cd "$OUT_DIR"
+          sha256sum --check SHA256SUMS
+          tar -tzf openradlr-v0.0.0-test-source.tar.gz > contents.txt
+          grep -Fx 'openradlr-v0.0.0-test/LICENSE' contents.txt
+          grep -Fx 'openradlr-v0.0.0-test/version.txt' contents.txt
+
+  publish:
+    if: github.event_name == 'release' && github.repository == 'Lethonium/OpenRadlr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Prepare the tagged source and checksums
+        env:
+          OUT_DIR: ${{ runner.temp }}/release-source
+        run: node .github/scripts/release-source.cjs
+      - name: Attest the archive and checksum manifest
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/release-source/*
+          create-storage-record: false
+      - name: Verify provenance and attach the release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUT_DIR: ${{ runner.temp }}/release-source
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          cd "$OUT_DIR"
+          sha256sum --check SHA256SUMS
+          gh attestation verify "openradlr-${RELEASE_TAG}-source.tar.gz" \
+            --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-source.yml" \
+            --source-ref "refs/tags/$RELEASE_TAG"
+          gh attestation verify SHA256SUMS \
+            --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-source.yml" \
+            --source-ref "refs/tags/$RELEASE_TAG"
+          cp "$BUNDLE" "openradlr-${RELEASE_TAG}.sigstore.json"
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "openradlr-${RELEASE_TAG}-source.tar.gz" SHA256SUMS "openradlr-${RELEASE_TAG}.sigstore.json"

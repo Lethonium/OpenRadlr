@@ -2,7 +2,8 @@
 
 OpenRadlr ships as one application. [Release Please](https://github.com/googleapis/release-please)
 maintains a release PR on `main`; merging it creates a `vX.Y.Z` tag and a GitHub
-Release. It does not publish packages, build release assets, or deploy a server.
+Release. A separate workflow attaches signed source artifacts after publication
+(see below). Neither workflow deploys a server or publishes a package registry entry.
 
 ## Repository setup
 
@@ -70,6 +71,51 @@ Please** manually on `main` with **credits-tag** set to its tag, e.g. `v0.1.0`.
 This mode skips release creation and replaces only the managed contributor section,
 preserving the rest of the release notes. Leaving the input empty runs the usual
 release flow. Existing releases are not modified automatically.
+
+## Verifiable source downloads
+
+For releases published after this workflow is merged, **Signed release source**
+attaches three files to the GitHub Release:
+
+- `openradlr-vX.Y.Z-source.tar.gz`: the committed source tree at the release tag.
+- `SHA256SUMS`: the source archive's SHA-256 checksum.
+- `openradlr-vX.Y.Z.sigstore.json`: a signed provenance bundle covering both files.
+
+The workflow checks that the checkout is the tagged commit and its `version.txt`
+matches the release. It generates [GitHub artifact attestations](https://github.com/actions/attest)
+with a short-lived Sigstore certificate, then verifies both subjects against this
+repository, the signing workflow and source tag before uploading. Pull-request
+checks only build unsigned snapshots and have no publishing or OIDC permission.
+
+To download and verify a release with a recent [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify),
+replace `v0.2.0` with a release that has these assets, and run in an empty directory:
+
+```bash
+tag=v0.2.0
+gh release download "$tag" --repo Lethonium/OpenRadlr \
+  --pattern "openradlr-${tag}-source.tar.gz" --pattern SHA256SUMS \
+  --pattern "openradlr-${tag}.sigstore.json"
+for file in "openradlr-${tag}-source.tar.gz" SHA256SUMS; do
+  gh attestation verify "$file" --repo Lethonium/OpenRadlr \
+    --bundle "openradlr-${tag}.sigstore.json" \
+    --signer-workflow Lethonium/OpenRadlr/.github/workflows/release-source.yml \
+    --source-ref "refs/tags/$tag"
+done
+sha256sum --check SHA256SUMS  # macOS: shasum -a 256 --check SHA256SUMS
+```
+
+Verify signatures and checksums before extracting or building the archive.
+These are source releases, not prebuilt server binaries or app-store packages.
+The attestation identifies the source and producing workflow; it is not a security
+audit of the code. No extra signing secret is needed. Release Please uses its
+existing separate token, so its published-release event can trigger this workflow.
+
+If publication fails, inspect the **Signed release source** run and rerun its
+failed job. Rebuilding the same committed tree produces the same archive; upload
+replaces only the three named source assets. Existing releases are not modified
+automatically, and releases predating the workflow are not supported by this job.
+Scorecard's Signed-Releases result can change only after a release has actual
+signature assets and its scan refreshes.
 
 ## Version tracking
 
