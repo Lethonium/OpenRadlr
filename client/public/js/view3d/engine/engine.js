@@ -36,6 +36,8 @@ export class Engine {
     this.#onDispose = onDispose;
     this.renderer = createRenderer(canvas);
     this.renderer.autoClear = false;
+    // A frame is several render calls: `info` counts from `beginFrame` on, so `frameStats` sees the whole frame.
+    if (this.renderer.info) this.renderer.info.autoReset = false;
     // The world's sun casts soft shadows; a level without a shadow map just leaves `castShadow` off.
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -86,6 +88,13 @@ export class Engine {
     renderer.setViewport(0, 0, this.size.width, this.size.height);
     renderer.setClearColor(this.clearColor, 1);
     renderer.clear(true, true, true);
+    renderer.info?.reset();
+  }
+
+  /** Draw calls and triangles since the last `beginFrame` (the dev `?stats` readout). */
+  frameStats() {
+    const render = this.renderer.info?.render;
+    return { calls: render?.calls ?? 0, triangles: render?.triangles ?? 0 };
   }
 
   /**

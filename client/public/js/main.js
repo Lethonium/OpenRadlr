@@ -854,6 +854,15 @@ function initStartMenu() {
     Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
   }, 1000);
   window.addEventListener("resize", () => app.menu && app.drawMenuStage());
+  // Dev readout for draw-call budgets: `?stats` puts the last frame's draw calls and triangles on <body>.
+  if (new URLSearchParams(location.search).has("stats")) {
+    setInterval(() => {
+      const stats = app.view3d?.frameStats;
+      if (!stats) return;
+      document.body.dataset.drawCalls = String(stats.calls);
+      document.body.dataset.triangles = String(stats.triangles);
+    }, 1000);
+  }
 
   // Coming back from Strava: show what happened, then tidy the address bar.
   const params = new URLSearchParams(location.search);

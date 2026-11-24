@@ -338,6 +338,8 @@ const STUDIO_NEAR_HIDE = 1.2;
 export class View3D {
   /** The workout's side-view box (see `workoutMode`), null while riding. */
   sideView = null;
+  /** The last frame's draw calls and triangles before the post chain (the dev `?stats` readout); null before one. */
+  frameStats = null;
   /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
   #sideAhead = null;
   #labels = new Map();
@@ -965,6 +967,7 @@ export class View3D {
     }
     // Closes the last pass (the side view, when a workout drew one), then the post chain draws the frame.
     this.renderer.end();
+    this.frameStats = this.engine.frameStats?.() ?? null;
     this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
   }
 
