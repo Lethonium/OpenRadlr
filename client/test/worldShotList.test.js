@@ -35,13 +35,14 @@ test("an unknown time of day is rejected, naming the shot", () => {
   assert.throws(() => parseShotList(JSON.stringify([shot({ time: "noon" })])), /a/);
 });
 
-test("settingsFor asks for the 3D view and nothing else by default", () => {
-  assert.deepEqual(settingsFor(shot()), { "openride.view": "3d" });
+test("settingsFor asks for the 3D view at a stored High by default", () => {
+  assert.deepEqual(settingsFor(shot()), { "openride.view": "3d", "openride.quality": "high" });
 });
 
 test("settingsFor passes the route, camera, time of day and season", () => {
   assert.deepEqual(settingsFor(shot({ route: "rolling-hills", camera: "chase", time: "night", season: "winter" })), {
     "openride.view": "3d",
+    "openride.quality": "high",
     "openride.route": "rolling-hills",
     "openride.camera": "chase",
     "openride.time": "night",
@@ -55,9 +56,8 @@ test("parseShotList accepts night and a season", () => {
   assert.equal(parsed.season, "autumn");
 });
 
-test("settingsFor never stores a quality level", () => {
-  const keys = Object.keys(settingsFor(shot({ quality: "low" })));
-  assert.ok(!keys.includes("openride.quality"));
+test("settingsFor always stores High, never a shot's own level", () => {
+  assert.equal(settingsFor(shot({ quality: "low" }))["openride.quality"], "high");
 });
 
 test("pinCamera keeps the module and ends by pinning the camera", () => {

@@ -89,12 +89,14 @@ export function urlFor(shot, base) {
 
 /**
  * The localStorage entries a shot starts the app with, written before load so
- * the app reads them. Never a quality level: `low` turns the 3D menu off.
+ * the app reads them. Always High, never `low` (which turns the 3D menu off).
  * @param {object} shot
  * @returns {Record<string, string>}
  */
 export function settingsFor(shot) {
-  const settings = { "openride.view": "3d" };
+  // High, stored: the app's default level, kept out of the first-run pick and its slow-ride step-down
+  // (headless software GL is always slow).
+  const settings = { "openride.view": "3d", "openride.quality": "high" };
   for (const [key, setting] of [
     ["route", "openride.route"],
     ["camera", "openride.camera"],
