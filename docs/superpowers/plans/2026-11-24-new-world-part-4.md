@@ -218,6 +218,23 @@ butterflies), 1180-1300 (GPU-fall rain and snow, `weatherIntensities`, overcast)
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** Green, `npm run preload`.
 - [ ] **Step 5:** Commit `feat(client): Pick a graphics level for each device on first run`.
 
+### Task 7b: Part 3 follow-ups (owner, 2026-11-24, from the part 3 shots)
+
+- **River gaps:** near the castle the river shows as separate flat patches where the ground rises over it. The
+  river surface must stay visible along its whole course (carve the bed or lift the surface, whichever the river
+  layer's own tests show is wrong). Test: along every river, the ground height at the centreline stays below the
+  water surface.
+- **Castle footprint:** the ruin's towers and walls touch the water. The river test checks the whole footprint
+  (`width`/`depth` of the castle's parts round its centre), not only `apron`; move the castle or the ruin's parts
+  until it passes.
+- **Quay reaches the water:** the harbour's quay stops on the sand. Its seaward end must stand in water deeper than
+  0.5 m, with the boats beside it. Test in the settlement plan.
+- **Sea foam:** close to the camera the foam shows as big hard-edged white blobs. Make it smaller and softer near
+  the camera (fade with distance or scale).
+- **Lighthouse spot:** it stands about 100 m inland on flat grass. Place it within 25 m of the shore, preferring a
+  headland. Test in the landmark plan.
+- [ ] Commit per item as `fix(client): ...`; one shot of the castle, harbour and lighthouse afterwards.
+
 ### Task 8: Shots (main session)
 
 - [ ] Shot list `~/.cache/openradlr/scripts/part4.json` with `?weather=`: city at night (lamps, headlight on the
