@@ -10,10 +10,12 @@ import { createSea } from "./sea.js";
 import { NATURE } from "../assets/nature/index.js";
 import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
+import { createFarmLayer } from "./farmLayer.js";
 import { createGrassLayer } from "./grassLayer.js";
 import { createRiverLayer } from "./riverLayer.js";
 import { createRoadLayer } from "./roadLayer.js";
 import { createRoadsideLayer } from "./roadsideLayer.js";
+import { createSettlementLayer } from "./settlementLayer.js";
 import { createSky } from "./sky.js";
 import { createTerrainLayer } from "./terrainLayer.js";
 import { createOwner } from "./tracker.js";
@@ -59,12 +61,14 @@ export function createWorldScene(world, { settings, track }) {
     crops: () => createCropLayer(plan, { ...plants(), ground: world.ground }),
     roadside: () => createRoadsideLayer(plan, { ...plants(), assets: NATURE }),
     grass: () => createGrassLayer(world.ground, plan, plants()),
+    settlements: () => createSettlementLayer(plan, { ...plants(), grain, ground: world.ground }),
+    farms: () => createFarmLayer(plan, { ...plants(), grain, ground: world.ground }),
   };
   const layers = [createSky({ uniforms, track })];
   if (world.ground) {
     uniforms.fogBase.value = world.ground.near.water;
     layers.push(createSea(world.ground, { uniforms, track }), makers.terrain());
-    if (plan) layers.push(makers.forest(), makers.crops(), makers.roadside(), makers.grass());
+    if (plan) layers.push(makers.forest(), makers.crops(), makers.roadside(), makers.grass(), makers.settlements(), makers.farms());
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
@@ -112,7 +116,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("forest", "roadside", "grass");
+    rebuild("forest", "roadside", "grass", "settlements", "farms");
   };
   setQuality(settings);
 
@@ -155,13 +159,13 @@ export function createWorldScene(world, { settings, track }) {
       for (const layer of layers) layer.update(frame);
     },
     /**
-     * Rebuilds what the season colours (woods, fields, verges) from `plan`, freeing the old.
+     * Rebuilds what the season colours (woods, fields, verges, towns and farms) from `plan`, freeing the old.
      * The ground's own colours were baked into the world for the season it was built in.
      */
     setSeason(next, nextPlan = plan) {
       season = next;
       plan = nextPlan;
-      if (plan) rebuild("forest", "crops", "roadside");
+      if (plan) rebuild("forest", "crops", "roadside", "settlements", "farms");
     },
     setEnvironment(env) {
       environment = env;

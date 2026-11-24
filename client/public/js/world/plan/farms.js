@@ -4,6 +4,8 @@
  * is stamped built so nothing grows there. The models come later from this data.
  */
 import { seededRandom } from "../noise.js";
+import { regionMix } from "../regions.js";
+import { REGION_STYLE } from "../regionKinds.js";
 import { VERGE, roadHalfWidth } from "../roads.js";
 import { MASK, maskAt, stampBuilt, stampDisc } from "./masks.js";
 
@@ -33,6 +35,7 @@ export const FARM = Object.freeze({
  * @property {number} z
  * @property {number} yaw angle of the yard's front, toward the road: (cos yaw, sin yaw) in world x/z
  * @property {number} houses 1 or 2
+ * @property {string} style house style of the farm's region (`REGION_STYLE[kind].houses`)
  * @property {1|2} silos
  * @property {{x: number, z: number, width: number, depth: number, yaw: number}|null} paddock
  * @property {Float32Array} drive x, z pairs from the yard gate to the road's edge
@@ -88,7 +91,7 @@ function farmBudget(roads) {
  * @param {{fields: import("./fields.js").Field[], terrain: {height: (x: number, z: number) => number}, roads: import("../roads.js").RoadIndex, regions?: object[], seed: number, masks: import("./masks.js").Masks, water: number, settlements?: Array<{center: number[], radius: number}>}} input
  * @returns {Farm[]}
  */
-export function planFarms({ fields, terrain, roads, seed, masks, water, settlements = [] }) {
+export function planFarms({ fields, terrain, roads, regions = [], seed, masks, water, settlements = [] }) {
   const random = seededRandom(seed ^ 0xfa53);
   const budget = farmBudget(roads);
   const farms = [];
@@ -121,7 +124,7 @@ export function planFarms({ fields, terrain, roads, seed, masks, water, settleme
     if (paddock) stampBuilt(masks, paddock);
     if (pump) stampDisc(masks, pump.x, pump.z, FARM.pump.radius, MASK.built);
     farms.push({
-      x, y, z, yaw, houses: random() < FARM.secondHouseChance ? 2 : 1, silos: silos < FARM.silosChance ? 2 : 1,
+      x, y, z, yaw, style: REGION_STYLE[regionMix(x, z, regions, seed)[0].kind].houses, houses: random() < FARM.secondHouseChance ? 2 : 1, silos: silos < FARM.silosChance ? 2 : 1,
       paddock, drive: driveTo(yard, neighbour.sample), pump,
     });
   }

@@ -40,8 +40,8 @@ export const SEASONS = Object.freeze(["spring", "summer", "autumn", "winter"]);
  * The options with their defaults.
  * @param {BuildingOptions} [options]
  */
-export function buildingOptions({ style, season = "summer", detail = true, seed = 1, big = false, own = (resource) => resource } = {}) {
-  return { style, season, detail, seed, big, own };
+export function buildingOptions({ style, season = "summer", detail = true, seed = 1, big = false, own = (resource) => resource, ...rest } = {}) {
+  return { ...rest, style, season, detail, seed, big, own };
 }
 
 /** A turning part: its geometries merged round the pivot, owned. */
