@@ -21,3 +21,9 @@ test("the camera's world matrix and inverse projection follow", () => {
   assert.ok(product.equals(new THREE.Matrix4()));
   assert.equal(camera.projectionMatrixInverse.elements[0], 0.5);
 });
+
+test("the camera's position is where the view puts it, for the layers that read it (grass rings, tree LOD)", () => {
+  const camera = new THREE.Camera();
+  cameraFromMatrices(camera, view, projection);
+  assert.deepEqual(camera.position.toArray(), [-1, -2, -3]);
+});

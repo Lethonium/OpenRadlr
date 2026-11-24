@@ -14,6 +14,8 @@ export function cameraFromMatrices(camera, view, projection) {
   camera.matrixWorldAutoUpdate = false;
   camera.matrixWorldInverse.fromArray(view);
   camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+  // The scene's layers read `camera.position` (grass rings, tree LOD); the matrices alone leave it at the origin.
+  camera.position.setFromMatrixPosition(camera.matrixWorld);
   camera.projectionMatrix.fromArray(projection);
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
