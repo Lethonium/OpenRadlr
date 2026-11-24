@@ -24,7 +24,7 @@ const point = (shot, key, value) => {
 
 /**
  * A shot list from its JSON: an array of `{ name, kind, route?, at?, camera?,
- * time?, season?, asset?, eye?, target?, wait? }`. Throws on anything a run could not
+ * time?, season?, weather?, asset?, eye?, target?, wait? }`. Throws on anything a run could not
  * shoot as asked, naming the shot.
  * @param {string} json
  * @returns {object[]}
@@ -40,7 +40,7 @@ export function parseShotList(json) {
     if (seen.has(shot.name)) throw new Error(`shot "${shot.name}" appears twice`);
     seen.add(shot.name);
     if (!SHOT_KINDS.includes(shot.kind)) throw new Error(`shot "${shot.name}" has an unknown kind: ${shot.kind}`);
-    for (const key of ["route", "camera", "season", "asset"]) {
+    for (const key of ["route", "camera", "season", "asset", "weather"]) {
       if (entry[key] === undefined) continue;
       if (typeof entry[key] !== "string" || entry[key] === "") throw new Error(`shot "${shot.name}" has an invalid ${key}`);
       shot[key] = entry[key];
@@ -83,7 +83,8 @@ export function urlFor(shot, base) {
     for (const key of ["season", "time"]) if (shot[key]) query.set(key, shot[key]);
     return `${base}/workbench.html?${query}`;
   }
-  return shot.kind === "ride" ? `${base}/?at=${shot.at ?? 0}` : `${base}/`;
+  const weather = shot.weather ? `&weather=${shot.weather}` : "";
+  return shot.kind === "ride" ? `${base}/?at=${shot.at ?? 0}${weather}` : `${base}/`;
 }
 
 /**

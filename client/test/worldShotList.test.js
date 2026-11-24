@@ -92,6 +92,11 @@ test("a workbench shot opens workbench.html with its asset, season and time", ()
   assert.equal(urlFor({ name: "w", kind: "workbench", asset: "olive" }, "http://x"), "http://x/workbench.html?asset=olive");
 });
 
+test("a ride shot with a weather previews it through the address", () => {
+  const [shot] = parseShotList(JSON.stringify([{ name: "s", kind: "ride", at: 200, weather: "storm" }]));
+  assert.equal(urlFor(shot, "http://x"), "http://x/?at=200&weather=storm");
+});
+
 test("ride and menu shots keep their addresses", () => {
   assert.equal(urlFor(shot({ at: 12 }), "http://x"), "http://x/?at=12");
   assert.equal(urlFor({ name: "m", kind: "menu" }, "http://x"), "http://x/");
