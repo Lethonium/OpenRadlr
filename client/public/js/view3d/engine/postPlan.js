@@ -34,3 +34,21 @@ export function atmosOptions(settings, { ride }) {
     depthOfField: settings.depthOfField && ride,
   };
 }
+
+/** The grade on a clear day (warm) and under full cloud (grey and cool). */
+const CLEAR_GRADE = Object.freeze({ saturation: 1.05, tint: Object.freeze([1.03, 1, 0.93]) });
+const OVERCAST_GRADE = Object.freeze({ saturation: 0.78, tint: Object.freeze([0.96, 0.99, 1.04]) });
+
+/**
+ * The colour grade for an environment: cloud cover (`overcast`, 0..1) drains the warmth and some colour.
+ * @param {{overcast?: number}} env
+ * @returns {{saturation: number, tint: number[]}}
+ */
+export function gradeFor(env) {
+  const k = Math.min(1, Math.max(0, env.overcast ?? 0));
+  const mix = (a, b) => a + (b - a) * k;
+  return {
+    saturation: mix(CLEAR_GRADE.saturation, OVERCAST_GRADE.saturation),
+    tint: CLEAR_GRADE.tint.map((c, i) => mix(c, OVERCAST_GRADE.tint[i])),
+  };
+}

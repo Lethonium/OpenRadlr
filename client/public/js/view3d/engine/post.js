@@ -11,7 +11,7 @@ import { OutputPass } from "../../../vendor/three/addons/postprocessing/OutputPa
 import { Pass, FullScreenQuad } from "../../../vendor/three/addons/postprocessing/Pass.js";
 import { OutputShader } from "../../../vendor/three/addons/shaders/OutputShader.js";
 import { QUAD_VERTEX, GRADE_GLSL, aoFragment, compositeFragment } from "./shaderChunks.js";
-import { atmosOptions, postPlan } from "./postPlan.js";
+import { atmosOptions, gradeFor, postPlan } from "./postPlan.js";
 
 /** Camera heights above the rider (metres) over which depth of field fades out. */
 const DOF_FADE = Object.freeze([15, 45]);
@@ -92,7 +92,7 @@ class AtmosPass extends Pass {
 /** OutputPass whose shader also grades: saturation, tint, lift, contrast curve, vignette. */
 function gradePass() {
   const pass = new OutputPass();
-  Object.assign(pass.uniforms, { uSat: { value: 1.05 }, uVig: { value: 0.42 }, uTint: { value: new THREE.Vector3(1.03, 1, 0.93) }, uLift: { value: 0.05 }, uCurve: { value: 0.28 } });
+  Object.assign(pass.uniforms, { uSat: { value: 1 }, uVig: { value: 0.42 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uLift: { value: 0.05 }, uCurve: { value: 0.28 } });
   const shader = OutputShader.fragmentShader.replace("uniform sampler2D tDiffuse;", "uniform sampler2D tDiffuse; uniform float uSat, uVig, uLift, uCurve; uniform vec3 uTint;"); // i18n-ok
   const end = shader.lastIndexOf("}");
   pass.material.fragmentShader = shader.slice(0, end) + GRADE_GLSL + shader.slice(end);
@@ -139,6 +139,9 @@ export function createPost(renderer, target, settings) {
         // Far-only and mild, as in the reference's ride views; a camera high above the rider (a drone, a pinned view) is sharp.
         u.uDof.value = ride && options.depthOfField ? 1 - smoothstep(DOF_FADE[0], DOF_FADE[1], height) : 0;
       }
+      const { saturation, tint } = gradeFor(env);
+      grade.uniforms.uSat.value = saturation;
+      grade.uniforms.uTint.value.set(...tint);
       // The scene target is always the one the chain starts from; a frame with an odd
       // number of swaps would otherwise start the next one from the other buffer.
       composer.readBuffer = composer.renderTarget1;
