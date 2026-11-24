@@ -3203,6 +3203,10 @@ body.riding {
   --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'><path d='M8 6h13M8 12h13M8 18h13'/><circle cx='4' cy='6' r='1'/><circle cx='4' cy='12' r='1'/><circle cx='4' cy='18' r='1'/></svg>");
 }
 
+[data-menu-nav="account"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/><path d='M10 14l2 2 3.5-3.5'/></svg>");
+}
+
 [data-menu-nav="data"] {
   --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3'/></svg>");
 }
@@ -3283,6 +3287,7 @@ body.riding {
 /* Who is riding on this device: the active rider and, opened, the others and "Add rider". */
 .rider-switcher {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -3314,8 +3319,154 @@ body.riding {
   white-space: nowrap;
 }
 
+/* A rider without a name yet: a person, not a question mark. */
+.rider-initial.unnamed {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.rider-initial.unnamed::before {
+  content: "";
+  width: 60%;
+  height: 60%;
+  background: currentColor;
+  -webkit-mask: var(--icon-person) center / contain no-repeat;
+  mask: var(--icon-person) center / contain no-repeat;
+}
+
+/* The row: avatar, name over where the progress is kept, and a chevron for the menu. */
+.rider-switch .rider-initial {
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+}
+
+.rider-switch-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.rider-switch-name {
+  font-weight: 600;
+}
+
+.rider-switch-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-switch-status[hidden] {
+  display: none;
+}
+
+.rider-switch-status::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--icon-cloud) center / contain no-repeat;
+  mask: var(--icon-cloud) center / contain no-repeat;
+}
+
+.rider-switch-status.ok {
+  color: var(--terrain-edge);
+}
+
+.rider-switch-status.ok::before {
+  -webkit-mask-image: var(--icon-cloud-ok);
+  mask-image: var(--icon-cloud-ok);
+}
+
+.rider-switch-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.rider-switch[aria-expanded="true"] .rider-switch-chevron {
+  margin: 4px 4px 0;
+  transform: rotate(-135deg);
+}
+
+.rider-switcher {
+  --icon-cloud: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/></svg>");
+  --icon-cloud-ok: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/><path d='M10 14l2 2 3.5-3.5'/></svg>");
+  --icon-person: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='8' r='4'/><path d='M4 21a8 8 0 0 1 16 0'/></svg>");
+}
+
+/* The menu's own entries (account, profile): an icon where riders have their initial. */
+.picker-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+}
+
+.picker-icon::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--picker-icon) center / contain no-repeat;
+  mask: var(--picker-icon) center / contain no-repeat;
+}
+
+.picker-icon-account {
+  --picker-icon: var(--icon-cloud);
+}
+
+.picker-icon-profile {
+  --picker-icon: var(--icon-person);
+}
+
+.rider-picker button.highlight {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.rider-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-picker-separator {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border);
+}
+
+.rider-picker-riders {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .rider-picker {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin: 0;
   padding: 0;
@@ -3435,6 +3586,12 @@ body.riding {
   fill: none;
   stroke: var(--muted);
   stroke-width: 1.8;
+}
+
+.profile-ride-title .ride-backed-up {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 .profile-ride-when {
@@ -7548,4 +7705,474 @@ body.working-out #paddles {
 /* While a locked rider's PIN is pending, the start menu is not drawn at all. */
 .pin-gate #setup {
   visibility: hidden;
+}
+/* ------------------------------------------------------------ account --- */
+/* ADR 0032: the profile's Account page (a sign-in card, then the account) and the summary's offer. */
+
+.account-panel {
+  --icon-cloud: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/><path d='M10 14l2 2 3.5-3.5'/></svg>");
+  --icon-key: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.7 12.3L21 2M17 6l3 3M15 8l2 2'/></svg>");
+  display: grid;
+  gap: 20px;
+  max-width: 440px;
+  margin: 0 auto;
+  padding-top: 8px;
+}
+
+.account-panel p {
+  margin: 0;
+}
+
+.account-fine {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Signed out */
+.account-auth,
+.account-form {
+  display: grid;
+  gap: 14px;
+}
+
+.account-form[hidden],
+.account-auth[hidden],
+.account-home[hidden] {
+  display: none;
+}
+
+.account-hero {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.account-hero h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+
+.account-hero p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* On the code step the promise was read already: the code is what matters. */
+.account-auth[data-step="code"] .account-hero p {
+  display: none;
+}
+
+.account-hero-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.account-hero-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.account-hero-icon::before,
+.account-passkey::before {
+  content: "";
+  background: currentColor;
+  -webkit-mask: var(--icon-cloud) center / contain no-repeat;
+  mask: var(--icon-cloud) center / contain no-repeat;
+}
+
+.account-hero-icon::before {
+  width: 28px;
+  height: 28px;
+}
+
+.account-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.account-inline input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 12px;
+}
+
+.account-inline button.primary {
+  flex: none;
+  width: auto;
+  padding: 11px 18px;
+}
+
+.account-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.account-or::before,
+.account-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.account-or[hidden] {
+  display: none;
+}
+
+.account-passkey {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px;
+}
+
+.account-passkey::before {
+  width: 18px;
+  height: 18px;
+  -webkit-mask-image: var(--icon-key);
+  mask-image: var(--icon-key);
+}
+
+.account-passkey[hidden] {
+  display: none;
+}
+
+.account-code-sent {
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.account-code {
+  width: 100%;
+  max-width: 260px;
+  justify-self: center;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 28px;
+  letter-spacing: 0.4em;
+  text-align: center;
+  text-indent: 0.4em;
+}
+
+.account-code::placeholder {
+  color: var(--border);
+}
+
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.account-link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.account-link:hover {
+  color: var(--text);
+}
+
+.account-link.danger-link:hover {
+  color: var(--danger, #ff6b6b);
+}
+
+/* Signed in: the account at the top, then grouped lists like a settings page. */
+.account-home {
+  display: grid;
+  gap: 22px;
+}
+
+.account-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.account-identity-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-email {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-group {
+  display: grid;
+  gap: 8px;
+}
+
+.account-group h3 {
+  margin: 0 0 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-group-note {
+  margin: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* A list: rows in one rounded box, separated by hairlines. */
+.account-list,
+.account-rider {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.account-list[hidden],
+.account-list:empty {
+  display: none;
+}
+
+/* Lists that follow each other in a group read as one box. */
+.account-group .account-list + .account-list:not(:empty):not([hidden]) {
+  margin-top: -9px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.account-group .account-list:has(+ .account-list:not(:empty):not([hidden])) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.account-list > * + * > .account-row,
+.account-list > * + .account-row,
+.account-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.account-row-button:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.account-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-row-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-row-text .account-fine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-row-action {
+  width: auto;
+  white-space: nowrap;
+}
+
+.account-row-action[hidden] {
+  display: none;
+}
+
+.account-row-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.account-row-icon::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--row-icon) center / contain no-repeat;
+  mask: var(--row-icon) center / contain no-repeat;
+}
+
+.account-icon-cloud { --row-icon: var(--icon-cloud); }
+.account-icon-key { --row-icon: var(--icon-key); }
+.account-icon-mail { --row-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><path d='M3 7l9 6 9-6'/></svg>"); }
+.account-icon-plus { --row-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 5v14M5 12h14'/></svg>"); }
+.account-icon-trash { --row-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/></svg>"); }
+
+/* The backup row is a box of its own (it is a row and a list at once). */
+.account-row.account-rider {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.account-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-rider[data-tone="ok"] .account-row-icon {
+  background: color-mix(in srgb, var(--terrain-edge) 16%, transparent);
+  color: var(--terrain-edge);
+}
+
+.account-rider[data-tone="warning"] .account-row-icon {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.account-icon-plus {
+  color: var(--accent);
+}
+
+.account-row-button .account-icon-plus + .account-row-text .account-row-title {
+  color: var(--accent);
+}
+
+.account-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--terrain-edge) 16%, transparent);
+  color: var(--terrain-edge);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Deleting: one quiet row of its own, red only in its title. */
+.account-danger .account-row-button {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.account-danger .account-row-title,
+.account-danger .account-row-icon {
+  color: var(--danger);
+}
+
+.account-danger .account-row-icon {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.account-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-error {
+  text-align: center;
+}
+
+.account-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.account-note summary {
+  cursor: pointer;
+}
+
+.account-note p {
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+.account-confirm,
+.finish-account {
+  margin: 12px 0;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--accent, currentColor);
+  border-radius: 8px;
+}
+
+.account-confirm p,
+.finish-account p {
+  margin: 0;
+}
+
+.finish-account button {
+  justify-self: start;
+}
+
+/* A ride the account holds: a small cloud with a tick next to its route. */
+.ride-backed-up {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
+  background: var(--terrain-edge);
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/><path d='M10 14l2 2 3.5-3.5'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11a4 4 0 0 1-2.5 8z'/><path d='M10 14l2 2 3.5-3.5'/></svg>") center / contain no-repeat;
+}
+
+.account-danger .account-confirm {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
 }
