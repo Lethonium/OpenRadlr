@@ -42,6 +42,8 @@
     <link rel="modulepreload" href="js/profile/achievements.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
+    <link rel="modulepreload" href="js/profile/pinFlows.js" />
+    <link rel="modulepreload" href="js/profile/pinLock.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
     <link rel="modulepreload" href="js/profile/riderStorage.js" />
     <link rel="modulepreload" href="js/profile/riders.js" />
@@ -102,6 +104,7 @@
     <link rel="modulepreload" href="js/view/paddleView.js" />
     <link rel="modulepreload" href="js/view/panels.js" />
     <link rel="modulepreload" href="js/view/photos.js" />
+    <link rel="modulepreload" href="js/view/pinDialog.js" />
     <link rel="modulepreload" href="js/view/profilePage.js" />
     <link rel="modulepreload" href="js/view/profileView.js" />
     <link rel="modulepreload" href="js/view/raceTimelineView.js" />
@@ -146,6 +149,7 @@
     <link rel="modulepreload" href="js/ble/zwiftProtocol.js" />
     <link rel="modulepreload" href="js/i18n/de.js" />
     <link rel="modulepreload" href="js/i18n/en.js" />
+    <link rel="modulepreload" href="js/profile/pin.js" />
     <link rel="modulepreload" href="js/ride/fitFile.js" />
     <link rel="modulepreload" href="js/ride/ftpTest.js" />
     <link rel="modulepreload" href="js/ride/liveStats.js" />
@@ -687,23 +691,19 @@
                       <button type="button" id="profile-delete-all" class="secondary profile-ride-delete" data-i18n="profilePage.data.deleteAll">Delete everything on this device</button>
                       <button type="button" id="profile-delete-rider" class="secondary profile-ride-delete" hidden data-i18n="profilePage.data.deleteRider">Delete this rider</button>
                     </div>
+                    <div id="pin-settings" class="pin-settings">
+                      <h3 data-i18n="pin.settings.title">PIN lock</h3>
+                      <p class="field-hint" data-i18n="pin.settings.lede">Keeps others from opening your profile by accident. It is not encryption: your data stays in this browser.</p>
+                      <p id="pin-status" class="field-hint"></p>
+                      <div class="profile-data-actions">
+                        <button type="button" id="pin-set" class="secondary" data-i18n="pin.button.set">Set a PIN</button>
+                        <button type="button" id="pin-change" class="secondary" data-i18n="pin.button.change">Change PIN</button>
+                        <button type="button" id="pin-remove" class="secondary" data-i18n="pin.button.remove">Remove PIN</button>
+                      </div>
+                    </div>
                     <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-          <!-- Every delete in the profile asks here first: what goes, what changes, what stays (view/deleteConfirm.js) -->
-          <div id="delete-confirm" class="delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-lines" hidden>
-            <div class="delete-card">
-              <h2 id="delete-confirm-title"></h2>
-              <ul id="delete-confirm-lines" class="delete-lines"></ul>
-              <label id="delete-confirm-tick-row" class="check" hidden><input id="delete-confirm-tick" type="checkbox" /> <span data-i18n="profilePage.delete.everything.tick">I understand this cannot be undone</span></label>
-              <p id="delete-confirm-error" class="error" role="alert" hidden></p>
-              <div class="delete-actions">
-                <button type="button" id="delete-confirm-export" class="secondary" data-i18n="profilePage.delete.export">Export first</button>
-                <button type="button" id="delete-confirm-cancel" class="secondary" data-i18n="profilePage.delete.cancel">Cancel</button>
-                <button type="button" id="delete-confirm-go" class="danger"></button>
               </div>
             </div>
           </div>
@@ -1347,5 +1347,33 @@
         </div>
       </section>
     </main>
+    <!-- A locked rider asks for the PIN here (view/pinDialog.js); a lock in the UI, not encryption -->
+    <div id="pin-dialog" class="delete-confirm pin-dialog" role="dialog" aria-modal="true" aria-labelledby="pin-dialog-title" aria-describedby="pin-dialog-hint" hidden>
+      <form id="pin-dialog-form" class="delete-card" novalidate autocomplete="off">
+        <h2 id="pin-dialog-title"></h2>
+        <p id="pin-dialog-hint" class="field-hint"></p>
+        <input id="pin-dialog-input" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="PIN" data-i18n-attr="aria-label:pin.input" />
+        <p id="pin-dialog-error" class="error" role="alert" hidden></p>
+        <button type="button" id="pin-dialog-forgot" class="goal-link" hidden></button>
+        <div class="delete-actions">
+          <button type="button" id="pin-dialog-cancel" class="secondary" data-i18n="pin.cancel">Cancel</button>
+          <button type="submit" id="pin-dialog-go" class="primary"></button>
+        </div>
+      </form>
+    </div>
+    <!-- Every delete in the profile asks here first: what goes, what changes, what stays (view/deleteConfirm.js) -->
+    <div id="delete-confirm" class="delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-lines" hidden>
+      <div class="delete-card">
+        <h2 id="delete-confirm-title"></h2>
+        <ul id="delete-confirm-lines" class="delete-lines"></ul>
+        <label id="delete-confirm-tick-row" class="check" hidden><input id="delete-confirm-tick" type="checkbox" /> <span data-i18n="profilePage.delete.everything.tick">I understand this cannot be undone</span></label>
+        <p id="delete-confirm-error" class="error" role="alert" hidden></p>
+        <div class="delete-actions">
+          <button type="button" id="delete-confirm-export" class="secondary" data-i18n="profilePage.delete.export">Export first</button>
+          <button type="button" id="delete-confirm-cancel" class="secondary" data-i18n="profilePage.delete.cancel">Cancel</button>
+          <button type="button" id="delete-confirm-go" class="danger"></button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
