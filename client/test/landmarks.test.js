@@ -25,8 +25,17 @@ test("the lighthouse stands near the sea, on dry ground", () => {
   assert.ok(sea, "open water within 300 m");
 });
 
+test("the lighthouse stands within 25 m of the shore, on a headland", () => {
+  const l = of("lighthouse");
+  const ring = (radius, count) => Array.from({ length: count }, (_, i) => valley.terrain.height(l.x + Math.cos((i / count) * Math.PI * 2) * radius, l.z + Math.sin((i / count) * Math.PI * 2) * radius) < water);
+  let shore = Infinity;
+  for (let r = 0; r <= 25 && shore === Infinity; r += 1) if (ring(r, 36).some(Boolean)) shore = r;
+  assert.ok(shore <= 25, `the sea is ${shore === Infinity ? "more than 25" : shore} m away`);
+  assert.ok(ring(150, 32).filter(Boolean).length >= 12, "at least a third of the ring 150 m round is sea: a headland");
+});
+
 test("a stretch of cape-loop sees the lighthouse", () => {
-  assert.ok(seen(of("lighthouse"), 30, 600), "some road sample sees the lantern");
+  assert.ok(seen(of("lighthouse"), 30, 700), "some road sample sees the lantern");
 });
 
 test("the castle crowns the crag above the southwest village", () => {

@@ -112,7 +112,7 @@ export function planFauna({ farms = [], trees, terrain, roads, regions = [], see
     const s = roads.samples[Math.floor(random() * roads.samples.length)];
     const [angle, away] = [random() * Math.PI * 2, 50 + random() * 400];
     const [x, z] = [s.x + Math.cos(angle) * away, s.z + Math.sin(angle) * away];
-    if (!dry(x, z) || maskAt(masks, x, z) === MASK.river) continue;
+    if (!dry(x, z) || [MASK.river, MASK.road].includes(maskAt(masks, x, z))) continue;
     flocks.push({ x, z, altitude: between(random, FAUNA.flock.altitude), radius: between(random, FAUNA.flock.radius), count: whole(random, FAUNA.flock.count), seed: next() });
   }
 
