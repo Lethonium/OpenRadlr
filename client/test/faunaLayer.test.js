@@ -27,7 +27,13 @@ const frameAt = (x, z, extra = {}) => {
   return { dt: 0.016, t: 1, camera, focus: [x, 0, z], ...extra };
 };
 const meshes = (layer) => layer.object.children.filter((child) => child.isInstancedMesh);
-const bodyOf = (layer, kind) => layer.object.getObjectByName(`${kind}-body`);
+const bodiesOf = (layer, kind) => layer.object.children.filter((child) => child.isInstancedMesh && new RegExp(`^${kind}-(\\d-)?body$`).test(child.name));
+const bodyOf = (layer, kind) => bodiesOf(layer, kind)[0];
+const solid = (mesh, i) => {
+  const m = new THREE.Matrix4();
+  mesh.getMatrixAt(i, m);
+  return m.elements[12] !== 0 || m.elements[14] !== 0; // a fresh instance is the identity, at the origin
+};
 
 test("a grazing cow stays inside its herd radius", () => {
   const herd = { kind: "cow", x: 100, z: -50, radius: 12, count: 6, seed: 7 };
@@ -72,16 +78,39 @@ test("only nearby animals are re-posed", () => {
   layer.dispose();
 });
 
+test("every animal is drawn from the start, far ones too", () => {
+  const layer = make("high");
+  layer.setEnvironment(day);
+  const bodies = layer.object.children.filter((child) => child.isInstancedMesh && child.name.endsWith("body"));
+  assert.equal(bodies.reduce((sum, mesh) => sum + mesh.count, 0), layer.total);
+  for (const mesh of bodies) for (let i = 0; i < mesh.count; i += 1) assert.ok(solid(mesh, i), `${mesh.name} ${i}`);
+  layer.dispose();
+});
+
+test("a kind with coats is split over at most three instanced groups", () => {
+  const layer = make("high");
+  for (const kind of ["cow", "sheep", "horse", "pig", "chicken", "deer", "bird"]) {
+    const groups = bodiesOf(layer, kind).length;
+    assert.ok(groups <= (["deer", "bird"].includes(kind) ? 1 : 3), `${kind}: ${groups}`);
+  }
+  assert.ok(bodiesOf(layer, "cow").length > 1, "cows come in more than one coat");
+  layer.dispose();
+});
+
 test("animals stand on the ground", () => {
   const layer = make("high");
   layer.setEnvironment(day);
   const herd = plan.fauna.herds[0];
   layer.update(frameAt(herd.x, herd.z));
-  const body = bodyOf(layer, herd.kind);
   const m = new THREE.Matrix4();
-  body.getMatrixAt(0, m);
-  const y = new THREE.Vector3().setFromMatrixPosition(m).y;
-  assert.ok(Math.abs(y - layer.groundAt(new THREE.Vector3().setFromMatrixPosition(m).x, new THREE.Vector3().setFromMatrixPosition(m).z)) < 0.01);
+  const p = new THREE.Vector3();
+  for (const body of bodiesOf(layer, herd.kind)) {
+    for (let i = 0; i < body.count; i += 1) {
+      body.getMatrixAt(i, m);
+      p.setFromMatrixPosition(m);
+      assert.ok(Math.abs(p.y - layer.groundAt(p.x, p.z)) < 0.01);
+    }
+  }
   layer.dispose();
 });
 
@@ -89,6 +118,7 @@ test("butterflies and birds rest at night, walkers sleep, dolphins swim on", () 
   const layer = make("high");
   layer.setEnvironment(day);
   const visible = (kind) => bodyOf(layer, kind)?.visible;
+  assert.ok(bodiesOf(layer, "cow").every((mesh) => mesh.visible === true));
   assert.equal(visible("bird"), true);
   assert.equal(visible("cow"), true);
   layer.setEnvironment(night);

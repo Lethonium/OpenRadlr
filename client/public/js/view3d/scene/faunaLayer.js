@@ -1,7 +1,7 @@
 /**
  * The island's animals as instanced meshes: one for each kind's body and one for each of its limbs, every instance
  * an animal. Poses come from `faunaMotion.js`; an animal is re-posed only while within `settings.animals.animateReach`
- * of the camera (an animal not posed yet is a zero matrix, so it is not drawn), the others keep their last pose.
+ * of the camera (every animal starts in its pose at t = 0), the others keep their last pose.
  * Wild animals step away when the camera comes within `FLEE` metres. At night every kind but the dolphins is hidden;
  * birds and butterflies are also hidden while it rains or snows.
  */
@@ -20,6 +20,10 @@ const WILD_RADIUS = 3;
 /** Share of night above which the walkers sleep; strength of precipitation above which birds and butterflies shelter. */
 const DARK = 0.5;
 const SHELTER = 0.3;
+
+/** Kinds with coat variants, and how many coats each has (the animal's plan seed picks one). */
+const COATS = 3;
+const COATED = Object.freeze(["cow", "horse", "pig", "sheep", "chicken"]);
 
 /** @param {string} id */
 const hiddenAtNight = (id) => id !== "dolphin";
@@ -56,14 +60,19 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
   const animals = gather(plan?.fauna);
   const byKind = new Map();
   for (const animal of animals) {
-    if (!byKind.has(animal.kind)) byKind.set(animal.kind, []);
-    byKind.get(animal.kind).push(animal);
+    animal.coat = COATED.includes(animal.kind) ? animal.seed % COATS : 0;
+    const key = `${animal.kind}:${animal.coat}`;
+    if (!byKind.has(key)) byKind.set(key, []);
+    byKind.get(key).push(animal);
   }
 
   /** @type {Map<string, {id: string, parts: ReturnType<typeof CREATURES.cow.parts>, meshes: THREE.InstancedMesh[], limbs: object[], animals: object[]}>} */
   const kinds = new Map();
-  for (const [id, list] of byKind) {
-    const parts = CREATURES[id].parts({ season, detail: settings.detail, seed: 1, own });
+  for (const [key, list] of byKind) {
+    const [id, coatText] = key.split(":");
+    const coat = Number(coatText);
+    const label = coat ? `${id}-${coat}` : id;
+    const parts = CREATURES[id].parts({ season, detail: settings.detail, seed: 1 + coat, own });
     const make = (geometry, name) => {
       const mesh = own(new THREE.InstancedMesh(geometry, material, list.length));
       mesh.name = name;
@@ -73,12 +82,12 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
       object.add(mesh);
       return mesh;
     };
-    const body = make(parts.body, `${id}-body`);
+    const body = make(parts.body, `${label}-body`);
     const limbs = parts.limbs.map((limb, k) => {
       const [px, py, pz] = limb.pivot;
-      return { limb, mesh: make(limb.geometry, `${id}-limb-${k}`), to: new THREE.Matrix4().makeTranslation(px, py, pz), back: new THREE.Matrix4().makeTranslation(-px, -py, -pz) };
+      return { limb, mesh: make(limb.geometry, `${label}-limb-${k}`), to: new THREE.Matrix4().makeTranslation(px, py, pz), back: new THREE.Matrix4().makeTranslation(-px, -py, -pz) };
     });
-    kinds.set(id, { id, parts, body, limbs, animals: list });
+    kinds.set(key, { id, parts, body, limbs, animals: list });
   }
 
   const dummy = new THREE.Object3D();
@@ -127,6 +136,33 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
     return { pose, y };
   }
 
+  /** Writes the animal's body and limb matrices. */
+  function place(kind, animal, i, t, dt, camera) {
+    const { pose, y } = poseOf(animal, kind, t, dt, camera);
+    dummy.position.set(pose.x, y, pose.z);
+    dummy.rotation.set(pose.pitch, pose.yaw, pose.roll);
+    dummy.updateMatrix();
+    base.copy(dummy.matrix);
+    kind.body.setMatrixAt(i, base);
+    for (const { limb, mesh, to, back } of kind.limbs) {
+      const angle = limbAngle(limb, pose);
+      if (limb.swing === "wing") turn.makeRotationZ(angle);
+      else turn.makeRotationX(angle);
+      limbMatrix.multiplyMatrices(base, to).multiply(turn).multiply(back);
+      mesh.setMatrixAt(i, limbMatrix);
+    }
+  }
+  const flush = (kind) => {
+    kind.body.instanceMatrix.needsUpdate = true;
+    for (const { mesh } of kind.limbs) mesh.instanceMatrix.needsUpdate = true;
+  };
+  // Every animal starts in its pose at t = 0, so far herds are drawn too; only those near the camera move afterwards.
+  const nowhere = { x: 1e9, z: 1e9 };
+  for (const kind of kinds.values()) {
+    kind.animals.forEach((animal, i) => place(kind, animal, i, 0, 0, nowhere));
+    flush(kind);
+  }
+
   const writes = { posed: 0 };
   let night = 0;
   let falling = 0;
@@ -140,7 +176,8 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
 
   return {
     object,
-    /** Animals in the plan, and how many `update` posed last time. */
+    /** Animals in the plan, instanced mesh groups (one per kind and coat), and how many `update` posed last time. */
+    groups: kinds.size,
     total: animals.length,
     get posed() {
       return writes.posed;
@@ -157,23 +194,9 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
           if ((x - camera.x) ** 2 + (z - camera.z) ** 2 > reach2 + (animal.entry.radius ?? 0) ** 2 + (animal.type === "dolphin" ? 400 : 0)) return;
           touched = true;
           writes.posed += 1;
-          const { pose, y } = poseOf(animal, kind, frame.t, frame.dt, camera);
-          dummy.position.set(pose.x, y, pose.z);
-          dummy.rotation.set(pose.pitch, pose.yaw, pose.roll);
-          dummy.updateMatrix();
-          base.copy(dummy.matrix);
-          kind.body.setMatrixAt(i, base);
-          for (const { limb, mesh, to, back } of kind.limbs) {
-            const angle = limbAngle(limb, pose);
-            if (limb.swing === "wing") turn.makeRotationZ(angle);
-            else turn.makeRotationX(angle);
-            limbMatrix.multiplyMatrices(base, to).multiply(turn).multiply(back);
-            mesh.setMatrixAt(i, limbMatrix);
-          }
+          place(kind, animal, i, frame.t, frame.dt, camera);
         });
-        if (!touched) continue;
-        kind.body.instanceMatrix.needsUpdate = true;
-        for (const { mesh } of kind.limbs) mesh.instanceMatrix.needsUpdate = true;
+        if (touched) flush(kind);
       }
     },
     setEnvironment(env) {
