@@ -1,6 +1,7 @@
 import { Emitter } from "../util/emitter.js";
 import { ClientMessages, parseServerMessage } from "./protocol.js";
 import { t } from "../i18n/i18n.js";
+import { joinMessage } from "../profile/riderKey.js";
 
 /**
  * One connection to a game server.
@@ -27,8 +28,9 @@ export class GameConnection extends Emitter {
   }
 
   /**
-   * Connects, performs the hello/join handshake and resolves with the rider id.
-   * @param {{name: string, weightKg: number, publicKey?: string}} profile
+   * Connects, performs the hello/join handshake and resolves with the rider id. With
+   * `sign` (the rider key's), the join carries the welcome challenge signed with it.
+   * @param {{name: string, weightKg: number, publicKey?: string, sign?: (message: string) => Promise<string | null>}} profile
    */
   join(profile) {
     return new Promise((resolve, reject) => {
@@ -44,7 +46,7 @@ export class GameConnection extends Emitter {
           case "welcome":
             this.serverInfo = message;
             this.graceS = message.grace_s ?? 0;
-            this.#send(ClientMessages.join(profile));
+            this.#sendJoin(profile, message.challenge);
             break;
           case "joined": {
             const rejoined = joined;
@@ -72,6 +74,17 @@ export class GameConnection extends Emitter {
         if (!joined) reject(new Error(t("net.cannotConnect", { url: this.url })));
       });
     });
+  }
+
+  /** Sends `join`, signed when the server sent a challenge and the rider can sign. */
+  #sendJoin({ sign, ...profile }, challenge) {
+    if (!challenge || !profile.publicKey || typeof sign !== "function") {
+      this.#send(ClientMessages.join(profile));
+      return;
+    }
+    sign(joinMessage(challenge))
+      .catch(() => null)
+      .then((signature) => this.#send(ClientMessages.join({ ...profile, signature })));
   }
 
   sendTelemetry(reading) {

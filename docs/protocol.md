@@ -45,7 +45,7 @@ Workout riders are exempt.
 | `type` | Fields | When |
 | --- | --- | --- |
 | `hello` | `protocol_version`, `client_version` | first message |
-| `join` | `name` (1–24 chars), `weight_kg` (30–200), `route_id`?, `ftp_w`?, `level_w`?, `device`?, `vehicle_code`?, `public_key`?, `features`? | after `welcome`; `ftp_w` sets the studio's targets (default 2.5 W/kg); `level_w` is the riding level the event bots are matched to; `device` is `trainer` (default), `sim`, `paddle` (phone paddles) or `workout` (no bike: a parked bodyweight workout at the route start; the studio refuses it with `unknown_route`, and `vehicle_code` and `resume` are ignored); `vehicle_code` boards that vehicle on joining (the server picks the world from it, `route_id` is ignored); `resume_token` and `resume` (`route_id`, `distance_m`) come back after a dropped connection, see [Reconnecting](#reconnecting); `features` is a list of optional extras, and `"studio_riders"` adds the spin studio's riders to `riders[]` on a world with the studio building (unknown entries are ignored); `screen_key`? (the tablet's second-screen key, 32 lowercase hex characters: the connection becomes the host of that screen, see [Second screens](#second-screens)) |
+| `join` | `name` (1–24 chars), `weight_kg` (30–200), `route_id`?, `ftp_w`?, `level_w`?, `device`?, `vehicle_code`?, `public_key`?, `signature`?, `features`? | after `welcome`; `ftp_w` sets the studio's targets (default 2.5 W/kg); `level_w` is the riding level the event bots are matched to; `device` is `trainer` (default), `sim`, `paddle` (phone paddles) or `workout` (no bike: a parked bodyweight workout at the route start; the studio refuses it with `unknown_route`, and `vehicle_code` and `resume` are ignored); `vehicle_code` boards that vehicle on joining (the server picks the world from it, `route_id` is ignored); `resume_token` and `resume` (`route_id`, `distance_m`) come back after a dropped connection, see [Reconnecting](#reconnecting); `features` is a list of optional extras, and `"studio_riders"` adds the spin studio's riders to `riders[]` on a world with the studio building (unknown entries are ignored); `screen_key`? (the tablet's second-screen key, 32 lowercase hex characters: the connection becomes the host of that screen, see [Second screens](#second-screens)) |
 | `telemetry` | `power`, `cadence`? | about 4 Hz |
 | `input` | `action`: `lane_left` \| `lane_right` | on key or button press |
 | `start_race` | `laps` (1–`OPENRADLR_MAX_RACE_LAPS`) | any rider on a route, when no race is running there |
@@ -71,7 +71,7 @@ Workout riders are exempt.
 
 | `type` | Fields |
 | --- | --- |
-| `welcome` | `protocol_version`, `server_name`, `server_version`, `auth_mode`, `route_id`, `grace_s` (how long a dropped rider is kept) |
+| `welcome` | `protocol_version`, `server_name`, `server_version`, `auth_mode`, `route_id`, `grace_s` (how long a dropped rider is kept), `challenge` (random per connection, see [Signed join](#signed-join)) |
 | `joined` | `rider_id`, `resume_token` (send it back in `join` after a dropped connection), `physics` (`mass_kg` rider plus bike, `cda_m2`, `crr`, `air_density`: what the server rides you with on a solo bike) |
 | `state` | `tick`, `riders[]` (the riders around you), `race` (your route's, see below), `route_riders` (`humans`, `bots`, `remote`?: everyone on your route; `remote` counts riders of other apps, see below, and is left out when 0), `event`? (your route's scheduled event, see below), `vehicle`? (your own vehicle, see below) — about 4 Hz |
 | `studio_state` | spin studio only, for the rider's room: `tick`, `room` (0-based), `rooms`, `class` (`id`, `name`, `starts_at_s` Unix time, `elapsed_s` — negative in the lobby), `riders[]`, `road_riders[]`? (what the room's windows show, in the shape of `state`'s `riders[]`: the riders on the road outside the studio building and the riders of the other rooms, the latter with `studio`; left out when empty and on servers without the valley map) — about 4 Hz |
@@ -319,3 +319,18 @@ within version 2. Version 2 (#14): one world per map. `riders[]` entries gained 
 `road`, `state` is culled to the riders around you and gained
 `route_riders`, and events stay on their route. Version 1 clients are
 refused with `protocol_mismatch`.
+
+## Signed join
+
+`welcome` carries `challenge`, 64 hex characters, fresh for every connection. A client
+that has a rider key (ADR 0003) signs the UTF-8 bytes of `openradlr-join\n<challenge>`
+with ECDSA P-256 and SHA-256 and sends the signature in `join` as `signature` (base64
+of the raw 64-byte `r‖s`, what WebCrypto's `sign` returns), next to `public_key`
+(base64 SPKI). The server checks it ([ADR 0032](adr/0032-accounts-with-signed-rider-keys.md)):
+
+- a valid signature: the key is the rider's, verified;
+- an invalid signature, or a `signature` without `public_key`: `error` `bad_signature`,
+  and the connection stays waiting for `join`;
+- `public_key` without `signature` (a client before 0032): accepted, the key unverified.
+
+Both fields are additive within protocol version 2.

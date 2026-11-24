@@ -45,6 +45,7 @@ import { changePinFlow, removePinFlow, setPinFlow } from "./profile/pinFlows.js"
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
+import { RiderKey } from "./profile/riderKey.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
@@ -56,7 +57,7 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
-import { continueAllowed, deleteIndexedDb, unfinishedLabel } from "./ride/rideAutosave.js";
+import { continueAllowed, deleteIndexedDb, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { BotCalls } from "./ride/botCalls.js";
@@ -299,7 +300,11 @@ let unlockedRider = isLocked(riders, riders.active) ? null : riders.active;
 /** Everything that belongs to the active rider; device keys go through `rawStorage`. */
 const riderStore = riderStorage(rawStorage, activeRider);
 
-const profiles = new ProfileStore({ storage: riderStore });
+/** The key pair of rider `id` (or of whoever is active, for a function), in their own database (ADR 0032). */
+const riderKeys = (id) => new RiderKey({ store: indexedDbStore(() => riderDbName("openradlr-keys", typeof id === "function" ? id() : id)) });
+const profiles = new ProfileStore({ storage: riderStore, keys: riderKeys(activeRider) });
+/** Signs a join for the active rider. */
+const signAsRider = (message) => profiles.sign(message);
 
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
@@ -1197,7 +1202,7 @@ function askForPin(id, { canForget = true } = {}) {
   });
 }
 
-const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id));
+const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys"].map((base) => riderDbName(base, id));
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
@@ -1231,7 +1236,7 @@ async function forgetRider(id) {
       if (fresh) {
         // Like a fresh install: stored defaults and a key pair for the new rider.
         const generation = app.riderGeneration;
-        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id) });
+        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id), keys: riderKeys(fresh.id) });
         const profile = await store.ensureKeys(store.save(store.load()));
         if (generation === app.riderGeneration) app.profile = profile;
       }
@@ -1320,7 +1325,7 @@ async function addNewRider() {
   saveLocale(locale, browserStorage());
   applyRoster(roster);
   // Like a fresh install: stored defaults and a key pair, written for this rider even if the rider switches meanwhile.
-  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id) });
+  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id), keys: riderKeys(id) });
   const generation = app.riderGeneration;
   const profile = await own.ensureKeys(own.save(own.load()));
   if (generation !== app.riderGeneration) return;
@@ -2146,6 +2151,7 @@ async function joinRide(restored = null) {
   if (app.trainer instanceof PaddleTrainer) app.trainer.setFtp(app.profile.ftp);
   app.riderId = await connection.join({
     ...app.profile,
+    sign: signAsRider,
     vehicleCode,
     routeId: route?.id,
     level: levelOf(app.profile),
@@ -2223,7 +2229,7 @@ async function joinWorkout(profile, errors) {
   const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
-  app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
+  app.riderId = await connection.join({ ...app.profile, sign: signAsRider, routeId, level: levelOf(app.profile), device: "workout" });
   closeMenuStage(routeId, app.routeFile.map?.id ?? null);
   app.workoutPlan = plan;
   app.workout = new WorkoutSession({ plan, now, wallNow: () => Date.now() });
@@ -4345,6 +4351,7 @@ async function rejoin(lost) {
   try {
     const riderId = await connection.join({
       ...app.profile,
+      sign: signAsRider,
       routeId: app.route.id,
       level: levelOf(app.profile),
       // A workout rider is flagged again by its join, also when the server forgot it.

@@ -10,6 +10,7 @@ use crate::protocol::ServerMessage;
 use crate::resume::JoinedRider;
 use crate::runtime::{ChannelSink, Command, GameHandle};
 use crate::screens::{HostGuard, WatchGuard};
+use crate::secure_random::random_token;
 use crate::session::{Action, Phase, PlayerCommand, Session};
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -74,7 +75,7 @@ pub async fn serve(socket: WebSocket, state: AppState) {
 
     let started = Instant::now();
     let now = move || started.elapsed().as_secs_f64();
-    let mut session = Session::new(Arc::clone(&state.info), state.protection.limits, now());
+    let mut session = Session::new(Arc::clone(&state.info), state.protection.limits, now(), random_token());
     // The world this connection joined, and its seat under the player cap.
     let mut game: Option<GameHandle> = None;
     // Which attach of the rider this connection is (#73).
@@ -120,7 +121,11 @@ pub async fn serve(socket: WebSocket, state: AppState) {
                         resume,
                         screen_key,
                         features,
+                        rider_key,
                     } => {
+                        if rider_key.is_some() {
+                            tracing::debug!("join signed with a verified rider key");
+                        }
                         // A dropped connection coming back: the same rider, wherever they ride (#73).
                         if let Some((token, world)) =
                             resume_token.and_then(|token| state.worlds.resume_game(&token).map(|world| (token, world)))

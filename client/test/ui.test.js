@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
 import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
+import { RiderKey } from "../public/js/profile/riderKey.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
 import { describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, riderSections } from "../public/js/view/panels.js";
 import { profileScale } from "../public/js/view/profileView.js";
@@ -101,11 +102,22 @@ test("changing FTP resets the level estimate", () => {
 });
 
 test("generates a key pair once", async () => {
-  const store = new ProfileStore({ storage: memoryStorage(), subtle: globalThis.crypto.subtle });
+  const records = new Map();
+  const keyStore = { get: async (key) => records.get(key), put: async (key, value) => void records.set(key, value) };
+  const store = new ProfileStore({ storage: memoryStorage(), keys: new RiderKey({ store: keyStore, subtle: globalThis.crypto.subtle }) });
   const withKeys = await store.ensureKeys({ ...DEFAULT_PROFILE, name: "Anna" });
   assert.match(withKeys.publicKey, /^[A-Za-z0-9+/=]{80,}$/);
   assert.equal((await store.ensureKeys(withKeys)).publicKey, withKeys.publicKey);
   assert.equal(store.load().publicKey, withKeys.publicKey);
+  assert.equal("privateKeyJwk" in store.load(), false);
+  assert.match(await store.sign("m"), /^[A-Za-z0-9+/=]{80,}$/);
+});
+
+test("a profile store without a key store keeps the profile and signs nothing", async () => {
+  const store = new ProfileStore({ storage: memoryStorage() });
+  const profile = { ...DEFAULT_PROFILE, name: "Anna" };
+  assert.equal(await store.ensureKeys(profile), profile);
+  assert.equal(await store.sign("m"), null);
 });
 
 test("lists nearby riders from ahead to behind", () => {

@@ -85,6 +85,39 @@ test("performs the hello and join handshake", async () => {
   assert.equal(connection.serverInfo.server_name, "Test");
 });
 
+test("signs the welcome challenge when the rider can sign", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const signed = [];
+  const sign = async (message) => (signed.push(message), "c2ln");
+  const joined = connection.join({ name: "Anna", weightKg: 70, publicKey: "pk", sign });
+  socket().open();
+  socket().receive({ type: "welcome", challenge: "ab12" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(signed, ["openradlr-join\nab12"]);
+  assert.equal(socket().sent[1].signature, "c2ln");
+  assert.equal(socket().sent[1].public_key, "pk");
+  socket().receive({ type: "joined", rider_id: 7 });
+  assert.equal(await joined, 7);
+});
+
+test("joins unsigned when signing gives nothing", async () => {
+  const { connection, socket } = connectionWithSocket();
+  connection.join({ name: "Anna", weightKg: 70, publicKey: "pk", sign: async () => null });
+  socket().open();
+  socket().receive({ type: "welcome", challenge: "ab12" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(socket().sent[1].type, "join");
+  assert.equal("signature" in socket().sent[1], false);
+});
+
+test("joins unsigned on a server that sends no challenge", () => {
+  const { connection, socket } = connectionWithSocket();
+  connection.join({ name: "Anna", weightKg: 70, publicKey: "pk", sign: async () => "c2ln" });
+  socket().open();
+  socket().receive({ type: "welcome" });
+  assert.equal("signature" in socket().sent[1], false);
+});
+
 test("rejects when the server refuses the join", async () => {
   const { connection, socket } = connectionWithSocket();
   const joined = connection.join({ name: "", weightKg: 70 });

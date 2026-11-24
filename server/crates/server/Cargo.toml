@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 openradlr-sim = { path = "../sim" }
+openradlr-id = { path = "../id" }
 axum = { version = "0.8", features = ["ws"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 # Strava: token exchange and uploads over HTTPS (rustls with bundled roots, no system OpenSSL).
@@ -35,3 +36,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["io-util"] }
+# The e2e tests sign joins like a client's WebCrypto would.
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8", "alloc"] }
+base64 = "0.22"

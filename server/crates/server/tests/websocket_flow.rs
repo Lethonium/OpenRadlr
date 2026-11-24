@@ -1334,3 +1334,64 @@ async fn info_links_the_configured_discord_community() {
     let info: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(info["discord_url"], "https://community.example.org/join");
 }
+
+/// A rider key as a client holds it: a signing key and its public key as base64 SPKI.
+fn rider_key() -> (p256::ecdsa::SigningKey, String) {
+    use base64::Engine as _;
+    use p256::pkcs8::EncodePublicKey as _;
+    let signing = p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap();
+    let spki = signing.verifying_key().to_public_key_der().unwrap();
+    (
+        signing,
+        base64::engine::general_purpose::STANDARD.encode(spki.as_bytes()),
+    )
+}
+
+fn sign(key: &p256::ecdsa::SigningKey, message: &str) -> String {
+    use base64::Engine as _;
+    use p256::ecdsa::signature::Signer as _;
+    let signature: p256::ecdsa::Signature = key.sign(message.as_bytes());
+    base64::engine::general_purpose::STANDARD.encode(signature.to_bytes())
+}
+
+#[tokio::test]
+async fn a_join_signed_over_the_welcome_challenge_is_accepted() {
+    let addr = start_server(0).await;
+    let mut socket = connect(addr).await;
+    send(&mut socket, r#"{"type":"hello","protocol_version":2}"#).await;
+    let welcome = expect_type(&mut socket, "welcome").await;
+    let challenge = welcome["challenge"].as_str().expect("welcome carries a challenge");
+    let (key, public_key) = rider_key();
+    let join = serde_json::json!({
+        "type": "join", "name": "Anna", "weight_kg": 70,
+        "public_key": public_key, "signature": sign(&key, &format!("openradlr-join\n{challenge}")),
+    });
+    send(&mut socket, &join.to_string()).await;
+    expect_type(&mut socket, "joined").await;
+}
+
+#[tokio::test]
+async fn a_join_signed_over_another_challenge_is_refused() {
+    let addr = start_server(0).await;
+    let mut socket = connect(addr).await;
+    hello(&mut socket).await;
+    let (key, public_key) = rider_key();
+    let join = serde_json::json!({
+        "type": "join", "name": "Anna", "weight_kg": 70,
+        "public_key": public_key, "signature": sign(&key, "openradlr-join\nan old challenge"),
+    });
+    send(&mut socket, &join.to_string()).await;
+    assert_eq!(expect_type(&mut socket, "error").await["code"], "bad_signature");
+}
+
+#[tokio::test]
+async fn every_connection_gets_its_own_challenge() {
+    let addr = start_server(0).await;
+    let mut challenges = Vec::new();
+    for _ in 0..2 {
+        let mut socket = connect(addr).await;
+        send(&mut socket, r#"{"type":"hello","protocol_version":2}"#).await;
+        challenges.push(expect_type(&mut socket, "welcome").await["challenge"].clone());
+    }
+    assert_ne!(challenges[0], challenges[1]);
+}

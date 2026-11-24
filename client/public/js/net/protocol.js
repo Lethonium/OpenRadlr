@@ -9,13 +9,15 @@ export const CLIENT_VERSION = "web-0.1.0";
 
 export const ClientMessages = Object.freeze({
   hello: () => ({ type: "hello", protocol_version: PROTOCOL_VERSION, client_version: CLIENT_VERSION }),
-  join: ({ name, weightKg, publicKey, routeId, ftp, level, device, vehicleCode, resumeToken, resume, screenKey }) => ({
+  join: ({ name, weightKg, publicKey, signature, routeId, ftp, level, device, vehicleCode, resumeToken, resume, screenKey }) => ({
     type: "join",
     name,
     weight_kg: weightKg,
     // The valley world then also lists the spin studio's riders.
     features: ["studio_riders"],
     ...(publicKey ? { public_key: publicKey } : {}),
+    // Proves the key: the welcome challenge signed with it (docs/protocol.md, Signed join).
+    ...(publicKey && signature ? { signature } : {}),
     ...(routeId ? { route_id: routeId } : {}),
     // The spin studio sets targets from it; route worlds ignore it.
     ...(Number.isFinite(ftp) && ftp > 0 ? { ftp_w: ftp } : {}),
