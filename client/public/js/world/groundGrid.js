@@ -26,8 +26,10 @@ import { insideField } from "./plan/masks.js";
 /** Metres from a road's centre that are bare soil, and the further metres over which the soil fades into grass. */
 export const VERGE_REACH = 4;
 const VERGE_FADE = 1.5;
-/** Gradient (rise over run) above which the ground is bare rock. */
+/** Gradient (rise over run) above which the ground starts to turn to rock. */
 export const ROCK_SLOPE = 0.6;
+/** Gradient from which the ground is wholly rock; between the two it fades from grass, so a hillside has no grey-brown smudge. */
+const ROCK_FULL = 1;
 /** Metres above the sea that are beach. */
 export const BEACH_HEIGHT = 3;
 /** Metres from a river's centre that are its bed. */
@@ -57,8 +59,9 @@ export function groundColor({ height, slope, roadDistance, riverDistance, noise,
   if (height < water + BEACH_HEIGHT) colour = linear(look.sand);
   if (roadDistance < VERGE_REACH + VERGE_FADE) colour = mix(linear(look.soil), colour, smoothstep(VERGE_REACH, VERGE_REACH + VERGE_FADE, roadDistance));
   if (riverDistance < RIVER_BED) colour = linear(look.soil).map((c) => c * 0.7);
-  const steep = slope > ROCK_SLOPE;
-  if (steep) colour = linear(look.rock);
+  const bare = smoothstep(ROCK_SLOPE, ROCK_FULL, slope);
+  const steep = bare > 0.5;
+  if (bare > 0) colour = mix(colour, linear(look.rock), bare);
   if (!steep && look.snowCover > 0 && height - water >= look.snowLine) colour = mix(colour, SNOW, look.snowCover);
   return /** @type {Rgb} */ (colour);
 }

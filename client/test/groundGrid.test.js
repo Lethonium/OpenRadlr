@@ -26,9 +26,19 @@ test("normals point up on flat ground", () => {
 });
 
 test("steep ground is rock", () => {
-  assert.deepEqual(groundColor({ ...base, slope: 0.9 }, SEASON_LOOK.summer, 0).map((c) => +c.toFixed(3)), groundColor({ ...base, slope: 0.7 }, SEASON_LOOK.summer, 0).map((c) => +c.toFixed(3)));
-  const [r, g, b] = groundColor({ ...base, slope: 0.9 }, SEASON_LOOK.summer, 0);
+  const rock = (slope) => groundColor({ ...base, slope }, SEASON_LOOK.summer, 0).map((c) => +c.toFixed(3));
+  assert.deepEqual(rock(1.4), rock(1.1));
+  const [r, g, b] = rock(1.1);
   assert.ok(Math.abs(r - g) < 0.05 && Math.abs(g - b) < 0.05, "grey, not green");
+});
+
+test("a slope just past the rock line is still mostly grass, so no grey-brown smudge on a hillside", () => {
+  const at = (slope) => groundColor({ ...base, slope }, SEASON_LOOK.summer, 0);
+  const grass = at(0.05);
+  const edge = at(0.65);
+  const rock = at(1.1);
+  assert.ok(edge[1] - edge[0] > (grass[1] - grass[0]) * 0.6, "green stays above red");
+  assert.ok(Math.abs(edge[1] - grass[1]) < Math.abs(edge[1] - rock[1]), "nearer the grass than the rock");
 });
 
 test("a road verge is soil", () => {
