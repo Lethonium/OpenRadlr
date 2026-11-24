@@ -62,7 +62,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
+  drawDistance: { structures: 2600, bright: 1200 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -751,7 +751,7 @@ export class View3D {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
-    const { pixelRatioMax, shadows, detail } = qualitySettings(this.quality);
+    const { pixelRatioMax, shadows } = qualitySettings(this.quality);
     const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
@@ -860,10 +860,8 @@ export class View3D {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
-      for (const group of ["scenery", "structures"]) {
-        for (const chunk of this.chunks[group]) {
-          if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
-        }
+      for (const chunk of this.chunks.structures) {
+        if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
       }
       this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
       for (const part of visible) {
@@ -904,7 +902,7 @@ export class View3D {
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
-    const scene = { light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
+    const scene = { light, lens, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -970,11 +968,10 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+  #drawWorld({ light, lens, shadows, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
-      if (group === "detail" && !detail) continue;
       // Seen from the drone, small things reach a little further, not as far as the haze.
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
       for (const chunk of chunks) {

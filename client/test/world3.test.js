@@ -10,7 +10,7 @@ import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
-import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, RoadIndex, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
+import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -400,20 +400,6 @@ test("where a route cuts a junction's corner off the network's roads, it still c
   }
 });
 
-test("no tree or bush stands on the asphalt of any route of the map", () => {
-  const index = new RoadIndex(valley, { step: 2 });
-  const half = roadHalfWidth(hillsRoute.lanes);
-  const onRoad = [];
-  for (const chunk of mapWorld.chunks.scenery) {
-    const p = chunk.mesh.positions;
-    for (let i = 0; i < p.length; i += 3) {
-      const near = index.nearest(p[i], p[i + 2]);
-      if (near && near.distance < half && p[i + 1] > near.sample.elevation + 1.5) onRoad.push(`${near.sample.route.id} at ${Math.round(near.sample.distance)} m`);
-    }
-  }
-  assert.deepEqual([...new Set(onRoad)], []);
-});
-
 const near = (p, places, radius) => places.some((n) => Math.hypot(p.x - n.x, p.y - n.y) < radius);
 const places = [...network.nodes.values()];
 
@@ -593,9 +579,6 @@ test("rivers run in valleys, not gorges", () => {
 test("the map world looks the same whichever route you ride", () => {
   // From a track, the other way round from the road the world was built from.
   const fromTrack = buildWorld(tracks[1], { network, others: [...valley, ...tracks] });
-  const vertices = (world, name) => world.chunks[name].reduce((sum, c) => sum + c.mesh.vertexCount, 0);
-  // Grass and flowers are thinner along roads you don't ride; the rest is the same.
-  assert.equal(vertices(fromTrack, "scenery"), vertices(mapWorld, "scenery"), "scenery");
   assert.deepEqual(fromTrack.ground.near.heights, mapWorld.ground.near.heights, "ground");
   assert.deepEqual(fromTrack.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
   // Only the ridden route has arches and spectators.

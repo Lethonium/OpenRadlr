@@ -4,7 +4,6 @@
  * season's colours, shapes and ground rules.
  */
 import { winterModels } from "./buildings.js";
-import { plantFlower, plantTree, plantTuft } from "./flora.js";
 import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
 import { buildPenguin, penguinWorkoutParts } from "./people.js";
 import { terrainColor } from "./terrain.js";
@@ -166,11 +165,6 @@ export const winter = Object.freeze({
   }),
   terrainColor,
   flora: Object.freeze({
-    /** Sparse under the snow: fewer trees than summer, no flowers at all. */
-    density: Object.freeze({ trees: 230, tufts: 700, flowers: 0, elsewhere: 0.4 }),
-    tree: plantTree,
-    tuft: plantTuft,
-    flower: plantFlower,
     /** Dark pines and snow-laden branches for the 2D map's tree dots. */
     mapColors: Object.freeze([PINE, ICE]),
   }),

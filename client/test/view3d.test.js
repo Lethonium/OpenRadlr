@@ -6,8 +6,8 @@ import { identity, lookAt, multiply, perspective, placement, rotationXAbout, tra
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
-import { buildArches, buildGroundDetail, buildFarIslands, buildScenery } from "../public/js/view3d/world.js";
-import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, roadHalfWidth, terrainModel, waterLevel } from "../public/js/world/roads.js";
+import { buildArches, buildFarIslands } from "../public/js/view3d/world.js";
+import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";
@@ -153,17 +153,6 @@ test("cranks turn forward and the leg extends at the bottom of the stroke", () =
   assert.ok(kneeAngle(legPose(Math.PI)) < (80 * Math.PI) / 180, "well bent at the top");
 });
 
-test("scenery is deterministic and never on the road", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const bounds = { x0: -200, z0: -450, x1: 450, z1: 200 };
-  const a = buildScenery(route, terrain, bounds, { count: 150 });
-  const b = buildScenery(route, terrain, bounds, { count: 150 });
-  assert.equal(a.count, 150);
-  assert.deepEqual(a.positions, b.positions);
-  for (const [x, , z] of a.positions) assert.ok(terrain.distanceToRoad(x, z) >= roadHalfWidth(route.lanes) + 4);
-});
-
 // --- view helpers -----------------------------------------------------------
 
 test("labels: not mine, nearest first, no overlaps", async () => {
@@ -219,15 +208,6 @@ test("far islands stand out at sea", () => {
     if (islands.positions[i * 3 + 1] > terrain.seaLevel) continue;
     assert.ok(terrain.island.inland(x, z) < -500, "far islands stand well off the coast");
   }
-});
-
-test("scenery avoids the lake", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const bounds = { x0: -200, z0: -450, x1: 450, z1: 200 };
-  const water = 95;
-  const scenery = buildScenery(route, terrain, bounds, { count: 120, water });
-  for (const [x, , z] of scenery.positions) assert.ok(terrain.height(x, z) >= water + 1);
 });
 
 // --- round 2: lighting, cameras, riders, ground detail ----------------------
@@ -300,20 +280,6 @@ test("riders get a stable look from their id", async () => {
   }
   assert.equal(variantLook(3).skin.length, 3);
   assert.ok(buildWheel().vertexCount > 200);
-});
-
-test("grass and flowers grow beside the road, not on it", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const detail = buildGroundDetail(route, terrain, { tufts: 300, flowers: 50 });
-  assert.ok(detail.count > 250, "most spots are usable even on a tight test loop");
-  const half = roadHalfWidth(route.lanes);
-  for (let i = 0; i < detail.mesh.vertexCount; i += 9) {
-    const x = detail.mesh.positions[i * 3];
-    const z = detail.mesh.positions[i * 3 + 2];
-    assert.ok(terrain.distanceToRoad(x, z) > half, "outside the asphalt");
-    assert.ok(terrain.distanceToRoad(x, z) < half + 40, "close to the road where the camera sees it");
-  }
 });
 
 // --- workout riders at the gym (#77) ------------------------------------------

@@ -1,8 +1,8 @@
 /**
  * Builds the static 3D world for a route: road, verge, lane markings, posts,
  * the ground as grids (an island: fine over the land, coarse out to the
- * horizon; the main thread tiles them, see scene/terrainLayer.js), trees,
- * bushes, rocks, grass tufts and flowers, arches and far-off islands. The sea
+ * horizon; the main thread tiles them, see scene/terrainLayer.js), arches and far-off
+ * islands (the plants are the scene's layers). The sea
  * and the sky are scene layers, not meshes of the world.
  * Everything is derived deterministically from the route files (geometry +
  * seeds), so every client sees the same world. Routes on one shared map
@@ -15,7 +15,6 @@ import { buildBanners, letterArch } from "./banners.js";
 import { ChunkedMesh } from "./chunks.js";
 import {
   Occupancy,
-  PAVEMENT,
   buildBikeCafe,
   buildOutdoorGym,
   studioSite,
@@ -42,7 +41,7 @@ import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "./zones.js";
 import { add, normalize, scale } from "./math.js";
-import { seededRandom, valueNoise } from "../world/noise.js";
+import { seededRandom } from "../world/noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
 import { planWorld } from "../world/plan/index.js";
@@ -107,9 +106,6 @@ export function buildGroundGrids(terrain, ground, { season, long, regions, masks
   };
 }
 
-/** Wraps a target so builders can share the "own a mesh or write into one" pattern. */
-const target = (into) => ({ mesh: into ?? new MeshBuilder(), own: !into });
-
 /** Arches at the start/finish line and at climb and sprint segments, with their names; banners counting down climbs and at halfway. */
 export function buildArches(route, { biome = temperate } = {}) {
   const colors = biome.arch;
@@ -148,98 +144,6 @@ export function buildArches(route, { biome = temperate } = {}) {
   }
   buildBanners(mesh, route, { biome });
   return mesh.build();
-}
-
-/**
- * Trees (firs and leafy), bushes and rocks scattered deterministically:
- * denser near the road, clustered into small woods, never on the road and
- * never in the sea. Shadows come from the renderer's shadow map.
- */
-export function buildScenery(
-  route,
-  terrain,
-  bounds,
-  { count = 1100, water = -Infinity, into = null, blocked = () => false, forests = [], biome = temperate } = {},
-) {
-  const random = seededRandom((route.seed >>> 0) ^ 0x5eed);
-  const seed = route.seed >>> 0;
-  const halfWidth = roadHalfWidth(route.lanes) + VERGE;
-  const { mesh, own } = target(into);
-  const positions = [];
-  let attempts = 0;
-  while (positions.length < count && attempts < count * 8) {
-    attempts += 1;
-    let x;
-    let z;
-    let inForest = false;
-    const mode = random();
-    if (forests.length > 0 && mode < 0.25) {
-      // Forest stretches: trees close to the road, ignoring the woods noise.
-      const stretch = forests[Math.floor(random() * forests.length)];
-      const frame = roadFrame(route, stretch.from + random() * (stretch.to - stretch.from));
-      const side = random() < 0.5 ? -1 : 1;
-      [x, , z] = add(frame.center, scale(frame.right, side * (halfWidth + 5 + Math.pow(random(), 1.3) * 70)));
-      inForest = true;
-    } else if (mode < 0.65) {
-      const frame = roadFrame(route, random() * route.length);
-      const side = random() < 0.5 ? -1 : 1;
-      const offset = halfWidth + 4 + Math.pow(random(), 1.7) * 170;
-      [x, , z] = add(frame.center, scale(frame.right, side * offset));
-    } else {
-      x = bounds.x0 + random() * (bounds.x1 - bounds.x0);
-      z = bounds.z0 + random() * (bounds.z1 - bounds.z0);
-    }
-    // Woods: keep most trees where a slow noise says "forest".
-    const forest = valueNoise(x / 160, z / 160, seed + 99);
-    if (!inForest && forest < 0.42 && random() < 0.75) continue;
-    if (terrain.distanceToRoad(x, z) < halfWidth + 3 || blocked(x, z)) continue;
-    const ground = terrain.height(x, z);
-    if (ground < water + 2.5) continue; // no trees in the sea or on the beach
-    const y = ground - 0.3;
-    positions.push([x, y, z]);
-
-    const kind = inForest ? 0.28 + random() * 0.72 : random();
-    biome.flora.tree({ mesh, x, y, z, kind, random });
-  }
-  return { mesh: own ? mesh.build() : mesh, count: positions.length, positions };
-}
-
-/**
- * Grass tufts and wildflowers next to the road, where the camera sees them
- * up close. Three thin blades per tuft; flowers are a stem with a small head.
- */
-export function buildGroundDetail(
-  route,
-  terrain,
-  { tufts = 7000, flowers = 900, reach = 28, water = -Infinity, into = null, blocked = () => false, biome = temperate } = {},
-) {
-  const random = seededRandom((route.seed >>> 0) ^ 0x6a55);
-  const halfWidth = roadHalfWidth(route.lanes) + VERGE;
-  const { mesh, own } = target(into);
-  let placed = 0;
-  const spot = () => {
-    const frame = roadFrame(route, random() * route.length);
-    const side = random() < 0.5 ? -1 : 1;
-    const offset = halfWidth + 0.4 + Math.pow(random(), 1.5) * reach;
-    const [x, , z] = add(frame.center, scale(frame.right, side * offset));
-    // On tight bends a spot beside one segment can land on the next one.
-    if (terrain.distanceToRoad(x, z) < halfWidth + 0.2 || blocked(x, z)) return null;
-    const y = terrain.height(x, z);
-    return y < water + 2.5 ? null : [x, y, z];
-  };
-  for (let i = 0; i < tufts; i += 1) {
-    const p = spot();
-    if (!p) continue;
-    placed += 1;
-    biome.flora.tuft({ mesh, x: p[0], y: p[1], z: p[2], random });
-  }
-  for (let i = 0; i < flowers; i += 1) {
-    const p = spot();
-    if (!p) continue;
-    placed += 1;
-    biome.flora.flower({ mesh, x: p[0], y: p[1], z: p[2], random });
-  }
-  return { mesh: own ? mesh.build() : mesh, count: placed };
 }
 
 /**
@@ -348,7 +252,6 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  */
 export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
-  const density = biome.flora.density;
   const roads = network ? network.roads() : null;
   // Every route of the map keeps its asphalt clear, whichever is ridden, so the world looks the same from all of them.
   const mapRoutes = [route, ...others.filter((o) => o.id !== route.id)];
@@ -367,8 +270,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const half = roadHalfWidth(route.lanes) + VERGE;
 
   const chunks = {
-    detail: new ChunkedMesh(),
-    scenery: new ChunkedMesh(),
     structures: new ChunkedMesh(),
     bright: new ChunkedMesh(),
   };
@@ -487,31 +388,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   }
   // On a network the roads have the rails; the ridden route adds its signs.
   if (network) buildRoadside(route, terrain, { structures: chunks.structures, bright: chunks.bright, rails: false, biome });
-
-  // Villages keep their streets clear of trees; nothing grows in rivers or buildings.
-  const inVillage = (x, z) => {
-    const near = terrain.index.nearest(x, z);
-    return near !== null && near.distance < 70 && inStretch(near.sample.route, zonesOf.get(near.sample.route).villages, near.sample.distance, 20);
-  };
-  const blocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.4) || occupancy.blocked(x, z, 2) || inVillage(x, z);
-  const detailBlocked = (x, z) => nearRiver(x, z, -RIVER.bank * 0.7) || occupancy.blocked(x, z) || (inVillage(x, z) && terrain.distanceToRoad(x, z) < half + PAVEMENT + 1);
-  for (const r of ordered) {
-    const km = r.length / 1000;
-    const margin = 450;
-    const { minX, maxX, minY, maxY } = r.bounds;
-    const bounds = { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
-    buildScenery(r, terrain, bounds, { biome, water: ground.water, into: chunks.scenery, blocked, forests: zonesOf.get(r).forests, count: Math.round(density.trees * km * (long ? LONG.trees : 1)) });
-    // Grass and flowers only show close up: thinner along the roads you don't ride.
-    const detail = (network && !ridden.has(r) ? density.elsewhere : 1) * (long ? LONG.ground : 1);
-    buildGroundDetail(r, terrain, {
-      biome,
-      water: ground.water,
-      into: chunks.detail,
-      tufts: Math.round(density.tufts * km * detail),
-      flowers: Math.round(density.flowers * km * detail),
-      blocked: detailBlocked,
-    });
-  }
 
   // The river's colour is a bare colour or an object with colour, opacity and (frozen) ice patches.
   const river = Array.isArray(biome.river) ? { color: biome.river } : (biome.river ?? {});

@@ -5,7 +5,6 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { riverStrips } from "../public/js/world/plan/riverStrips.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
-import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildWeather } from "../public/js/view3d/weather.js";
 import { buildWorld } from "../public/js/view3d/world.js";
 import { terrainModel } from "../public/js/world/roads.js";
@@ -85,7 +84,6 @@ test("winter brings ploughed banks, ruts and a frozen river", () => {
   assert.notDeepEqual(winter.river.color, resolveBiome("temperate").river.color, "the river freezes over");
   assert.equal(winter.river.alpha, 1, "ice is opaque");
   assert.ok(winter.river.ice, "the ice carries snow patches");
-  assert.equal(winter.flora.density.flowers, 0, "nothing flowers under the snow");
 });
 
 test("winter's river grows a surface, not a new course", () => {
@@ -136,16 +134,7 @@ test("winter changes the air, not the sun's direction", async () => {
   }
 });
 
-/** One tree at the origin with a deterministic random stream, for comparing biomes. */
-const sampleTree = (biome, kind) => {
-  const mesh = new MeshBuilder();
-  let state = 1;
-  const random = () => (state = (state * 48271) % 2147483647) / 2147483647;
-  biome.flora.tree({ mesh, x: 0, y: 0, z: 0, kind, random });
-  return mesh.build();
-};
-
-test("a biome grows its own trees and crowd", () => {
+test("a biome has its own crowd", () => {
   const temperate = resolveBiome("temperate");
   const winter = resolveBiome("winter");
   assert.equal(temperate.people.motion, "jump", "people jump in summer");
@@ -155,11 +144,6 @@ test("a biome grows its own trees and crowd", () => {
   const clap = winter.people.model(true);
   assert.ok(idle.vertexCount > 0, "the penguin has geometry");
   assert.notDeepEqual(clap.positions, idle.positions, "the flippers move");
-
-  const leafy = sampleTree(temperate, 0.8);
-  const birch = sampleTree(winter, 0.8);
-  assert.ok(leafy.vertexCount > 0 && birch.vertexCount > 0);
-  assert.notDeepEqual(birch.positions, leafy.positions, "winter grows a different tree");
 });
 
 test("winter's workout figures are penguins", () => {
@@ -237,7 +221,8 @@ test("winter changes the look, not the layout", () => {
   const t = total(temperate);
   const w = total(winter);
   assert.notEqual(winter.roads.strips.positions.length, temperate.roads.strips.positions.length, "the road itself is reshaped");
-  assert.ok(Math.abs(w - t) / t < 0.1, `winter stays within 10 % of temperate (${t} → ${w})`);
+  // The plants are scene layers now; what is left is the adapter's own drawing, where winter's snowmen posts and banked road weigh more.
+  assert.ok(w / t < 1.6, `winter stays within 60 % of temperate (${t} → ${w})`);
 });
 
 test("every biome keeps the world's places", () => {

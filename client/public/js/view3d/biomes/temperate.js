@@ -2,8 +2,7 @@
  * The temperate biome: the farmland valley OpenRadlr has always drawn.
  *
  * A biome only changes what the world *looks like*, never where anything is.
- * It supplies colours, the terrain shading rule, the scenery models and how
- * trees, tufts and flowers are drawn; the layout (terrain heights, roads,
+ * It supplies colours, the terrain shading rule and the scenery models; the layout (terrain heights, roads,
  * zones, buildings' places) stays the same in every biome, so riders on the
  * same road share a world even when they see different seasons.
  *
@@ -34,19 +33,6 @@ export const COLORS = Object.freeze({
   verge: [0.62, 0.58, 0.48],
   marking: [0.93, 0.93, 0.89],
   edge: [0.9, 0.9, 0.86],
-  trunk: [0.38, 0.27, 0.18],
-  firs: [
-    [0.13, 0.33, 0.2],
-    [0.16, 0.37, 0.22],
-    [0.11, 0.29, 0.19],
-  ],
-  leaves: [
-    [0.3, 0.52, 0.22],
-    [0.38, 0.58, 0.24],
-    [0.46, 0.6, 0.2],
-    [0.68, 0.55, 0.2],
-  ],
-  bush: [0.27, 0.45, 0.2],
   rock: [0.52, 0.51, 0.49],
   postWhite: [0.94, 0.94, 0.92],
   postRed: [0.82, 0.18, 0.16],
@@ -59,17 +45,6 @@ export const COLORS = Object.freeze({
   cloud: [1, 1, 1, 1], // tinted by the time of day
   water: [0.16, 0.42, 0.56],
   river: [0.22, 0.45, 0.6],
-  grass: [
-    [0.3, 0.5, 0.2],
-    [0.38, 0.58, 0.22],
-    [0.45, 0.6, 0.26],
-  ],
-  flowers: [
-    [0.95, 0.85, 0.2],
-    [0.95, 0.95, 0.95],
-    [0.85, 0.3, 0.55],
-    [0.55, 0.45, 0.9],
-  ],
 });
 
 /** The crowd's shirts, a stable list so the same person keeps the same colour. */
@@ -121,64 +96,6 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
   const shade = 0.92 + 0.16 * fbm(x / 30, z / 30, seed + 7, 2);
   const high = smoothstep(85, 140, height - water);
   return [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
-}
-
-/** One tree, bush or rock at `[x, y, z]`; `kind` is the placement's random draw. */
-function plantTree({ mesh, x, y, z, kind, random }) {
-  if (kind < 0.1) {
-    const size = 0.8 + random() * 2;
-    mesh.cone([x, y, z], size, size * 0.8, COLORS.rock, 5, random() * Math.PI);
-  } else if (kind < 0.28) {
-    const size = 0.9 + random() * 1.2;
-    mesh.ellipsoid([x, y + size * 0.55, z], [size, size * 0.75, size], COLORS.bush, 4, 8, random() * Math.PI);
-  } else if (kind < 0.62) {
-    // Fir: two or three stacked cones.
-    const height = 6 + random() * 7;
-    const color = COLORS.firs[Math.floor(random() * COLORS.firs.length)];
-    mesh.box([x, y + height * 0.12, z], [0.4, height * 0.24, 0.4], COLORS.trunk);
-    const tiers = random() < 0.5 ? 2 : 3;
-    for (let t = 0; t < tiers; t += 1) {
-      const base = y + height * (0.18 + t * 0.22);
-      const radius = height * (0.3 - t * 0.07);
-      mesh.cone([x, base, z], radius, height * (0.5 - t * 0.08), color, 7, random() * Math.PI);
-    }
-  } else {
-    // Leafy tree: trunk and one or two round crowns.
-    const height = 5 + random() * 5;
-    const color = COLORS.leaves[Math.floor(random() * COLORS.leaves.length)];
-    const crown = height * (0.3 + random() * 0.1);
-    mesh.box([x, y + height * 0.3, z], [0.45, height * 0.6, 0.45], COLORS.trunk);
-    mesh.ellipsoid([x, y + height * 0.68, z], [crown, crown * 0.85, crown], color, 4, 7, random() * Math.PI);
-    if (random() < 0.5) {
-      const dx = (random() - 0.5) * crown;
-      const dz = (random() - 0.5) * crown;
-      mesh.ellipsoid([x + dx, y + height * 0.85, z + dz], [crown * 0.7, crown * 0.6, crown * 0.7], color, 3, 6, random() * Math.PI);
-    }
-  }
-}
-
-/** Three thin blades of grass. */
-function plantTuft({ mesh, x, y, z, random }) {
-  const color = COLORS.grass[Math.floor(random() * COLORS.grass.length)];
-  const height = 0.25 + random() * 0.35;
-  const turn = random() * Math.PI;
-  for (let blade = 0; blade < 3; blade += 1) {
-    const angle = turn + (blade / 3) * Math.PI;
-    const dx = Math.cos(angle) * 0.09;
-    const dz = Math.sin(angle) * 0.09;
-    const lean = [(random() - 0.5) * 0.15, height, (random() - 0.5) * 0.15];
-    mesh.triangle([x - dx, y, z - dz], [x + dx, y, z + dz], [x + lean[0], y + lean[1], z + lean[2]], color);
-  }
-}
-
-/** A stem with a small flower head. */
-function plantFlower({ mesh, x, y, z, random }) {
-  const height = 0.3 + random() * 0.25;
-  const top = [x, y + height, z];
-  mesh.triangle([x - 0.015, y, z], [x + 0.015, y, z], top, COLORS.grass[0]);
-  const color = COLORS.flowers[Math.floor(random() * COLORS.flowers.length)];
-  const r = 0.06 + random() * 0.04;
-  mesh.ellipsoid(top, [r, r * 0.6, r], color, 2, 5, random() * Math.PI);
 }
 
 /** Buildings and props: a biome swaps these for its own shapes and skins. */
@@ -279,11 +196,6 @@ export const temperate = Object.freeze({
   people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true, shirts: SHIRTS, flagHand: [0.36, 1.85, -0.05] }),
   terrainColor,
   flora: Object.freeze({
-    /** Scenery per kilometre of road, so every route gets the same density. */
-    density: Object.freeze({ trees: 270, tufts: 1450, flowers: 190, elsewhere: 0.4 }),
-    tree: plantTree,
-    tuft: plantTuft,
-    flower: plantFlower,
     /** The two greens of the 2D map's tree dots. */
     mapColors: Object.freeze([Object.freeze([0.302, 0.49, 0.227]), Object.freeze([0.376, 0.561, 0.271])]),
   }),
