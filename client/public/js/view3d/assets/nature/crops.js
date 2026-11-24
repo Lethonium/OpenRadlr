@@ -18,6 +18,7 @@ export const CROPS = deepFreeze({
   rapeseed: { h: 1.15, a: "#efd22e", b: "#9fb84a", period: 0.45, stripe: 0.16, speck: 0.35, side: "#7d9a3c", tram: 0.55, sway: 0.8, walls: true },
   wheat: { h: 0.95, a: "#dcb860", b: "#bf9340", period: 0.22, stripe: 0.2, side: "#a8843a", tram: 0.6, sway: 1, walls: true },
   sunflower: { h: 1.8, a: "#f0b51f", b: "#4f7a2e", period: 0.7, stripe: 0.4, speck: 0.55, specky: "#5a3a1c", side: "#557f30", sway: 0.35, walls: true },
+  corn: { h: 2.1, a: "#7ea03c", b: "#58802c", period: 0.75, stripe: 0.45, side: "#5b8a30", sway: 0.45, walls: true },
   stubble: { h: 0.06, a: "#d9c38a", b: "#a38a55", period: 6.0, stripe: 0.5 },
   ploughed: { h: 0.1, a: "#4c3524", b: "#7a5a40", period: 0.9, stripe: 0.9, furrow: 1 },
   pumpkin: { h: 0.1, a: "#5a4230", b: "#61803a", period: 1.6, stripe: 0.7, furrow: 1 },
@@ -61,17 +62,36 @@ const toWorld = ({ x, z, yaw }) => {
   return (lx, lz) => [x + lx * c - lz * s, z + lx * s + lz * c];
 };
 
+/** Share of the crop's height the ground-level edge of a field with plants keeps: the plants stand there, not a wall. */
+const EDGE_DIP = 0.22;
+
+/**
+ * The coordinates of one axis of the field grid: every `step` metres, with a line at `band` and at half of it from
+ * both ends, so the dipped edge has vertices where it ramps.
+ */
+function axis(length, step, band) {
+  const n = Math.max(2, Math.ceil(length / step));
+  const list = Array.from({ length: n + 1 }, (_, i) => -length / 2 + (i * length) / n);
+  if (band > 0 && band < length / 2 - 0.5) {
+    for (const edge of [0.5, 1]) list.push(-length / 2 + band * edge, length / 2 - band * edge);
+  }
+  const sorted = list.sort((a, b) => a - b);
+  return sorted.filter((v, i) => i === 0 || v - sorted[i - 1] > 0.4);
+}
+
 /**
  * A field rectangle draped over the ground.
- * @param {{width: number, depth: number, x?: number, z?: number, yaw?: number, crop: string, heightAt?: (x: number, z: number) => number, step?: number}} field
- *   `width` runs along `yaw`; `heightAt` is the ground height in world space
+ * @param {{width: number, depth: number, x?: number, z?: number, yaw?: number, crop: string, heightAt?: (x: number, z: number) => number, step?: number, edgeBand?: number}} field
+ *   `width` runs along `yaw`; `heightAt` is the ground height in world space; `edgeBand` metres along the edges
+ *   where individual plants stand: the canopy dips there, so they are not hidden behind a wall
  * @returns {import("../../../three.js").BufferGeometry} non-indexed with an `aF` attribute (row coordinate, along, wall)
  */
-export function fieldGeometry({ width: w, depth: d, x = 0, z = 0, yaw = 0, crop, heightAt = () => 0, step = 4 }) {
+export function fieldGeometry({ width: w, depth: d, x = 0, z = 0, yaw = 0, crop, heightAt = () => 0, step = 4, edgeBand = 0 }) {
   const p = CROPS[crop];
   const tall = Boolean(p.walls);
-  const nx = Math.max(2, Math.ceil(w / step));
-  const nz = Math.max(2, Math.ceil(d / step));
+  const xs = axis(w, step, edgeBand);
+  const zs = axis(d, step, edgeBand);
+  const [nx, nz] = [xs.length - 1, zs.length - 1];
   const world = toWorld({ x, z, yaw });
   const pos = [];
   const nrm = [];
@@ -86,12 +106,13 @@ export function fieldGeometry({ width: w, depth: d, x = 0, z = 0, yaw = 0, crop,
     const nxs = heightAt(px - e, pz) - heightAt(px + e, pz);
     const nzs = heightAt(px, pz - e) - heightAt(px, pz + e);
     const l = Math.hypot(nxs, 2 * e, nzs);
-    return { x: px, z: pz, y: g + lift + bump, g, n: [nxs / l, (2 * e) / l, nzs / l] };
+    const inside = edgeBand > 0 ? Math.min(1, Math.min(w / 2 + lx, w / 2 - lx, d / 2 + lz, d / 2 - lz) / edgeBand) : 1;
+    const dip = EDGE_DIP + (1 - EDGE_DIP) * inside * inside * (3 - 2 * inside);
+    return { x: px, z: pz, y: g + lift * dip + bump * dip, g, n: [nxs / l, (2 * e) / l, nzs / l] };
   };
   for (let j = 0; j <= nz; j += 1) {
     for (let i = 0; i <= nx; i += 1) {
-      const lx = -w / 2 + (i * w) / nx;
-      const lz = -d / 2 + (j * d) / nz;
+      const [lx, lz] = [xs[i], zs[j]];
       const t = top(lx, lz);
       pos.push(t.x, t.y, t.z);
       nrm.push(...t.n);
@@ -107,10 +128,10 @@ export function fieldGeometry({ width: w, depth: d, x = 0, z = 0, yaw = 0, crop,
   }
   if (tall) {
     const ring = [];
-    for (let i = 0; i < nx; i += 1) ring.push([-w / 2 + (i * w) / nx, -d / 2]);
-    for (let j = 0; j < nz; j += 1) ring.push([w / 2, -d / 2 + (j * d) / nz]);
-    for (let i = nx; i > 0; i -= 1) ring.push([-w / 2 + (i * w) / nx, d / 2]);
-    for (let j = nz; j > 0; j -= 1) ring.push([-w / 2, -d / 2 + (j * d) / nz]);
+    for (let i = 0; i < nx; i += 1) ring.push([xs[i], -d / 2]);
+    for (let j = 0; j < nz; j += 1) ring.push([w / 2, zs[j]]);
+    for (let i = nx; i > 0; i -= 1) ring.push([xs[i], d / 2]);
+    for (let j = nz; j > 0; j -= 1) ring.push([-w / 2, zs[j]]);
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     ring.forEach(([ax, az], k) => {

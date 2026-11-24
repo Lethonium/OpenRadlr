@@ -29,7 +29,7 @@ const frozen = (value) => {
   return value;
 };
 
-const ARABLE = { spring: list("rapeseed"), summer: list("wheat", "sunflower"), autumn: list("stubble", "pumpkin"), winter: list("ploughed") };
+const ARABLE = { spring: list("rapeseed"), summer: list("wheat", "sunflower", "corn"), autumn: list("stubble", "pumpkin"), winter: list("ploughed") };
 const DRY = { spring: list("wheat"), summer: list("wheat"), autumn: list("stubble"), winter: list("ploughed") };
 
 /**

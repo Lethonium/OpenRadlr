@@ -8,6 +8,8 @@ import { baleGeometry, cropMaterial, fieldExtras, fieldGeometry, pumpkinGeometry
 import { bodyMaterial } from "../assets/nature/foliage.js";
 import { colour } from "../assets/nature/geom.js";
 import { heightSampler } from "./grassField.js";
+import { STALK_CROPS } from "../../world/plan/stalks.js";
+import { createStalkLayer } from "./stalkLayer.js";
 import { createOwner } from "./tracker.js";
 
 /** Seed of the scatter on the fields. */
@@ -32,10 +34,10 @@ function instances(things, geometry, material, own, place) {
 
 /**
  * @param {{fields: import("../../world/plan/fields.js").Field[]}} plan
- * @param {{ground: {near: import("../../world/groundGrid.js").GroundGrid}, uniforms: object, track: import("./tracker.js").Tracker["track"]}} options
- *   `ground` gives the height the fields drape over
+ * @param {{ground: {near: import("../../world/groundGrid.js").GroundGrid}, uniforms: object, track: import("./tracker.js").Tracker["track"], settings?: import("../quality.js").QualitySettings}} options
+ *   `ground` gives the height the fields drape over; `settings` the crop plants along the edges (none without)
  */
-export function createCropLayer(plan, { ground, uniforms, track }) {
+export function createCropLayer(plan, { ground, uniforms, track, settings }) {
   const { own, disposeAll } = createOwner(track);
   const object = new THREE.Group();
   object.name = "crops";
@@ -49,7 +51,7 @@ export function createCropLayer(plan, { ground, uniforms, track }) {
   const pumpkins = [];
   const bales = [];
   const fields = plan.fields.map((field) => {
-    const mesh = new THREE.Mesh(own(fieldGeometry({ ...field, heightAt })), material(field.crop));
+    const mesh = new THREE.Mesh(own(fieldGeometry({ ...field, heightAt, edgeBand: STALK_CROPS[field.crop] ? (settings?.cropStalks?.edgeBand ?? 0) : 0 })), material(field.crop));
     mesh.receiveShadow = true;
     mesh.name = `field-${field.crop}`;
     object.add(mesh);
@@ -78,10 +80,16 @@ export function createCropLayer(plan, { ground, uniforms, track }) {
     mesh.name = "bales";
     object.add(mesh);
   }
+  const stalks = settings?.cropStalks && createStalkLayer(plan.fields, { settings: settings.cropStalks, heightAt, uniforms, own });
+  if (stalks) object.add(stalks.object);
   return {
     object,
     fields,
-    update() {},
+    stalks,
+    /** Plants the fields near the camera. */
+    update(frame) {
+      stalks?.update(frame.camera.position);
+    },
     setEnvironment() {},
     dispose() {
       object.clear();
