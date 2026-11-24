@@ -1,1 +1,155 @@
-[]
+[
+  {
+    "name": "menu-island",
+    "kind": "menu",
+    "wait": 12000
+  },
+  {
+    "name": "menu-route",
+    "kind": "menu",
+    "route": "island-tour",
+    "wait": 12000
+  },
+  {
+    "name": "ride-village",
+    "kind": "ride",
+    "at": 200,
+    "camera": "chase"
+  },
+  {
+    "name": "ride-forest",
+    "kind": "ride",
+    "at": 6200,
+    "camera": "chase"
+  },
+  {
+    "name": "ride-climb-banners",
+    "kind": "ride",
+    "at": 6760,
+    "camera": "chase"
+  },
+  {
+    "name": "ride-coast",
+    "kind": "ride",
+    "route": "cape-loop",
+    "at": 1100,
+    "eye": [
+      1789,
+      120,
+      3300
+    ],
+    "target": [
+      1790,
+      0,
+      2950
+    ]
+  },
+  {
+    "name": "ride-farm",
+    "kind": "ride",
+    "at": 2270,
+    "eye": [
+      1883,
+      68,
+      658
+    ],
+    "target": [
+      1810,
+      40,
+      598
+    ]
+  },
+  {
+    "name": "ride-riders-labels",
+    "kind": "ride",
+    "at": 0,
+    "camera": "chase",
+    "wait": 8000
+  },
+  {
+    "name": "ride-crowd-summit",
+    "kind": "ride",
+    "at": 7650,
+    "camera": "chase"
+  },
+  {
+    "name": "studio-outside",
+    "kind": "ride",
+    "route": "riverside-flats",
+    "at": 57,
+    "eye": [
+      58,
+      42,
+      15
+    ],
+    "target": [
+      55.3,
+      39.9,
+      -26.6
+    ]
+  },
+  {
+    "name": "statue",
+    "kind": "ride",
+    "at": 70,
+    "eye": [
+      2398.5,
+      152.6,
+      -878
+    ],
+    "target": [
+      2392.7,
+      153.1,
+      -876.3
+    ]
+  },
+  {
+    "name": "gym",
+    "kind": "ride",
+    "at": 69,
+    "eye": [
+      2417,
+      154.5,
+      -883.5
+    ],
+    "target": [
+      2400.4,
+      153,
+      -878.5
+    ]
+  },
+  {
+    "name": "ride-dusk",
+    "kind": "ride",
+    "route": "cape-loop",
+    "at": 1100,
+    "eye": [
+      1789,
+      120,
+      3300
+    ],
+    "target": [
+      1790,
+      0,
+      2950
+    ],
+    "time": "dusk"
+  },
+  {
+    "name": "ride-winter-snow",
+    "kind": "ride",
+    "at": 6200,
+    "camera": "chase",
+    "biome": "winter"
+  },
+  {
+    "name": "gallery-temperate",
+    "kind": "gallery",
+    "biome": "temperate"
+  },
+  {
+    "name": "gallery-winter",
+    "kind": "gallery",
+    "biome": "winter"
+  }
+]
