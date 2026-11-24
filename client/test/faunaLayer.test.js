@@ -70,7 +70,7 @@ test("a dolphin swims along the surface: most of the time its back is above the 
     let samples = 0;
     for (let t = 0; t < 120; t += 0.25) {
       samples += 1;
-      if (dolphinPose({ x: 0, z: 0, seed }, t).y + half > 0) above += 1;
+      if (dolphinPose({ x: 0, z: 0, seed }, t).y + half > 0.25) above += 1;
     }
     assert.ok(above / samples >= 0.6, `seed ${seed}: ${above}/${samples}`);
   }
@@ -170,4 +170,10 @@ test("the fauna layer disposes everything after a season and quality switch", ()
   layer.dispose();
   assert.equal(tracker.live(), 0);
   assert.ok(meshes(layer).length === 0);
+});
+
+test("dolphins swim in pods, a few to each spot", () => {
+  const fauna = { dolphins: [{ x: 0, z: 0, seed: 7 }] };
+  const layer = createFaunaLayer({ fauna }, { season: "summer", settings: qualitySettings("high"), track: createTracker().track, ground });
+  assert.equal(layer.total, 3);
 });

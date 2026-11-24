@@ -16,7 +16,7 @@ const WANDER = 0.7;
  * jumps they swim along the surface, the body rolling `roll` metres either side of `ride` (a negative offset: the back
  * and fin break the water, the belly stays under) once every `rollPeriod` seconds.
  */
-const DOLPHIN = Object.freeze({ period: 9, above: 0.3, height: 2.4, ride: -0.3, roll: 0.3, rollPeriod: 3, loop: 18, speed: 4 });
+const DOLPHIN = Object.freeze({ period: 9, above: 0.3, height: 2.4, ride: 0, roll: 0.25, rollPeriod: 3, loop: 18, speed: 4 });
 
 /** A repeatable pseudo-random number in [0, 1) for `seed` and a slot. */
 const unit = (seed, slot) => {

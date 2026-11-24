@@ -27,6 +27,9 @@ const COATED = Object.freeze(["cow", "horse", "pig", "sheep", "chicken"]);
 
 /** @param {string} id */
 const hiddenAtNight = (id) => id !== "dolphin";
+/** Dolphins to a pod, and how far apart they swim (metres). */
+const POD = 3;
+const POD_SPACING = 5;
 const shelters = (id) => id === "bird" || id === "butterfly";
 
 /** Every animal the plan lists, as `{kind, type, entry, seed}` records. */
@@ -40,7 +43,13 @@ function gather(fauna) {
     for (let i = 0; i < flock.count; i += 1) animals.push({ kind: "bird", type: "flock", entry: flock, seed: flock.seed, index: i });
   }
   for (const spot of fauna?.butterflies ?? []) animals.push({ kind: "butterfly", type: "butterfly", entry: spot, seed: spot.seed, index: 0 });
-  for (const spot of fauna?.dolphins ?? []) animals.push({ kind: "dolphin", type: "dolphin", entry: spot, seed: spot.seed, index: 0 });
+  // A pod swims the same loop, a few metres apart and out of step, so a bay shows several backs at once.
+  for (const spot of fauna?.dolphins ?? []) {
+    for (let i = 0; i < POD; i += 1) {
+      const entry = { ...spot, x: spot.x + POD_SPACING * Math.cos(i * 2.1), z: spot.z + POD_SPACING * Math.sin(i * 2.1), seed: spot.seed + i * 977 };
+      animals.push({ kind: "dolphin", type: "dolphin", entry, seed: entry.seed, index: i });
+    }
+  }
   return animals;
 }
 
