@@ -12,5 +12,5 @@ export const dolphin = defineCreature({ id: "dolphin", name: "Dolphin", descript
     body.push(blob(1, BELLY, 0.42, 0.3, 1.35, 0, -0.2, 0.05));
     for (const side of [-1, 1]) body.push(box(0.3, 0.05, 0.2, back).rotateZ(side * 0.5).translate(side * 0.5, -0.3, 0.6));
   }
-  return { body, limbs: [limb([box(1.1, 0.07, 0.3, back, 0, 0, -1.65)], [0, 0, -1.45], "tail")] };
+  return { body, limbs: [limb([cone(0.18, 0.7, 4, back).rotateX(-Math.PI / 2).translate(0, 0, -1.3), box(1.1, 0.07, 0.3, back, 0, 0, -1.65)], [0, 0, -1.2], "tail")] };
 });

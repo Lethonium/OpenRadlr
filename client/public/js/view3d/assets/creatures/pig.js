@@ -13,5 +13,5 @@ export const pig = defineCreature({ id: "pig", name: "Pig", description: "Farm p
     for (const side of [-1, 1]) head.push(cone(0.12, 0.26, 4, colour(main), side * 0.18, 1.12, 0.9));
   } else head.push(box(0.26, 0.2, 0.14, colour(snout), 0, 0.74, 1.25));
   const legs = [[0.22, 0.45], [-0.22, 0.45], [0.22, -0.45], [-0.22, -0.45]].map(([x, z]) => legAt([box(0.14, 0.42, 0.14, colour(main).multiplyScalar(0.92), x, 0.21, z)], [x, 0.42, z]));
-  return { body, limbs: [limb(head, [0, 0.82, 0.8], "head"), limb([cone(0.05, 0.22, 4, colour(main), 0, 0.9, -0.95)], [0, 0.9, -0.85], "tail"), ...legs] };
+  return { body, limbs: [limb(head, [0, 0.82, 0.8], "head"), limb([cone(0.05, 0.22, 4, colour(main), 0, 0.72, -0.85)], [0, 0.72, -0.78], "tail"), ...legs] };
 });

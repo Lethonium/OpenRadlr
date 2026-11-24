@@ -215,3 +215,58 @@ test("each animal is one piece at rest: no part floats free of the rest", () => 
     assert.equal(pieces.size, 1, `${id} falls into ${pieces.size} pieces`);
   }
 });
+
+/** Is the point inside a closed geometry: does a ray from it cross the surface an odd number of times. */
+function inside(geometry, point) {
+  const p = geometry.attributes.position;
+  const ray = new THREE.Ray(point, new THREE.Vector3(0.31, 0.17, 0.93).normalize());
+  let hits = 0;
+  for (let i = 0; i < p.count; i += 3) {
+    const [a, b, c] = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, i + k));
+    if (ray.intersectTriangle(a, b, c, false, new THREE.Vector3())) hits += 1;
+  }
+  return hits % 2 === 1;
+}
+
+/** Distance from a point to a geometry's surface. */
+function surfaceDistance(geometry, point) {
+  const p = geometry.attributes.position;
+  const target = new THREE.Vector3();
+  let best = Infinity;
+  for (let i = 0; i < p.count; i += 3) {
+    const triangle = new THREE.Triangle(...[0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, i + k)));
+    best = Math.min(best, triangle.closestPointToPoint(point, target).distanceTo(point));
+  }
+  return best;
+}
+
+test("every limb reaches into the body or touches its skin", () => {
+  const problems = [];
+  for (const id of IDS) {
+    const built = build(id);
+    for (const part of built.limbs) {
+      const p = part.geometry.attributes.position;
+      let closest = Infinity;
+      for (let i = 0; i < p.count; i += 1) {
+        const vertex = new THREE.Vector3().fromBufferAttribute(p, i);
+        closest = Math.min(closest, inside(built.body, vertex) ? 0 : surfaceDistance(built.body, vertex));
+      }
+      if (closest > 0.02) problems.push(`${id} ${part.swing} at ${part.pivot.map((n) => n.toFixed(2))} hovers ${closest.toFixed(2)} m off the body`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
+test("as the workbench runs it, every limb stays on the body at every moment", () => {
+  for (const id of IDS) {
+    const made = CREATURES[id].create({});
+    for (const t of [0, 0.4, 1, 2.7, 5, 1.7e9]) {
+      made.update(0.016, t);
+      made.object.updateMatrixWorld(true);
+      const [bodyMesh, ...joints] = made.object.children;
+      const body = new THREE.Box3().setFromObject(bodyMesh).expandByScalar(0.08);
+      for (const joint of joints) assert.ok(body.intersectsBox(new THREE.Box3().setFromObject(joint)), `${id} limb at ${joint.position.toArray().map((n) => n.toFixed(2))} leaves the body at t=${t}`);
+    }
+    made.dispose();
+  }
+});
