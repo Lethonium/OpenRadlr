@@ -11,7 +11,7 @@ import { add, scale } from "../vec.js";
 import { createStrips, mergeStrips } from "./strips.js";
 
 /** What a quad is, for colouring and for the draw order. */
-export const ROAD_KIND = Object.freeze({ asphalt: 0, verge: 1, marking: 2, bank: 3, rut: 4, edge: 5 });
+export const ROAD_KIND = Object.freeze({ asphalt: 0, verge: 1, marking: 2, bank: 3, rut: 4, edge: 5, pavement: 6 });
 /** Metres of road per texture tile. */
 export const TILE = 12;
 

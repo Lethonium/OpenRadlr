@@ -65,5 +65,6 @@ export function kindColors(style) {
   colors[ROAD_KIND.bank] = style.bank?.color ?? style.verge;
   colors[ROAD_KIND.rut] = style.rut?.color ?? style.surface;
   colors[ROAD_KIND.edge] = style.edge;
+  colors[ROAD_KIND.pavement] = style.pavement ?? style.verge;
   return colors;
 }

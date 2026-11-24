@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { NETWORK_LANES, RoadNetwork, hashSeed } from "../public/js/route/network.js";
 import { fetchMapNetwork, roadNetworkOf } from "../public/js/route/worldMap.js";
+import { ROAD_KIND } from "../public/js/world/plan/roadStrips.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
 import { buildScene } from "../public/js/view3d/worldScene.js";
 import { drawMapPreview } from "../public/js/view/mapPreview.js";
@@ -106,7 +107,8 @@ test("a route on a network rides its roads point for point", () => {
 test("the world on a network: every road once, the café, junction pads", () => {
   // Drawn once: the ridden route on top, the roads only where it doesn't run.
   const alone = buildWorld(loop, { network: new RoadNetwork({ ...tinyNetworkFile(), edges: tinyNetworkFile().edges.slice(0, 1), routes: [] }) });
-  const vertices = (w) => w.roads.strips.kinds.length;
+  // Town pavements are not roads: they come with the towns, not with the network.
+  const vertices = (w) => w.roads.strips.kinds.filter((kind) => kind !== ROAD_KIND.pavement).length;
   assert.ok(vertices(world) < vertices(alone) * 1.2, "roads under the ridden route are not drawn again");
   assert.equal(world.cafes.length, 1);
   assert.ok(Math.hypot(world.cafes[0][0], world.cafes[0][2]) < 80, "the café is at the café");

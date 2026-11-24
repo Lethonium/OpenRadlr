@@ -47,6 +47,7 @@ import { groundGrid } from "../world/groundGrid.js";
 import { planWorld } from "../world/plan/index.js";
 import { junctionPads, roadStrips } from "../world/plan/roadStrips.js";
 import { riverStrips } from "../world/plan/riverStrips.js";
+import { streetStrips } from "../world/plan/streetStrips.js";
 import { mergeStrips } from "../world/plan/strips.js";
 import { buildBridges } from "./bridges.js";
 import { buildRoadPosts } from "./roadPosts.js";
@@ -335,6 +336,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // Where roads of a network meet at an angle, an asphalt pad closes the
   // gap between their square ends (under every road, so markings stay on top).
   if (network) strips.unshift(junctionPads(network));
+  // The towns' streets, squares and pavements and the farms' drives ride with the road.
+  strips.push(streetStrips(plan.settlements, terrain, { farms: plan.farms }));
 
   // Places other features must keep clear of.
   const occupancy = new Occupancy();
