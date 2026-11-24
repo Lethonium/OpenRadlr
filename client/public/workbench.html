@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenRadlr workbench</title>
+    <link rel="stylesheet" href="workbench.css" />
+  </head>
+  <body>
+    <div class="wb">
+      <aside class="wb-side">
+        <h1>Workbench</h1>
+        <p class="wb-hint">Every plant of the world kit, lit and post-processed like the world. A dev aid, not part of the app.</p>
+        <nav id="assets" class="wb-list" aria-label="Assets"></nav>
+      </aside>
+      <main class="wb-stage" id="stage">
+        <canvas id="canvas" class="wb-canvas"></canvas>
+        <div id="stats" class="wb-stats" role="status"></div>
+      </main>
+      <aside class="wb-panel">
+        <div id="controls" class="wb-controls"></div>
+        <div id="options" class="wb-options"></div>
+      </aside>
+    </div>
+    <script type="module" src="js/workbench.js"></script>
+  </body>
+</html>

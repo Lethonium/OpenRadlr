@@ -143,13 +143,27 @@
     "season": "winter"
   },
   {
-    "name": "gallery-temperate",
-    "kind": "gallery",
-    "biome": "temperate"
+    "name": "workbench-olive-summer",
+    "kind": "workbench",
+    "asset": "olive",
+    "season": "summer"
   },
   {
-    "name": "gallery-winter",
-    "kind": "gallery",
-    "biome": "winter"
+    "name": "workbench-broadleaf-autumn",
+    "kind": "workbench",
+    "asset": "broadleaf",
+    "season": "autumn"
+  },
+  {
+    "name": "workbench-umbrellapine-winter",
+    "kind": "workbench",
+    "asset": "umbrellaPine",
+    "season": "winter"
+  },
+  {
+    "name": "workbench-lavender-summer",
+    "kind": "workbench",
+    "asset": "lavender",
+    "season": "summer"
   }
 ]

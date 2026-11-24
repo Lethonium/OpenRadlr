@@ -1,0 +1,172 @@
+/* Dev-only plant workbench (/workbench.html). Not part of the app's styles. */
+:root {
+  color-scheme: dark;
+  --wb-bg: #12161a;
+  --wb-panel: #1b2127;
+  --wb-line: #2a323a;
+  --wb-text: #e8ecef;
+  --wb-muted: #93a0aa;
+  --wb-accent: #ffcf5a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--wb-bg);
+  color: var(--wb-text);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+.wb {
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  height: 100%;
+}
+
+.wb-side,
+.wb-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px;
+  background: var(--wb-panel);
+  overflow-y: auto;
+}
+
+.wb-side {
+  border-right: 1px solid var(--wb-line);
+}
+
+.wb-panel {
+  border-left: 1px solid var(--wb-line);
+  gap: 16px;
+}
+
+.wb-side h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wb-hint {
+  margin: 0 0 12px;
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+
+.wb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wb-list button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-list button:hover {
+  background: #252d34;
+}
+
+.wb-list button.on {
+  background: var(--wb-accent);
+  color: #1b1d27;
+}
+
+.wb-stage {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.wb-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.wb-stats {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgb(14 19 34 / 78%);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+
+.wb-controls,
+.wb-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-row label {
+  min-width: 70px;
+  color: var(--wb-muted);
+}
+
+.wb-row select,
+.wb-row input[type="text"],
+.wb-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.wb-row select,
+.wb-row input[type="text"],
+.wb-row button {
+  padding: 4px 8px;
+  border: 1px solid #39424b;
+  border-radius: 6px;
+  background: var(--wb-bg);
+  color: var(--wb-text);
+  font: inherit;
+}
+
+.wb-row button {
+  flex: 1;
+  cursor: pointer;
+}
+
+.wb-row button.on {
+  background: var(--wb-accent);
+  color: #1b1d27;
+}
+
+.wb-desc {
+  margin: 0;
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .wb {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+}

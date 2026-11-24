@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { parseShotList, pinCamera, settingsFor } from "./worldShotList.mjs";
+import { parseShotList, pinCamera, settingsFor, urlFor } from "./worldShotList.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT_DIR = path.join(os.homedir(), ".cache", "openradlr", "screenshots", "world");
@@ -46,13 +46,6 @@ export function parseRunArgs(argv) {
   return opts;
 }
 
-/** The address a shot starts from, before its settings are written. */
-function urlFor(shot, base) {
-  if (shot.kind === "gallery") return `${base}/gallery.html?biome=${encodeURIComponent(shot.biome ?? "temperate")}`;
-  if (shot.kind === "ride") return `${base}/?at=${shot.at ?? 0}`;
-  return `${base}/`;
-}
-
 /** Writes the shot's settings before the app starts, so it reads them on load. */
 async function startWithSettings(page, shot, base) {
   await page.goto(urlFor(shot, base));
@@ -67,6 +60,11 @@ async function startWithSettings(page, shot, base) {
 /** The menu is over the island once the setup screen is no longer building it. */
 async function waitForMenuWorld(page) {
   await page.waitForFunction(() => !globalThis.document.querySelector("#setup")?.classList.contains("world-building"));
+}
+
+/** The workbench has drawn its first frame of the asked plant. */
+async function waitForWorkbench(page) {
+  await page.waitForFunction(() => globalThis.Workbench?.ready === true, null, { timeout: TIMEOUT });
 }
 
 /** Joins a ride as "World Check", pauses at the join point and waits for its world. */
@@ -109,6 +107,7 @@ async function shoot(browser, shot, opts) {
     await startWithSettings(page, shot, opts.url);
     if (shot.kind === "menu") await waitForMenuWorld(page);
     if (shot.kind === "ride") await waitForRideWorld(page);
+    if (shot.kind === "workbench") await waitForWorkbench(page);
     await page.waitForTimeout(shot.wait ?? DEFAULT_WAIT);
     const out = path.join(opts.out, `${shot.name}.png`);
     mkdirSync(path.dirname(out), { recursive: true });

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseShotList, settingsFor, pinCamera } from "../worldShotList.mjs";
+import { parseShotList, settingsFor, pinCamera, urlFor } from "../worldShotList.mjs";
 
 const shot = (extra = {}) => ({ name: "a", kind: "ride", ...extra });
 
@@ -67,4 +67,32 @@ test("pinCamera keeps the module and ends by pinning the camera", () => {
   assert.match(out, /ChaseCamera\.prototype\.update = function/);
   assert.match(out, /this\.eye = \[1,2,3\]/);
   assert.match(out, /this\.target = \[4,5,6\]/);
+});
+
+test("a workbench shot names its asset, and may name a season and a time", () => {
+  const [one] = parseShotList(JSON.stringify([{ name: "w", kind: "workbench", asset: "olive", season: "summer", time: "dusk" }]));
+  assert.deepEqual([one.asset, one.season, one.time], ["olive", "summer", "dusk"]);
+});
+
+test("a workbench shot without an asset is rejected, naming the shot", () => {
+  assert.throws(() => parseShotList(JSON.stringify([{ name: "w", kind: "workbench" }])), /w/);
+});
+
+test("an asset on any other kind of shot is rejected, naming the shot", () => {
+  assert.throws(() => parseShotList(JSON.stringify([shot({ asset: "olive" })])), /a/);
+});
+
+test("the gallery kind is gone", () => {
+  assert.throws(() => parseShotList(JSON.stringify([{ name: "g", kind: "gallery", biome: "winter" }])), /g/);
+});
+
+test("a workbench shot opens workbench.html with its asset, season and time", () => {
+  const url = urlFor({ name: "w", kind: "workbench", asset: "umbrellaPine", season: "winter", time: "night" }, "http://x");
+  assert.equal(url, "http://x/workbench.html?asset=umbrellaPine&season=winter&time=night");
+  assert.equal(urlFor({ name: "w", kind: "workbench", asset: "olive" }, "http://x"), "http://x/workbench.html?asset=olive");
+});
+
+test("ride and menu shots keep their addresses", () => {
+  assert.equal(urlFor(shot({ at: 12 }), "http://x"), "http://x/?at=12");
+  assert.equal(urlFor({ name: "m", kind: "menu" }, "http://x"), "http://x/");
 });

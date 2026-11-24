@@ -6,13 +6,13 @@
  * A shot names a `kind`:
  * - `menu`: the start menu over the island, optionally with a route picked.
  * - `ride`: a ride joined at `at` metres along the route, paused for the shot.
- * - `gallery`: the model gallery for a biome.
+ * - `workbench`: one plant of the kit on the workbench page, in a season and at a time of day (`asset` is needed).
  *
  * `eye` and `target` (world x,y,z) go together and pin the chase camera there,
  * for a landmark the ride's own cameras do not face.
  */
 
-export const SHOT_KINDS = Object.freeze(["menu", "ride", "gallery"]);
+export const SHOT_KINDS = Object.freeze(["menu", "ride", "workbench"]);
 export const SHOT_TIMES = Object.freeze(["auto", "day", "golden", "dusk", "night"]);
 
 const point = (shot, key, value) => {
@@ -24,7 +24,7 @@ const point = (shot, key, value) => {
 
 /**
  * A shot list from its JSON: an array of `{ name, kind, route?, at?, camera?,
- * time?, season?, biome?, eye?, target?, wait? }`. Throws on anything a run could not
+ * time?, season?, asset?, eye?, target?, wait? }`. Throws on anything a run could not
  * shoot as asked, naming the shot.
  * @param {string} json
  * @returns {object[]}
@@ -40,10 +40,13 @@ export function parseShotList(json) {
     if (seen.has(shot.name)) throw new Error(`shot "${shot.name}" appears twice`);
     seen.add(shot.name);
     if (!SHOT_KINDS.includes(shot.kind)) throw new Error(`shot "${shot.name}" has an unknown kind: ${shot.kind}`);
-    for (const key of ["route", "camera", "biome", "season"]) {
+    for (const key of ["route", "camera", "season", "asset"]) {
       if (entry[key] === undefined) continue;
       if (typeof entry[key] !== "string" || entry[key] === "") throw new Error(`shot "${shot.name}" has an invalid ${key}`);
       shot[key] = entry[key];
+    }
+    if ((shot.kind === "workbench") !== (shot.asset !== undefined)) {
+      throw new Error(`shot "${shot.name}" ${shot.kind === "workbench" ? "needs an asset" : "has an asset but is not a workbench shot"}`);
     }
     if (entry.time !== undefined) {
       if (!SHOT_TIMES.includes(entry.time)) throw new Error(`shot "${shot.name}" has an unknown time: ${entry.time}`);
@@ -66,6 +69,21 @@ export function parseShotList(json) {
     }
     return shot;
   });
+}
+
+/**
+ * The address a shot starts from, below `base` (no trailing slash).
+ * @param {object} shot
+ * @param {string} base
+ * @returns {string}
+ */
+export function urlFor(shot, base) {
+  if (shot.kind === "workbench") {
+    const query = new URLSearchParams({ asset: shot.asset });
+    for (const key of ["season", "time"]) if (shot[key]) query.set(key, shot[key]);
+    return `${base}/workbench.html?${query}`;
+  }
+  return shot.kind === "ride" ? `${base}/?at=${shot.at ?? 0}` : `${base}/`;
 }
 
 /**

@@ -130,6 +130,8 @@ export function createWorldScene(world, { settings, track }) {
   return {
     scene,
     sun,
+    /** The shared shader uniforms, for assets made outside the layers (the workbench's). */
+    uniforms,
     setQuality,
     /** @param {Frame} frame */
     update(frame) {
