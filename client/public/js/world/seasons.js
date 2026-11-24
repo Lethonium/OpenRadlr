@@ -68,6 +68,17 @@ export const SEASON_LOOK = Object.freeze({
 });
 
 /**
+ * How likely each kind of weather is on a day of the season (each row adds up to 1).
+ * @type {Readonly<Record<Season, Readonly<Record<string, number>>>>}
+ */
+export const WEATHER_ODDS = Object.freeze({
+  spring: Object.freeze({ clear: 0.45, showers: 0.3, rain: 0.17, storm: 0.08 }),
+  summer: Object.freeze({ clear: 0.75, showers: 0.2, storm: 0.05 }),
+  autumn: Object.freeze({ clear: 0.35, showers: 0.3, rain: 0.25, storm: 0.1 }),
+  winter: Object.freeze({ clear: 0.4, snow: 0.45, showers: 0.15 }),
+});
+
+/**
  * The season for a season mode: "auto" follows the month (Mar–May spring,
  * Jun–Aug summer, Sep–Nov autumn, Dec–Feb winter); an unknown mode is "auto".
  * @param {string} mode

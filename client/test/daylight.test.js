@@ -82,3 +82,40 @@ test("the night is lit enough to read the ground by the moon", () => {
   assert.ok(luma(night.sunColor) * night.sunIntensity < luma(day.sunColor) * day.sunIntensity / 2, "but far below the sun");
   assert.ok(night.skyHorizon[2] > night.skyHorizon[0] * 2, "a blue night");
 });
+
+test("an overcast environment has a weaker sun and greyer sky", () => {
+  const preset = resolvePreset("day");
+  const clear = environmentAt(preset, "autumn");
+  const grey = environmentAt(preset, "autumn", { weather: { kind: "storm", strength: 1 } });
+  assert.equal(grey.overcast, 1);
+  assert.ok(grey.sunIntensity < clear.sunIntensity);
+  assert.ok(Math.abs(grey.sunIntensity - clear.sunIntensity * 0.25) < 1e-9);
+  assert.ok(grey.fogDensity > clear.fogDensity);
+  assert.ok(grey.storm);
+  const spread = (c) => Math.max(...c) - Math.min(...c);
+  assert.ok(spread(grey.skyTop) < spread(clear.skyTop));
+  assert.ok(spread(grey.fogColor) < spread(clear.fogColor));
+});
+
+test("without weather the environment is unchanged", () => {
+  const preset = resolvePreset("day");
+  const e = environmentAt(preset, "summer");
+  assert.equal(e.overcast, 0);
+  assert.equal(e.precipitation, 0);
+  assert.equal(e.wetness, 0);
+  assert.equal(e.snowing, false);
+  assert.equal(e.storm, false);
+  assert.equal(e.sunIntensity, 3.1);
+  assert.equal(e.fogDensity, 0.00016);
+  assert.deepEqual(environmentAt(preset, "summer", { weather: { kind: "clear", strength: 1 } }), e);
+});
+
+test("snow weather snows and rain wets the ground", () => {
+  const preset = resolvePreset("day");
+  const snow = environmentAt(preset, "winter", { weather: { kind: "snow", strength: 0.8 } });
+  assert.equal(snow.snowing, true);
+  assert.ok(snow.precipitation > 0);
+  const rain = environmentAt(preset, "spring", { weather: { kind: "rain", strength: 0.8 } });
+  assert.equal(rain.snowing, false);
+  assert.ok(rain.wetness > 0);
+});

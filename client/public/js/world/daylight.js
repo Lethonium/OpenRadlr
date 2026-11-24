@@ -7,6 +7,8 @@
  * the horizon (see `environmentAt`).
  */
 
+import { precipitationAt } from "./weather.js";
+
 const normalize = (v) => {
   const len = Math.hypot(v[0], v[1], v[2]);
   return len > 0 ? [v[0] / len, v[1] / len, v[2] / len] : [0, 0, 0];
@@ -111,6 +113,12 @@ export const LOOKS = Object.freeze({
 const WINTER_FOG = 1.8;
 const FOG_SKY_MIX = 0.15;
 
+/** How overcast each kind of weather is at full strength, how far cloud cuts the sun, and the grey it pulls the sky towards (linear). */
+const OVERCAST = Object.freeze({ showers: 0.5, rain: 0.8, storm: 1, snow: 0.7 });
+const SUN_DIM = 0.75;
+const MAX_GREY = 0.6;
+const OVERCAST_GREY = Object.freeze([0.5, 0.54, 0.6].map(toLinear));
+
 /**
  * @typedef {object} Environment
  * @property {string} key time-of-day preset key
@@ -130,16 +138,23 @@ const FOG_SKY_MIX = 0.15;
  * @property {number} exposure
  * @property {number} stars 0..1
  * @property {number} snow 0..1
+ * @property {number} overcast 0..1, how much cloud dims the sun and greys the sky
+ * @property {number} precipitation 0..1, how hard it rains or snows now
+ * @property {number} wetness 0..1, how wet the ground and air look
+ * @property {boolean} snowing
+ * @property {boolean} storm
  */
 
 /**
  * The environment for a resolved preset in a season, in linear colours.
  * @param {{key: string, sun: number[], sunColor: number[], zenith: number[], horizon: number[], ground: number[], fog: number[]}} preset
  * @param {string} season
- * @param {{haze?: number}} [options] `haze` above 1 thickens the air
+ * @param {{haze?: number, weather?: {kind: string, strength: number}, precipitation?: number}} [options]
+ *   `haze` above 1 thickens the air; `weather` greys the sky; `precipitation` is how hard it falls now
+ *   (default: what the weather gives at time 0, so steady kinds need no clock)
  * @returns {Readonly<Environment>}
  */
-export function environmentAt(preset, season, { haze = 1 } = {}) {
+export function environmentAt(preset, season, { haze = 1, weather, precipitation } = {}) {
   const night = preset.key === "night" ? 1 : 0;
   const key = preset.sun;
   // At night `key` is the moon; the sun sits opposite, below the horizon.
@@ -147,24 +162,34 @@ export function environmentAt(preset, season, { haze = 1 } = {}) {
   const moon = night ? [...key] : [-key[0], -key[1], -key[2]];
   const horizon = linear(preset.horizon);
   const look = LOOKS[preset.key] ?? LOOKS.day;
-  const fogDensity = (look.fog * (season === "winter" ? WINTER_FOG : 1)) / haze;
+  const kind = weather?.kind ?? "clear";
+  const overcast = Math.min(1, (OVERCAST[kind] ?? 0) * (weather?.strength ?? 0));
+  const falling = Math.min(1, Math.max(0, precipitation ?? (weather ? precipitationAt(weather, 0) : 0)));
+  const grey = overcast * MAX_GREY;
+  const fogDensity = ((look.fog * (season === "winter" ? WINTER_FOG : 1)) / haze) * (1 + overcast);
+  const greyed = (c) => Object.freeze(mix(c, OVERCAST_GREY, grey));
   return Object.freeze({
     key: preset.key,
     sun: Object.freeze(sun),
     moon: Object.freeze(moon),
     night,
     sunColor: linear(preset.sunColor),
-    skyTop: linear(preset.zenith),
-    skyHorizon: horizon,
+    skyTop: greyed(linear(preset.zenith)),
+    skyHorizon: greyed(horizon),
     skyBottom: Object.freeze(mix(horizon, linear(preset.ground), 0.6)),
     hemiSky: linear(look.hemiSky),
     hemiGround: linear(preset.ground),
-    fogColor: Object.freeze(mix(horizon, linear(preset.zenith), FOG_SKY_MIX)),
-    sunIntensity: look.sun,
+    fogColor: greyed(mix(horizon, linear(preset.zenith), FOG_SKY_MIX)),
+    sunIntensity: look.sun * (1 - SUN_DIM * overcast),
     hemiIntensity: look.hemi,
     fogDensity,
     exposure: look.exposure,
     stars: night,
     snow: season === "winter" ? 1 : 0,
+    overcast,
+    precipitation: falling,
+    wetness: kind === "snow" ? 0 : Math.min(1, falling + overcast * 0.5 * (kind === "clear" ? 0 : 1)),
+    snowing: kind === "snow" && falling > 0,
+    storm: kind === "storm",
   });
 }
