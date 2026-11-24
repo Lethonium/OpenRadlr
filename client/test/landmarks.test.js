@@ -5,6 +5,7 @@ import { MASK, buildMasks, maskAt } from "../public/js/world/plan/masks.js";
 import { MILL_SPACING, planLandmarks } from "../public/js/world/plan/landmarks.js";
 import { seenFromRoad } from "../public/js/world/sight.js";
 import { waterLevel } from "../public/js/world/roads.js";
+import { buildWorld } from "../public/js/view3d/world.js";
 import { valleyWorld } from "./support/planFixture.js";
 
 const valley = valleyWorld();
@@ -85,4 +86,14 @@ test("a ridge between the road and the point blocks the view", () => {
   assert.equal(seenFromRoad([1000, 10, 0], { roads, terrain: ridge }), false);
   assert.equal(seenFromRoad([300, 10, 0], { roads, terrain: ridge }), true);
   assert.equal(seenFromRoad([300, 10, 0], { roads, terrain: ridge, reach: 100 }), false, "out of reach");
+});
+
+test("no landmark, town plot or farm yard stands in a river of the valley as built", () => {
+  const { network } = valley;
+  const world = buildWorld(network.roads()[0], { network, detail: "low" });
+  const { terrain, plan } = world;
+  const wet = (x, z, r) => terrain.riverDistance(x, z) < r;
+  for (const l of plan.landmarks) if (l.kind !== "seaArch" && l.kind !== "balloons") assert.ok(!wet(l.x, l.z, l.apron), `${l.id} clear of rivers`);
+  for (const s of plan.settlements) for (const p of s.plots) assert.ok(!wet(p.x, p.z, 8), `${s.id} plot clear of rivers`);
+  for (const f of plan.farms) assert.ok(!wet(f.x, f.z, 42), "farm yard clear of rivers");
 });

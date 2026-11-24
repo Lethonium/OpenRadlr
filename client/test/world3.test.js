@@ -126,10 +126,6 @@ test("the crowd's two poses have the same vertex count", () => {
   assert.equal(up.vertexCount, down.vertexCount);
 });
 
-function close(a, b, eps) {
-  assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-}
-
 // --- the assembled world -----------------------------------------------------
 
 test("the river crosses the road only at the bridge, below it and above the lake", () => {
