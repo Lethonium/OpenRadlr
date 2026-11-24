@@ -14,6 +14,8 @@ const THICK = 2.4;
 const SLAB = 3.2;
 const FOUNDATION = 1.5;
 const KEEP_HEIGHT = 20;
+/** The keep's footing radius: it stands on a corner, so it reaches past the wall rectangle. */
+const KEEP_REACH = 6;
 const CORNERS = Object.freeze([[-HALF[0], -HALF[1]], [HALF[0], -HALF[1]], [HALF[0], HALF[1]], [-HALF[0], HALF[1]]]);
 /** Runs of each side: [from, to, height]; height 0 is a gap. Side 2 (the +z side) holds the gate. */
 const SIDES = Object.freeze([
@@ -57,7 +59,7 @@ export const castle = defineBuilding(
       near.push(cylinder(3, 3.8, top + FOUNDATION, 9, stones[0], x, (top - FOUNDATION) / 2, z));
     }
     const [kx, kz] = CORNERS[1];
-    near.push(cylinder(5, 6, KEEP_HEIGHT + FOUNDATION, 12, stones[1], kx, (KEEP_HEIGHT - FOUNDATION) / 2, kz));
+    near.push(cylinder(5, KEEP_REACH, KEEP_HEIGHT + FOUNDATION, 12, stones[1], kx, (KEEP_HEIGHT - FOUNDATION) / 2, kz));
     for (let i = 0; i < 12; i += 1) {
       if (i % 3 === 1) continue; // a broken crenellation
       const angle = (i / 12) * Math.PI * 2;
@@ -69,6 +71,6 @@ export const castle = defineBuilding(
     for (const side of [-1, 1]) near.push(box(1.4, 6.5, THICK + 0.4, stones[2], GATE.x + side * 3.4, 2.25, GATE.z));
     for (const [x, z, shade] of [[kx, kz, stones[1]]]) far.push(cylinder(5, 6, KEEP_HEIGHT + FOUNDATION, 6, shade, x, (KEEP_HEIGHT - FOUNDATION) / 2, z));
     for (const { x, z, size, height } of [blocks[0], blocks[2], blocks[5]]) far.push(box(size[0], height * 0.8 + FOUNDATION, size[1], stones[0], x, (height * 0.8 - FOUNDATION) / 2, z));
-    return { near, far, glows: slits, width: 2 * HALF[0] + THICK, depth: 2 * HALF[1] + THICK, eaves: 7, door: { x: GATE.x, y: 1, z: GATE.z } };
+    return { near, far, glows: slits, width: 2 * (HALF[0] + KEEP_REACH), depth: 2 * (HALF[1] + KEEP_REACH), eaves: 7, door: { x: GATE.x, y: 1, z: GATE.z } };
   },
 );

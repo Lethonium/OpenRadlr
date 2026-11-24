@@ -6,6 +6,8 @@ import { MILL_SPACING, planLandmarks } from "../public/js/world/plan/landmarks.j
 import { seenFromRoad } from "../public/js/world/sight.js";
 import { waterLevel } from "../public/js/world/roads.js";
 import { buildWorld } from "../public/js/view3d/world.js";
+import { RIVER } from "../public/js/world/rivers.js";
+import { BUILDINGS } from "../public/js/view3d/assets/buildings/index.js";
 import { valleyWorld } from "./support/planFixture.js";
 
 const valley = valleyWorld();
@@ -105,4 +107,27 @@ test("no landmark, town plot or farm yard stands in a river of the valley as bui
   for (const l of plan.landmarks) if (l.kind !== "seaArch" && l.kind !== "balloons") assert.ok(!wet(l.x, l.z, l.apron), `${l.id} clear of rivers`);
   for (const s of plan.settlements) for (const p of s.plots) assert.ok(!wet(p.x, p.z, 8), `${s.id} plot clear of rivers`);
   for (const f of plan.farms) assert.ok(!wet(f.x, f.z, 42), "farm yard clear of rivers");
+});
+
+test("the castle's whole footprint, towers and walls, keeps 2 m from the river's water", () => {
+  const { network } = valley;
+  const { terrain, plan } = buildWorld(network.roads()[0], { network, detail: "low" });
+  const castle = plan.landmarks.find((l) => l.kind === "castle");
+  const { width, depth } = BUILDINGS.castle.parts({ seed: 1 });
+  const [c, s] = [Math.cos(castle.yaw), Math.sin(castle.yaw)];
+  const steps = 8;
+  const rim = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const [u, v] = [(i / steps - 0.5) * width, (i / steps - 0.5) * depth];
+    rim.push([u, -depth / 2], [u, depth / 2], [-width / 2, v], [width / 2, v]);
+  }
+  for (const [u, v] of [[0, 0], ...rim]) {
+    const [x, z] = [castle.x + u * c + v * s, castle.z - u * s + v * c];
+    assert.ok(terrain.riverDistance(x, z) > RIVER.halfWidth + 2, `footprint point ${x.toFixed(0)},${z.toFixed(0)} is ${terrain.riverDistance(x, z).toFixed(1)} m from the river's centre`);
+  }
+});
+
+test("the castle's reported footprint reaches the round keep's far edge", () => {
+  const { width, depth } = BUILDINGS.castle.parts({ seed: 1 });
+  assert.ok(width / 2 >= 22 + 6 && depth / 2 >= 16 + 6, `${width} x ${depth}`);
 });
