@@ -7,6 +7,7 @@
 import { waterLevel } from "../roads.js";
 import { planFarms } from "./farms.js";
 import { planFields } from "./fields.js";
+import { planFauna } from "./fauna.js";
 import { planFarIslands } from "./islands.js";
 import { planLandmarks } from "./landmarks.js";
 import { buildMasks } from "./masks.js";
@@ -33,6 +34,7 @@ export const PLAN_BUDGET = Object.freeze({
  * @property {import("./farms.js").Farm[]} farms
  * @property {import("./turbines.js").Turbine[]} turbines
  * @property {import("./islands.js").FarIsland[]} islands far hills at sea
+ * @property {import("./fauna.js").Fauna} fauna herds, wild animals, flocks, butterflies and dolphins
  * @property {import("./masks.js").Masks} masks 0 free, 1 road, 2 river, 3 field, 4 verge, 5 built
  */
 
@@ -53,5 +55,6 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   const islands = planFarIslands({ terrain, seed: terrain.seed ?? seed });
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
   const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside });
-  return { trees, fields, roadside, settlements: villages, landmarks: places, farms, turbines, islands, masks };
+  const fauna = planFauna({ farms, fields, trees, terrain, roads, regions, seed, season, masks, water, detail });
+  return { trees, fields, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
 }
