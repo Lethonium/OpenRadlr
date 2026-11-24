@@ -1,0 +1,88 @@
+/** Landmark placement (#117): where each stands, that a road sees it, and that its apron stays free. */
+import assert from "node:assert/strict";
+import test from "node:test";
+import { MASK, buildMasks, maskAt } from "../public/js/world/plan/masks.js";
+import { MILL_SPACING, planLandmarks } from "../public/js/world/plan/landmarks.js";
+import { seenFromRoad } from "../public/js/world/sight.js";
+import { waterLevel } from "../public/js/world/roads.js";
+import { valleyWorld } from "./support/planFixture.js";
+
+const valley = valleyWorld();
+const water = waterLevel(valley.roads);
+const masks = buildMasks({ roads: valley.roads, rivers: [], bounds: valley.bounds });
+const input = { landmarks: valley.landmarks, terrain: valley.terrain, roads: valley.roads, seed: valley.seed, masks, water };
+const placed = planLandmarks(input);
+const of = (kind) => placed.find((l) => l.kind === kind);
+const eye = (l, up) => [l.x, l.y + up, l.z];
+const seen = (l, up, reach = 2500) => seenFromRoad(eye(l, up), { roads: valley.roads, terrain: valley.terrain, reach });
+
+test("the lighthouse stands near the sea, on dry ground", () => {
+  const l = of("lighthouse");
+  assert.ok(l.y > water, "dry");
+  const sea = Array.from({ length: 12 }, (_, i) => [Math.cos((i / 12) * Math.PI * 2), Math.sin((i / 12) * Math.PI * 2)])
+    .some(([dx, dz]) => [100, 200, 300].some((r) => valley.terrain.height(l.x + dx * r, l.z + dz * r) < water));
+  assert.ok(sea, "open water within 300 m");
+});
+
+test("a stretch of cape-loop sees the lighthouse", () => {
+  assert.ok(seen(of("lighthouse"), 30, 600), "some road sample sees the lantern");
+});
+
+test("the castle crowns the crag above the southwest village", () => {
+  const castle = of("castle");
+  const village = valley.settlements.find((s) => s.id === "southwest");
+  assert.ok(Math.hypot(castle.x - village.center[0], castle.z - village.center[1]) <= 600, "within 600 m of the village");
+  let top = -Infinity;
+  for (let dx = -600; dx <= 600; dx += 10) for (let dz = -600; dz <= 600; dz += 10) if (Math.hypot(dx, dz) <= 600) top = Math.max(top, valley.terrain.height(village.center[0] + dx, village.center[1] + dz));
+  assert.ok(valley.terrain.height(castle.x, castle.z) >= top - 6, "on the highest ground a road can see");
+  assert.ok(seen(castle, 22, 1200), "a road sees the keep");
+});
+
+test("the sea arch stands in deep water within sight of a road", () => {
+  const arch = of("seaArch");
+  assert.equal(arch.y, water, "the water line");
+  for (const dx of [-30, 0, 30]) assert.ok(valley.terrain.height(arch.x + dx, arch.z) <= water - 3, `deep at ${dx}`);
+  assert.ok(seen(arch, 35, 1200), "a road sees the arch");
+});
+
+test("the farm belt has a row of five windmills on dry ground clear of the roads", () => {
+  const row = of("windmills");
+  assert.equal(row.members.length, 5);
+  row.members.forEach((m, i) => {
+    assert.ok(m.y > water + 2, "dry");
+    assert.ok(valley.terrain.distanceToRoad(m.x, m.z) >= 16, "clear of the road");
+    if (i > 0) assert.ok(Math.abs(Math.hypot(m.x - row.members[i - 1].x, m.z - row.members[i - 1].z) - MILL_SPACING) < 1e-6);
+  });
+  assert.ok(seen(row, 18, 1200), "a road sees the sails");
+});
+
+test("balloons loop 600 to 1,500 m round the centre at 250 to 450 m", () => {
+  const { members } = of("balloons");
+  assert.equal(members.length, 4);
+  for (const b of members) {
+    assert.ok(b.radius >= 600 && b.radius <= 1500 && b.y >= 250 && b.y <= 450, `${b.radius} m at ${b.y} m`);
+  }
+  assert.ok(members.some((b) => b.speed > 0) && members.some((b) => b.speed < 0), "both directions");
+});
+
+test("an unknown landmark kind is skipped", () => {
+  const out = planLandmarks({ ...input, landmarks: [{ id: "x", kind: "nothing", center: [0, 0], yaw: 0, apron: 10, count: 0 }] });
+  assert.deepEqual(out, []);
+});
+
+test("each apron is stamped built, the sea arch's water excepted", () => {
+  const fresh = buildMasks({ roads: valley.roads, rivers: [], bounds: valley.bounds });
+  const out = planLandmarks({ ...input, masks: fresh });
+  const light = out.find((l) => l.kind === "lighthouse");
+  assert.equal(maskAt(fresh, light.x, light.z), MASK.built);
+  const row = out.find((l) => l.kind === "windmills");
+  for (const m of row.members) assert.equal(maskAt(fresh, m.x, m.z), MASK.built);
+});
+
+test("a ridge between the road and the point blocks the view", () => {
+  const ridge = { height: (x) => (Math.abs(x - 500) < 30 ? 80 : 0) };
+  const roads = { samples: [{ x: 0, z: 0 }] };
+  assert.equal(seenFromRoad([1000, 10, 0], { roads, terrain: ridge }), false);
+  assert.equal(seenFromRoad([300, 10, 0], { roads, terrain: ridge }), true);
+  assert.equal(seenFromRoad([300, 10, 0], { roads, terrain: ridge, reach: 100 }), false, "out of reach");
+});

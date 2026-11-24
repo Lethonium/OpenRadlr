@@ -48,5 +48,5 @@ export function valleyWorld() {
   const network = new RoadNetwork(JSON.parse(readFileSync(new URL("../../../routes/maps/valley.json", import.meta.url), "utf8")));
   const roads = network.roads();
   const terrain = networkTerrain(network, roads);
-  return { network, terrain, roads: terrain.index, routes: roads, rivers: [], regions: network.regions, seed: network.seed, bounds: groundExtent(terrain).bounds, settlements: network.settlements };
+  return { network, terrain, roads: terrain.index, routes: roads, rivers: [], regions: network.regions, seed: network.seed, bounds: groundExtent(terrain).bounds, settlements: network.settlements, landmarks: network.landmarks };
 }

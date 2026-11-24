@@ -71,7 +71,8 @@ export function planRoadside({ terrain, roads, regions, seed, masks, water, budg
   const put = (id, s, { tangent }, side, off, uYaw, uSize, along, parallel) => {
     const x = s.x + tangent[0] * along - tangent[1] * side * off;
     const z = s.z + tangent[1] * along + tangent[0] * side * off;
-    if (maskAt(masks, x, z) === MASK.field || maskAt(masks, x, z) === MASK.river) return;
+    const cell = maskAt(masks, x, z);
+    if (cell === MASK.field || cell === MASK.river || cell === MASK.built) return;
     const near = roads.nearest(x, z, 2);
     if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + 1.5) return;
     if ((terrain.riverDistance?.(x, z) ?? Infinity) < ROADSIDE.riverClear) return;

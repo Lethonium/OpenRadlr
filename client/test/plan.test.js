@@ -10,7 +10,7 @@ import { VERGE, roadHalfWidth } from "../public/js/world/roads.js";
 import { SEASONS } from "../public/js/world/seasons.js";
 import { sceneOf, transferList, buildSceneNow } from "../public/js/view3d/worldScene.js";
 import { tinyLoopFile, tinyNetworkFile } from "./helpers.js";
-import { longWorld, planOf, tinyWorld } from "./support/planFixture.js";
+import { longWorld, planOf, tinyWorld, valleyWorld } from "./support/planFixture.js";
 
 const tiny = tinyWorld();
 let longCache = null;
@@ -91,6 +91,42 @@ test("nothing grows on roads in the long route either", () => {
 
 test("the plan is deterministic", () => {
   assert.deepEqual(planOf(tiny), planOf(tiny));
+});
+
+let valleyCache = null;
+const valleyPlan = () => (valleyCache ??= (() => {
+  const world = valleyWorld();
+  return { world, plan: planOf(world), again: planOf(world) };
+})());
+
+test("the plan carries settlements and landmarks, and is deterministic with them", () => {
+  const { plan, again } = valleyPlan();
+  assert.ok(plan.settlements.length >= 3, `${plan.settlements.length} settlements`);
+  assert.deepEqual(plan.landmarks.map((l) => l.kind), ["lighthouse", "castle", "seaArch", "windmills", "balloons"]);
+  assert.deepEqual(plan, again);
+  assert.deepEqual(planOf(tiny).settlements, []);
+  assert.deepEqual(planOf(tiny).landmarks, []);
+});
+
+test("no tree, field or roadside item lies in a built cell", () => {
+  const { plan } = valleyPlan();
+  const built = (x, z) => maskAt(plan.masks, x, z) === MASK.built;
+  assert.ok(plan.masks.data.includes(MASK.built), "something is built");
+  for (const list of [itemsOf(plan.trees), itemsOf(plan.roadside)]) {
+    for (const { id, x, z } of list) assert.ok(!built(x, z), `${id} stands in a built cell at ${x},${z}`);
+  }
+  for (const field of plan.fields) {
+    for (let k = 0; k < 4; k += 1) assert.ok(!built(field.corners[k * 3], field.corners[k * 3 + 2]), "a field corner lies in a built cell");
+  }
+});
+
+test("no tree stands within a landmark's apron", () => {
+  const { plan } = valleyPlan();
+  for (const l of plan.landmarks.filter((m) => m.apron > 0)) {
+    for (const m of l.members) {
+      for (const { id, x, z } of itemsOf(plan.trees)) assert.ok(Math.hypot(x - m.x, z - m.z) >= l.apron, `${id} ${Math.hypot(x - m.x, z - m.z).toFixed(1)} m from ${l.id}`);
+    }
+  }
 });
 
 test("an oliveTerraces region grows olives", () => {
@@ -184,7 +220,7 @@ test("a route file without a network gets a plan", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url))));
   assert.ok(count(scene.plan.trees) > 100);
   assert.ok(count(scene.plan.roadside) > 50);
-  assert.deepEqual(Object.keys(scene.plan).sort(), ["fields", "masks", "roadside", "trees"]);
+  assert.deepEqual(Object.keys(scene.plan).sort(), ["fields", "landmarks", "masks", "roadside", "settlements", "trees"]);
 });
 
 test("the plan transfers", () => {

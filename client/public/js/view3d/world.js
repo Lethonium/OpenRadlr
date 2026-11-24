@@ -298,7 +298,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   // Where woods, fields and verges go (and which ground is farmed): the plan, then the ground that tints and ploughs by it.
   const regions = network?.regions ?? [];
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), seed, season, detail, bounds: ground.bounds });
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], routes, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow
