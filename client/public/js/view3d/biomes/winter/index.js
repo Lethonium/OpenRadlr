@@ -60,15 +60,6 @@ export const winter = Object.freeze({
     ground: SNOW,
     accent: Object.freeze([0.3, 0.47, 0.68]),
   }),
-  weather: Object.freeze({
-    kind: "snow",
-    count: 900,
-    box: Object.freeze([74, 26, 74]),
-    fall: Object.freeze([4, 8]),
-    drift: Object.freeze([1.1, 0.35]),
-    size: Object.freeze([0.012, 0.035]),
-    color: Object.freeze([0.98, 0.99, 1, 0.9]),
-  }),
   sky: Object.freeze({
     clouds: Object.freeze({
       color: Object.freeze([0.9, 0.92, 0.96, 1]),

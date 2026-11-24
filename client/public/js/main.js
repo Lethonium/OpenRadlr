@@ -117,6 +117,7 @@ import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { seasonChoices } from "./view/seasonPicker.js";
 import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
+import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
@@ -191,6 +192,11 @@ const writeSetting = (key, value) => {
  */
 function seasonState() {
   return seasonFromLocation(location.search, { season: readSetting(SEASON_KEY), biome: readSetting(BIOME_KEY) }, new Date());
+}
+
+/** The sky's weather for a view: today's roll for the map's season, or `?weather=storm` as a preview. */
+function weatherToday() {
+  return { date: new Date(), override: weatherFromLocation(location.search, null) };
 }
 
 /** Applies a season state to the app: the mode, the resolved season and the biome that goes with it. */
@@ -943,7 +949,7 @@ function initMenuStage() {
     season: () => app.season,
     createView: use3d
       ? (route, scene) => {
-          const view = new View3D(canvas, $("labels3d"), route, scene);
+          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday() });
           view.lens = droneLens(scene.overview);
           view.setQuality("low");
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
@@ -983,7 +989,7 @@ function initMenuStage() {
       stageGoal ??= stageOffset($("menu-stage"));
       stageEased ??= { value: stageGoal.slice(), velocity: [0, 0] };
       view.viewOffset = reducedMotion ? stageGoal : springTo(stageEased, stageGoal, 0.35, dt).value.slice();
-      view.render({ riders: [], myId: null, timeS, colors: themeColors() });
+      view.render({ riders: [], myId: null, timeS, utcSeconds: Date.now() / 1000, colors: themeColors() });
     },
   });
   app.drawMenuStage = drawStage;
@@ -2834,7 +2840,7 @@ function workoutFrame() {
   if (app.state && app.viewMode === "3d") {
     // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
     const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
-    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
+    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, utcSeconds: Date.now() / 1000, colors: themeColors() });
   }
 }
 
@@ -2934,7 +2940,7 @@ function buildStudioWorld() {
     .then((world) => {
       if (app.ride !== ride) return;
       if (!world) return studioRoomOnly();
-      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene);
+      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday() });
       view.routes = world.routes;
       view.network = world.network;
       view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
@@ -5409,7 +5415,7 @@ async function fetchNetworkFile(mapId) {
 /** Shows the 3D view once its world is built (or takes the menu's view as it is). */
 function show3d(scene, view = null) {
   try {
-    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene);
+    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday() });
   } catch (error) {
     console.error(error);
     $("view-note").textContent = t("view.unavailable");
@@ -5797,7 +5803,7 @@ function frame() {
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }

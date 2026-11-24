@@ -67,7 +67,7 @@ test("each mesh asks Three to re-upload the shared material's uniforms", () => {
 
 test("every material keeps the own renderer's LESS depth test, so the far-plane sky stays hidden", () => {
   const { renderer } = make();
-  for (const material of [renderer.meshMaterial, renderer.transparentMaterial, renderer.skyMaterial, renderer.depthMaterial, renderer.weatherMaterial]) {
+  for (const material of [renderer.meshMaterial, renderer.transparentMaterial, renderer.skyMaterial, renderer.depthMaterial]) {
     assert.equal(material.depthFunc, THREE.LessDepth);
   }
 });
@@ -131,16 +131,6 @@ test("the camera uses the frame's view and projection", () => {
   assert.deepEqual([...renderer.camera.projectionMatrix.elements], [...projection]);
 });
 
-const weatherData = () => new Float32Array(6 * 6 * 4);
-
-const weatherStyle = {
-  box: [40, 20, 40],
-  fall: [1, 2],
-  drift: [0.1, 0.2],
-  size: [0.1, 0.3],
-  color: [1, 1, 1, 0.8],
-};
-
 test("shadow casters render into the shadow target before the main pass", () => {
   const { renderer, fake } = make();
   assert.equal(renderer.createShadowMap(1024), true);
@@ -173,23 +163,6 @@ test("a shadow pass turns the strength on for the main pass", () => {
   renderer.begin(frame({ shadowStrength: 0.6 }));
   assert.equal(renderer.meshMaterial.uniforms.u_shadowStrength.value, 0.6);
   renderer.end();
-});
-
-test("weather draws after transparent meshes", () => {
-  const { renderer, fake } = make();
-  renderer.begin(frame());
-  renderer.draw(renderer.upload(mesh("A")), identity);
-  renderer.drawTransparent(renderer.upload(mesh("B")), identity, { alpha: 0.5 });
-  renderer.drawWeather(renderer.uploadWeather(weatherData()), {
-    viewProjection: identity,
-    camera: [0, 0, 0],
-    right: [1, 0, 0],
-    up: [0, 1, 0],
-    timeS: 1,
-    style: weatherStyle,
-  });
-  renderer.end();
-  assert.deepEqual(fake.calls.renders, [["sky", "A", "B", "weather"]]);
 });
 
 test("an overlay pass neither clears nor draws the sky", () => {

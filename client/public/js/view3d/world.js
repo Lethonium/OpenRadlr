@@ -48,7 +48,6 @@ import { mergeStrips } from "../world/plan/strips.js";
 import { buildBridges } from "./bridges.js";
 import { buildRoadPosts } from "./roadPosts.js";
 import { roadStyle } from "./roadStyle.js";
-import { buildWeather } from "./weather.js";
 
 /** Box (world x/z) around the island's coast, with some sea around it. */
 function islandBox(island, sea = 60) {
@@ -380,7 +379,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     meshes: {
       arches: buildArches(route, { biome }),
     },
-    weather: buildWeather(terrain, { biome }),
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
     spectators,

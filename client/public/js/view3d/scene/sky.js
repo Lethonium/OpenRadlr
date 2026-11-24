@@ -87,6 +87,7 @@ export function createSky({ uniforms, track }) {
       shader.uNight.value = env.night;
       shader.uStars.value = env.stars;
       shader.uDay.value = 1 - env.night;
+      shader.uCloudy.value = env.overcast ?? SKY.cloudiness;
     },
     dispose() {
       disposeAll();

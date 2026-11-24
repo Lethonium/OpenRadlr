@@ -16,7 +16,7 @@
  */
 import * as THREE from "../three.js";
 import { cameraFromMatrices } from "./engine/camera.js";
-import { DEPTH_FRAGMENT, DEPTH_VERTEX, MESH_FRAGMENT, MESH_VERTEX, SKY_FRAGMENT, SKY_VERTEX, WEATHER_FRAGMENT, WEATHER_VERTEX } from "./shaders.js";
+import { DEPTH_FRAGMENT, DEPTH_VERTEX, MESH_FRAGMENT, MESH_VERTEX, SKY_FRAGMENT, SKY_VERTEX } from "./shaders.js";
 
 /** Three prepends the version itself for GLSL3, so the source must not carry it. */
 const glsl3 = (source) => source.replace(/^#version 300 es\n/, "");
@@ -170,44 +170,6 @@ export class ThreeRenderer {
     // A sampler2DShadow cannot be bound to an ordinary empty texture, so a tiny
     // depth target stands in until the app asks for a real shadow map.
     this.shadow = this.#shadowTarget(1);
-
-    this.weatherMaterial = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3,
-      vertexShader: glsl3(WEATHER_VERTEX),
-      fragmentShader: glsl3(WEATHER_FRAGMENT),
-      uniforms: {
-        u_viewProjection: { value: new THREE.Matrix4() },
-        u_cameraPosition: { value: new THREE.Vector3() },
-        u_cameraRight: { value: new THREE.Vector3() },
-        u_cameraUp: { value: new THREE.Vector3() },
-        u_box: { value: new THREE.Vector3() },
-        u_fall: { value: new THREE.Vector2() },
-        u_drift: { value: new THREE.Vector2() },
-        u_size: { value: new THREE.Vector2() },
-        u_time: { value: 0 },
-        u_color: { value: new THREE.Vector4() },
-        u_linearOut: { value: 0 },
-      },
-      transparent: true,
-      depthFunc: DEPTH_FUNC,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    this.weatherMaterial.onBeforeRender = (renderer, scene, camera, geometry, object) => {
-      object.material.uniformsNeedUpdate = true;
-      const uniforms = object.material.uniforms;
-      const draw = object.userData;
-      uniforms.u_viewProjection.value.fromArray(draw.viewProjection);
-      uniforms.u_cameraPosition.value.fromArray(draw.camera);
-      uniforms.u_cameraRight.value.fromArray(draw.right);
-      uniforms.u_cameraUp.value.fromArray(draw.up);
-      uniforms.u_box.value.fromArray(draw.style.box);
-      uniforms.u_fall.value.fromArray(draw.style.fall);
-      uniforms.u_drift.value.fromArray(draw.style.drift);
-      uniforms.u_size.value.fromArray(draw.style.size);
-      uniforms.u_time.value = draw.timeS;
-      uniforms.u_color.value.fromArray(draw.style.color);
-    };
   }
 
   /** Uploads a mesh from MeshBuilder.build() and returns a handle. */
@@ -229,7 +191,7 @@ export class ThreeRenderer {
   destroy() {
     this.shadow?.target.dispose();
     this.shadow = null;
-    for (const material of [this.meshMaterial, this.transparentMaterial, this.skyMaterial, this.depthMaterial, this.weatherMaterial]) material.dispose();
+    for (const material of [this.meshMaterial, this.transparentMaterial, this.skyMaterial, this.depthMaterial]) material.dispose();
     this.sky.geometry.dispose();
     if (this.ownsRenderer) this.renderer.dispose();
   }
@@ -293,23 +255,6 @@ export class ThreeRenderer {
     shadow.drawn = true;
   }
 
-  /** Uploads camera-local weather particles: six vertices per flake, six floats each. */
-  uploadWeather(data) {
-    const geometry = new THREE.BufferGeometry();
-    const buffer = new THREE.InterleavedBuffer(data, 6);
-    geometry.setAttribute("a_corner", new THREE.InterleavedBufferAttribute(buffer, 2, 0));
-    geometry.setAttribute("a_seed", new THREE.InterleavedBufferAttribute(buffer, 4, 2));
-    const count = data.length / 6;
-    geometry.setDrawRange(0, count);
-    return { geometry, count, name: "weather" };
-  }
-
-  /** Draws the weather field around the camera; `style` is the biome's weather data. */
-  drawWeather(handle, draw) {
-    if (!this.pending) return;
-    this.pending.weather.push({ handle, data: draw });
-  }
-
   resize(width, height) {
     this.size = { width, height };
     this.renderer.setSize(width, height, false);
@@ -336,7 +281,7 @@ export class ThreeRenderer {
     this.flush();
     cameraFromMatrices(this.camera, frame.view, frame.projection);
     this.#setFrameUniforms(frame);
-    this.pending = { overlay: frame.overlay === true, viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [], weather: [] };
+    this.pending = { overlay: frame.overlay === true, viewport: this.viewportRect, horizon: frame.horizon, opaque: [], transparent: [] };
   }
 
   end() {
@@ -393,7 +338,6 @@ export class ThreeRenderer {
     if (!pass.overlay) this.scene.add(this.sky);
     pass.opaque.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.meshMaterial, index)));
     pass.transparent.forEach((draw, index) => this.scene.add(this.#meshFor(draw, this.transparentMaterial, 1000 + index)));
-    pass.weather.forEach((draw) => this.scene.add(this.#meshFor(draw, this.weatherMaterial, 10000)));
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -441,7 +385,6 @@ export class ThreeRenderer {
       u.u_lightViewProjection.value.copy(IDENTITY);
       if (shadow?.lightViewProjection) u.u_lightViewProjection.value.fromArray(shadow.lightViewProjection);
     }
-    this.weatherMaterial.uniforms.u_linearOut.value = frame.overlay ? 1 : 0;
     const s = this.skyMaterial.uniforms;
     s.u_inverseViewProjection.value.fromArray(frame.inverseViewProjection);
     s.u_cameraPosition.value.fromArray(frame.camera);

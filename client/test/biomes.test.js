@@ -5,9 +5,7 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { riverStrips } from "../public/js/world/plan/riverStrips.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
-import { buildWeather } from "../public/js/view3d/weather.js";
 import { buildWorld } from "../public/js/view3d/world.js";
-import { terrainModel } from "../public/js/world/roads.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
@@ -31,7 +29,7 @@ test("the registry knows every biome and falls back to the default", () => {
 test("a biome brings everything the world draws with", () => {
   for (const id of BIOME_IDS) {
     const biome = resolveBiome(id);
-    for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "weather", "preview", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
+    for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "preview", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
     assert.equal(typeof biome.people.model, "function", `${id} draws its own crowd`);
@@ -60,10 +58,6 @@ test("a biome brings everything the world draws with", () => {
       for (const key of ["fillAlpha", "edgeAlpha", "ridgeAlpha"]) {
         assert.ok(spec[key] === undefined || (spec[key] > 0 && spec[key] <= 1), `${id}'s 2D ${kind} ${key} is an opacity`);
       }
-    }
-    if (biome.weather) {
-      assert.ok(biome.weather.count > 0, `${id} has weather particles`);
-      assert.equal(biome.weather.color.length, 4, `${id} has a weather colour`);
     }
     const spot = { x: 10, z: 20, height: 30, steep: 0.2, seed: 7, water: 0, riverDistance: Infinity, riverHalfWidth: 9 };
     const color = biome.terrainColor(spot);
@@ -104,19 +98,6 @@ test("winter's sky is a lower, broader ceiling", () => {
   assert.ok(winter.sky.clouds.count > temperate.sky.clouds.count, "more cloud cover");
   assert.ok(winter.sky.clouds.altitude[0] < temperate.sky.clouds.altitude[0], "the ceiling sits lower");
   assert.ok(winter.sky.clouds.squash[0] < temperate.sky.clouds.squash[0], "and the puffs are flatter");
-});
-
-test("only a biome with weather grows a particle field", () => {
-  const terrain = terrainModel(new RouteGeometry(route));
-  const temperate = resolveBiome("temperate");
-  const winter = resolveBiome("winter");
-  assert.equal(buildWeather(terrain, { biome: temperate }), null, "summer air is clear");
-  const snow = buildWeather(terrain, { biome: winter });
-  assert.equal(snow.kind, "snow");
-  assert.equal(snow.count, winter.weather.count);
-  assert.equal(snow.data.length, winter.weather.count * 6 * 6, "six vertices per flake");
-  const again = buildWeather(terrain, { biome: winter });
-  assert.deepEqual(again.data, snow.data, "the same air on every client");
 });
 
 test("winter changes the air, not the sun's direction", async () => {
@@ -209,12 +190,9 @@ test("winter changes the look, not the layout", () => {
   assert.equal(winter.spectators[0].motion, "clap", "the winter crowd claps");
   assert.notDeepEqual(winter.spectatorMeshes[0].positions, temperate.spectatorMeshes[0].positions, "winter's crowd is penguins");
   assert.notDeepEqual(winter.spectatorMeshes[1].positions, winter.spectatorMeshes[0].positions, "the clapping pose moves");
-  assert.equal(temperate.weather, null, "summer has no particle field");
-  assert.equal(winter.weather.kind, "snow", "winter air carries snow");
 
   const total = (scene) =>
     Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
-    (scene.weather ? scene.weather.count * 2 : 0) +
     scene.rivers.strips.indices.length / 3 +
     scene.roads.strips.indices.length / 3 +
     Object.values(scene.meshes).reduce((a, mesh) => a + mesh.positions.length / 9, 0);

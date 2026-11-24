@@ -10,8 +10,9 @@ import { chunkNear, chunkVisible } from "./chunks.js";
 import * as THREE from "../three.js";
 import { TIME_MODES, TIME_PRESETS, environmentAt, resolvedLight, resolvePreset } from "../world/daylight.js";
 import { SEASONS } from "../world/seasons.js";
+import { precipitationAt, weatherFor } from "../world/weather.js";
 import { sunShadowMatrix } from "./lighting.js";
-import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
+import { invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { ThreeRenderer } from "./threeRenderer.js";
 import { cameraFromMatrices } from "./engine/camera.js";
 import { engineFor } from "./engine/engine.js";
@@ -350,6 +351,9 @@ export class View3D {
   #lastTime = null;
   /** The environment last pushed to the world scene, with the inputs it was made from. */
   #environment = null;
+  /** What the day's weather is rolled from (see the constructor's `weather` option). */
+  #weatherInput = { date: null, override: null, seed: 0 };
+  #weatherCache = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -362,9 +366,10 @@ export class View3D {
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
    * @param {{renderer?: object, engine?: object}} [options] `renderer` replaces the adapter's (tests),
-   *   `engine` the canvas's engine (tests; the canvas's own is used otherwise)
+   *   `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
+   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null, engine = null } = {}) {
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null, engine = null, weather = null } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -381,6 +386,7 @@ export class View3D {
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
     this.tracker = createTracker();
+    this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.terrain?.seed ?? 0 };
     /** The world as a Three.js scene: ground, sea, sky and sun, drawn before the adapter's riders and features. */
     this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
     this.worldCamera = new THREE.PerspectiveCamera();
@@ -403,7 +409,6 @@ export class View3D {
     this.chunks = Object.fromEntries(
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
-    this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
     this.lemonMesh = this.renderer.upload(buildLemon());
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
@@ -461,11 +466,26 @@ export class View3D {
     if (changed) this.worldScene.setSeason(season);
   }
 
-  /** The world scene's environment for a time preset in this season and lens, pushed to the scene only when it changed. */
-  #environmentFor(preset, haze) {
-    const key = `${preset.key}|${this.season}|${haze}`;
+  /** The day's weather: the fixed one if given, else the season's roll for this map and UTC day, or none without a date. */
+  #weatherToday() {
+    const { date, override, seed } = this.#weatherInput;
+    if (override) return override;
+    if (!date) return null;
+    const key = `${this.season}|${seed}|${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
+    if (this.#weatherCache?.key !== key) this.#weatherCache = { key, weather: weatherFor({ season: this.season, seed, date }) };
+    return this.#weatherCache.weather;
+  }
+
+  /**
+   * The world scene's environment for a time preset in this season, weather and lens, pushed to the scene only when it
+   * changed (the rain's strength is compared to a hundredth).
+   */
+  #environmentFor(preset, haze, utcSeconds) {
+    const weather = this.#weatherToday();
+    const precipitation = weather ? Math.round(precipitationAt(weather, utcSeconds) * 100) / 100 : 0;
+    const key = `${preset.key}|${this.season}|${haze}|${weather?.kind}|${weather?.strength}|${precipitation}`;
     if (this.#environment?.key !== key) {
-      this.#environment = { key, env: environmentAt(preset, this.season, { haze }) };
+      this.#environment = { key, env: environmentAt(preset, this.season, { haze, weather: weather ?? undefined, precipitation }) };
       this.worldScene.setEnvironment(this.#environment.env);
     }
     return this.#environment.env;
@@ -742,9 +762,10 @@ export class View3D {
 
   /**
    * Draws one frame.
-   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: {me: string, human: string, bot: string}}} frame
+   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, utcSeconds?: number, colors: {me: string, human: string, bot: string}}} frame
+   *   `timeS` is the scene's clock; `utcSeconds` the wall clock (when the showers fall), read by the caller
    */
-  render({ riders, myId, myCadence, timeS, colors }) {
+  render({ riders, myId, myCadence, timeS, utcSeconds = 0, colors }) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
@@ -889,10 +910,10 @@ export class View3D {
 
     // The world first: ground, sea and sky from the Three.js scene into the engine's target. The adapter then
     // draws the riders and features over it (overlay) and the engine's post chain presents the whole frame.
-    const env = this.#environmentFor(preset, lens.haze);
+    const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, camera: this.worldCamera, focus: me ? me.position : this.camera.target, shadows: shadows && lens.shadows });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, shadows: shadows && lens.shadows });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
@@ -903,14 +924,6 @@ export class View3D {
     const probes = this.#labelProbes(placed, myId, seatHeads);
     if (this.renderer.queryOcclusion) {
       for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
-    }
-
-    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
-      let right = cross(forward, [0, 1, 0]);
-      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
-      right = normalize(right);
-      const up = normalize(cross(right, forward));
-      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
     }
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
@@ -1105,7 +1118,6 @@ export class View3D {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
     const handles = [...Object.values(this.meshes), ...chunkHandles, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
-    if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();
     const workoutHandles = this.workoutParts ? [...this.workoutParts.values()] : [];

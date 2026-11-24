@@ -123,7 +123,6 @@ export const temperate = Object.freeze({
   }),
   water: Object.freeze({ color: COLORS.water, alpha: 0.82 }),
   river: Object.freeze({ color: COLORS.river, alpha: 0.85 }),
-  weather: null,
   /** A small three-colour swatch for the season picker. */
   preview: Object.freeze({
     sky: Object.freeze([0.62, 0.78, 0.9]),

@@ -17,6 +17,9 @@ const MARK_KINDS = new Set([ROAD_KIND.marking, ROAD_KIND.edge, ROAD_KIND.rut]);
 /** The surface sits just in front of the ground; marks and ruts in front of that. */
 const SURFACE_OFFSET = Object.freeze({ factor: -2, units: -4 });
 const MARK_OFFSET = Object.freeze({ factor: -4, units: -8 });
+/** How much of its colour and roughness wet asphalt keeps, at full wetness. */
+const WET = Object.freeze({ shade: 0.6, markShade: 0.8, roughness: 0.45 });
+const DRY_ROUGHNESS = 0.95;
 
 /**
  * The quads of `strips` for which `keep(kind)` holds, as geometries of up to `CHUNK_QUADS` consecutive quads.
@@ -119,7 +122,13 @@ export function createRoadLayer(roads, { uniforms, track }) {
   return {
     object: group,
     update() {},
-    setEnvironment() {},
+    /** Wet roads are darker and glossier. */
+    setEnvironment(env) {
+      const wet = env.wetness ?? 0;
+      surface.color.setScalar(1 - (1 - WET.shade) * wet);
+      surface.roughness = DRY_ROUGHNESS - (DRY_ROUGHNESS - WET.roughness) * wet;
+      marks.color.setScalar(1 - (1 - WET.markShade) * wet);
+    },
     dispose() {
       group.clear();
       disposeAll();

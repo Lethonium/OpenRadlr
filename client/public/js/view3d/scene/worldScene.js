@@ -20,6 +20,7 @@ import { createRoadsideLayer } from "./roadsideLayer.js";
 import { createSettlementLayer } from "./settlementLayer.js";
 import { createSky } from "./sky.js";
 import { createTerrainLayer } from "./terrainLayer.js";
+import { createWeatherLayer } from "./weatherLayer.js";
 import { createOwner } from "./tracker.js";
 
 /** Sun placement and shadow box, in metres. */
@@ -28,11 +29,14 @@ export const SUN = Object.freeze({ distance: 1800, shadowHalf: 130, near: 10, fa
 const SUN_THROUGH = 0.55;
 /** Strength of the drifting cloud shadows by day. */
 const CLOUD_SHADOW = 0.24;
+/** How much a lightning bolt adds to the hemisphere's light at its peak. */
+const LIGHTNING = 3;
 
 /**
  * @typedef {object} Frame
  * @property {number} dt seconds since the last frame
  * @property {number} t seconds on the scene's clock
+ * @property {number} [utcSeconds] wall-clock seconds, passed in by the view (nothing here reads a clock)
  * @property {import("../../three.js").Camera} camera
  * @property {number[]} focus world point the shadow box is centred on
  * @property {number} [shadowHalf] half the shadow box's edge, metres
@@ -55,6 +59,7 @@ export function createWorldScene(world, { settings, track }) {
   let season = world.season ?? "summer";
   let plan = world.plan;
   let environment = null;
+  let flash = 0;
   const plants = () => ({ settings: current, season, uniforms, track });
   /** How each rebuildable layer is made, by the name of its object. */
   const makers = {
@@ -67,6 +72,7 @@ export function createWorldScene(world, { settings, track }) {
     farms: () => createFarmLayer(plan, { ...plants(), grain, ground: world.ground }),
     landmarks: () => createLandmarkLayer(plan, { ...plants(), grain }),
     islands: () => createIslandLayer(plan, plants()),
+    weather: () => createWeatherLayer(plants()),
   };
   const layers = [createSky({ uniforms, track })];
   if (world.ground) {
@@ -76,6 +82,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
+  layers.push(makers.weather());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -102,6 +109,7 @@ export function createWorldScene(world, { settings, track }) {
   sun.shadow.camera.far = SUN.far;
   scene.add(sun, sun.target);
 
+  const weather = () => layers.find((layer) => layer.object.name === "weather");
   const keyDirection = new THREE.Vector3(0, 1, 0);
   let shadowSize = 0;
   let shadowsOn = true;
@@ -120,7 +128,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "weather");
   };
   setQuality(settings);
 
@@ -161,6 +169,11 @@ export function createWorldScene(world, { settings, track }) {
       lastFocus[2] = frame.focus[2];
       placeSun(lastFocus, half);
       for (const layer of layers) layer.update(frame);
+      const bolt = weather().flash ?? 0;
+      if (bolt !== flash) {
+        flash = bolt;
+        hemisphere.intensity = (environment?.hemiIntensity ?? 1) + LIGHTNING * flash;
+      }
     },
     /**
      * Rebuilds what the season colours (woods, fields, verges, towns, farms, landmarks and far islands) from `plan`, freeing the old.
@@ -180,7 +193,7 @@ export function createWorldScene(world, { settings, track }) {
       sun.intensity = env.sunIntensity;
       hemisphere.color.setRGB(...env.hemiSky);
       hemisphere.groundColor.setRGB(...env.hemiGround);
-      hemisphere.intensity = env.hemiIntensity;
+      hemisphere.intensity = env.hemiIntensity + LIGHTNING * flash;
       scene.fog.color.setRGB(...env.fogColor);
       scene.fog.density = env.fogDensity;
       uniforms.cloudShadow.value = (1 - env.night) * CLOUD_SHADOW;
