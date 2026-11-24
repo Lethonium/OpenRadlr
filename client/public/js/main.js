@@ -114,6 +114,7 @@ import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
 import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
+import { nextQuality, qualityLevel } from "./view3d/quality.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
@@ -2790,7 +2791,7 @@ function buildStudioWorld() {
       view.routes = world.routes;
       view.network = world.network;
       view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
-      view.setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+      view.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
       view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
       app.view3d = view;
       $("view-note").textContent = "";
@@ -5185,7 +5186,7 @@ function initViews() {
   $("view-3d").addEventListener("click", () => setViewMode("3d"));
   $("view-2d").addEventListener("click", () => setViewMode("2d"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
-  $("quality-mode").addEventListener("click", () => setQuality(app.view3d.quality === "high" ? "low" : "high"));
+  $("quality-mode").addEventListener("click", () => setQuality(nextQuality(app.view3d.quality)));
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
   setViewMode("2d", { remember: false });
@@ -5252,7 +5253,7 @@ function show3d(scene, view = null) {
   if (CAMERA_MODES[camera]) app.view3d.setCameraMode(camera);
   renderCameraButton();
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
-  setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+  setQuality(qualityLevel(readSetting(QUALITY_KEY)));
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
   // Each gym's statues (also on a view taken over from the menu, which had its own rows).
   // A workout whose café this route does not start at shows its figures at the gym here.
@@ -5317,9 +5318,11 @@ function renderCameraButton() {
   $("camera-mode").textContent = t("camera.label", { mode: cameraName(app.view3d.camera.mode) });
 }
 
+const GRAPHICS_LABELS = { low: "graphics.low", medium: "graphics.medium", high: "graphics.high", ultra: "graphics.ultra" };
+
 function setQuality(quality) {
   app.view3d.setQuality(quality);
-  $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
+  $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
 }
 

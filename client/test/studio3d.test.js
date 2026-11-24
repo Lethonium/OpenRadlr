@@ -103,3 +103,13 @@ test("a studio frame ends with end() and carries the seat camera's view", () => 
   const { eye, target } = view.cameraPose(3, 80, 1);
   assert.deepEqual([...renderer.frames[0].view], [...lookAt(eye, target)]);
 });
+
+test("the room-only view takes every graphics level and ignores unknown ones", () => {
+  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer() });
+  for (const level of ["low", "medium", "high", "ultra"]) {
+    view.setQuality(level);
+    assert.equal(view.quality, level);
+  }
+  view.setQuality("potato");
+  assert.equal(view.quality, "ultra");
+});

@@ -517,6 +517,8 @@ export default {
   "camera.coach": "Coach's view",
   "graphics.label": "Graphics: {level}",
   "graphics.high": "High",
+  "graphics.medium": "Medium",
+  "graphics.ultra": "Ultra",
   "graphics.low": "Low",
   "ride.offRoute": "Off route",
   "ride.towards": "to {name}",

@@ -28,6 +28,7 @@ import {
 } from "./riderModel.js";
 import { hexToRgb, projectToScreen, visibleLabels } from "./view3d.js";
 import { sunShadowMatrix } from "./lighting.js";
+import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
 
 export { INSTRUCTOR, ROOM, STAGE, seatPosition };
 
@@ -114,7 +115,7 @@ export class StudioView3D {
   }
 
   setQuality(quality) {
-    if (quality === "high" || quality === "low") this.quality = quality;
+    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
   }
 
   /** Upper-body parts of a rider in the riding pose, hung off `model` (the bike frame). */
@@ -159,8 +160,8 @@ export class StudioView3D {
   render({ riders, myId, myCadence, coachCadence, timeS, colors }) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
-    const high = this.quality === "high";
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, high ? 2 : 1);
+    const { pixelRatioMax, shadows } = qualitySettings(this.quality);
+    const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
@@ -183,7 +184,7 @@ export class StudioView3D {
       return { rider, position, yaw, tint, ...this.#parts(rider.id, position, yaw, cadence, speed, dt) };
     });
 
-    if (this.shadowsEnabled && high) {
+    if (this.shadowsEnabled && shadows) {
       this.renderer.beginShadows(sunShadowMatrix(STUDIO_LIGHT.sun, [0, 0, -1.5], { halfSize: 11, depth: 40, mapSize: 1024 }));
       for (const part of drawn) {
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
@@ -193,7 +194,7 @@ export class StudioView3D {
       this.renderer.endShadows();
     }
 
-    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...STUDIO_LIGHT, shadowStrength: high ? STUDIO_LIGHT.shadowStrength : 0 });
+    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...STUDIO_LIGHT, shadowStrength: shadows ? STUDIO_LIGHT.shadowStrength : 0 });
     this.renderer.draw(this.room, this.identity);
     this.renderer.drawBright(this.accents, this.identity, 1);
     for (const part of drawn) {

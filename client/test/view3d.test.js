@@ -1046,3 +1046,17 @@ test("the frame carries the camera's view and projection", () => {
   assert.deepEqual([...frame.view], [...lookAt(view.camera.eye, view.camera.target)]);
   assert.deepEqual([...multiply(frame.projection, frame.view)], [...frame.viewProjection]);
 });
+
+test("every graphics level but low renders the shadow map", () => {
+  const rendered = {};
+  for (const level of ["low", "medium", "high", "ultra"]) {
+    const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
+    let shadowPasses = 0;
+    renderer.beginShadows = () => shadowPasses++;
+    view.camera.update(100, 1, 0);
+    view.setQuality(level);
+    view.render({ riders: [], myId: null, timeS: 12, colors });
+    rendered[level] = shadowPasses > 0;
+  }
+  assert.deepEqual(rendered, { low: false, medium: true, high: true, ultra: true });
+});

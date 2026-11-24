@@ -46,6 +46,7 @@ import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { isRemote } from "../view/remoteRiders.js";
+import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -426,9 +427,9 @@ export class View3D {
     if (TIME_MODES.includes(mode)) this.timeMode = mode;
   }
 
-  /** "high": shadow map, grass, sharp on high-DPI screens. "low": none of those, for weaker GPUs. */
+  /** A graphics level (see quality.js): "low" has no shadow map or grass and a 1x pixel ratio, for weaker GPUs. */
   setQuality(quality) {
-    if (quality === "high" || quality === "low") this.quality = quality;
+    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
   }
 
   /**
@@ -708,8 +709,8 @@ export class View3D {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
-    const high = this.quality === "high";
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, high ? 2 : 1);
+    const { pixelRatioMax, shadows, detail } = qualitySettings(this.quality);
+    const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
@@ -812,7 +813,7 @@ export class View3D {
     const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
 
     // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
-    if (this.shadowsEnabled && high && lens.shadows) {
+    if (this.shadowsEnabled && shadows && lens.shadows) {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
@@ -852,7 +853,7 @@ export class View3D {
     }
 
     // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
-    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
+    const scene = { light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -906,12 +907,12 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
+  #drawWorld({ light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0 });
     this.renderer.draw(this.meshes.horizon, this.identity);
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
-      if (group === "detail" && !high) continue;
+      if (group === "detail" && !detail) continue;
       // Seen from the drone, small things reach a little further, not as far as the haze.
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
       for (const chunk of chunks) {
