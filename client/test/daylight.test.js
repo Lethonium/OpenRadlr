@@ -52,3 +52,33 @@ test("colours are linear", () => {
 test("the environment is frozen", () => {
   assert.ok(Object.isFrozen(env("day")));
 });
+
+const luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+test("the day sky is blue: the zenith is bluer than it is red and the horizon is not grey", () => {
+  const day = env("day");
+  assert.ok(day.skyTop[2] > day.skyTop[0] * 5);
+  assert.ok(day.skyHorizon[2] > day.skyHorizon[0] * 1.3);
+  assert.ok(day.fogColor[2] > day.fogColor[0] * 1.2, "the distance tints blue");
+});
+
+test("fog leaves most of the view clear at two kilometres by day and fades it out past twelve", () => {
+  const { fogDensity } = env("day");
+  const left = (metres) => Math.exp(-((fogDensity * metres) ** 2));
+  assert.ok(left(2000) > 0.8);
+  assert.ok(left(12000) < 0.05);
+});
+
+test("winter is hazier than summer and the drone's haze thins the fog by its factor", () => {
+  assert.ok(env("day", "winter").fogDensity > env("day", "summer").fogDensity);
+  assert.ok(Math.abs(env("day", "summer", { haze: 2 }).fogDensity * 2 - env("day").fogDensity) < 1e-12);
+});
+
+test("the night is lit enough to read the ground by the moon", () => {
+  const night = env("night");
+  const day = env("day");
+  assert.ok(luma(night.hemiSky) * night.hemiIntensity * night.exposure >= 0.1, "moonlit ambient");
+  assert.ok(luma(night.sunColor) * night.sunIntensity >= 0.3, "moon key");
+  assert.ok(luma(night.sunColor) * night.sunIntensity < luma(day.sunColor) * day.sunIntensity / 2, "but far below the sun");
+  assert.ok(night.skyHorizon[2] > night.skyHorizon[0] * 2, "a blue night");
+});

@@ -116,6 +116,7 @@ export function createPost(renderer, target, settings) {
   composer.addPass(grade);
 
   const sun = new THREE.Vector3();
+  const eye = new THREE.Vector3();
   return {
     render(camera, env, { ride = false } = {}) {
       if (atmos) {
@@ -123,7 +124,7 @@ export function createPost(renderer, target, settings) {
         const u = atmos.compositeMaterial.uniforms;
         camera.getWorldDirection(sun);
         const facing = sun.dot(new THREE.Vector3(...env.sun));
-        sun.set(...env.sun).multiplyScalar(1000).add(camera.position).project(camera);
+        sun.set(...env.sun).multiplyScalar(1000).add(camera.getWorldPosition(eye)).project(camera);
         u.uSun.value.set(sun.x * 0.5 + 0.5, sun.y * 0.5 + 0.5);
         u.uRays.value = !env.night && facing > 0 && options.raySamples > 0 ? 1 : 0;
         const peak = Math.max(...env.sunColor, 1e-3);

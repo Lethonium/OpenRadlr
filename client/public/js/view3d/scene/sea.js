@@ -11,6 +11,17 @@ import { createOwner } from "./tracker.js";
 /** Plane size and subdivisions (a vertex every ~73 m, finer than the shortest wave) and the depth the texture covers. */
 export const SEA = Object.freeze({ size: 16000, segments: 220, depthRange: 72 });
 const CELL = SEA.size / SEA.segments;
+
+/**
+ * How many times the plane is stretched (in whole steps, so the snapping below stays on the
+ * same lattice) for its half edge to reach `far`, the lens' far plane: past the plane's edge
+ * the sky would show through as flat wedges.
+ * @param {number} far
+ * @returns {number}
+ */
+export function seaScale(far) {
+  return Math.max(1, Math.ceil((far * 1.05) / (SEA.size / 2)));
+}
 const SHALLOW = "#4fe0cf";
 const DEEP = "#0d4f86";
 
@@ -47,15 +58,15 @@ const VERTEX = `uniform float uTime; varying vec3 vW;
     wp.y += sin(wp.x*0.021+uTime*0.9)*0.32 + sin(wp.z*0.027+uTime*1.1)*0.28 + sin((wp.x+wp.z)*0.05+uTime*1.7)*0.1;
     vW = wp.xyz; gl_Position = projectionMatrix*viewMatrix*wp; }`; // i18n-ok
 
-const FRAGMENT = `uniform float uTime, uFogDensity, uNight, uLight, uWinter, uDepthRange, uNearRows, uFarRows;
+const FRAGMENT = `uniform float uTime, uFogDensity, uFar, uNight, uLight, uWinter, uDepthRange, uNearRows, uFarRows;
   uniform vec3 uSunDir, uSunColor, uHorizon, uSkyTop, uFogColor, uShallow, uDeep;
-  uniform vec4 uNear, uFar; uniform sampler2D uNearDepth, uFarDepth; varying vec3 vW;
+  uniform vec4 uNear, uFarGrid; uniform sampler2D uNearDepth, uFarDepth; varying vec3 vW;
   ${NOISE_GLSL}
   // Depth in metres below the sea at p: the fine grid where it covers p, else the coarse one, else deep water.
   float seaDepth(vec2 p){
     vec2 nu = (p - uNear.xy) / uNear.z; vec2 ns = vec2(uNear.w, uNearRows);
     if (nu.x >= 0.0 && nu.y >= 0.0 && nu.x <= ns.x - 1.0 && nu.y <= ns.y - 1.0) return texture2D(uNearDepth, (nu + 0.5) / ns).r * uDepthRange;
-    vec2 fu = (p - uFar.xy) / uFar.z; vec2 fs = vec2(uFar.w, uFarRows);
+    vec2 fu = (p - uFarGrid.xy) / uFarGrid.z; vec2 fs = vec2(uFarGrid.w, uFarRows);
     if (fu.x >= 0.0 && fu.y >= 0.0 && fu.x <= fs.x - 1.0 && fu.y <= fs.y - 1.0) return texture2D(uFarDepth, (fu + 0.5) / fs).r * uDepthRange;
     return uDepthRange;
   }
@@ -86,10 +97,11 @@ const FRAGMENT = `uniform float uTime, uFogDensity, uNight, uLight, uWinter, uDe
     float band = sin(depth*3.2 - t*2.0 + n*5.0)*0.5+0.5;
     float foam = shore*smoothstep(0.6, 0.95, band + shore*0.35) + (1.0 - smoothstep(0.0, 0.55, depth));
     foam = clamp(foam * (0.7+0.5*n), 0.0, 1.0);
-    float caps = smoothstep(0.82, 0.95, vnoise(p*0.06+vec2(t*0.1,-t*0.07))*vnoise(p*0.3-o1)*1.6) * smoothstep(10.,30.,depth);
+    float caps = smoothstep(0.82, 0.95, vnoise(p*0.06+vec2(t*0.1,-t*0.07))*vnoise(p*0.3-o1)*1.6) * smoothstep(10.,30.,depth) * (1.0 - smoothstep(250.0, 1500.0, length(cameraPosition - vW))); // far white caps are sub-pixel and only speckle
     col = mix(col, vec3(0.95,0.98,1.0)*uLight, max(foam*0.85, caps*0.5));
     float dist = length(cameraPosition - vW);
     float fog = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
+    fog = max(fog, smoothstep(0.7*uFar, 0.95*uFar, dist)); // the far plane cuts the sea: end in the fog colour, not in a ragged edge
     gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
   }`; // i18n-ok
 
@@ -118,7 +130,8 @@ export function createSea(ground, { uniforms, track }) {
     uNear: { value: placement(near) },
     uNearRows: { value: near.rows },
     uNearDepth: { value: own(depthTexture(near)) },
-    uFar: { value: placement(far ?? near) },
+    uFarGrid: { value: placement(far ?? near) },
+    uFar: { value: 9000 },
     uFarRows: { value: (far ?? near).rows },
     uFarDepth: { value: own(depthTexture(far ?? near)) },
   };
@@ -136,8 +149,11 @@ export function createSea(ground, { uniforms, track }) {
     /** Follows the camera in whole vertex steps, so the waves (a function of world position) never swim. */
     update({ camera }) {
       camera.getWorldPosition(eye);
-      mesh.position.x = Math.round(eye.x / CELL) * CELL;
-      mesh.position.z = Math.round(eye.z / CELL) * CELL;
+      const scale = seaScale(camera.far);
+      shader.uFar.value = camera.far;
+      mesh.scale.set(scale, 1, scale);
+      mesh.position.x = Math.round(eye.x / (CELL * scale)) * CELL * scale;
+      mesh.position.z = Math.round(eye.z / (CELL * scale)) * CELL * scale;
     },
     setEnvironment(env) {
       const moonlit = env.night > 0;

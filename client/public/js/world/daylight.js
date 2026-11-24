@@ -17,8 +17,10 @@ export const TIME_PRESETS = Object.freeze({
     label: "Day", // i18n-ok (English id label; the UI translates by mode)
     sun: normalize([0.55, 0.62, 0.32]),
     sunColor: [1.0, 0.94, 0.82],
-    zenith: [0.3, 0.52, 0.84],
-    horizon: [0.76, 0.85, 0.93],
+    // Deeper than the reference's #2d7ad8 / #bfe3ff: ACES and the grade's warm tint
+    // pull a pale sky to grey, so these come out as a clear blue.
+    zenith: [0.08, 0.34, 0.8],
+    horizon: [0.56, 0.78, 1.0],
     ground: [0.4, 0.38, 0.3],
     cloudTint: [1, 1, 1],
     fog: [260, 4200],
@@ -50,10 +52,10 @@ export const TIME_PRESETS = Object.freeze({
     label: "Night", // i18n-ok (English id label; the UI translates by mode)
     // The key light is the moon, high in the south-west.
     sun: normalize([-0.4, 0.7, 0.35]),
-    sunColor: [0.32, 0.4, 0.62],
-    zenith: [0.02, 0.04, 0.12],
-    horizon: [0.07, 0.1, 0.2],
-    ground: [0.05, 0.07, 0.13],
+    sunColor: [0.56, 0.66, 1.0],
+    zenith: [0.03, 0.06, 0.17],
+    horizon: [0.06, 0.11, 0.25],
+    ground: [0.1, 0.13, 0.25],
     cloudTint: [0.18, 0.22, 0.34],
     fog: [120, 2400],
     shadowStrength: 0.3,
@@ -91,8 +93,22 @@ const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
 const linear = (rgb) => Object.freeze(rgb.map(toLinear));
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
-/** The reference's exposure for each look: night is lifted, day is not. */
-const EXPOSURE = Object.freeze({ day: 1.05, golden: 1.05, dusk: 1.1, night: 1.5 });
+/**
+ * How each look is lit in the world scene, from the reference: the exposure
+ * (night is lifted), the key and the hemisphere's strength and sky colour
+ * (sRGB; the zenith is far too dark and blue to light a night, and the day
+ * sky is brighter and whiter than its zenith), and the exponential-squared
+ * fog's density per metre, about 2% of the view left at twelve kilometres by day.
+ */
+export const LOOKS = Object.freeze({
+  day: Object.freeze({ exposure: 1.05, sun: 2.6, hemi: 0.7, hemiSky: [0.8, 0.9, 1.0], fog: 0.00016 }),
+  golden: Object.freeze({ exposure: 1.05, sun: 2.6, hemi: 0.7, hemiSky: [1.0, 0.82, 0.67], fog: 0.0002 }),
+  dusk: Object.freeze({ exposure: 1.1, sun: 2.0, hemi: 0.6, hemiSky: [0.62, 0.5, 0.62], fog: 0.00024 }),
+  night: Object.freeze({ exposure: 1.5, sun: 1.8, hemi: 1.4, hemiSky: [0.25, 0.36, 0.62], fog: 0.00026 }),
+});
+/** Winter's air is hazier (the reference adds as much again), and the fog leans this far towards the sky's top colour. */
+const WINTER_FOG = 1.8;
+const FOG_SKY_MIX = 0.15;
 
 /**
  * @typedef {object} Environment
@@ -129,9 +145,8 @@ export function environmentAt(preset, season, { haze = 1 } = {}) {
   const sun = night ? [-key[0], -key[1], -key[2]] : [...key];
   const moon = night ? [...key] : [-key[0], -key[1], -key[2]];
   const horizon = linear(preset.horizon);
-  const far = preset.fog[1];
-  // Exponential-squared fog: density that reaches ~2% at the far distance.
-  const fogDensity = Math.sqrt(-Math.log(0.02)) / ((far * haze));
+  const look = LOOKS[preset.key] ?? LOOKS.day;
+  const fogDensity = (look.fog * (season === "winter" ? WINTER_FOG : 1)) / haze;
   return Object.freeze({
     key: preset.key,
     sun: Object.freeze(sun),
@@ -141,13 +156,13 @@ export function environmentAt(preset, season, { haze = 1 } = {}) {
     skyTop: linear(preset.zenith),
     skyHorizon: horizon,
     skyBottom: Object.freeze(mix(horizon, linear(preset.ground), 0.6)),
-    hemiSky: linear(preset.zenith),
+    hemiSky: linear(look.hemiSky),
     hemiGround: linear(preset.ground),
-    fogColor: horizon,
-    sunIntensity: night ? 0.9 : 2.6,
-    hemiIntensity: night ? 0.55 : 0.7,
+    fogColor: Object.freeze(mix(horizon, linear(preset.zenith), FOG_SKY_MIX)),
+    sunIntensity: look.sun,
+    hemiIntensity: look.hemi,
     fogDensity,
-    exposure: EXPOSURE[preset.key] ?? 1.05,
+    exposure: look.exposure,
     stars: night,
     snow: season === "winter" ? 1 : 0,
   });
