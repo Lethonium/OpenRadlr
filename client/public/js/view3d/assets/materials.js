@@ -5,7 +5,7 @@
  * `createSharedUniforms()` and `createGrainTexture()`, owned by the scene.
  */
 import * as THREE from "../../three.js";
-import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX } from "./hookChunks.js";
+import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX, TRANSLUCENT_FRAGMENT, WIND_VERTEX } from "./hookChunks.js";
 
 /**
  * A shader patch. `key` tells Three's program cache that patched and plain
@@ -154,4 +154,49 @@ export function heightFog(uniforms) {
     shader.fragmentShader = `uniform float uHFBase, uHFFall; varying vec3 vHFW;\n${shader.fragmentShader.replace("#include <fog_fragment>", HEIGHT_FOG_FRAGMENT)}`; // i18n-ok
   };
   return Object.assign(hook, { key: "hfog" });
+}
+
+/**
+ * Wind sway on a material: vertices move more the higher they are.
+ * @param {import("../../three.js").Material} material
+ * @param {number} amplitude sway in metres per metre of height
+ * @param {ReturnType<typeof createSharedUniforms>} uniforms
+ * @returns {import("../../three.js").Material} the same material
+ */
+export function windify(material, amplitude, uniforms) {
+  const hook = (shader) => {
+    shader.uniforms.uTime = uniforms.time;
+    shader.uniforms.uWind = uniforms.wind;
+    shader.vertexShader = `uniform float uTime; uniform float uWind;\n${shader.vertexShader.replace("#include <begin_vertex>", WIND_VERTEX(amplitude))}`; // i18n-ok
+  };
+  return addHook(material, Object.assign(hook, { key: `w${amplitude}` }));
+}
+
+/**
+ * Thin leaves glow when the sun is behind them.
+ * @param {import("../../three.js").Material} material
+ * @param {number} amount
+ * @param {ReturnType<typeof createSharedUniforms>} uniforms
+ * @returns {import("../../three.js").Material} the same material
+ */
+export function translucent(material, amount, uniforms) {
+  const hook = (shader) => {
+    shader.uniforms.uSunDirV = uniforms.sunDirV;
+    shader.uniforms.uSunCol = uniforms.sunCol;
+    shader.fragmentShader = `uniform vec3 uSunDirV; uniform vec3 uSunCol;\n${shader.fragmentShader.replace("#include <emissivemap_fragment>", TRANSLUCENT_FRAGMENT(amount))}`; // i18n-ok
+  };
+  return addHook(material, Object.assign(hook, { key: `t${amount}` }));
+}
+
+/**
+ * Double-sided leaves and blades keep their authored normal on back faces, so
+ * both sides light the same.
+ * @param {import("../../three.js").Material} material
+ * @returns {import("../../three.js").Material} the same material
+ */
+export function noFlip(material) {
+  const hook = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\n normal = normalize(vNormal);"); // i18n-ok
+  };
+  return addHook(material, Object.assign(hook, { key: "nf" }));
 }

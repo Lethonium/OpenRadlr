@@ -76,3 +76,34 @@ test("every level has a label in both languages", () => {
     assert.equal(typeof de[`graphics.${level}`], "string", `de graphics.${level}`);
   }
 });
+
+test("each level has grass rings that grow outwards, and Low stays lighter than Medium", async () => {
+  const { bladeCount } = await import("../public/js/view3d/assets/nature/grass.js");
+  let previous = 0;
+  for (const level of QUALITY_LEVELS) {
+    const { grassRings } = qualitySettings(level);
+    assert.equal(grassRings.length, 4);
+    grassRings.forEach((ring, i) => i && assert.ok(ring.r > grassRings[i - 1].r, `${level} ring ${i}`));
+    const blades = bladeCount(grassRings);
+    assert.ok(blades > previous, `${level} has more blades than the level below`);
+    previous = blades;
+  }
+  assert.ok(qualitySettings("low").grassRings[3].r < qualitySettings("medium").grassRings[3].r);
+});
+
+test("tree detail: cards come closer than hulls, leaf shadows are off on Low, the roadside reaches further with quality", () => {
+  for (const level of QUALITY_LEVELS) {
+    const { treeLod } = qualitySettings(level);
+    assert.ok(treeLod.cards < treeLod.hulls, level);
+  }
+  assert.equal(qualitySettings("low").leafShadows, false);
+  assert.equal(qualitySettings("high").leafShadows, true);
+  const reach = QUALITY_LEVELS.map((level) => qualitySettings(level).roadsideReach);
+  assert.deepEqual(reach, [120, 200, 300, 400]);
+  assert.deepEqual(QUALITY_LEVELS.map((level) => qualitySettings(level).treeLod.cards), [420, 600, 750, 1300]);
+});
+
+test("the quality tables are frozen", () => {
+  const { grassRings, treeLod } = qualitySettings("high");
+  assert.ok(Object.isFrozen(grassRings) && Object.isFrozen(grassRings[0]) && Object.isFrozen(treeLod));
+});

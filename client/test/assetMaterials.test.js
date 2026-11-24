@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import * as THREE from "../public/js/three.js";
-import { addHook, cloudShadows, createGrainTexture, createSharedUniforms, grain, heightFog } from "../public/js/view3d/assets/materials.js";
+import { addHook, cloudShadows, createGrainTexture, createSharedUniforms, grain, heightFog, noFlip, translucent, windify } from "../public/js/view3d/assets/materials.js";
 
 const shader = () => ({
   uniforms: {},
@@ -73,4 +73,27 @@ test("the grain texture is a repeating square", () => {
   const texture = createGrainTexture();
   assert.equal(texture.image.width, 256);
   assert.equal(texture.wrapS, THREE.RepeatWrapping);
+});
+
+test("wind sways by height and reads the shared time and strength", () => {
+  const uniforms = createSharedUniforms();
+  const material = windify(new THREE.MeshStandardMaterial(), 0.02, uniforms);
+  const sh = shader();
+  sh.vertexShader = "#include <begin_vertex>";
+  material.onBeforeCompile(sh);
+  assert.equal(sh.uniforms.uTime, uniforms.time);
+  assert.equal(sh.uniforms.uWind, uniforms.wind);
+  assert.match(sh.vertexShader, /max\(position\.y, 0\.0\)/);
+  assert.notEqual(windify(new THREE.MeshStandardMaterial(), 0.02, uniforms).customProgramCacheKey(), windify(new THREE.MeshStandardMaterial(), 0.05, uniforms).customProgramCacheKey());
+});
+
+test("translucency reads the sun, and double-sided leaves keep their normal", () => {
+  const uniforms = createSharedUniforms();
+  const material = noFlip(translucent(new THREE.MeshStandardMaterial(), 0.8, uniforms));
+  const sh = shader();
+  sh.fragmentShader = "#include <emissivemap_fragment>\n#include <normal_fragment_begin>";
+  material.onBeforeCompile(sh);
+  assert.equal(sh.uniforms.uSunDirV, uniforms.sunDirV);
+  assert.equal(sh.uniforms.uSunCol, uniforms.sunCol);
+  assert.match(sh.fragmentShader, /normal = normalize\(vNormal\)/);
 });

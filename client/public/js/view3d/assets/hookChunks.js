@@ -47,3 +47,18 @@ export const HEIGHT_FOG_FRAGMENT = `#ifdef USE_FOG
   float hfFactor = (1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth)) * hfThin;
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, clamp(hfFactor, 0.0, 1.0));
 #endif`;
+
+/** Wind: sways a vertex by its height, phased by where the instance stands. */
+export const WIND_VERTEX = (amplitude) => `#include <begin_vertex>
+  #ifdef USE_INSTANCING
+    vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+  #else
+    vec3 ip = vec3(modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
+  #endif
+  float ph = ip.x * 0.05 + ip.z * 0.07;
+  float sway = (sin(uTime * 1.7 + ph) * 0.6 + sin(uTime * 3.1 + ph * 1.7) * 0.4) * uWind * ${amplitude.toFixed(4)} * max(position.y, 0.0);
+  transformed.x += sway; transformed.z += sway * 0.6;`;
+
+/** Light passing through thin leaves when looking toward the sun. */
+export const TRANSLUCENT_FRAGMENT = (amount) => `#include <emissivemap_fragment>
+  { float bl = pow(max(dot(normalize(-vViewPosition), uSunDirV), 0.0), 4.0); totalEmissiveRadiance += diffuseColor.rgb * uSunCol * bl * ${amount.toFixed(3)}; }`;

@@ -13,5 +13,13 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `scene/noiseGlsl.js` | `NOISE_GLSL` in `core/shared.js` |
 | `assets/materials.js`, `assets/hookChunks.js` | `core/shared.js` and `core/geo.js`: grain, cloud shadows and height fog hooks |
 | `engine/post.js`, `engine/shaderChunks.js` | `core/post.js`: the post chain (occlusion, sun rays, depth of field, bloom, grade) |
+| `assets/nature/foliage.js`, `foliageTextures.js` | `_foliage.js`: leaf cards, needle and leaf textures (as data textures), foliage materials |
+| `assets/nature/crown.js`, `broadleaf.js` | `tree-broadleaf.js`: trunk, hull and leaf-card crowns; round, poplar, birch, cypress |
+| `assets/nature/pine.js`, `bush.js`, `rock.js` | `tree-pine.js`, `bush.js`, `rock.js` |
+| `assets/nature/grass.js`, `grassShader.js` | `grass-field.js`: grass rings with LOD cross-fade (ring tables are in `quality.js`) |
+| `assets/nature/crops.js`, `cropShader.js`, `hayBale.js` | `crop-field.js`, `pumpkin.js`, `hay-bale.js`: seasonal crop fields, pumpkins, bales |
+| `assets/materials.js` (`windify`, `translucent`, `noFlip`) | `core/geo.js` |
+
+`assets/nature/olive.js`, `umbrellaPine.js`, `almond.js` and `lavender.js` are new in this renderer, in the reference's style.
 
 Three.js itself is MIT licensed (`client/public/vendor/three/`).
