@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import * as THREE from "../public/js/three.js";
 import { createSharedUniforms } from "../public/js/view3d/assets/materials.js";
 import { CROPS, NATURE } from "../public/js/view3d/assets/nature/index.js";
+import { PROPS } from "../public/js/view3d/assets/props/index.js";
 import { REGION_KINDS, REGION_STYLE } from "../public/js/world/regionKinds.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 
@@ -171,4 +172,64 @@ test("the grass field wraps blades around the camera and frees what it made", as
   assert.equal(ring.uniforms.uCam.value.x, 5);
   ring.dispose();
   assert.equal(tracker.live(), 0);
+});
+
+const PROP_IDS = ["picketFence", "stoneWall", "logPile", "boardwalk", "cairn", "snowPole", "cart", "bench", "mailbox", "beehive"];
+const buildProp = (id, season, extra = {}) => PROPS[id].parts({ season, detail: true, uniforms: createSharedUniforms(), ...extra });
+
+test("the roadside layer draws every prop id the region tables name", () => {
+  const assets = { ...NATURE, ...PROPS };
+  for (const kind of REGION_KINDS) for (const id of REGION_STYLE[kind].props.kinds) assert.ok(assets[id], `prop ${id} in ${kind}`);
+});
+
+test("the prop kit has exactly the verge's props and none shadows a plant", () => {
+  assert.deepEqual(Object.keys(PROPS).sort(), [...PROP_IDS].sort());
+  for (const id of PROP_IDS) assert.equal(NATURE[id] === undefined || id === "hayBale", true, id);
+});
+
+for (const id of PROP_IDS) {
+  for (const season of SEASONS) {
+    test(`prop ${id} in ${season}: on the ground, small, no far twin`, () => {
+      const { near, far } = buildProp(id, season);
+      assert.ok(near.length > 0);
+      assert.deepEqual(far, []);
+      const { min, max } = box(near);
+      assert.ok(min.y >= -0.05 && min.y <= 0.05, `${id} min y ${min.y}`);
+      assert.ok(max.y > 0.1 && max.y < 3, `${id} height ${max.y}`);
+      assert.ok(max.x - min.x < 8 && max.z - min.z < 8, `${id} stays small`);
+      assert.ok(total(near) <= 400, `${id} ${season} ${total(near)} triangles`);
+    });
+  }
+
+  test(`prop ${id} describes itself and is the same every time`, () => {
+    assert.equal(PROPS[id].meta.id, id);
+    assert.equal(typeof PROPS[id].meta.name, "string");
+    const a = buildProp(id, "summer").near[0].geometry.attributes;
+    const b = buildProp(id, "summer").near[0].geometry.attributes;
+    assert.deepEqual(Array.from(a.position.array), Array.from(b.position.array));
+    assert.ok(a.color && !a.uv, `${id} vertex colours, no uv`);
+  });
+
+  test(`prop ${id} frees everything it made`, () => {
+    const tracker = createTracker();
+    const asset = PROPS[id].create({ season: "winter", track: tracker.track, uniforms: createSharedUniforms() });
+    assert.ok(tracker.live() > 0);
+    asset.dispose();
+    assert.equal(tracker.live(), 0, `${id} leaked`);
+  });
+}
+
+test("a wooden prop is the same shape in every season, and snow shows only in winter", () => {
+  for (const id of ["picketFence", "bench", "cart", "stoneWall"]) {
+    const sizes = SEASONS.map((season) => total(buildProp(id, season).near));
+    assert.equal(new Set(sizes).size, 1, id);
+  }
+  const snowy = (season) => Array.from(buildProp("stoneWall", season).near[0].geometry.attributes.color.array).filter((v) => v > 0.8).length;
+  assert.ok(snowy("winter") > snowy("summer"));
+});
+
+test("no prop asks for Math.random", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../public/js/view3d/assets/props/", import.meta.url);
+  for (const file of readdirSync(dir)) assert.ok(!readFileSync(new URL(file, dir), "utf8").includes("Math.random"), file);
 });

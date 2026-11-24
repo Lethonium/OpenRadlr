@@ -28,6 +28,8 @@ export const SEASONS = Object.freeze(["spring", "summer", "autumn", "winter"]);
  * @property {{geometry: import("../../../three.js").BufferGeometry}[]} near
  * @property {{geometry: import("../../../three.js").BufferGeometry}[]} far
  * @property {import("../../../three.js").BufferGeometry[]} glows pane geometry the world lights at night
+ * @property {Record<string, {geometry: import("../../../three.js").BufferGeometry, x: number, y: number, z: number, axis: number[]}>} movers
+ *   parts that turn (sails, rotor, wheel), each built round its pivot (x, y, z in building space) and turned by the layer about `axis`
  * @property {number} width footprint along x
  * @property {number} depth footprint along z
  * @property {number} eaves height of the walls' top
@@ -42,12 +44,15 @@ export function buildingOptions({ style, season = "summer", detail = true, seed 
   return { style, season, detail, seed, big, own };
 }
 
+/** A turning part: its geometries merged round the pivot, owned. */
+const moverPart = ({ geometries, x, y, z, axis }, own) => ({ geometry: own(merge(geometries.map((g) => g.translate(-x, -y, -z)))), x, y, z, axis });
+
 const mergedPart = (list, own) => (list.length ? [{ geometry: own(merge(list)) }] : []);
 
 /**
  * Builds a building asset from its description and builder.
  * @param {{id: string, name: string, description: string, options?: object}} info
- * @param {(options: ReturnType<typeof buildingOptions> & {random: () => number, dice: ReturnType<typeof dice>}) => {near: import("../../../three.js").BufferGeometry[], far: import("../../../three.js").BufferGeometry[], glows: import("../../../three.js").BufferGeometry[], width: number, depth: number, eaves: number, door: {x: number, y: number, z: number}}} build
+ * @param {(options: ReturnType<typeof buildingOptions> & {random: () => number, dice: ReturnType<typeof dice>}) => {near: import("../../../three.js").BufferGeometry[], far: import("../../../three.js").BufferGeometry[], glows: import("../../../three.js").BufferGeometry[], width: number, depth: number, eaves: number, door: {x: number, y: number, z: number}, movers?: {name: string, geometries: import("../../../three.js").BufferGeometry[], x: number, y: number, z: number, axis: number[]}[]}} build
  * @returns {Readonly<{meta: object, parts: (options?: BuildingOptions) => BuildingParts, create: (options?: BuildingOptions & {track?: (resource: any) => any}) => {object: import("../../../three.js").Group, dispose: () => void}}>}
  */
 export function defineBuilding({ id, name, description, options = {} }, build) {
@@ -66,6 +71,7 @@ export function defineBuilding({ id, name, description, options = {} }, build) {
       near: mergedPart(made.near, opts.own),
       far: mergedPart(made.far, opts.own),
       glows: made.glows.length ? [opts.own(merge(made.glows))] : [],
+      movers: Object.fromEntries((made.movers ?? []).map((mover) => [mover.name, moverPart(mover, opts.own)])),
       width: made.width,
       depth: made.depth,
       eaves: made.eaves,
@@ -74,13 +80,19 @@ export function defineBuilding({ id, name, description, options = {} }, build) {
   };
   const create = ({ track, ...options } = {}) => {
     const owner = createOwner(track);
-    const { near, glows } = parts({ ...options, own: owner.own });
+    const { near, glows, movers } = parts({ ...options, own: owner.own });
     const object = new THREE.Group();
     const material = owner.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
     for (const part of near) {
       const mesh = new THREE.Mesh(part.geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      object.add(mesh);
+    }
+    for (const { geometry, x, y, z } of Object.values(movers)) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
       object.add(mesh);
     }
     if (glows.length) object.add(new THREE.Mesh(glows[0], owner.own(new THREE.MeshBasicMaterial({ color: 0xffe2a0 }))));

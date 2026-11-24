@@ -8,7 +8,13 @@ import { HOUSE_STYLES } from "../public/js/view3d/assets/buildings/house.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 
 const SEASONS = ["spring", "summer", "autumn", "winter"];
-const IDS = Object.keys(BUILDINGS);
+const HOUSES = ["cathedral", "farmstead", "house", "streetLamp"];
+const LANDMARKS = ["lighthouse", "castle", "seaArch", "windmill", "windTurbine", "windpump", "balloon", "boat"];
+const IDS = [...HOUSES, ...LANDMARKS];
+/** Assets that light up at night: panes, lamps, a burner. */
+const LIT = ["cathedral", "farmstead", "house", "streetLamp", "lighthouse", "castle", "windmill", "balloon"];
+/** How far below y = 0 an asset's foot may reach (the layer sinks it into a slope or the sea). */
+const SINK = { castle: 2, lighthouse: 2, seaArch: 10, windmill: 1.5 };
 const SEEDS = [1, 2, 3, 4, 5, 6];
 /** Triangle budgets from the plan: near, near without detail, far. */
 const BUDGET = {
@@ -16,9 +22,20 @@ const BUDGET = {
   farmstead: { near: 3000, plain: 3000, far: 80 },
   streetLamp: { near: 120, plain: 120, far: 12 },
   cathedral: { near: 4000, plain: 4000, far: 120 },
+  lighthouse: { near: 2500, plain: 2500, far: 150 },
+  castle: { near: 5000, plain: 5000, far: 100 },
+  seaArch: { near: 4000, plain: 4000, far: 100 },
+  windmill: { near: 1200, plain: 1200, far: 60 },
+  windTurbine: { near: 900, plain: 900, far: 60 },
+  windpump: { near: 1500, plain: 1500, far: 80 },
+  balloon: { near: 200, plain: 200, far: 80 },
+  boat: { near: 400, plain: 400, far: 40 },
 };
+/** Parts that turn, by asset. */
+const MOVERS = { windmill: ["sails"], windTurbine: ["rotor"], windpump: ["wheel"] };
 
 const triangles = (geometry) => (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+const withMovers = (built) => total(built.near) + total(Object.values(built.movers ?? {}));
 const total = (list) => list.reduce((sum, part) => sum + triangles(part.geometry ?? part), 0);
 const bounds = (list) => list.reduce((b, part) => ((part.geometry ?? part).computeBoundingBox(), b.union((part.geometry ?? part).boundingBox)), new THREE.Box3());
 const build = (id, options) => BUILDINGS[id].parts({ season: "summer", detail: true, seed: 1, ...options });
@@ -34,8 +51,8 @@ function whiteAbove(part, height) {
   return count;
 }
 
-test("the registry lists houses, farmsteads, lamps and the cathedral", () => {
-  assert.deepEqual(IDS.sort(), ["cathedral", "farmstead", "house", "streetLamp"]);
+test("the registry lists houses, farmsteads, lamps, the cathedral and the landmarks", () => {
+  assert.deepEqual(Object.keys(BUILDINGS).sort(), [...IDS].sort());
 });
 
 test("each building describes itself", () => {
@@ -59,7 +76,7 @@ for (const id of IDS) {
         const { near, far } = build(id, { ...variant, seed });
         for (const list of [near, far]) {
           const { min, max } = bounds(list);
-          assert.ok(min.y >= -0.6 && min.y <= 0.05, `${label} min y ${min.y}`);
+          assert.ok(min.y >= -(SINK[id] ?? 0.6) && min.y <= 0.05, `${label} min y ${min.y}`);
           assert.ok(max.y > 1, `${label} max y ${max.y}`);
         }
       });
@@ -80,10 +97,10 @@ for (const id of IDS) {
           const limits = BUDGET[id];
           const rich = build(id, { ...variant, season, seed });
           const plain = build(id, { ...variant, season, seed, detail: false });
-          assert.ok(total(rich.near) <= limits.near, `${label} ${season} ${seed} near ${total(rich.near)}`);
-          assert.ok(total(plain.near) <= limits.plain, `${label} ${season} ${seed} plain ${total(plain.near)}`);
+          assert.ok(withMovers(rich) <= limits.near, `${label} ${season} ${seed} near ${withMovers(rich)}`);
+          assert.ok(withMovers(plain) <= limits.plain, `${label} ${season} ${seed} plain ${withMovers(plain)}`);
           assert.ok(total(rich.far) <= limits.far, `${label} ${season} ${seed} far ${total(rich.far)}`);
-          assert.ok(total(plain.near) <= total(rich.near), `${label} plain is not heavier`);
+          assert.ok(withMovers(plain) <= withMovers(rich), `${label} plain is not heavier`);
           assert.ok(total(rich.far) < total(rich.near), `${label} far is lighter`);
         }
       }
@@ -95,7 +112,7 @@ for (const id of IDS) {
         assert.ok(part.geometry.attributes.color, `${label} colours`);
         assert.ok(!part.geometry.attributes.uv, `${label} has no uv`);
       }
-      assert.ok(glows.length > 0 && total(glows) > 0, `${label} lights up`);
+      assert.equal(glows.length > 0 && total(glows) > 0, LIT.includes(id), `${label} lights up as expected`);
     });
   }
 
@@ -111,9 +128,9 @@ for (const id of IDS) {
 
   test(`${id} owns what parts makes, so the caller can free it`, () => {
     const tracker = createTracker();
-    const { near, far, glows } = BUILDINGS[id].parts({ own: tracker.track });
-    assert.equal(tracker.live(), near.length + far.length + glows.length);
-    for (const part of [...near, ...far]) part.geometry.dispose();
+    const { near, far, glows, movers } = BUILDINGS[id].parts({ own: tracker.track });
+    assert.equal(tracker.live(), near.length + far.length + glows.length + Object.keys(movers).length);
+    for (const part of [...near, ...far, ...Object.values(movers)]) part.geometry.dispose();
     for (const geometry of glows) geometry.dispose();
     assert.equal(tracker.live(), 0);
   });
@@ -191,4 +208,101 @@ test("a street lamp is slim and reaches toward the road", () => {
   const box = bounds(near);
   assert.ok(box.max.y > 5 && box.max.y < 8, `height ${box.max.y}`);
   assert.ok(box.max.x - box.min.x < 3 && box.max.z - box.min.z < 1, "slim");
+});
+
+test("turning parts are separate geometry with a pivot and an axis", () => {
+  for (const id of IDS) {
+    const { movers } = build(id);
+    assert.deepEqual(Object.keys(movers).sort(), [...(MOVERS[id] ?? [])].sort(), id);
+    for (const mover of Object.values(movers)) {
+      for (const key of ["x", "y", "z"]) assert.ok(Number.isFinite(mover[key]), `${id} pivot ${key}`);
+      assert.equal(mover.axis.length, 3);
+      assert.ok(Math.abs(Math.hypot(...mover.axis) - 1) < 1e-6, `${id} unit axis`);
+      assert.ok(mover.geometry.attributes.color, `${id} mover colours`);
+    }
+  }
+});
+
+test("a mover is built round its pivot, so spinning it spins about the hub", () => {
+  for (const id of Object.keys(MOVERS)) {
+    for (const mover of Object.values(build(id).movers)) {
+      const { min, max } = bounds([mover.geometry]);
+      assert.ok(min.x < 0 && max.x > 0 && min.y < 0 && max.y > 0, `${id} centred ${min.toArray()} ${max.toArray()}`);
+    }
+  }
+});
+
+test("the windmill is a Mallorcan tower of about ten metres with sails reaching the middle of it", () => {
+  const { near, movers, far } = build("windmill");
+  const tower = bounds(near);
+  assert.ok(tower.max.y >= 10.5 && tower.max.y <= 14, `height ${tower.max.y}`);
+  assert.ok(total(far) <= 60);
+  const sails = movers.sails;
+  const reach = bounds([sails.geometry]);
+  assert.ok(sails.y + reach.min.y > 1.5, "sails clear the ground");
+  assert.ok(reach.max.x > 5, "a real wheel");
+});
+
+test("the turbine stands high and its rotor sits at the top of the tower", () => {
+  const { near, movers } = build("windTurbine");
+  const box = bounds(near);
+  assert.ok(box.max.y > 55, `height ${box.max.y}`);
+  assert.ok(Math.abs(movers.rotor.y - box.max.y) < 4, "rotor at the nacelle");
+});
+
+test("the lighthouse is tall, banded red and white, with its lamp as a glow at the top", () => {
+  const { near, glows } = build("lighthouse");
+  const box = bounds(near);
+  assert.ok(box.max.y >= 28 && box.max.y <= 36, `height ${box.max.y}`);
+  const lamp = bounds(glows);
+  assert.ok(lamp.max.y > box.max.y * 0.7, "the lantern is high");
+  const { color } = near[0].geometry.attributes;
+  let red = 0;
+  let white = 0;
+  for (let i = 0; i < color.count; i += 1) {
+    if (color.getX(i) > 0.4 && color.getY(i) < 0.15) red += 1;
+    if (Math.min(color.getX(i), color.getY(i), color.getZ(i)) > 0.7) white += 1;
+  }
+  assert.ok(red > 20 && white > 20, `red ${red} white ${white}`);
+});
+
+test("the castle ruin has gaps in its wall and one tall tower", () => {
+  const { near } = build("castle");
+  const box = bounds(near);
+  assert.ok(box.max.y >= 18 && box.max.y <= 26, `keep ${box.max.y}`);
+  const p = near[0].geometry.attributes.position;
+  let tall = 0;
+  for (let i = 0; i < p.count; i += 1) {
+    if (p.getY(i) <= 12) continue;
+    tall += 1;
+    assert.ok(Math.hypot(p.getX(i) - 22, p.getZ(i) + 16) < 8, "only the keep rises");
+  }
+  assert.ok(tall > 0);
+  assert.ok(box.max.x - box.min.x > 40, "a ring of walls");
+});
+
+test("the sea arch spans a hole a boat can pass, higher than it is wide at the legs", () => {
+  const { near } = build("seaArch");
+  const box = bounds(near);
+  assert.ok(box.max.y >= 20 && box.max.y <= 40, `crown ${box.max.y}`);
+  assert.ok(box.max.x - box.min.x >= 40, "wide");
+  const p = near[0].geometry.attributes.position;
+  let under = 0;
+  for (let i = 0; i < p.count; i += 1) if (Math.abs(p.getX(i)) < 6 && p.getY(i) > 0.5 && p.getY(i) < 10) under += 1;
+  assert.equal(under, 0, "open water under the crown");
+});
+
+test("the balloon is a pear of two colours over a basket", () => {
+  const { near, glows } = build("balloon");
+  const box = bounds(near);
+  assert.ok(box.max.y > 20 && box.max.x - box.min.x > 12, "envelope");
+  const { color } = near[0].geometry.attributes;
+  const seen = new Set();
+  for (let i = 0; i < color.count; i += 1) seen.add([color.getX(i), color.getY(i), color.getZ(i)].map((v) => v.toFixed(2)).join());
+  assert.ok(seen.size >= 3, `colours ${seen.size}`);
+  assert.ok(bounds(glows).max.y < box.max.y / 2, "the burner hangs under the envelope");
+});
+
+test("a winter windmill is capped in snow", () => {
+  assert.ok(whiteAbove(build("windmill", { season: "winter" }).near[0], 9) > whiteAbove(build("windmill", { season: "summer" }).near[0], 9));
 });

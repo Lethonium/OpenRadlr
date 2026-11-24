@@ -25,6 +25,12 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `assets/buildings/house.js`, `shapes.js` | `assets/buildings/house.js` (scenic palette) and `core/geo.js` `gable`: the house in cottage, whitewashed, timber and stone styles, the gabled roof prism |
 | `assets/buildings/farmstead.js`, `farmBuildings.js` | `assets/buildings/farmstead.js`: farmhouse, gambrel barn, silos, machine shed, bales, garden fence, with a small tractor in place of `props/tractor.js` |
 | `assets/buildings/streetLamp.js` | `assets/buildings/street-lamp.js`: the slim LED lamp post (scenic) |
+| `assets/buildings/lighthouse.js` | `assets/buildings/lighthouse.js`: banded tower, gallery, glazed lantern, keeper's cottage (no beam) |
+| `assets/buildings/windmill.js` | `assets/buildings/windmill.js`: the lattice sails with canvas (the tower is #127's Mallorcan mill) |
+| `assets/buildings/windTurbine.js`, `windpump.js` | `assets/buildings/wind-turbine.js`, `windpump.js`: tapered blades and nacelle; lattice tower, multi-blade wheel, tank |
+| `assets/props/balloon.js`, `boat.js` | `props/balloon.js`, `props/boat.js`: the basket and ropes, the hull, cabin and sail |
+
+`assets/buildings/castle.js`, `seaArch.js` and the windmill's tower are rebuilt on the geometry kit from #127's `landmarks.js` (castle ruin, `sweepRock` and `archRings`, Mallorcan mill), not from the reference. The roadside props in `assets/props/` (fence, wall, log pile, boardwalk, cairn, snow pole, cart, bench, mailbox, beehive) are new.
 
 `assets/buildings/cathedral.js` is rebuilt on the geometry kit from the cathedral in #127's `tools/scenery/assemble.mjs`, not from the reference.
 

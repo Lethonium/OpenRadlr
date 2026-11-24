@@ -80,11 +80,11 @@ test("low has no leaf shadows, high has", () => {
   assert.ok(highCards.every((m) => m.castShadow));
 });
 
-test("the roadside layer skips props without a plant and draws the rest", () => {
+test("the roadside layer skips ids without an asset and draws plants and props", () => {
   const some = new Float32Array([10, 0, 10, 0.5, 1, 40, 0, 40, 1.5, 1]);
-  const layer = createRoadsideLayer({ ...plan, roadside: { picketFence: some, mailbox: some, olive: some } }, options());
-  assert.deepEqual([...new Set(layer.chunks.map((c) => c.id))], ["olive"]);
-  assert.equal(layer.chunks.reduce((sum, c) => sum + c.count, 0), 2);
+  const layer = createRoadsideLayer({ ...plan, roadside: { picketFence: some, teapot: some, olive: some } }, options());
+  assert.deepEqual([...new Set(layer.chunks.map((c) => c.id))].sort(), ["olive", "picketFence"]);
+  assert.equal(layer.chunks.reduce((sum, c) => sum + c.count, 0), 4);
   layer.dispose();
 });
 
