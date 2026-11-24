@@ -36,6 +36,7 @@ import { inStretch, resolveZones } from "./zones.js";
 import { add, cellKey, normalize, placement, scale } from "./math.js";
 import { fbm, seededRandom, valueNoise } from "./noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
+import { groundGrid } from "../world/groundGrid.js";
 import { buildWeather } from "./weather.js";
 
 export const LANE_WIDTH = 1.4;
@@ -497,7 +498,22 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   const floor = lowest - TERRAIN_LAYERS.floorGap;
   const far = Math.max(20000, horizon * 2);
   mesh.quad([cx - far, floor, cz - far], [cx - far, floor, cz + far], [cx + far, floor, cz + far], [cx + far, floor, cz - far], biome.terrainColor({ x: cx, z: cz, height: floor, steep: 0, seed, water, riverHalfWidth: RIVER.halfWidth }));
-  return { mesh: mesh.build(), bounds, water, floor, horizon };
+  return { mesh: mesh.build(), bounds, water, floor, horizon, center: [cx, cz], huge };
+}
+
+/**
+ * The new ground, as grids for the worker's typed-array hand-over: the same
+ * extent as `buildTerrain`'s fine grid, plus the coarse one out to the horizon.
+ */
+export function buildGroundGrids(terrain, ground, { season, long }) {
+  const [cx, cz] = ground.center;
+  const options = { water: ground.water, season, seed: terrain.seed };
+  const farCell = long ? 400 : 140;
+  const reach = Math.ceil(ground.horizon / farCell) * farCell;
+  return {
+    near: groundGrid(terrain, { ...options, bounds: ground.bounds, cell: ground.huge ? 144 : 16 }),
+    far: groundGrid(terrain, { ...options, bounds: { x0: cx - reach, z0: cz - reach, x1: cx + reach, z1: cz + reach }, cell: farCell }),
+  };
 }
 
 /** Junction pads sit below every road's asphalt (other roads: -0.02) and above the road bed (-0.35). */
@@ -967,7 +983,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer" } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -998,6 +1014,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   const long = route.length > LONG_ROUTE_M;
   const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+
+  const grids = buildGroundGrids(terrain, ground, { season, long });
 
   // Nodes where a network's roads meet, for the junction pads.
   const degree = new Map();
@@ -1138,6 +1156,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     gyms,
     studio,
     waterLevel: ground.water,
+    ground: grids,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     meshes: {

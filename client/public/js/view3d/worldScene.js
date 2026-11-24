@@ -11,8 +11,8 @@ import { buildWorld } from "./world.js";
 
 /** What the view draws: meshes, chunks, the animated objects and the gyms' spots and the studio's site (no functions). */
 export function sceneOf(world) {
-  const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio } = world;
-  return { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio };
+  const { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio, ground } = world;
+  return { biome, meshes, chunks, clouds, weather, water, rivers, rotors, spectators, spectatorMeshes, overview, gyms, studio, ground };
 }
 
 /** Every typed array buffer in `value`, for a zero-copy postMessage. */
@@ -24,12 +24,13 @@ export function transferList(value, found = new Set()) {
 }
 
 /** Builds the scene for `routeFile` and the `others` on its map (or its map's `network` file), in `biome`, synchronously. */
-export function buildSceneNow(routeFile, others = [], network = null, biome = "temperate") {
+export function buildSceneNow(routeFile, others = [], network = null, biome = "temperate", season = "summer") {
   return sceneOf(
     buildWorld(new RouteGeometry(routeFile), {
       others: others.map((file) => new RouteGeometry(file)),
       network: network ? roadNetworkOf(network) : null,
       biome: biome?.id ?? biome,
+      season,
     }),
   );
 }
@@ -38,14 +39,14 @@ export function buildSceneNow(routeFile, others = [], network = null, biome = "t
  * Builds the scene in a module worker; falls back to building in place when
  * workers are unavailable or fail (older browsers, file:// pages).
  */
-export function buildScene(routeFile, others = [], { network = null, biome = "temperate", createWorker = defaultWorker } = {}) {
+export function buildScene(routeFile, others = [], { network = null, biome = "temperate", season = "summer", createWorker = defaultWorker } = {}) {
   const biomeId = biome?.id ?? biome;
   return new Promise((resolve) => {
     let worker = null;
     const fallback = (reason) => {
       worker?.terminate();
       if (reason) console.warn("Building the 3D world in place:", reason);
-      resolve(buildSceneNow(routeFile, others, network, biomeId));
+      resolve(buildSceneNow(routeFile, others, network, biomeId, season));
     };
     try {
       worker = createWorker();
@@ -66,7 +67,7 @@ export function buildScene(routeFile, others = [], { network = null, biome = "te
       event.preventDefault?.();
       fallback(event.message ?? "worker failed");
     };
-    worker.postMessage({ route: routeFile, others, network, biome: biomeId });
+    worker.postMessage({ route: routeFile, others, network, biome: biomeId, season });
   });
 }
 
