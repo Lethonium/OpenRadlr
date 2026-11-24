@@ -247,7 +247,7 @@ function buildRideWorld() {
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season }))
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season, detail: qualityLevel(readSetting(QUALITY_KEY)) }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
       // The season changed while this was building: build the picked one instead.

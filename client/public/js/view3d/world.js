@@ -49,6 +49,7 @@ import { add, normalize, placement, scale } from "./math.js";
 import { seededRandom, valueNoise } from "../world/noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
+import { planWorld } from "../world/plan/index.js";
 import { buildWeather } from "./weather.js";
 
 /** Box (world x/z) around the island's coast, with some sea around it. */
@@ -93,9 +94,9 @@ export function groundExtent(terrain, { margin = 450, cell = 16, horizon = 4200 
  * The ground as grids for the worker's typed-array hand-over: a fine one over
  * `groundExtent`'s box, plus a coarse one out to the horizon.
  */
-export function buildGroundGrids(terrain, ground, { season, long }) {
+export function buildGroundGrids(terrain, ground, { season, long, regions, masks }) {
   const [cx, cz] = ground.center;
-  const options = { water: ground.water, season, seed: terrain.seed };
+  const options = { water: ground.water, season, seed: terrain.seed, regions, masks };
   const farCell = long ? 400 : 140;
   const reach = Math.ceil(ground.horizon / farCell) * farCell;
   return {
@@ -475,7 +476,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (turbine rotors, spectators).
  */
-export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer" } = {}) {
+export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
   const density = biome.flora.density;
   const roads = network ? network.roads() : null;
@@ -506,7 +507,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const long = route.length > LONG_ROUTE_M;
   const ground = groundExtent(terrain);
 
-  const grids = buildGroundGrids(terrain, ground, { season, long });
+  // Where woods, fields and verges go (and which ground is farmed): the plan, then the ground that tints and ploughs by it.
+  const regions = network?.regions ?? [];
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, seed, season, detail, bounds: ground.bounds });
+  const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
   // Nodes where a network's roads meet, for the junction pads.
   const degree = new Map();
@@ -649,6 +653,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     studio,
     waterLevel: ground.water,
     ground: grids,
+    plan,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     meshes: {

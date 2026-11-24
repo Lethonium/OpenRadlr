@@ -619,7 +619,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "rivers", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "plan", "rivers", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));

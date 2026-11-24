@@ -71,3 +71,28 @@ test("the ground grid is transferred, not copied", () => {
   const list = transferList(scene);
   for (const part of [scene.ground.near, scene.ground.far]) for (const key of ["heights", "normals", "colors"]) assert.ok(list.includes(part[key].buffer));
 });
+
+test("a region tint multiplies the grass", () => {
+  const plain = groundColor(base, SEASON_LOOK.summer, 0);
+  const tinted = groundColor({ ...base, tint: [0.5, 1, 1] }, SEASON_LOOK.summer, 0);
+  assert.ok(Math.abs(tinted[0] - plain[0] * 0.5) < 1e-9);
+  assert.equal(tinted[1], plain[1]);
+});
+
+test("a field is earth under its crop", () => {
+  const [r, g] = groundColor({ ...base, field: true }, SEASON_LOOK.summer, 0);
+  assert.ok(r > g, "brown: red above green");
+});
+
+test("the grid takes its tint from the regions and its earth from the field mask", () => {
+  const regions = [{ id: "a", kind: "oliveTerraces", center: [0, 0], radius: 5000 }];
+  const masks = { cell: 16, x0: -64, z0: -32, columns: 8, rows: 4, data: new Uint8Array(32) };
+  masks.data[1 * 8 + 4] = 3;
+  const options = { bounds, cell: 16, water: 0, season: "summer", seed: 7 };
+  const plain = groundGrid(stub(() => 20), options);
+  const g = groundGrid(stub(() => 20), { ...options, regions, masks });
+  const at = (grid, i, j) => [...grid.colors.slice(3 * (j * grid.columns + i), 3 * (j * grid.columns + i) + 3)];
+  assert.notDeepEqual(at(g, 1, 1), at(plain, 1, 1));
+  const [r, gr] = at(g, 4, 1);
+  assert.ok(r > gr, "the field cell is brown");
+});
