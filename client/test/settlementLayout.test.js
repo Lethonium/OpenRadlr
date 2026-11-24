@@ -130,6 +130,24 @@ test("the map's village and harbour stand on dry land, and the boats do not", ()
   }
 });
 
+test("the harbour's quay is a pier whose seaward end stands in deep water, with the boats beside it", () => {
+  const { network, terrain, routes } = valley();
+  const settlement = network.settlements.find((each) => each.id === "harbour");
+  const { quay, boats } = layoutSettlement({ ...settlement, terrain, roads: routes });
+  const [sx, sz] = quay.sea;
+  assert.ok(Math.abs(quay.yaw - Math.atan2(sx, sz)) < 1e-6, "the pier runs out to sea");
+  const end = [quay.x + (sx * quay.length) / 2, quay.z + (sz * quay.length) / 2];
+  const start = [quay.x - (sx * quay.length) / 2, quay.z - (sz * quay.length) / 2];
+  assert.ok(terrain.seaLevel - terrain.height(end[0], end[1]) > 0.5, "the seaward end is more than 0.5 m under water");
+  assert.ok(terrain.height(start[0], start[1]) > terrain.seaLevel, "the landward end is on the shore");
+  for (const boat of boats) {
+    const [dx, dz] = [boat.x - quay.x, boat.z - quay.z];
+    const [along, across] = [dx * sx + dz * sz, Math.abs(-dx * sz + dz * sx)];
+    assert.ok(along <= quay.length / 2 + 14 && across <= quay.width / 2 + 14, "each boat lies beside the pier");
+    assert.ok(across > quay.width / 2, "no boat sits on the deck");
+  }
+});
+
 // --- roads that cross a town ----------------------------------------------------------
 
 /** Distance from a point to a plot's oriented footprint rectangle. */

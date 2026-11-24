@@ -161,18 +161,24 @@ export function layoutQuay(ctx) {
     if (shore !== null && (!sea || shore < sea.shore)) sea = { shore, dx, dz };
   }
   if (!sea) return { quay: null, boats: [], props: [] };
-  const inland = Math.max(0, sea.shore - 8);
-  const shoreX = center[0] + sea.dx * inland;
-  const shoreZ = center[1] + sea.dz * inland;
+  // The pier starts 8 m inland of the shore line and runs out until the sea is deeper than 2 m, plus a short stub.
+  const start = Math.max(0, sea.shore - 8);
+  let end = sea.shore;
+  while (end < sea.shore + 120 && terrain.height(center[0] + sea.dx * end, center[1] + sea.dz * end) > water - 2) end += 2;
+  end += 4;
+  const mid = (start + end) / 2;
+  const shoreX = center[0] + sea.dx * (start + 8);
+  const shoreZ = center[1] + sea.dz * (start + 8);
   const along = perp2([sea.dx, sea.dz]);
-  const quay = { x: shoreX, z: shoreZ, yaw: Math.atan2(-along[0], -along[1]), length: 46, width: 7, sea: [sea.dx, sea.dz] };
+  const quay = { x: center[0] + sea.dx * mid, z: center[1] + sea.dz * mid, yaw: Math.atan2(sea.dx, sea.dz), length: end - start, width: 7, sea: [sea.dx, sea.dz] };
   const boats = [];
   for (let i = 0; i < 4; i += 1) {
-    const offset = (i - 1.5) * 9;
+    const side = i % 2 ? 1 : -1;
+    const out = end - 4 + Math.floor(i / 2) * 12;
     boats.push({
-      x: shoreX + sea.dx * (18 + (i % 2) * 8) + along[0] * offset,
-      z: shoreZ + sea.dz * (18 + (i % 2) * 8) + along[1] * offset,
-      yaw: Math.atan2(-sea.dx, -sea.dz) + (i % 2 ? 0.3 : -0.2),
+      x: center[0] + sea.dx * out + along[0] * side * 11,
+      z: center[1] + sea.dz * out + along[1] * side * 11,
+      yaw: Math.atan2(sea.dx, sea.dz) + (i % 2 ? 0.2 : -0.2),
     });
   }
   const props = [

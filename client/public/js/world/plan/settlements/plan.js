@@ -57,7 +57,7 @@ function stampSettlement(masks, layout) {
   }
   const { square, quay } = layout;
   if (square) stampBuilt(masks, { x: square.center[0], z: square.center[1], width: square.width, depth: square.depth, yaw: Math.atan2(layout.frame.u[1], layout.frame.u[0]) });
-  if (quay) stampBuilt(masks, { x: quay.x, z: quay.z, width: quay.length, depth: quay.width * 2, yaw: Math.atan2(quay.sea[0], -quay.sea[1]) });
+  if (quay) stampBuilt(masks, { x: quay.x, z: quay.z, width: quay.length, depth: quay.width * 2, yaw: Math.atan2(quay.sea[1], quay.sea[0]) });
   for (const prop of layout.props) if (prop.role === "church" || prop.role === "windmills") stampBuilt(masks, { x: prop.x, z: prop.z, width: prop.radius * 2, depth: prop.radius * 2, yaw: 0 });
 }
 
