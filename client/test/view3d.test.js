@@ -3,22 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { identity, lookAt, multiply, perspective, placement, rotationXAbout, transformPoint, yawFor } from "../public/js/view3d/math.js";
-import { fbm, seededRandom, valueNoise } from "../public/js/view3d/noise.js";
+import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
-import {
-  LANE_WIDTH,
-  RoadIndex,
-  buildArches,
-  buildGroundDetail,
-  buildFarIslands,
-  buildRoad,
-  buildScenery,
-  roadFrame,
-  roadHalfWidth,
-  riderPosition,
-  terrainModel,
-  waterLevel,
-} from "../public/js/view3d/world.js";
+import { buildArches, buildGroundDetail, buildFarIslands, buildRoad, buildScenery } from "../public/js/view3d/world.js";
+import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, roadHalfWidth, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, settle } from "../public/js/view3d/clips.js";
 import { riderLook } from "../public/js/view3d/riderModel.js";

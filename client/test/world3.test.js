@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { ChunkedMesh, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
-import { BRIDGE_HALF_LENGTH, Occupancy, RIVER, buildRiverPath, buildRoadside } from "../public/js/view3d/features.js";
+import { Occupancy, buildRoadside } from "../public/js/view3d/features.js";
+import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/rivers.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { RoadIndex, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
+import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, RoadIndex, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -266,7 +268,7 @@ test("a gym knows its café and where its statue row stands behind the pad", () 
 // --- one map for all routes: the road network (ADR 0010, #26) ---------------------
 
 import { RoadNetwork } from "../public/js/route/network.js";
-import { JUNCTION_LIFT } from "../public/js/view3d/world.js";
+import { JUNCTION_LIFT } from "../public/js/world/roads.js";
 
 const ROUTE_IDS = ["riverside-flats", "rolling-hills", "col-de-la-forge", "balcony-road", "forge-circuit", "island-tour", "cape-loop"];
 const loadRoute = (id) => new RouteGeometry(JSON.parse(readFileSync(new URL(`../../routes/${id}.json`, import.meta.url))));
@@ -503,7 +505,7 @@ test("the map terrain is defined everywhere, out to the horizon", () => {
 // --- no flicker: stacked surfaces stay apart (#24) ---------------------------
 
 import { DRONE_LENS, RIDE_LENS, depthStep } from "../public/js/view3d/view3d.js";
-import { ROAD_LIFT } from "../public/js/view3d/world.js";
+import { ROAD_LIFT } from "../public/js/world/roads.js";
 
 test("other roads' markings stay under the ridden road's asphalt where they cross it", () => {
   const gap = ROAD_LIFT.ridden - (ROAD_LIFT.other + ROAD_LIFT.marking);

@@ -8,7 +8,7 @@
  */
 import { BIOME_IDS, BIOMES, resolveBiome } from "./view3d/biomes/index.js";
 import { MeshBuilder } from "./view3d/meshBuilder.js";
-import { seededRandom } from "./view3d/noise.js";
+import { seededRandom } from "./world/noise.js";
 import { t } from "./i18n/i18n.js";
 
 const params = new URLSearchParams(location.search);

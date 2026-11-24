@@ -11,7 +11,7 @@
  */
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { t } from "../i18n/i18n.js";
-import { LANE_WIDTH, SHOULDER } from "../view3d/world.js";
+import { LANE_WIDTH, SHOULDER } from "../world/roads.js";
 import { prepareCanvas, riderColor } from "./canvas.js";
 import { coastOutline } from "./mapPreview.js";
 import { riderLabel } from "./remoteRiders.js";

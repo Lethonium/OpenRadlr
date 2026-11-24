@@ -5,7 +5,8 @@ import { BANNERS, ARCH_TEXT, bannerSpots, buildBanners } from "../public/js/view
 import { GLYPHS, pixelText, textWidth } from "../public/js/view3d/pixelFont.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { SIGN_TEXT } from "../public/js/view3d/studioBuilding.js";
-import { buildArches, roadFrame } from "../public/js/view3d/world.js";
+import { buildArches } from "../public/js/view3d/world.js";
+import { roadFrame } from "../public/js/world/roads.js";
 
 // --- pixel font -------------------------------------------------------------------
 

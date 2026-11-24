@@ -42,9 +42,9 @@ test("layering: an import against the arrows is reported with both file names", 
   assert.match(violations[0], /js\/view3d\/scene\/b\.js/);
 });
 
-test("layering: world may import world and the seeded noise, scene may import three and assets", () => {
+test("layering: world may import only world, scene may import three and assets", () => {
   const sources = {
-    "js/world/a.js": 'import { x } from "./b.js";\nimport { n } from "../view3d/noise.js";\n',
+    "js/world/a.js": 'import { x } from "./b.js";\nimport { n } from "./noise.js";\n',
     "js/view3d/scene/s.js": 'import { T } from "../../three.js";\nimport { m } from "../assets/m.js";\n',
   };
   assert.deepEqual(layerViolations(Object.keys(sources), (path) => sources[path]), []);

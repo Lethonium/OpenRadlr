@@ -7,7 +7,7 @@ import { MenuStage, studioRouteId } from "../public/js/view/menuStage.js";
 import { HIGHLIGHT, HIGHLIGHT_LIFT, buildHighlight, highlightColor } from "../public/js/view3d/highlight.js";
 import { DRONE_LENS, depthStep } from "../public/js/view3d/view3d.js";
 import { MENU_CAMERA, MenuCamera, groundAt, gymPose, orbitPose, routePose, statuePose, studioPose } from "../public/js/view3d/menuCamera.js";
-import { roadFrame } from "../public/js/view3d/world.js";
+import { roadFrame } from "../public/js/world/roads.js";
 import { PRESETS } from "../public/js/workout/presets.js";
 
 const file = (id) => JSON.parse(readFileSync(new URL(`../../routes/${id}.json`, import.meta.url)));

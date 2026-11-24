@@ -2,7 +2,7 @@
  * Winter's ground: snow over the same land. Heights, rivers and shorelines
  * are the terrain's, never the biome's — only the colour rules differ.
  */
-import { fbm, valueNoise } from "../../noise.js";
+import { fbm, valueNoise } from "../../../world/noise.js";
 import { mix } from "../helpers.js";
 
 const SNOW = [0.93, 0.95, 0.99];

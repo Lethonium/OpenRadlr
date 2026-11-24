@@ -14,7 +14,7 @@ const THREE = (target) => target === "js/three.js" || target.startsWith("vendor/
 const RULES = Object.freeze([
   {
     folder: "js/world/",
-    allows: (target) => target.startsWith("js/world/") || target === "js/view3d/noise.js",
+    allows: (target) => target.startsWith("js/world/"),
   },
   {
     folder: "js/view3d/assets/",

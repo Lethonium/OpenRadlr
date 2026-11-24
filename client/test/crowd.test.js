@@ -4,7 +4,7 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { CROWD, cheer, crowdShare } from "../public/js/view3d/crowd.js";
 import { buildSpectators } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
-import { RoadIndex, VERGE, roadFrame, roadHalfWidth } from "../public/js/view3d/world.js";
+import { RoadIndex, VERGE, roadFrame, roadHalfWidth } from "../public/js/world/roads.js";
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 

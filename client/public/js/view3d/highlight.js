@@ -6,7 +6,7 @@
  */
 import { MeshBuilder } from "./meshBuilder.js";
 import { add, scale } from "./math.js";
-import { roadFrame } from "./world.js";
+import { roadFrame } from "../world/roads.js";
 
 const UP = [0, 1, 0];
 

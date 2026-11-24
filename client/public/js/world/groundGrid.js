@@ -3,7 +3,7 @@
  * worker computes and the main thread turns into terrain tiles. Pure; the
  * terrain is passed in, nothing here knows about drawing.
  */
-import { fbm } from "../view3d/noise.js";
+import { fbm } from "./noise.js";
 import { SEASON_LOOK } from "./seasons.js";
 
 /** @typedef {[number, number, number]} Rgb */

@@ -7,7 +7,7 @@
 import { add, normalize, scale } from "./math.js";
 import { pixelText, textWidth } from "./pixelFont.js";
 import { temperate } from "./biomes/index.js";
-import { roadFrame, roadHalfWidth } from "./world.js";
+import { roadFrame, roadHalfWidth } from "../world/roads.js";
 
 /** What each arch says, by marker type. */
 export const ARCH_TEXT = Object.freeze({ start_finish: "OPENRADLR", climb: "KOM", sprint: "SPRINT" });

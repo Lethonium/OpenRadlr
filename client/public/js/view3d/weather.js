@@ -4,7 +4,7 @@
  * weather shader wraps it around the camera and animates it, so no buffer is
  * rewritten per frame. No textures: the fragment shader cuts a soft disc.
  */
-import { seededRandom } from "./noise.js";
+import { seededRandom } from "../world/noise.js";
 
 /** Six vertices per camera-facing quad. */
 const CORNERS = Object.freeze([[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]);

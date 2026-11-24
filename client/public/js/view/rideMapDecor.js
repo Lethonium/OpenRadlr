@@ -9,8 +9,8 @@
  * It is generated once per map and culled to the view each frame, and its
  * colours always come from the view's theme (the biome's 2D palette).
  */
-import { seededRandom } from "../view3d/noise.js";
-import { LANE_WIDTH, SHOULDER } from "../view3d/world.js";
+import { seededRandom } from "../world/noise.js";
+import { LANE_WIDTH, SHOULDER } from "../world/roads.js";
 import { inStretch, resolveZones } from "../view3d/zones.js";
 
 const PAVEMENT = 2.4;

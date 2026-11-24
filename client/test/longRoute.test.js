@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { FloatBuffer } from "../public/js/view3d/meshBuilder.js";
-import { buildGroundGrids, groundExtent, terrainModel } from "../public/js/view3d/world.js";
+import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
+import { terrainModel } from "../public/js/world/roads.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 import { BIOME_IDS } from "../public/js/view3d/biomes/index.js";
 

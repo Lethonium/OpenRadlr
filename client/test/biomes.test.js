@@ -6,7 +6,8 @@ import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "..
 import { buildRiverWater } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildWeather } from "../public/js/view3d/weather.js";
-import { buildRoad, buildWorld, terrainModel } from "../public/js/view3d/world.js";
+import { buildRoad, buildWorld } from "../public/js/view3d/world.js";
+import { terrainModel } from "../public/js/world/roads.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));

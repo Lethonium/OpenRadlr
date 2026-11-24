@@ -15,7 +15,7 @@
  */
 import { lerp3 } from "./math.js";
 import { FLOOR_HEIGHT } from "./studioBuilding.js";
-import { roadFrame } from "./world.js";
+import { roadFrame } from "../world/roads.js";
 
 export const MENU_CAMERA = Object.freeze({
   /** Orbit: radians per second, distance and height relative to the island's radius. */

@@ -27,7 +27,7 @@ import {
   buildVillageSign,
   buildWarningSign,
 } from "../structures.js";
-import { fbm, valueNoise } from "../noise.js";
+import { fbm, valueNoise } from "../../world/noise.js";
 
 export const COLORS = Object.freeze({
   road: [0.25, 0.26, 0.28],

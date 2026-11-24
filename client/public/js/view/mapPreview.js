@@ -1,6 +1,6 @@
 import { prepareCanvas } from "./canvas.js";
 import { MAP_COLORS, rideMapTheme } from "./rideMapTheme.js";
-import { islandShape } from "../view3d/island.js";
+import { islandShape } from "../world/island.js";
 import { roadNetworkOf } from "../route/worldMap.js";
 
 export { MAP_COLORS };
