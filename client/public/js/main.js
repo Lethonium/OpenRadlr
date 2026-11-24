@@ -16,7 +16,7 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
@@ -3390,28 +3390,53 @@ function renderProfileRides() {
   $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i])));
 }
 
+/** A ride as a card: the date tile, route and start, its figures, and the detail when opened. */
 function profileRideItem(row, record) {
   const open = app.profileOpenRide === row.id;
   const item = document.createElement("li");
   item.className = "profile-ride";
+  item.classList.toggle("open", open);
   const summary = document.createElement("button");
   summary.type = "button";
   summary.className = "profile-ride-summary";
   summary.setAttribute("aria-expanded", String(open));
-  const when = textElement("span", `${row.date} · ${row.route}`);
-  when.className = "profile-ride-when";
+
+  const tile = document.createElement("span");
+  tile.className = "profile-ride-date";
+  tile.setAttribute("aria-hidden", "true");
+  tile.append(textElement("strong", row.day), textElement("span", row.month));
+
+  const heading = document.createElement("span");
+  heading.className = "profile-ride-heading";
+  const title = textElement("span", row.route);
+  title.className = "profile-ride-title";
   if (row.device) {
     const icon = document.querySelector(`.mode-card[data-mode="${row.device === "paddle" ? "paddles" : "sim"}"] svg`)?.cloneNode(true);
     if (icon) {
       icon.setAttribute("role", "img");
       icon.setAttribute("aria-label", row.device === "paddle" ? t("devices.paddlesLabel") : t("start.simulator"));
       icon.removeAttribute("aria-hidden");
-      when.append(" ", icon);
+      title.append(icon);
     }
   }
-  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].filter((part) => part !== null).join(" · "));
-  figures.className = "profile-ride-figures";
-  summary.append(when, figures);
+  const when = textElement("span", row.when);
+  when.className = "profile-ride-when";
+  heading.append(title, when);
+
+  const stats = document.createElement("span");
+  stats.className = "profile-ride-stats";
+  stats.append(...row.stats.map(({ label, value }) => {
+    const cell = document.createElement("span");
+    cell.className = "profile-ride-stat";
+    cell.append(textElement("strong", value), textElement("span", label));
+    return cell;
+  }));
+
+  const chevron = document.createElement("span");
+  chevron.className = "profile-ride-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+
+  summary.append(tile, heading, stats, chevron);
   summary.addEventListener("click", () => {
     app.profileOpenRide = open ? null : row.id;
     renderProfileRides();
@@ -3423,26 +3448,55 @@ function profileRideItem(row, record) {
   return item;
 }
 
+/** An opened ride: its other figures as tiles, best power as bars, the splits, and deleting. */
 function profileRideDetail(record) {
   const detail = document.createElement("div");
   detail.className = "profile-ride-detail";
-  const splits = document.createElement("table");
-  splits.className = "splits";
-  renderSplits(splits, record.splits ?? [], unitMetres());
-  const curve = curveRows(record.curve);
-  if (curve.length) {
-    const list = document.createElement("dl");
-    list.className = "profile-totals";
-    list.append(...curve.flatMap(({ label, watts }) => [textElement("dt", label), textElement("dd", watts)]));
-    detail.append(textElement("h3", t("profilePage.rides.curve")), list);
+  const extras = rideExtras(record);
+  if (extras.length) {
+    const tiles = document.createElement("div");
+    tiles.className = "profile-ride-tiles";
+    tiles.append(...extras.map(({ label, value }) => {
+      const tile = document.createElement("div");
+      tile.className = "profile-ride-tile";
+      tile.append(textElement("span", label), textElement("strong", value));
+      return tile;
+    }));
+    detail.append(tiles);
   }
-  const scroller = document.createElement("div");
-  scroller.className = "profile-splits";
-  scroller.append(splits);
-  detail.prepend(scroller);
+  const bars = curveBars(record.curve);
+  if (bars.length) {
+    const section = document.createElement("section");
+    section.className = "profile-ride-section";
+    const list = document.createElement("ul");
+    list.className = "profile-ride-curve";
+    list.append(...bars.map(({ label, watts, share }) => {
+      const bar = document.createElement("li");
+      const fill = document.createElement("span");
+      fill.className = "profile-ride-bar";
+      fill.style.setProperty("--share", String(share));
+      bar.append(textElement("span", label), fill, textElement("strong", watts));
+      return bar;
+    }));
+    section.append(textElement("h3", t("profilePage.rides.curve")), list);
+    detail.append(section);
+  }
+  // One split is the whole ride again: the table needs two (splitsView.js).
+  if (record.splits?.length > 1) {
+    const section = document.createElement("section");
+    section.className = "profile-ride-section";
+    const splits = document.createElement("table");
+    splits.className = "splits";
+    renderSplits(splits, record.splits, unitMetres());
+    const scroller = document.createElement("div");
+    scroller.className = "profile-splits";
+    scroller.append(splits);
+    section.append(textElement("h3", t("profilePage.rides.splits")), scroller);
+    detail.append(section);
+  }
   const remove = textElement("button", t("profilePage.delete.ride.action"));
   remove.type = "button";
-  remove.className = "secondary small profile-ride-delete";
+  remove.className = "profile-ride-remove";
   remove.addEventListener("click", () => deleteRide(record));
   detail.append(remove);
   return detail;
