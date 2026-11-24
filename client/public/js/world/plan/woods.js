@@ -11,14 +11,22 @@ import { clearAt } from "./masks.js";
 
 export const WOODS = Object.freeze({
   block: 100,
-  farFrom: 1500, // beyond this distance from a road, trees thin out
-  farShare: 0.5,
+  nearReach: 300, // within this distance of a road the woods are at their full density
+  farFrom: 1200, // beyond this distance from a road they have thinned to `farShare`
+  farShare: 0.08,
+  forestReach: 160, // a route's forest stretch is wooded this far to either side of its road
+  forestDensity: 55, // trees per hectare in a forest stretch, at least
   farmTrees: 1, // the farmed share of the land carries no woods: density applies to the rest
   minAbove: 2.5, // no trees in the sea or on the beach
 });
 /** [min, max] scale per plant; the others use `DEFAULT_SIZE`. */
 const SIZE = Object.freeze({ bush: Object.freeze([0.6, 1.1]), rock: Object.freeze([0.5, 1.6]), lavender: Object.freeze([0.8, 1.2]) });
 const DEFAULT_SIZE = Object.freeze([0.8, 1.3]);
+
+const smooth = (edge0, edge1, x) => {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};
 
 /** Chamfer distance, in metres, from each block to the nearest block with a road sample in it. */
 function roadDistances(roads, grid) {
@@ -44,6 +52,22 @@ function roadDistances(roads, grid) {
   return data;
 }
 
+/** The blocks within `WOODS.forestReach` of any forest point (the route's forest stretches). */
+function forestBlocks(forests, grid) {
+  const marked = new Uint8Array(grid.columns * grid.rows);
+  const reach = Math.ceil(WOODS.forestReach / grid.block);
+  for (const { x, z } of forests) {
+    const [ci, cj] = [Math.floor((x - grid.x0) / grid.block), Math.floor((z - grid.z0) / grid.block)];
+    for (let j = Math.max(0, cj - reach); j <= Math.min(grid.rows - 1, cj + reach); j += 1) {
+      for (let i = Math.max(0, ci - reach); i <= Math.min(grid.columns - 1, ci + reach); i += 1) {
+        const [dx, dz] = [grid.x0 + (i + 0.5) * grid.block - x, grid.z0 + (j + 0.5) * grid.block - z];
+        if (Math.hypot(dx, dz) <= WOODS.forestReach + grid.block / 2) marked[j * grid.columns + i] = 1;
+      }
+    }
+  }
+  return marked;
+}
+
 const pickFrom = (shares, u) => {
   let sum = 0;
   let last = null;
@@ -63,11 +87,17 @@ function densities(mix) {
   });
 }
 
+/** A forest stretch's trees: the deep wood's mix at `forestDensity`, or the region's own where that is denser. */
+function forestDensities(mix) {
+  const own = densities(mix);
+  return own.reduce((total, [, d]) => total + d, 0) >= WOODS.forestDensity ? own : [["deepWood", WOODS.forestDensity]];
+}
+
 /**
- * @param {{terrain: object, roads: import("../roads.js").RoadIndex, regions: object[], seed: number, bounds: {x0: number, z0: number, x1: number, z1: number}, masks: import("./masks.js").Masks, water: number, budget: number}} input
+ * @param {{terrain: object, roads: import("../roads.js").RoadIndex, regions: object[], forests?: {x: number, z: number}[], seed: number, bounds: {x0: number, z0: number, x1: number, z1: number}, masks: import("./masks.js").Masks, water: number, budget: number}} input
  * @returns {Record<string, Float32Array>} per plant id: x, y, z, yaw, scale for each tree
  */
-export function planWoods({ terrain, roads, regions, seed, bounds, masks, water, budget }) {
+export function planWoods({ terrain, roads, regions, forests = [], seed, bounds, masks, water, budget }) {
   const block = WOODS.block;
   const grid = { block, x0: Math.floor(bounds.x0 / block) * block, z0: Math.floor(bounds.z0 / block) * block };
   grid.columns = Math.ceil((bounds.x1 - grid.x0) / block);
@@ -75,33 +105,40 @@ export function planWoods({ terrain, roads, regions, seed, bounds, masks, water,
   const distances = roadDistances(roads, grid);
   const hectares = (block * block) / 10_000;
 
+  const wooded = forestBlocks(forests, grid);
   const mixes = new Array(grid.columns * grid.rows).fill(null);
   const expected = new Float32Array(grid.columns * grid.rows);
   let total = 0;
+  let forestTotal = 0;
   for (let j = 0; j < grid.rows; j += 1) {
     for (let i = 0; i < grid.columns; i += 1) {
       const [x, z] = [grid.x0 + (i + 0.5) * block, grid.z0 + (j + 0.5) * block];
       if (terrain.height(x, z) < water + WOODS.minAbove) continue;
       const k = j * grid.columns + i;
-      mixes[k] = densities(regionMix(x, z, regions, seed));
-      const near = distances[k] <= WOODS.farFrom ? 1 : WOODS.farShare;
+      const mix = regionMix(x, z, regions, seed);
+      mixes[k] = wooded[k] ? forestDensities(mix) : densities(mix);
+      const near = wooded[k] ? 1 : 1 - (1 - WOODS.farShare) * smooth(WOODS.nearReach, WOODS.farFrom, distances[k]);
       expected[k] = mixes[k].reduce((sum, [, d]) => sum + d, 0) * hectares * near;
-      total += expected[k];
+      if (wooded[k]) forestTotal += expected[k];
+      else total += expected[k];
     }
   }
-  const scale = total > budget ? budget / total : 1;
+  // The forest stretches are planted in full; the budget thins the rest.
+  const rest = Math.max(0, budget - forestTotal);
+  const scale = total > rest ? rest / total : 1;
 
   const lists = {};
+  const limit = Math.ceil(budget * 1.05); // the stochastic rounding of the counts may overshoot a little
   let placed = 0;
-  for (let j = 0; j < grid.rows && placed < budget; j += 1) {
-    for (let i = 0; i < grid.columns && placed < budget; i += 1) {
+  for (let j = 0; j < grid.rows && placed < limit; j += 1) {
+    for (let i = 0; i < grid.columns && placed < limit; i += 1) {
       const k = j * grid.columns + i;
       if (!mixes[k]) continue;
       const random = seededRandom((Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ seed) >>> 0);
-      const n = Math.floor(expected[k] * scale + random());
+      const n = Math.floor(expected[k] * (wooded[k] ? 1 : scale) + random());
       const side = Math.max(1, Math.ceil(Math.sqrt(n)));
       const kindShares = mixes[k].map(([kind, d]) => [kind, d / mixes[k].reduce((sum, [, e]) => sum + e, 0)]);
-      for (let t = 0; t < n && placed < budget; t += 1) {
+      for (let t = 0; t < n && placed < limit; t += 1) {
         const [cell, ux, uz, uKind, uPlant, uYaw, uSize] = [random(), random(), random(), random(), random(), random(), random()];
         const slot = Math.min(side * side - 1, Math.floor(((t + cell) / n) * side * side));
         const x = grid.x0 + (i + ((slot % side) + ux) / side) * block;

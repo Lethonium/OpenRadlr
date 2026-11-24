@@ -23,8 +23,9 @@ import { MASK, maskAt } from "./plan/masks.js";
  * @property {number} water sea level
  */
 
-/** Metres from a road's centre that count as its soil verge. */
-export const VERGE_REACH = 11;
+/** Metres from a road's centre that are bare soil, and the further metres over which the soil fades into grass. */
+export const VERGE_REACH = 5.5;
+const VERGE_FADE = 2;
 /** Gradient (rise over run) above which the ground is bare rock. */
 export const ROCK_SLOPE = 0.6;
 /** Metres above the sea that are beach. */
@@ -54,7 +55,7 @@ export function groundColor({ height, slope, roadDistance, riverDistance, noise,
   if (tint) colour = times(colour, tint);
   if (field) colour = linear(look.soil).map((c) => c * 0.85);
   if (height < water + BEACH_HEIGHT) colour = linear(look.sand);
-  if (roadDistance < VERGE_REACH) colour = linear(look.soil);
+  if (roadDistance < VERGE_REACH + VERGE_FADE) colour = mix(linear(look.soil), colour, smoothstep(VERGE_REACH, VERGE_REACH + VERGE_FADE, roadDistance));
   if (riverDistance < RIVER_BED) colour = linear(look.soil).map((c) => c * 0.7);
   const steep = slope > ROCK_SLOPE;
   if (steep) colour = linear(look.rock);

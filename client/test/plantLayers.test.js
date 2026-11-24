@@ -111,15 +111,19 @@ test("grass grows on meadow, not on roads, fields, beaches or cliffs", () => {
   const weights = grassWeights(ground.near, plan.masks);
   const { near } = ground;
   let meadow = 0;
+  let besideRoad = 0;
   for (let k = 0; k < weights.length; k += 1) {
     const x = near.x0 + (k % near.columns) * near.cell;
     const z = near.z0 + Math.floor(k / near.columns) * near.cell;
-    if (maskAt(plan.masks, x, z) !== MASK.free) assert.equal(weights[k], 0, `mask at ${x},${z}`);
+    const mask = maskAt(plan.masks, x, z);
+    if (mask !== MASK.free && mask !== MASK.verge) assert.equal(weights[k], 0, `mask at ${x},${z}`);
+    if (mask === MASK.verge && weights[k] > 0) besideRoad += 1;
     if (near.heights[k] < near.water + 3) assert.equal(weights[k], 0, "beach");
     if (near.normals[k * 3 + 1] < 0.8) assert.equal(weights[k], 0, "cliff");
     if (weights[k] > 0.99) meadow += 1;
   }
   assert.ok(meadow > 100, "some meadow");
+  assert.ok(besideRoad > 20, "grass grows right up to the road's edge");
 });
 
 test("the height sampler agrees with the grid at its vertices and between them", () => {

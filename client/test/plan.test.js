@@ -95,6 +95,15 @@ test("a deepWood is at least three times as dense as meadow", () => {
   assert.ok(around(tiny.centers.wood) >= 3 * meadow, `${around(tiny.centers.wood)} vs ${meadow}`);
 });
 
+test("a route's forest stretch is wooded densely, and the rest of the plan is unchanged in kind", () => {
+  const [cx, cz] = tiny.centers.meadow;
+  const around = (plan) => [...itemsOf(plan.trees)].filter(({ x, z }) => Math.hypot(x - cx, z - cz) < 120).length;
+  const plain = around(planOf(tiny));
+  const wooded = planOf(tiny, { forests: [{ x: cx, z: cz }] });
+  assert.ok(around(wooded) >= 2.5 * plain, `${around(wooded)} wooded vs ${plain} plain`);
+  assert.ok(count(wooded.trees) <= PLAN_BUDGET.high.trees, "still inside the budget");
+});
+
 test("roadside items stay near a road", () => {
   for (const world of [tiny, long()]) {
     const plan = planOf(world);

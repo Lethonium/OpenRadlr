@@ -199,6 +199,25 @@ export function worldOverview(terrain, sea, cell = 100) {
 }
 
 /**
+ * Points along every route's forest stretches, one per 40 m of road, for the plan to wood densely.
+ * @param {object[]} routes
+ * @param {Map<object, {forests: {from: number, to: number}[]}>} zonesOf
+ * @returns {{x: number, z: number}[]}
+ */
+export function forestPoints(routes, zonesOf) {
+  const points = [];
+  for (const route of routes) {
+    for (const { from, to } of zonesOf.get(route)?.forests ?? []) {
+      for (let d = from; d <= to; d += 40) {
+        const [x, , z] = roadFrame(route, d).center;
+        points.push({ x, z });
+      }
+    }
+  }
+  return points;
+}
+
+/**
  * Stretches of `route` (by distance) that run on points already drawn for
  * one of `drawn`, in either direction: map routes and network roads share
  * stretches point for point (ADR 0010).
@@ -279,7 +298,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   // Where woods, fields and verges go (and which ground is farmed): the plan, then the ground that tints and ploughs by it.
   const regions = network?.regions ?? [];
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, seed, season, detail, bounds: ground.bounds });
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow

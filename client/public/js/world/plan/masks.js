@@ -7,8 +7,11 @@
 import { RIVER } from "../rivers.js";
 import { VERGE, roadHalfWidth } from "../roads.js";
 
-/** Values in `masks.data`. A road or river outranks a field. */
-export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3 });
+/**
+ * Values in `masks.data`. A road or river outranks a field. `verge` is the strip beside a road
+ * (past its asphalt and verge, within `ROAD_MARGIN`): clear of trees and fields, but grass grows there.
+ */
+export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3, verge: 4 });
 /** Metres past the verge that stay clear of trees: canopy and the gap between road samples. */
 export const ROAD_MARGIN = 4.5;
 /** Metres past a river's water that stay clear: its bank. */
@@ -68,7 +71,8 @@ export function buildMasks({ roads, rivers, bounds, cell = 4, maxCells = MAX_CEL
       }
     }
   }
-  for (const s of roads.samples) stamp(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + ROAD_MARGIN, MASK.road);
+  for (const s of roads.samples) stamp(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + 0.5, MASK.road);
+  for (const s of roads.samples) stamp(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + ROAD_MARGIN, MASK.verge);
   return masks;
 }
 
@@ -80,7 +84,7 @@ export function maskAt(masks, x, z) {
   return masks.data[j * masks.columns + i];
 }
 
-/** True where nothing stands: no road, river or field, and inside the box. */
+/** True where nothing stands: no road, verge strip, river or field, and inside the box. */
 export const clearAt = (masks, x, z) => maskAt(masks, x, z) === MASK.free;
 
 /** Marks the rectangle (centre, size, `yaw` of its width axis) as field wherever the cells are free. */
