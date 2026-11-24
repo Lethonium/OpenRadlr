@@ -6,6 +6,7 @@
  */
 import * as THREE from "../../../three.js";
 import { createSharedUniforms } from "../materials.js";
+import { createOwner } from "../owner.js";
 
 /**
  * @typedef {object} PlantPart
@@ -21,25 +22,6 @@ import { createSharedUniforms } from "../materials.js";
  * @property {ReturnType<typeof createSharedUniforms>} [uniforms] shared shader uniforms
  * @property {<T>(resource: T) => T} [own] registers every resource made
  */
-
-/**
- * Collects what a plant makes, so it can be disposed of together. `track`, if
- * given, is called on every resource first (a scene's tracker registers them).
- * @param {(resource: any) => any} [track]
- * @returns {{own: <T>(resource: T) => T, disposeAll: () => void}}
- */
-export function createOwner(track = (resource) => resource) {
-  const owned = [];
-  return {
-    own(resource) {
-      owned.push(track(resource));
-      return resource;
-    },
-    disposeAll() {
-      for (const resource of owned.splice(0)) resource.dispose();
-    },
-  };
-}
 
 /**
  * The options with their defaults.

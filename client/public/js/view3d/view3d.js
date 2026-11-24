@@ -454,9 +454,15 @@ export class View3D {
     this.worldScene.setQuality(settings);
   }
 
-  /** "spring", "summer", "autumn" or "winter": the light and snow of the world scene (the ground's colours come with the world). */
+  /**
+   * "spring", "summer", "autumn" or "winter": the light and snow of the world scene, and the woods, fields and verges
+   * (rebuilt from the world's plan, no new worker run). The ground's own colours come with the world.
+   */
   setSeason(season) {
-    if (SEASONS.includes(season)) this.season = season;
+    if (!SEASONS.includes(season)) return;
+    const changed = season !== this.season;
+    this.season = season;
+    if (changed) this.worldScene.setSeason(season);
   }
 
   /** The world scene's environment for a time preset in this season and lens, pushed to the scene only when it changed. */

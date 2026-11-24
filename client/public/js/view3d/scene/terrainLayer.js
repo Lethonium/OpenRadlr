@@ -6,6 +6,8 @@
  */
 import * as THREE from "../../three.js";
 import { addHook, cloudShadows, createGrainTexture, grain, heightFog } from "../assets/materials.js";
+import { grassFloor } from "./grassFloor.js";
+import { grassWeights } from "./grassField.js";
 import { createOwner } from "./tracker.js";
 
 /** Cells per tile edge. */
@@ -27,12 +29,13 @@ function cellTriangles(i, j, width, out) {
 }
 
 /** One tile's geometry: vertices `i0..i1` by `j0..j1` of the grid, or null when it is all deep sea. */
-function tileGeometry(grid, i0, j0, i1, j1) {
+function tileGeometry(grid, grass, i0, j0, i1, j1) {
   const width = i1 - i0 + 1;
   const height = j1 - j0 + 1;
   const positions = new Float32Array(width * height * 3);
   const normals = new Float32Array(width * height * 3);
   const colors = new Float32Array(width * height * 3);
+  const grasses = new Float32Array(width * height);
   let land = false;
   for (let j = j0; j <= j1; j += 1) {
     for (let i = i0; i <= i1; i += 1) {
@@ -41,6 +44,7 @@ function tileGeometry(grid, i0, j0, i1, j1) {
       positions.set([grid.x0 + i * grid.cell, grid.heights[source], grid.z0 + j * grid.cell], target * 3);
       normals.set(grid.normals.subarray(source * 3, source * 3 + 3), target * 3);
       colors.set(grid.colors.subarray(source * 3, source * 3 + 3), target * 3);
+      grasses[target] = grass[source];
       if (grid.heights[source] > grid.water - SEA_SKIP_DEPTH) land = true;
     }
   }
@@ -51,13 +55,14 @@ function tileGeometry(grid, i0, j0, i1, j1) {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("aGrass", new THREE.BufferAttribute(grasses, 1));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return geometry;
 }
 
 /** The far grid as one geometry without the triangles centred inside the near grid or wholly under the sea. */
-function farGeometry(far, near) {
+function farGeometry(far, grass, near) {
   const box = { x0: near.x0, z0: near.z0, x1: near.x0 + (near.columns - 1) * near.cell, z1: near.z0 + (near.rows - 1) * near.cell };
   const indices = [];
   const corners = [0, 0, 0];
@@ -88,6 +93,7 @@ function farGeometry(far, near) {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(far.normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(far.colors, 3));
+  geometry.setAttribute("aGrass", new THREE.BufferAttribute(grass, 1));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return geometry;
@@ -99,29 +105,40 @@ function farGeometry(far, near) {
  * @param {{uniforms: ReturnType<typeof import("../assets/materials.js").createSharedUniforms>,
  *   settings: import("../quality.js").QualitySettings,
  *   track: import("./tracker.js").Tracker["track"],
- *   grain?: import("../../three.js").Texture}} options `grain` is the scene's shared grain texture
+ *   grain?: import("../../three.js").Texture,
+ *   plan?: {masks?: import("../../world/plan/masks.js").Masks}}} options `grain` is the scene's shared grain
+ *   texture; `plan.masks` keep the grass shading off roads, rivers and fields
  * @returns {{object: import("../../three.js").Group, update: (frame: object) => void,
+ *   setQuality: (settings: import("../quality.js").QualitySettings) => void,
  *   setEnvironment: (env: object) => void, dispose: () => void}}
  */
-export function createTerrainLayer(ground, { uniforms, track, grain: grainTexture }) {
+export function createTerrainLayer(ground, { uniforms, settings, track, grain: grainTexture, plan }) {
   const { own, disposeAll } = createOwner(track);
   const texture = grainTexture ?? own(createGrainTexture());
   const group = new THREE.Group();
   group.name = "terrain";
 
+  const outer = { value: 0 };
+  const setQuality = (next) => {
+    outer.value = next?.grassRings?.at(-1)?.r ?? 0;
+  };
+  setQuality(settings);
+
   const material = (offset) => {
     const made = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, ...(offset ? { polygonOffset: true, polygonOffsetFactor: offset.factor, polygonOffsetUnits: offset.units } : {}) }));
     addHook(made, grain({ texture, ...GRAIN }));
     addHook(made, cloudShadows(uniforms));
+    addHook(made, grassFloor(uniforms, outer));
     addHook(made, heightFog(uniforms));
     return made;
   };
 
   const near = ground.near;
+  const nearGrass = grassWeights(near, plan?.masks);
   const nearMaterial = material(null);
   for (let j0 = 0; j0 < near.rows - 1; j0 += TILE_CELLS) {
     for (let i0 = 0; i0 < near.columns - 1; i0 += TILE_CELLS) {
-      const geometry = tileGeometry(near, i0, j0, Math.min(i0 + TILE_CELLS, near.columns - 1), Math.min(j0 + TILE_CELLS, near.rows - 1));
+      const geometry = tileGeometry(near, nearGrass, i0, j0, Math.min(i0 + TILE_CELLS, near.columns - 1), Math.min(j0 + TILE_CELLS, near.rows - 1));
       if (!geometry) continue;
       const tile = new THREE.Mesh(own(geometry), nearMaterial);
       tile.name = "terrain-tile";
@@ -130,7 +147,7 @@ export function createTerrainLayer(ground, { uniforms, track, grain: grainTextur
     }
   }
   if (ground.far) {
-    const far = new THREE.Mesh(own(farGeometry(ground.far, near)), material(FAR_OFFSET));
+    const far = new THREE.Mesh(own(farGeometry(ground.far, grassWeights(ground.far), near)), material(FAR_OFFSET));
     far.name = "terrain-far";
     group.add(far);
   }
@@ -138,6 +155,7 @@ export function createTerrainLayer(ground, { uniforms, track, grain: grainTextur
   return {
     object: group,
     update() {},
+    setQuality,
     setEnvironment() {},
     dispose() {
       group.clear();

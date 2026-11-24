@@ -7,12 +7,19 @@
 import * as THREE from "../../three.js";
 import { createGrainTexture, createSharedUniforms } from "../assets/materials.js";
 import { createSea } from "./sea.js";
+import { NATURE } from "../assets/nature/index.js";
+import { createCropLayer } from "./cropLayer.js";
+import { createForestLayer } from "./forestLayer.js";
+import { createGrassLayer } from "./grassLayer.js";
+import { createRoadsideLayer } from "./roadsideLayer.js";
 import { createSky } from "./sky.js";
 import { createTerrainLayer } from "./terrainLayer.js";
 import { createOwner } from "./tracker.js";
 
 /** Sun placement and shadow box, in metres. */
 export const SUN = Object.freeze({ distance: 1800, shadowHalf: 130, near: 10, far: 4000, bias: -0.00025, normalBias: 0.35 });
+/** How much of the sun's colour shows through thin leaves and blades. */
+const SUN_THROUGH = 0.55;
 /** Strength of the drifting cloud shadows by day. */
 const CLOUD_SHADOW = 0.24;
 
@@ -28,7 +35,7 @@ const CLOUD_SHADOW = 0.24;
 
 /**
  * Builds the scene for a built world.
- * @param {{ground?: {near: object, far: object}}} world the scene object from `buildScene`
+ * @param {{ground?: {near: object, far: object}, plan?: import("../../world/plan/index.js").WorldPlan, season?: string}} world the scene object from `buildScene`
  * @param {{settings: import("../quality.js").QualitySettings, track: import("./tracker.js").Tracker["track"]}} options
  */
 export function createWorldScene(world, { settings, track }) {
@@ -38,12 +45,39 @@ export function createWorldScene(world, { settings, track }) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xffffff, 0.0002);
 
+  let current = settings;
+  let season = world.season ?? "summer";
+  let plan = world.plan;
+  let environment = null;
+  const plants = () => ({ settings: current, season, uniforms, track });
+  /** How each rebuildable layer is made, by the name of its object. */
+  const makers = {
+    terrain: () => createTerrainLayer(world.ground, { uniforms, settings: current, track, grain, plan }),
+    forest: () => createForestLayer(plan, { ...plants(), assets: NATURE }),
+    crops: () => createCropLayer(plan, { ...plants(), ground: world.ground }),
+    roadside: () => createRoadsideLayer(plan, { ...plants(), assets: NATURE }),
+    grass: () => createGrassLayer(world.ground, plan, plants()),
+  };
   const layers = [createSky({ uniforms, track })];
   if (world.ground) {
     uniforms.fogBase.value = world.ground.near.water;
-    layers.push(createSea(world.ground, { uniforms, track }), createTerrainLayer(world.ground, { uniforms, settings, track, grain }));
+    layers.push(createSea(world.ground, { uniforms, track }), makers.terrain());
+    if (plan) layers.push(makers.forest(), makers.crops(), makers.roadside(), makers.grass());
   }
   for (const layer of layers) scene.add(layer.object);
+
+  /** Replaces the named layers with new ones built from the current settings, season and plan. */
+  const rebuild = (...names) => {
+    for (const name of names) {
+      const at = layers.findIndex((layer) => layer.object.name === name);
+      if (at < 0) continue;
+      scene.remove(layers[at].object);
+      layers[at].dispose();
+      layers[at] = makers[name]();
+      scene.add(layers[at].object);
+      if (environment) layers[at].setEnvironment(environment);
+    }
+  };
 
   const hemisphere = new THREE.HemisphereLight();
   hemisphere.name = "hemisphere";
@@ -62,6 +96,8 @@ export function createWorldScene(world, { settings, track }) {
 
   /** Applies the quality's shadow map: its size, or none. */
   const setQuality = (next) => {
+    const changed = next !== current;
+    current = next;
     const size = next.shadowMapSize;
     if (size !== shadowSize) {
       shadowSize = size;
@@ -70,6 +106,9 @@ export function createWorldScene(world, { settings, track }) {
       sun.shadow.map = null;
     }
     sun.castShadow = size > 0 && shadowsOn;
+    if (!changed) return;
+    for (const layer of layers) layer.setQuality?.(next);
+    rebuild("forest", "roadside", "grass");
   };
   setQuality(settings);
 
@@ -102,13 +141,25 @@ export function createWorldScene(world, { settings, track }) {
         box.bottom = -half;
         box.updateProjectionMatrix();
       }
+      uniforms.sunDirV.value.copy(keyDirection).transformDirection(frame.camera.matrixWorldInverse);
       lastFocus[0] = frame.focus[0];
       lastFocus[1] = frame.focus[1];
       lastFocus[2] = frame.focus[2];
       placeSun(lastFocus, half);
       for (const layer of layers) layer.update(frame);
     },
+    /**
+     * Rebuilds what the season colours (woods, fields, verges) from `plan`, freeing the old.
+     * The ground's own colours were baked into the world for the season it was built in.
+     */
+    setSeason(next, nextPlan = plan) {
+      season = next;
+      plan = nextPlan;
+      if (plan) rebuild("forest", "crops", "roadside");
+    },
     setEnvironment(env) {
+      environment = env;
+      uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH);
       const key = env.night ? env.moon : env.sun;
       keyDirection.fromArray(key);
       sun.color.setRGB(...env.sunColor);

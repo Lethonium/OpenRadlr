@@ -35,21 +35,4 @@ export function createTracker() {
   };
 }
 
-/**
- * What one layer owns: it tracks each resource it makes and frees them all
- * with `disposeAll()`, so a layer's `dispose()` is one line.
- * @param {Tracker["track"]} track
- * @returns {{own: Tracker["track"], disposeAll: () => void}}
- */
-export function createOwner(track) {
-  const owned = [];
-  return {
-    own(resource) {
-      owned.push(track(resource));
-      return resource;
-    },
-    disposeAll() {
-      for (const resource of owned.splice(0)) resource.dispose();
-    },
-  };
-}
+export { createOwner } from "../assets/owner.js";

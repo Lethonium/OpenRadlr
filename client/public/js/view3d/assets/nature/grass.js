@@ -8,7 +8,7 @@
  * random roots are injected, flowers are left out.
  */
 import * as THREE from "../../../three.js";
-import { createOwner } from "./asset.js";
+import { createOwner } from "../owner.js";
 import { GRASS_EMISSIVE, GRASS_FRAGMENT_HEAD, GRASS_VERTEX_BLADE, GRASS_VERTEX_HEAD } from "./grassShader.js";
 
 export { GRASS_GLSL } from "./grassShader.js";
