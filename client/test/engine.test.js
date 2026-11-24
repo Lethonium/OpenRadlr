@@ -108,3 +108,38 @@ test("a disposed engine is replaced by a new one for the canvas", () => {
   const again = make(canvas).engine;
   assert.notEqual(again, engine);
 });
+
+test("the renderer draws soft shadows for the world's sun", () => {
+  const { fake } = make();
+  assert.equal(fake.shadowMap.enabled, true);
+  assert.equal(fake.shadowMap.type, THREE.PCFSoftShadowMap);
+});
+
+test("resizing to the size it already has does nothing", () => {
+  const { engine, fake, posts } = make();
+  engine.resize(300, 200, 1);
+  const sizes = fake.calls.sizes.length;
+  const post = posts[0].sizes.length;
+  engine.resize(300, 200, 1);
+  assert.equal(fake.calls.sizes.length, sizes);
+  assert.equal(posts[0].sizes.length, post);
+});
+
+test("a rectangle is cleared before its scene is drawn into it", () => {
+  const { engine, fake } = make();
+  engine.resize(100, 50, 1);
+  engine.beginFrame();
+  const clears = fake.calls.clears.length;
+  engine.renderScene(new THREE.Scene(), new THREE.PerspectiveCamera(), { x: 10, y: 20, width: 30, height: 40 });
+  assert.equal(fake.calls.clears.length, clears + 1);
+  assert.deepEqual(fake.calls.clears.at(-1).scissor, [10, 20, 30, 40]);
+  assert.equal(fake.calls.clears.at(-1).scissorTest, true);
+});
+
+test("a whole-frame scene is not cleared again after beginFrame", () => {
+  const { engine, fake } = make();
+  engine.beginFrame();
+  const clears = fake.calls.clears.length;
+  engine.renderScene(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(fake.calls.clears.length, clears);
+});

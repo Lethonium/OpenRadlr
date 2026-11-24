@@ -7,10 +7,16 @@ import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
 import { chunkNear, chunkVisible } from "./chunks.js";
-import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset } from "../world/daylight.js";
+import * as THREE from "../three.js";
+import { TIME_MODES, TIME_PRESETS, environmentAt, resolvedLight, resolvePreset } from "../world/daylight.js";
+import { SEASONS } from "../world/seasons.js";
 import { sunShadowMatrix } from "./lighting.js";
 import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
 import { ThreeRenderer } from "./threeRenderer.js";
+import { cameraFromMatrices } from "./engine/camera.js";
+import { engineFor } from "./engine/engine.js";
+import { createWorldScene } from "./scene/worldScene.js";
+import { createTracker } from "./scene/tracker.js";
 import {
   RIDER_GEOMETRY,
   VARIANT_COUNT,
@@ -55,7 +61,7 @@ const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
+  drawDistance: { road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
   rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
@@ -342,6 +348,8 @@ export class View3D {
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
   #clips = new Map();
   #lastTime = null;
+  /** The environment last pushed to the world scene, with the inputs it was made from. */
+  #environment = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -353,9 +361,10 @@ export class View3D {
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
-   * @param {{renderer?: object}} [options] `renderer` replaces the WebGL one (tests)
+   * @param {{renderer?: object, engine?: object}} [options] `renderer` replaces the adapter's (tests),
+   *   `engine` the canvas's engine (tests; the canvas's own is used otherwise)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null } = {}) {
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null, engine = null } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -365,7 +374,16 @@ export class View3D {
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
-    this.renderer = renderer ?? new ThreeRenderer(canvas);
+    // One engine per canvas, shared with every other view on it and never disposed here.
+    this.engine = engine ?? engineFor(canvas);
+    this.renderer = renderer ?? new ThreeRenderer(canvas, { renderer: this.engine.renderer });
+    this.engine.setQuality(qualitySettings(this.quality));
+    /** The season's look of the sky and light (the ground's colours were baked into the world). */
+    this.season = SEASONS.includes(world.season) ? world.season : "summer";
+    this.tracker = createTracker();
+    /** The world as a Three.js scene: ground, sea, sky and sun, drawn before the adapter's riders and features. */
+    this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
+    this.worldCamera = new THREE.PerspectiveCamera();
     // A biome's workout figure (winter: penguins): built meshes for `settle` and
     // uploaded handles to draw. Temperate keeps the human rider rig.
     const workout = this.biome.workout ?? null;
@@ -385,9 +403,7 @@ export class View3D {
     this.chunks = Object.fromEntries(
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
-    this.clouds = this.renderer.upload(world.clouds);
     this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
-    this.water = this.renderer.upload(world.water);
     this.rivers = this.renderer.upload(world.rivers);
     this.rotors = world.rotors;
     this.rotor = this.renderer.upload(buildRotor());
@@ -430,7 +446,26 @@ export class View3D {
 
   /** A graphics level (see quality.js): "low" has no shadow map or grass and a 1x pixel ratio, for weaker GPUs. */
   setQuality(quality) {
-    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
+    if (!QUALITY_LEVELS.includes(quality)) return;
+    this.quality = quality;
+    const settings = qualitySettings(quality);
+    this.engine.setQuality(settings);
+    this.worldScene.setQuality(settings);
+  }
+
+  /** "spring", "summer", "autumn" or "winter": the light and snow of the world scene (the ground's colours come with the world). */
+  setSeason(season) {
+    if (SEASONS.includes(season)) this.season = season;
+  }
+
+  /** The world scene's environment for a time preset in this season and lens, pushed to the scene only when it changed. */
+  #environmentFor(preset, haze) {
+    const key = `${preset.key}|${this.season}|${haze}`;
+    if (this.#environment?.key !== key) {
+      this.#environment = { key, env: environmentAt(preset, this.season, { haze }) };
+      this.worldScene.setEnvironment(this.#environment.env);
+    }
+    return this.#environment.env;
   }
 
   /**
@@ -714,6 +749,7 @@ export class View3D {
     const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
+    this.engine.resize(width, height, ratio);
     this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
@@ -853,7 +889,15 @@ export class View3D {
       this.renderer.endShadows();
     }
 
-    // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
+    // The world first: ground, sea and sky from the Three.js scene into the engine's target. The adapter then
+    // draws the riders and features over it (overlay) and the engine's post chain presents the whole frame.
+    const env = this.#environmentFor(preset, lens.haze);
+    this.engine.beginFrame();
+    this.#aim(this.worldCamera, view, projection, lens, width / height);
+    this.worldScene.update({ dt, t: timeS, camera: this.worldCamera, focus: me ? me.position : this.camera.target, shadows: shadows && lens.shadows });
+    this.engine.renderScene(this.worldScene.scene, this.worldCamera);
+
+    // Passes 1 and 2: the lit features and riders, then the blended rivers and soft contact shadows.
     const scene = { light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
@@ -886,6 +930,9 @@ export class View3D {
         const sideView = lookAt(side.eye, side.target);
         const sideViewProjection = multiply(sideProjection, sideView);
         this.renderer.viewport(rect);
+        this.sideCamera ??= new THREE.PerspectiveCamera();
+        this.#aim(this.sideCamera, sideView, sideProjection, lens, rect.width / rect.height);
+        this.engine.renderScene(this.worldScene.scene, this.sideCamera, rect);
         this.#drawWorld(
           { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
           { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
@@ -900,8 +947,17 @@ export class View3D {
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
       for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
     }
-    // Closes the last pass (the side view, when a workout drew one).
+    // Closes the last pass (the side view, when a workout drew one), then the post chain draws the frame.
     this.renderer.end();
+    this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera });
+  }
+
+  /** Points a Three.js camera where the adapter's matrices look, through the lens' near and far planes. */
+  #aim(camera, view, projection, lens, aspect) {
+    cameraFromMatrices(camera, view, projection);
+    camera.near = lens.near;
+    camera.far = lens.far;
+    camera.aspect = aspect;
   }
 
   /**
@@ -909,8 +965,7 @@ export class View3D {
    * once for the screen and, in a workout, once more for the side view.
    */
   #drawWorld({ light, lens, detail, shadows, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0 });
-    this.renderer.draw(this.meshes.horizon, this.identity);
+    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
     this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
       if (group === "detail" && !detail) continue;
@@ -924,7 +979,6 @@ export class View3D {
     }
     this.renderer.drawBright(this.meshes.arches, this.identity);
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
-    this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
     for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const p of crowd) {
       this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
@@ -953,8 +1007,7 @@ export class View3D {
 
     this.#studio?.draw("opaque", eye);
 
-    // Pass 3: blended — sea and soft contact shadows under the bikes.
-    this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
+    // Pass 2: blended — rivers and soft contact shadows under the bikes.
     this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
     for (const part of visible) {
       if (part.ghost || part.fromCamera > 150) continue;
@@ -1057,7 +1110,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();
@@ -1067,5 +1120,8 @@ export class View3D {
     }
     this.#labels.forEach((element) => element.remove());
     this.#labels.clear();
+    // The world scene is this view's; the engine stays for the next view on the canvas.
+    this.worldScene.dispose();
+    this.tracker.disposeAll();
   }
 }

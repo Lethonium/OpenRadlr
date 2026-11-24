@@ -1,8 +1,9 @@
 /**
  * Builds the static 3D world for a route: road, verge, lane markings, posts,
- * terrain (an island: fine over the land, coarse out to the horizon), trees,
- * bushes, rocks, grass tufts and flowers, arches, the sea with far-off
- * islands, and clouds.
+ * the ground as grids (an island: fine over the land, coarse out to the
+ * horizon; the main thread tiles them, see scene/terrainLayer.js), trees,
+ * bushes, rocks, grass tufts and flowers, arches and far-off islands. The sea
+ * and the sky are scene layers, not meshes of the world.
  * Everything is derived deterministically from the route files (geometry +
  * seeds), so every client sees the same world. Routes on one shared map
  * (ADR 0010) are drawn together: one terrain from the map seed, every road,
@@ -297,129 +298,6 @@ export function networkTerrain(network, roads = network.roads(), { keepClear = [
 /** Sea level: route elevations are above the sea; a road lower than that still stays dry. */
 export const waterLevel = (index) => Math.min(SEA_LEVEL, index.minElevation - 6);
 
-/**
- * A height grid of flat-shaded triangles. Where `coarse(x0, z0, x1, z1)` says
- * a block of `block` × `block` cells needs no detail (far from any road), and
- * the land in it lies within `flatness` metres of one quad, it is drawn as
- * that quad instead.
- */
-function gridTerrain(mesh, { x0, z0, columns, rows, cell, height, color, skipBelow = -Infinity, coarse = null, block = 3, flatness = 2.5, lazy = false }) {
-  // `lazy` (huge islands): a height is only computed where a triangle needs
-  // it, and a far block counts as flat without looking inside it.
-  const heights = new Float32Array((columns + 1) * (rows + 1));
-  if (lazy) heights.fill(NaN);
-  else {
-    for (let r = 0; r <= rows; r += 1) {
-      for (let c = 0; c <= columns; c += 1) heights[r * (columns + 1) + c] = height(x0 + c * cell, z0 + r * cell);
-    }
-  }
-  const h = (c, r) => {
-    const i = r * (columns + 1) + c;
-    if (lazy && Number.isNaN(heights[i])) heights[i] = height(x0 + c * cell, z0 + r * cell);
-    return heights[i];
-  };
-  const at = (c, r) => [x0 + c * cell, h(c, r), z0 + r * cell];
-  const cellTriangles = (a, b, d, e, size) => {
-    // Deep sea floor: hidden under the water anyway (the coarse grid sits below it).
-    if (Math.max(a[1], b[1], d[1], e[1]) < skipBelow) return;
-    for (const tri of [
-      [a, b, e],
-      [a, e, d],
-    ]) {
-      const cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3;
-      const cy = (tri[0][1] + tri[1][1] + tri[2][1]) / 3;
-      const cz = (tri[0][2] + tri[1][2] + tri[2][2]) / 3;
-      const steep = (Math.max(...tri.map((p) => p[1])) - Math.min(...tri.map((p) => p[1]))) / size;
-      mesh.triangle(tri[0], tri[1], tri[2], color(cx, cz, cy, steep));
-    }
-  };
-  const blocksC = Math.ceil(columns / block);
-  const blocksR = Math.ceil(rows / block);
-  const plain = new Uint8Array(blocksC * blocksR);
-  if (coarse) {
-    for (let br = 0; br < blocksR; br += 1) {
-      for (let bc = 0; bc < blocksC; bc += 1) {
-        const c0 = bc * block;
-        const r0 = br * block;
-        if (c0 + block > columns || r0 + block > rows) continue;
-        if (!coarse(x0 + c0 * cell, z0 + r0 * cell, x0 + (c0 + block) * cell, z0 + (r0 + block) * cell)) continue;
-        if (lazy) {
-          plain[br * blocksC + bc] = 1;
-          continue;
-        }
-        // Only where one quad follows the land closely (not over cliffs or crests).
-        let off = 0;
-        for (let r = 0; r <= block && off <= flatness; r += 1) {
-          for (let c = 0; c <= block; c += 1) {
-            // The block's two triangles, split from (c0, r0) to the opposite corner.
-            const [u, v] = [c / block, r / block];
-            const [a, b, d, e] = [h(c0, r0), h(c0, r0 + block), h(c0 + block, r0), h(c0 + block, r0 + block)];
-            const plane = v >= u ? a + u * (e - b) + v * (b - a) : a + u * (d - a) + v * (e - d);
-            off = Math.max(off, Math.abs(h(c0 + c, r0 + r) - plane));
-          }
-        }
-        plain[br * blocksC + bc] = off <= flatness ? 1 : 0;
-      }
-    }
-  }
-  // A coarse block's edges are straight: the finer cells next to it share
-  // those heights along the seam, so the two meet without a crack.
-  const index = (c, r) => r * (columns + 1) + c;
-  for (let br = 0; br < blocksR; br += 1) {
-    for (let bc = 0; bc < blocksC; bc += 1) {
-      if (!plain[br * blocksC + bc]) continue;
-      const [c0, r0, c1, r1] = [bc * block, br * block, bc * block + block, br * block + block];
-      const [a, b, d, e] = [h(c0, r0), h(c0, r1), h(c1, r0), h(c1, r1)];
-      for (let k = 1; k < block; k += 1) {
-        const t = k / block;
-        heights[index(c0 + k, r0)] = a * (1 - t) + d * t;
-        heights[index(c0 + k, r1)] = b * (1 - t) + e * t;
-        heights[index(c0, r0 + k)] = a * (1 - t) + b * t;
-        heights[index(c1, r0 + k)] = d * (1 - t) + e * t;
-      }
-    }
-  }
-  for (let br = 0; br < blocksR; br += 1) {
-    for (let bc = 0; bc < blocksC; bc += 1) {
-      const c0 = bc * block;
-      const r0 = br * block;
-      if (plain[br * blocksC + bc]) {
-        cellTriangles(at(c0, r0), at(c0, r0 + block), at(c0 + block, r0), at(c0 + block, r0 + block), cell * block);
-        continue;
-      }
-      for (let r = r0; r < Math.min(rows, r0 + block); r += 1) {
-        for (let c = c0; c < Math.min(columns, c0 + block); c += 1) cellTriangles(at(c, r), at(c, r + 1), at(c + 1, r), at(c + 1, r + 1), cell);
-      }
-    }
-  }
-}
-
-/**
- * Which parts of the land are far from every road: true for a box whose
- * every point is more than `reach` metres from the nearest road sample.
- * A coarse raster of road samples, grown by `reach`.
- */
-function farFromRoads(index, reach, cell = 50) {
-  const near = new Set();
-  const span = Math.ceil(reach / cell);
-  for (let k = 0; k < index.samples.length; k += 4) {
-    const s = index.samples[k];
-    const c0 = Math.floor(s.x / cell);
-    const r0 = Math.floor(s.z / cell);
-    for (let r = -span; r <= span; r += 1) {
-      for (let c = -span; c <= span; c += 1) {
-        if ((Math.abs(c) - 1) ** 2 + (Math.abs(r) - 1) ** 2 <= span * span) near.add(cellKey(c0 + c, r0 + r));
-      }
-    }
-  }
-  return (x0, z0, x1, z1) => {
-    for (let r = Math.floor(z0 / cell); r <= Math.floor(z1 / cell); r += 1) {
-      for (let c = Math.floor(x0 / cell); c <= Math.floor(x1 / cell); c += 1) if (near.has(cellKey(c, r))) return false;
-    }
-    return true;
-  };
-}
-
 /** Box (world x/z) around the island's coast, with some sea around it. */
 function islandBox(island, sea = 60) {
   const box = { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity };
@@ -436,26 +314,16 @@ function islandBox(island, sea = 60) {
   return box;
 }
 
-/**
- * How far apart stacked surfaces must stay so the depth buffer can tell them
- * apart out where they are seen: the coarse grid under the fine one, and the
- * sea-floor plane under the coarse grid (both seen through the sea).
- */
-export const TERRAIN_LAYERS = Object.freeze({ sink: 40, floorGap: 20 });
-
-/**
- * Fine terrain over the island plus a coarse ring out to the horizon (land
- * further than `detailReach` from every road in 48 m pieces). Inside
- * the fine grid's box the coarse grid sinks well under the sea floor, so the
- * two never fight; the fine grid leaves out the deep sea floor, where the
- * sunk coarse grid shows through the water instead.
- */
-/** Above this many fine-grid nodes an island is "huge" (a 180 km route): built lazily, in big far blocks, with a horizon around all of it. */
+/** Above this many fine-grid nodes an island is "huge" (a 180 km route): its ground grid is coarser, with a horizon around all of it. */
 export const HUGE_ISLAND_NODES = 1_500_000;
 
-export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200, outerCell = 140, detailReach = 350, into = null, biome = temperate } = {}) {
+/**
+ * Where the ground is drawn: the fine grid's box (around the island, or the
+ * routes with a margin), the sea level, the horizon distance and the centre.
+ * The ground itself is `buildGroundGrids`; the main thread tiles it.
+ */
+export function groundExtent(terrain, { margin = 450, cell = 16, horizon = 4200 } = {}) {
   const { minX, maxX, minY, maxY } = terrain.bounds;
-  const seed = terrain.seed;
   const water = waterLevel(terrain.index);
   const box = terrain.island ? islandBox(terrain.island) : { x0: minX - margin, z0: -maxY - margin, x1: maxX + margin, z1: -minY + margin };
   const bounds = { x0: Math.floor(box.x0 / cell) * cell, z0: Math.floor(box.z0 / cell) * cell, x1: 0, z1: 0 };
@@ -464,46 +332,13 @@ export function buildTerrain(terrain, { margin = 450, cell = 16, horizon = 4200,
   bounds.x1 = bounds.x0 + columns * cell;
   bounds.z1 = bounds.z0 + rows * cell;
   const huge = columns * rows > HUGE_ISLAND_NODES;
-  const [cx, cz] = terrain.island?.center ?? terrain.index.center;
-  if (huge) horizon = Math.hypot(bounds.x1 - bounds.x0, bounds.z1 - bounds.z0) / 2 + horizon;
-  const riverDistance = (x, z) => terrain.riverDistance?.(x, z) ?? Infinity;
-  const color = (x, z, y, steep) => biome.terrainColor({ x, z, height: y, steep, seed, water, riverDistance: riverDistance(x, z), riverHalfWidth: RIVER.halfWidth });
-
-  const fine = into ?? new MeshBuilder();
-  const mesh = into ? new MeshBuilder() : fine;
-  // Full detail near the roads; far out on the land, the plain parts in bigger pieces.
-  const coarse = detailReach > 0 ? farFromRoads(terrain.index, detailReach) : null;
-  // Huge islands: blocks of 9 cells (144 m), so the far land costs a few thousand quads, not millions.
-  gridTerrain(fine, { x0: bounds.x0, z0: bounds.z0, columns, rows, cell, height: (x, z) => terrain.height(x, z), color, skipBelow: water - 8, coarse, ...(huge ? { block: 9, lazy: true } : {}) });
-
-  const outerColumns = Math.ceil((2 * horizon) / outerCell);
-  const inside = (x, z) => x >= bounds.x0 && x <= bounds.x1 && z >= bounds.z0 && z <= bounds.z1;
-  let lowest = water - COAST.depth;
-  gridTerrain(mesh, {
-    x0: cx - horizon,
-    z0: cz - horizon,
-    columns: outerColumns,
-    rows: outerColumns,
-    cell: outerCell,
-    height: (x, z) => {
-      // Its 140 m triangles cut through hills, so inside the box it stays
-      // under the deepest sea floor rather than following the land.
-      const y = inside(x, z) ? Math.min(terrain.height(x, z), water - COAST.depth) - TERRAIN_LAYERS.sink : terrain.height(x, z);
-      lowest = Math.min(lowest, y);
-      return y;
-    },
-    color,
-  });
-  // A sea floor under everything, so the sea looks the same out to the horizon.
-  const floor = lowest - TERRAIN_LAYERS.floorGap;
-  const far = Math.max(20000, horizon * 2);
-  mesh.quad([cx - far, floor, cz - far], [cx - far, floor, cz + far], [cx + far, floor, cz + far], [cx + far, floor, cz - far], biome.terrainColor({ x: cx, z: cz, height: floor, steep: 0, seed, water, riverHalfWidth: RIVER.halfWidth }));
-  return { mesh: mesh.build(), bounds, water, floor, horizon, center: [cx, cz], huge };
+  const center = terrain.island?.center ?? terrain.index.center;
+  return { bounds, water, horizon: huge ? Math.hypot(bounds.x1 - bounds.x0, bounds.z1 - bounds.z0) / 2 + horizon : horizon, center, huge };
 }
 
 /**
- * The new ground, as grids for the worker's typed-array hand-over: the same
- * extent as `buildTerrain`'s fine grid, plus the coarse one out to the horizon.
+ * The ground as grids for the worker's typed-array hand-over: a fine one over
+ * `groundExtent`'s box, plus a coarse one out to the horizon.
  */
 export function buildGroundGrids(terrain, ground, { season, long }) {
   const [cx, cz] = ground.center;
@@ -879,39 +714,6 @@ export function buildFarIslands(route, terrain, { count = 11, distance = 1300, b
   return mesh.build();
 }
 
-/** The sea (or any water level): one flat plane; it only shows where the land dips below it. */
-export function buildWater(terrain, level, size = 40000, biome = temperate) {
-  const mesh = new MeshBuilder();
-  const [cx, cz] = terrain.island?.center ?? terrain.index.center;
-  const h = size / 2;
-  const color = biome.water.color ?? biome.water;
-  mesh.quad([cx - h, level, cz - h], [cx - h, level, cz + h], [cx + h, level, cz + h], [cx + h, level, cz - h], color);
-  return mesh.build();
-}
-
-/** Puffy low-poly clouds high above the route, shaped by the biome's sky. */
-export function buildClouds(route, terrain, { count, spread, biome = temperate } = {}) {
-  const style = biome.sky?.clouds ?? temperate.sky.clouds;
-  const random = seededRandom((terrain.seed ?? route.seed >>> 0) ^ 0xc10d);
-  const mesh = new MeshBuilder();
-  const [cx, cz] = terrain.index.center;
-  const total = count ?? style.count;
-  const span = spread ?? style.spread;
-  for (let i = 0; i < total; i += 1) {
-    const x = cx + (random() - 0.5) * 2 * span;
-    const z = cz + (random() - 0.5) * 2 * span;
-    const y = terrain.index.meanElevation + style.altitude[0] + random() * style.altitude[1];
-    const puffs = style.puffs[0] + Math.floor(random() * style.puffs[1]);
-    const size = style.radius[0] + random() * style.radius[1];
-    for (let p = 0; p < puffs; p += 1) {
-      const offset = [(random() - 0.5) * size * style.offset[0], random() * size * style.offset[1], (random() - 0.5) * size * style.offset[2]];
-      const r = size * (style.puffRadius[0] + random() * style.puffRadius[1]);
-      mesh.ellipsoid(add([x, y, z], offset), [r, r * style.squash[0], r * style.squash[1]], style.color, style.segments[0], style.segments[1], random() * Math.PI);
-    }
-  }
-  return mesh.build();
-}
-
 /**
  * What a camera flying over the map needs to know, as plain data: the
  * island's centre and size, the sea level, and a coarse height grid so it
@@ -967,7 +769,7 @@ const onStretches = (stretches, d) => stretches.some((s) => d >= s.from - 1e-6 &
  * detail, roads and far terrain get this much thinner instead.
  */
 export const LONG_ROUTE_M = 60_000;
-const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep: 6, railGrade: 6, railStep: 8, detailReach: 120, outerCell: 400 });
+const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep: 6, railGrade: 6, railStep: 8 });
 
 /**
  * Builds the whole world for a route and the `others` on its map, or, given
@@ -1004,7 +806,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const half = roadHalfWidth(route.lanes) + VERGE;
 
   const chunks = {
-    terrain: new ChunkedMesh(),
     road: new ChunkedMesh(),
     detail: new ChunkedMesh(),
     scenery: new ChunkedMesh(),
@@ -1013,7 +814,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   };
 
   const long = route.length > LONG_ROUTE_M;
-  const ground = buildTerrain(terrain, { into: chunks.terrain, biome, ...(long ? { detailReach: LONG.detailReach, outerCell: LONG.outerCell } : {}) });
+  const ground = groundExtent(terrain);
 
   const grids = buildGroundGrids(terrain, ground, { season, long });
 
@@ -1150,6 +951,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   return {
     // The view needs the biome to resolve its sky and lighting at render time.
     biome: biome.id,
+    season,
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,
@@ -1160,13 +962,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     meshes: {
-      horizon: ground.mesh,
       arches: buildArches(route, { biome }),
       islands: buildFarIslands(route, terrain, { biome }),
     },
-    clouds: buildClouds(route, terrain, { biome }),
     weather: buildWeather(terrain, { biome }),
-    water: buildWater(terrain, ground.water, Math.max(40000, ground.horizon * 4), biome),
     rivers: rivers3d.build(),
     rotors,
     spectators,

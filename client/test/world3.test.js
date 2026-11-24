@@ -8,7 +8,7 @@ import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { RoadIndex, buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { RoadIndex, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -505,91 +505,6 @@ test("the map terrain is defined everywhere, out to the horizon", () => {
 import { DRONE_LENS, RIDE_LENS, depthStep } from "../public/js/view3d/view3d.js";
 import { ROAD_LIFT } from "../public/js/view3d/world.js";
 
-/** Height of the highest triangle of `meshes` over (x, z), or null where there is none. */
-function surfaceOf(meshes, cell = 64) {
-  const triangles = [];
-  const buckets = new Map();
-  for (const mesh of meshes) {
-    const p = mesh.positions;
-    for (let i = 0; i < mesh.vertexCount; i += 3) {
-      const t = [0, 1, 2].map((k) => [p[(i + k) * 3], p[(i + k) * 3 + 1], p[(i + k) * 3 + 2]]);
-      const id = triangles.push(t) - 1;
-      const xs = t.map((v) => Math.floor(v[0] / cell));
-      const zs = t.map((v) => Math.floor(v[2] / cell));
-      for (let gx = Math.min(...xs); gx <= Math.max(...xs); gx += 1) {
-        for (let gz = Math.min(...zs); gz <= Math.max(...zs); gz += 1) {
-          const key = `${gx},${gz}`;
-          if (!buckets.has(key)) buckets.set(key, []);
-          buckets.get(key).push(id);
-        }
-      }
-    }
-  }
-  const surface = (x, z) => {
-    let top = null;
-    for (const id of buckets.get(`${Math.floor(x / cell)},${Math.floor(z / cell)}`) ?? []) {
-      const [a, b, c] = triangles[id];
-      const det = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
-      if (Math.abs(det) < 1e-9) continue;
-      const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / det;
-      const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / det;
-      const l3 = 1 - l1 - l2;
-      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
-      const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
-      top = top === null ? y : Math.max(top, y);
-    }
-    return top;
-  };
-  surface.triangles = triangles.length;
-  return surface;
-}
-
-test("terrain layers stay far enough apart for the depth buffer: fine over coarse over the sea floor", () => {
-  const horizon = mapWorld.meshes.horizon;
-  const coarseCount = horizon.vertexCount - 6; // the last quad is the sea-floor plane
-  const floor = horizon.positions[coarseCount * 3 + 1];
-  const fine = surfaceOf(mapWorld.chunks.terrain.map((chunk) => chunk.mesh));
-  const coarse = surfaceOf([{ positions: horizon.positions.subarray(0, coarseCount * 3), vertexCount: coarseCount }], 280);
-  // Fog ends by 4.2 km in the ride; the drone sees further but from higher up.
-  const needed = Math.max(depthStep(RIDE_LENS, 4200), depthStep(DRONE_LENS, 9000)) * 4;
-  let checked = 0;
-  for (let x = -6000; x <= 6000; x += 29) {
-    for (let z = -7000; z <= 5000; z += 31) {
-      const below = coarse(x, z);
-      if (below === null) continue;
-      assert.ok(below - floor > needed, `coarse grid only ${(below - floor).toFixed(2)} m above the sea-floor plane at (${x}, ${z})`);
-      const above = fine(x, z);
-      if (above === null) continue;
-      checked += 1;
-      assert.ok(above - below > needed, `fine terrain only ${(above - below).toFixed(2)} m above the coarse grid at (${x}, ${z})`);
-    }
-  }
-  assert.ok(checked > 10_000, `the island was sampled (${checked})`);
-});
-
-test("land far from the roads is drawn coarser, without holes and close to the full detail", () => {
-  const terrainOf = (options) => {
-    const into = new ChunkedMesh();
-    buildTerrain(mapWorld.terrain, { ...options, into });
-    return surfaceOf(into.build().map((chunk) => chunk.mesh));
-  };
-  const full = terrainOf({ detailReach: 0 });
-  const lighter = terrainOf({});
-  let land = 0;
-  for (let x = -5000; x <= 6000; x += 23) {
-    for (let z = -5000; z <= 5000; z += 29) {
-      const want = full(x, z);
-      if (want === null || want < 3) continue;
-      land += 1;
-      const got = lighter(x, z);
-      assert.ok(got !== null, `a hole in the terrain at (${x}, ${z})`);
-      assert.ok(Math.abs(got - want) < 3, `coarse terrain ${(got - want).toFixed(1)} m off the full detail at (${x}, ${z})`);
-    }
-  }
-  assert.ok(land > 50_000, `the island was sampled (${land})`);
-  assert.ok(lighter.triangles < full.triangles * 0.7, `fewer triangles (${lighter.triangles} of ${full.triangles})`);
-});
-
 test("other roads' markings stay under the ridden road's asphalt where they cross it", () => {
   const gap = ROAD_LIFT.ridden - (ROAD_LIFT.other + ROAD_LIFT.marking);
   assert.ok(gap > depthStep(RIDE_LENS, 600), `${gap} m apart flickers within 600 m`);
@@ -678,7 +593,8 @@ test("the map world looks the same whichever route you ride", () => {
   const fromTrack = buildWorld(tracks[1], { network, others: [...valley, ...tracks] });
   const vertices = (world, name) => world.chunks[name].reduce((sum, c) => sum + c.mesh.vertexCount, 0);
   // Grass and flowers are thinner along roads you don't ride; the rest is the same.
-  for (const name of ["terrain", "scenery"]) assert.equal(vertices(fromTrack, name), vertices(mapWorld, name), name);
+  assert.equal(vertices(fromTrack, "scenery"), vertices(mapWorld, "scenery"), "scenery");
+  assert.deepEqual(fromTrack.ground.near.heights, mapWorld.ground.near.heights, "ground");
   assert.deepEqual(fromTrack.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
   // Only the ridden route has arches and spectators.
   assert.notDeepEqual(fromTrack.spectators.map((p) => p.position), mapWorld.spectators.map((p) => p.position));
@@ -701,7 +617,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "clouds", "ground", "gyms", "meshes", "overview", "rivers", "rotors", "spectatorMeshes", "spectators", "studio", "water", "weather"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "rivers", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));
@@ -711,7 +627,7 @@ test("the scene is plain data whose buffers can be handed to the main thread", (
 
 test("without workers the scene is built in place, and a failing worker falls back too", async () => {
   const inPlace = await buildScene(tinyFile, [], { createWorker: () => null });
-  assert.ok(inPlace.chunks.terrain.length > 0);
+  assert.ok(inPlace.ground.near.columns > 1, "the ground comes as a grid");
 
   let terminated = false;
   const failing = {
@@ -726,7 +642,7 @@ test("without workers the scene is built in place, and a failing worker falls ba
   console.warn = () => {};
   try {
     const fallback = await buildScene(tinyFile, [], { createWorker: () => failing });
-    assert.ok(fallback.chunks.terrain.length > 0);
+    assert.ok(fallback.ground.near.columns > 1);
     assert.ok(terminated);
   } finally {
     console.warn = original;

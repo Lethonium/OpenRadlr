@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import * as THREE from "../public/js/three.js";
-import { addHook, cloudShadows, createGrainTexture, createSharedUniforms, grain, heightFog } from "../public/js/view3d/engine/materials.js";
+import { addHook, cloudShadows, createGrainTexture, createSharedUniforms, grain, heightFog } from "../public/js/view3d/assets/materials.js";
 
 const shader = () => ({
   uniforms: {},

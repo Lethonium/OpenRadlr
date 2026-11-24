@@ -5,7 +5,7 @@
  * `createSharedUniforms()` and `createGrainTexture()`, owned by the scene.
  */
 import * as THREE from "../../three.js";
-import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX } from "./shaderChunks.js";
+import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX } from "./hookChunks.js";
 
 /**
  * A shader patch. `key` tells Three's program cache that patched and plain

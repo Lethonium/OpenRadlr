@@ -36,6 +36,9 @@ export class Engine {
     this.#onDispose = onDispose;
     this.renderer = createRenderer(canvas);
     this.renderer.autoClear = false;
+    // The world's sun casts soft shadows; a level without a shadow map just leaves `castShadow` off.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // Sizes are in device pixels, as the adapter's callers pass them.
     this.renderer.setPixelRatio(1);
     this.settings = qualitySettings("high");
@@ -54,6 +57,7 @@ export class Engine {
   resize(width, height, pixelRatio = 1) {
     const deviceWidth = Math.max(1, Math.round(width * pixelRatio));
     const deviceHeight = Math.max(1, Math.round(height * pixelRatio));
+    if (deviceWidth === this.size.width && deviceHeight === this.size.height) return;
     this.size = { width: deviceWidth, height: deviceHeight };
     this.renderer.setSize(deviceWidth, deviceHeight, false);
     this.target.setSize(deviceWidth, deviceHeight);
@@ -86,7 +90,7 @@ export class Engine {
 
   /**
    * Renders a scene into the scene target, optionally only inside `rect`
-   * (device pixels from the bottom left).
+   * (device pixels from the bottom left), which is cleared first.
    * @param {import("../../three.js").Scene} scene
    * @param {import("../../three.js").Camera} camera
    * @param {{x: number, y: number, width: number, height: number}} [rect]
@@ -98,6 +102,8 @@ export class Engine {
       renderer.setScissorTest(true);
       renderer.setScissor(rect.x, rect.y, rect.width, rect.height);
       renderer.setViewport(rect.x, rect.y, rect.width, rect.height);
+      // The rectangle replaces what was drawn there (a workout's inset over the main view).
+      renderer.clear(true, true, true);
     } else {
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, this.size.width, this.size.height);

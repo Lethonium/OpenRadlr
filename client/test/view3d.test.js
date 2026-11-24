@@ -9,7 +9,6 @@ import {
   LANE_WIDTH,
   RoadIndex,
   buildArches,
-  buildClouds,
   buildGroundDetail,
   buildFarIslands,
   buildRoad,
@@ -27,6 +26,8 @@ import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
 import { buildStatues } from "../public/js/view3d/statues.js";
 import { resolveBiome } from "../public/js/view3d/biomes/index.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
+import { fakeEngine } from "./support/fakeEngine.js";
+import { groundFixture } from "./support/groundFixture.js";
 import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { WEATHER_VERTEX } from "../public/js/view3d/shaders.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
@@ -219,7 +220,7 @@ test("the sea level stays below the road", () => {
   assert.ok(waterLevel(index) <= index.minElevation - 4);
 });
 
-test("far islands stand out at sea and clouds float high", () => {
+test("far islands stand out at sea", () => {
   const route = squareRoute();
   const terrain = terrainModel(route);
   const islands = buildFarIslands(route, terrain, { count: 8 });
@@ -229,8 +230,6 @@ test("far islands stand out at sea and clouds float high", () => {
     if (islands.positions[i * 3 + 1] > terrain.seaLevel) continue;
     assert.ok(terrain.island.inland(x, z) < -500, "far islands stand well off the coast");
   }
-  const clouds = buildClouds(route, terrain, { count: 4 });
-  for (let i = 0; i < clouds.vertexCount; i += 1) assert.ok(clouds.positions[i * 3 + 1] > terrain.index.meanElevation + 200);
 });
 
 test("scenery avoids the lake", () => {
@@ -369,7 +368,7 @@ class StubRenderer {
     this.calls.push("draw");
   }
   drawCloudLayer() {
-    this.calls.push("draw");
+    this.calls.push("cloud");
   }
   drawTransparent() {
     this.calls.push("draw");
@@ -390,23 +389,21 @@ function testGym() {
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
   return { center, yaw: 0, spots };
 }
-function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined) {
+function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined, engine = fakeEngine()) {
   const route = squareRoute();
   const world = {
     biome,
-    meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
+    meshes: { islands: emptyMesh(), arches: emptyMesh() },
     chunks: { scenery: [], structures: [] },
-    clouds: emptyMesh(),
     weather,
-    water: emptyMesh(),
     rivers: emptyMesh(),
     rotors: [],
     spectators: [],
     gyms,
     studio,
   };
-  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
-  return { view, renderer };
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer, engine });
+  return { view, renderer, engine };
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
@@ -1060,4 +1057,95 @@ test("every graphics level but low renders the shadow map", () => {
     rendered[level] = shadowPasses > 0;
   }
   assert.deepEqual(rendered, { low: false, medium: true, high: true, ultra: true });
+});
+
+// --- the world scene and the engine (new world, part 1) ----------------------
+
+/** A view over a world with real ground; engine and renderer log into one list. */
+function worldView({ timeMode = "day", sideView = null } = {}) {
+  const log = [];
+  const engine = fakeEngine(log);
+  const renderer = new StubRenderer();
+  renderer.calls = log;
+  const gym = testGym();
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { islands: emptyMesh(), arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, rivers: emptyMesh(), rotors: [], spectators: [], gyms: [gym] };
+  const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
+  const view = new View3D(canvas, null, squareRoute(), world, { renderer, engine });
+  view.setTimeMode(timeMode);
+  view.workoutMode(gym, { reducedMotion: true, sideView });
+  const render = () => view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  return { view, engine, renderer, log, render };
+}
+
+test("a frame draws the world before the riders and presents last", () => {
+  const { log, render } = worldView();
+  render();
+  assert.equal(log[0], "beginFrame");
+  assert.equal(log[1], "renderScene");
+  assert.ok(log.indexOf("begin") > log.indexOf("renderScene"), "the adapter draws after the world");
+  assert.equal(log.at(-1), "present");
+  assert.ok(log.lastIndexOf("end") < log.lastIndexOf("present"), "the adapter's passes are closed before the post chain");
+});
+
+test("the adapter draws on top of the world without clearing it", () => {
+  const { renderer, render } = worldView();
+  render();
+  assert.ok(renderer.frames.length > 0);
+  for (const frame of renderer.frames) assert.equal(frame.overlay, true);
+});
+
+test("the world is the Three.js scene of the view", () => {
+  const { view, engine, render } = worldView();
+  render();
+  assert.equal(engine.scenes[0].scene, view.worldScene.scene);
+  assert.ok(view.worldScene.scene.getObjectByName("terrain"));
+});
+
+test("night darkens the frame", () => {
+  const night = worldView({ timeMode: "night" });
+  night.render();
+  assert.equal(night.engine.presented.at(-1).env.night, 1);
+  const day = worldView();
+  day.render();
+  assert.equal(day.engine.presented.at(-1).env.night, 0);
+});
+
+test("a season change reaches the frame's environment", () => {
+  const { view, engine, render } = worldView();
+  view.setSeason("winter");
+  render();
+  assert.equal(engine.presented.at(-1).env.snow, 1);
+});
+
+test("view3d no longer draws the old terrain, sea or clouds", () => {
+  const { view, renderer, render } = worldView();
+  render();
+  assert.equal(view.clouds, undefined);
+  assert.equal(view.water, undefined);
+  assert.equal(view.meshes.horizon, undefined);
+  assert.ok(!renderer.calls.includes("cloud"));
+});
+
+test("disposing a view frees its world scene and does not touch the engine", () => {
+  const { view, engine, render } = worldView();
+  render();
+  const before = engine.calls.length;
+  view.dispose();
+  assert.equal(view.worldScene.scene.children.length, 0);
+  assert.equal(engine.calls.length, before);
+});
+
+test("a workout's side view draws the world into the inset first", () => {
+  const side = { getBoundingClientRect: () => ({ left: 200, top: 100, width: 100, height: 80 }) };
+  const { engine, log, render } = worldView({ sideView: side });
+  render();
+  assert.equal(engine.rects.filter(Boolean).length, 1, "one scissored world pass for the inset");
+  assert.equal(log.at(-1), "present");
+});
+
+test("the quality reaches the engine and the world scene", () => {
+  const { view, engine } = worldView();
+  view.setQuality("low");
+  assert.equal(engine.qualities.at(-1).shadowMapSize, 0);
+  assert.equal(view.worldScene.sun.castShadow, false);
 });

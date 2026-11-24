@@ -6,7 +6,7 @@ import { BIOMES, BIOME_IDS, DEFAULT_BIOME, biomeChoices, resolveBiome } from "..
 import { buildRiverWater } from "../public/js/view3d/features.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { buildWeather } from "../public/js/view3d/weather.js";
-import { buildClouds, buildRoad, buildWorld, terrainModel } from "../public/js/view3d/world.js";
+import { buildRoad, buildWorld, terrainModel } from "../public/js/view3d/world.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
@@ -98,15 +98,11 @@ test("winter's river grows a surface, not a new course", () => {
 });
 
 test("winter's sky is a lower, broader ceiling", () => {
-  const terrain = terrainModel(new RouteGeometry(route));
   const temperate = resolveBiome("temperate");
   const winter = resolveBiome("winter");
   assert.ok(winter.sky.clouds.count > temperate.sky.clouds.count, "more cloud cover");
   assert.ok(winter.sky.clouds.altitude[0] < temperate.sky.clouds.altitude[0], "the ceiling sits lower");
   assert.ok(winter.sky.clouds.squash[0] < temperate.sky.clouds.squash[0], "and the puffs are flatter");
-  const warm = buildClouds(new RouteGeometry(route), terrain, { count: 4, biome: temperate });
-  const cold = buildClouds(new RouteGeometry(route), terrain, { count: 4, biome: winter });
-  assert.ok(cold.vertexCount > warm.vertexCount, "winter builds more cloud shapes");
 });
 
 test("only a biome with weather grows a particle field", () => {
@@ -231,9 +227,7 @@ test("winter changes the look, not the layout", () => {
 
   const total = (scene) =>
     Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
-    scene.clouds.positions.length / 9 +
     (scene.weather ? scene.weather.count * 2 : 0) +
-    scene.water.positions.length / 9 +
     scene.rivers.positions.length / 9 +
     Object.values(scene.meshes).reduce((a, mesh) => a + mesh.positions.length / 9, 0);
   const t = total(temperate);

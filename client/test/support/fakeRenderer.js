@@ -9,6 +9,7 @@ export function fakeRenderer() {
   return {
     calls,
     autoClear: true,
+    shadowMap: { enabled: false, type: 0 },
     toneMapping: 0,
     toneMappingExposure: 1,
     setPixelRatio() {},
