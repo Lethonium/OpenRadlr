@@ -131,3 +131,37 @@ test("the castle's reported footprint reaches the round keep's far edge", () => 
   const { width, depth } = BUILDINGS.castle.parts({ seed: 1 });
   assert.ok(width / 2 >= 22 + 6 && depth / 2 >= 16 + 6, `${width} x ${depth}`);
 });
+
+/** Height of the drawn ground (the near grid's triangles, as the terrain layer cuts them) at x, z. */
+function meshHeight(grid, x, z) {
+  const [fi, fj] = [(x - grid.x0) / grid.cell, (z - grid.z0) / grid.cell];
+  const [i, j] = [Math.floor(fi), Math.floor(fj)];
+  const [u, v] = [fi - i, fj - j];
+  const h = (di, dj) => grid.heights[(j + dj) * grid.columns + i + di];
+  // Cell triangles a,b,d and b,c,d with a=(i,j) b=(i,j+1) c=(i+1,j+1) d=(i+1,j): the diagonal runs b-d.
+  if (u + v <= 1) return h(0, 0) + (h(1, 0) - h(0, 0)) * u + (h(0, 1) - h(0, 0)) * v;
+  return h(1, 1) + (h(0, 1) - h(1, 1)) * (1 - u) + (h(1, 0) - h(1, 1)) * (1 - v);
+}
+
+test("along every river the drawn ground stays below the water, across the middle of its width", () => {
+  const { network } = valley;
+  const world = buildWorld(network.roads()[0], { network, detail: "low" });
+  const { positions } = world.rivers.strips;
+  const grid = world.ground.near;
+  const checked = [];
+  // The ribbon's vertices come in left/right pairs per sample (ponds follow as fans, only the pairs are walked here).
+  const pairs = Math.floor(positions.length / 6);
+  for (let k = 0; k < pairs; k += 1) {
+    const [lx, ly, lz, rx, , rz] = positions.slice(k * 6, k * 6 + 6);
+    if (!(ly > -Infinity)) continue;
+    for (const t of [0.5, 0.35, 0.65]) {
+      const [x, z] = [lx + (rx - lx) * t, lz + (rz - lz) * t];
+      if (x < grid.x0 || z < grid.z0 || x > grid.x0 + (grid.columns - 1) * grid.cell || z > grid.z0 + (grid.rows - 1) * grid.cell) continue;
+      if (Math.hypot(rx - lx, rz - lz) > 2 * (RIVER.halfWidth + 2)) continue; // a pond fan, not a river pair
+      checked.push([x, z, ly]);
+      if (t === 0.5) assert.ok(world.terrain.height(x, z) < ly, `terrain below the water at ${x.toFixed(0)},${z.toFixed(0)}`);
+      assert.ok(meshHeight(grid, x, z) < ly, `drawn ground below the water at ${x.toFixed(0)},${z.toFixed(0)}, t ${t}: ${meshHeight(grid, x, z).toFixed(2)} vs ${ly.toFixed(2)}`);
+    }
+  }
+  assert.ok(checked.length > 50, `${checked.length} samples`);
+});

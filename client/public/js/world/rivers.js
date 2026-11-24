@@ -11,7 +11,7 @@ const smoothstep = (edge0, edge1, x) => {
   return t * t * (3 - 2 * t);
 };
 
-export const RIVER = Object.freeze({ halfWidth: 9, bank: 26, belowRoad: 9, length: 2400, step: 15, rise: 0.05, mouthDepth: 2.5 });
+export const RIVER = Object.freeze({ halfWidth: 9, bank: 26, belowRoad: 9, length: 2400, step: 15, rise: 0.05, mouthDepth: 2.5, bed: 24 });
 export const BRIDGE_HALF_LENGTH = 34;
 const POND_RADIUS = 34;
 
@@ -149,9 +149,11 @@ export function withRivers(base, rivers, floor = -Infinity) {
       const near = river.index.nearest(x, z);
       if (!near) continue;
       distance = Math.min(distance, near.distance);
-      const { surface, radius } = near.sample;
+      const { surface } = near.sample;
       const d = near.distance;
-      const height = d <= radius ? surface - 2.6 + 2.2 * (d / radius) ** 2 : surface - 0.4 + (d - radius) * 0.9;
+      // The bed is as wide as the ground mesh needs (its 16 m cells put a vertex within ~12 m of any
+      // point): narrower, on a slope the mesh's bank vertices pull the ground up over the water between them.
+      const height = d <= RIVER.bed ? surface - 2.6 + 2.2 * (d / RIVER.bed) ** 2 : surface - 0.4 + (d - RIVER.bed) * 0.9;
       lowest = Math.min(lowest, height);
     }
     return { lowest, distance };
@@ -162,9 +164,9 @@ export function withRivers(base, rivers, floor = -Infinity) {
     height(x, z) {
       const natural = base.height(x, z);
       const { lowest, distance } = carve(x, z);
-      if (!Number.isFinite(lowest) || distance > RIVER.halfWidth + RIVER.bank + 20) return natural;
+      if (!Number.isFinite(lowest) || distance > RIVER.bed + RIVER.bank + 20) return natural;
       // Blend the valley wall into the natural slope.
-      const t = smoothstep(RIVER.halfWidth, RIVER.halfWidth + RIVER.bank, distance);
+      const t = smoothstep(RIVER.bed, RIVER.bed + RIVER.bank, distance);
       const valley = Math.min(natural, Math.max(floor + 0.3, lowest));
       return valley + (natural - valley) * t * t;
     },
