@@ -4,6 +4,7 @@
  * every rider. The atlas has one region per body part (`KIT_ATLAS`); the rig's UVs point into them.
  */
 import * as THREE from "../../../three.js";
+import { RIDER_SKINS } from "./look.js";
 
 /** Atlas regions `[u0, u1, v0, v1]` of the body parts, v = 0 at the bottom of the texture. */
 export const KIT_ATLAS = Object.freeze({
@@ -13,19 +14,6 @@ export const KIT_ATLAS = Object.freeze({
   head: Object.freeze([0, 0.25, 0.5, 1]),
   hand: Object.freeze([0.25, 0.375, 0.5, 0.75]),
   foot: Object.freeze([0.375, 0.5, 0.5, 0.75]),
-});
-
-/**
- * Skin tones, sRGB hex. The same table as `RIDER_SKINS` in `view3d/riderLook.js` (assets may not import from there;
- * a test keeps the two equal).
- */
-export const SKIN_TONES = Object.freeze({
-  light: "#f3d2b8",
-  fair: "#eac3a0",
-  tan: "#cf9f78",
-  olive: "#b88660",
-  brown: "#8d5a3c",
-  dark: "#5e3b28",
 });
 
 /** The side the reference painted at, so its pixel-sized details (eyes, dots) scale with the texture. */
@@ -141,14 +129,14 @@ function createSurface(size) {
 
 /**
  * Paints the whole atlas for a rider.
- * @param {import("../../riderLook.js").RiderLook} look
+ * @param {import("./look.js").RiderLook} look
  * @param {number} [size] edge of the square texture in pixels
  * @returns {Uint8Array} RGBA bytes, row 0 is the top of the texture (v = 1), as a canvas would hold it
  */
 export function paintKit(look, size = 256) {
   const s = createSurface(size);
   const { torso, arm, leg, hand, foot } = KIT_ATLAS;
-  const skin = SKIN_TONES[look.skin] ?? look.skin;
+  const skin = RIDER_SKINS[look.skin] ?? look.skin;
   const { kit, pattern, primary, secondary, accent } = look;
   s.rectPixels(0, 0, size, size, skin);
 
@@ -250,7 +238,7 @@ function paintFace(s, hair) {
 
 /**
  * The kit as a sRGB texture (the bytes flipped so v = 0 is the first row, as an uploaded texture wants).
- * @param {import("../../riderLook.js").RiderLook} look
+ * @param {import("./look.js").RiderLook} look
  * @param {<T>(resource: T) => T} own registers the texture
  * @param {number} [size]
  * @returns {import("../../../three.js").DataTexture}

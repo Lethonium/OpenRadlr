@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import * as THREE from "../public/js/three.js";
 import { createSharedUniforms } from "../public/js/view3d/assets/materials.js";
 import { createOwner } from "../public/js/view3d/assets/owner.js";
-import { KIT_ATLAS, SKIN_TONES, kitTexture, paintKit } from "../public/js/view3d/assets/riders/kitPainter.js";
+import { KIT_ATLAS, kitTexture, paintKit } from "../public/js/view3d/assets/riders/kitPainter.js";
 import { RIG_BONES, create, createRider, meta } from "../public/js/view3d/assets/riders/rider.js";
-import { RIDER_SKINS, lookOf } from "../public/js/view3d/riderLook.js";
+import { lookOf } from "../public/js/view3d/assets/riders/look.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 
 const SIZE = 256;
@@ -97,10 +97,6 @@ test("every pattern and kit paints a full opaque atlas", () => {
       for (let i = 3; i < pixels.length; i += 4) assert.equal(pixels[i], 255, `${kit} ${pattern}`);
     }
   }
-});
-
-test("the painter's skin tones are the look's", () => {
-  assert.deepEqual(SKIN_TONES, RIDER_SKINS);
 });
 
 test("kitTexture is an owned sRGB data texture", () => {

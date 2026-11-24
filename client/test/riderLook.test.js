@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { BIKE_TYPES_FOR_LOOKS, RIDER_KITS, RIDER_PATTERNS, RIDER_SKINS, lookOf } from "../public/js/view3d/riderLook.js";
+import { BIKE_TYPES_FOR_LOOKS, RIDER_KITS, RIDER_PATTERNS, RIDER_SKINS, lookOf } from "../public/js/view3d/assets/riders/look.js";
 
 const SAMPLE_IDS = Array.from({ length: 200 }, (_, index) => index + 1);
 const EXTREME_IDS = [0, -1, 1, 2 ** 31 - 1, -(2 ** 31), 123456789];

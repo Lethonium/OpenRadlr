@@ -406,7 +406,7 @@ const LEAN_ITERATIONS = 22;
 
 /**
  * Builds a rider.
- * @param {import("../../riderLook.js").RiderLook} look
+ * @param {import("./look.js").RiderLook} look
  * @param {{own?: <T>(resource: T) => T, uniforms?: ReturnType<typeof createSharedUniforms>, texture?: import("../../../three.js").Texture}} [options]
  *   `texture` replaces the painted kit (shared kits; the caller owns it)
  * @returns {RiderRig}
@@ -708,7 +708,7 @@ export const meta = Object.freeze({
 
 /**
  * The workbench's rider: one rigged rider posed and animated in place.
- * @param {{track?: (resource: any) => any, pose?: string} & Partial<import("../../riderLook.js").RiderLook>} [options]
+ * @param {{track?: (resource: any) => any, pose?: string} & Partial<import("./look.js").RiderLook>} [options]
  */
 export function create({ track, pose = "ride", uniforms, ...options } = {}) {
   const owner = createOwner(track);

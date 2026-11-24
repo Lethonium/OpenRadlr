@@ -3,7 +3,7 @@
  * draws the same rider the same way. Pure: no Three.js, no DOM.
  */
 
-import { seededRandom } from "../world/noise.js";
+import { seededRandom } from "../../../world/noise.js";
 
 /**
  * @typedef {object} RiderLook
