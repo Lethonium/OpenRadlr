@@ -140,7 +140,7 @@
     "kind": "ride",
     "at": 6200,
     "camera": "chase",
-    "biome": "winter"
+    "season": "winter"
   },
   {
     "name": "gallery-temperate",

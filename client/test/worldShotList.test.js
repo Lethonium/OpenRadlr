@@ -39,14 +39,20 @@ test("settingsFor asks for the 3D view and nothing else by default", () => {
   assert.deepEqual(settingsFor(shot()), { "openride.view": "3d" });
 });
 
-test("settingsFor passes the route, camera, time of day and biome", () => {
-  assert.deepEqual(settingsFor(shot({ route: "rolling-hills", camera: "chase", time: "dusk", biome: "winter" })), {
+test("settingsFor passes the route, camera, time of day and season", () => {
+  assert.deepEqual(settingsFor(shot({ route: "rolling-hills", camera: "chase", time: "night", season: "winter" })), {
     "openride.view": "3d",
     "openride.route": "rolling-hills",
     "openride.camera": "chase",
-    "openride.time": "dusk",
-    "openride.biome": "winter",
+    "openride.time": "night",
+    "openride.season": "winter",
   });
+});
+
+test("parseShotList accepts night and a season", () => {
+  const [parsed] = parseShotList(JSON.stringify([{ name: "a", kind: "ride", time: "night", season: "autumn" }]));
+  assert.equal(parsed.time, "night");
+  assert.equal(parsed.season, "autumn");
 });
 
 test("settingsFor never stores a quality level", () => {

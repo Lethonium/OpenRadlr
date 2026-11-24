@@ -13,7 +13,7 @@
  */
 
 export const SHOT_KINDS = Object.freeze(["menu", "ride", "gallery"]);
-export const SHOT_TIMES = Object.freeze(["auto", "day", "golden", "dusk"]);
+export const SHOT_TIMES = Object.freeze(["auto", "day", "golden", "dusk", "night"]);
 
 const point = (shot, key, value) => {
   if (!Array.isArray(value) || value.length !== 3 || !value.every(Number.isFinite)) {
@@ -24,7 +24,7 @@ const point = (shot, key, value) => {
 
 /**
  * A shot list from its JSON: an array of `{ name, kind, route?, at?, camera?,
- * time?, biome?, eye?, target?, wait? }`. Throws on anything a run could not
+ * time?, season?, biome?, eye?, target?, wait? }`. Throws on anything a run could not
  * shoot as asked, naming the shot.
  * @param {string} json
  * @returns {object[]}
@@ -40,7 +40,7 @@ export function parseShotList(json) {
     if (seen.has(shot.name)) throw new Error(`shot "${shot.name}" appears twice`);
     seen.add(shot.name);
     if (!SHOT_KINDS.includes(shot.kind)) throw new Error(`shot "${shot.name}" has an unknown kind: ${shot.kind}`);
-    for (const key of ["route", "camera", "biome"]) {
+    for (const key of ["route", "camera", "biome", "season"]) {
       if (entry[key] === undefined) continue;
       if (typeof entry[key] !== "string" || entry[key] === "") throw new Error(`shot "${shot.name}" has an invalid ${key}`);
       shot[key] = entry[key];
@@ -80,7 +80,7 @@ export function settingsFor(shot) {
     ["route", "openride.route"],
     ["camera", "openride.camera"],
     ["time", "openride.time"],
-    ["biome", "openride.biome"],
+    ["season", "openride.season"],
   ]) {
     if (shot[key]) settings[setting] = shot[key];
   }
