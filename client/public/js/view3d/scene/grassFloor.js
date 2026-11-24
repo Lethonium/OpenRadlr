@@ -25,7 +25,7 @@ export function grassFloor(uniforms, outer) {
           float cl = mix(0.5, gNoise(wp*0.09), 1.0 - smoothstep(4.0, 14.0, fw))*0.6 + mix(0.5, gNoise(wp*0.31 + 7.0), hi)*0.4;
           float dry = gDry(wp);
           vec3 c = diffuseColor.rgb;
-          vec3 gc = c*mix(vec3(1.0), vec3(1.22, 1.1, 0.62), dry*0.55)*(0.8 + cl*0.34);
+          vec3 gc = c*mix(vec3(1.0), vec3(1.12, 1.06, 0.74), dry*0.45)*(0.8 + cl*0.34);
           float dc = length(wp - cameraPosition.xz);
           tUnder = (1.0 - smoothstep(uGR*0.5, uGR*0.92, dc)) * tGr;
           gc *= mix(1.0, 0.8, tUnder);

@@ -7,7 +7,7 @@ import { fbm } from "./noise.js";
 import { SEASON_LOOK } from "./seasons.js";
 import { REGION_STYLE } from "./regionKinds.js";
 import { regionMix } from "./regions.js";
-import { MASK, maskAt } from "./plan/masks.js";
+import { insideField } from "./plan/masks.js";
 
 /** @typedef {[number, number, number]} Rgb */
 /**
@@ -24,8 +24,8 @@ import { MASK, maskAt } from "./plan/masks.js";
  */
 
 /** Metres from a road's centre that are bare soil, and the further metres over which the soil fades into grass. */
-export const VERGE_REACH = 5.5;
-const VERGE_FADE = 2;
+export const VERGE_REACH = 4;
+const VERGE_FADE = 1.5;
 /** Gradient (rise over run) above which the ground is bare rock. */
 export const ROCK_SLOPE = 0.6;
 /** Metres above the sea that are beach. */
@@ -51,7 +51,7 @@ const smoothstep = (edge0, edge1, x) => {
  * @returns {Rgb}
  */
 export function groundColor({ height, slope, roadDistance, riverDistance, noise, tint, field = false }, look, water) {
-  let colour = mix(linear(look.grass), linear(look.grassDry), smoothstep(0.5, 0.7, noise));
+  let colour = mix(linear(look.grass), linear(look.grassDry), smoothstep(0.62, 0.85, noise));
   if (tint) colour = times(colour, tint);
   if (field) colour = linear(look.soil).map((c) => c * 0.85);
   if (height < water + BEACH_HEIGHT) colour = linear(look.sand);
@@ -91,7 +91,7 @@ export function groundGrid(terrain, { bounds, cell, water, season, seed, regions
       const z = bounds.z0 + j * cell;
       const noise = fbm(x / 60, z / 60, seed);
       const tint = regions ? regionTint(x, z, regions, seed, season) : undefined;
-      const field = masks ? maskAt(masks, x, z) === MASK.field : false;
+      const field = masks ? insideField(masks, x, z) : false;
       colors.set(groundColor({ height: heights[k], slope: Math.hypot(dx, dz), roadDistance: terrain.distanceToRoad(x, z), riverDistance: terrain.riverDistance?.(x, z) ?? Infinity, noise, tint, field }, look, water), k * 3);
     }
   }

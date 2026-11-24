@@ -87,6 +87,17 @@ export function maskAt(masks, x, z) {
 /** True where nothing stands: no road, verge strip, river or field, and inside the box. */
 export const clearAt = (masks, x, z) => maskAt(masks, x, z) === MASK.free;
 
+/**
+ * True on a field cell whose eight neighbours are field cells too: the field's inside, not its rim. The rim cells
+ * reach half a cell past the crop, so grass and the meadow's colour keep to them.
+ */
+export function insideField(masks, x, z) {
+  for (let dz = -1; dz <= 1; dz += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) if (maskAt(masks, x + dx * masks.cell, z + dz * masks.cell) !== MASK.field) return false;
+  }
+  return true;
+}
+
 /** Marks the rectangle (centre, size, `yaw` of its width axis) as field wherever the cells are free. */
 export function stampField(masks, { x, z, width, depth, yaw }) {
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];

@@ -1,11 +1,11 @@
 /**
  * Where grass grows, and the ground sampled as textures for the grass rings.
  * Pure data in, typed arrays out (no DOM), so node can build every layer.
- * Grass keeps off roads, rivers and fields (the plan's masks), beaches and
+ * Grass keeps off roads, rivers and the inside of fields (the plan's masks), beaches and
  * cliffs; elsewhere the blades take the ground's own colour.
  */
 import { BEACH_HEIGHT, ROCK_SLOPE } from "../../world/groundGrid.js";
-import { MASK, maskAt } from "../../world/plan/masks.js";
+import { MASK, insideField, maskAt } from "../../world/plan/masks.js";
 
 /** `normal.y` of a slope that is bare rock: below it nothing grows. */
 const ROCK_NORMAL = 1 / Math.hypot(ROCK_SLOPE, 1);
@@ -52,7 +52,8 @@ export function grassWeights(grid, masks) {
       const k = j * columns + i;
       if (masks) {
         const mask = maskAt(masks, x0 + i * cell, z0 + j * cell);
-        if (mask !== MASK.free && mask !== MASK.verge) continue;
+        const rim = mask === MASK.field && !insideField(masks, x0 + i * cell, z0 + j * cell);
+        if (mask !== MASK.free && mask !== MASK.verge && !rim) continue;
       }
       weights[k] = smooth(BEACH_HEIGHT, BEACH_HEIGHT + 2, heights[k] - water) * smooth(ROCK_NORMAL, ROCK_NORMAL + 0.04, normals[k * 3 + 1]);
     }

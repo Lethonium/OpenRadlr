@@ -9,7 +9,7 @@ export const GRASS_GLSL = `
   float gNoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0 - 2.0*f);
     return mix(mix(gHash(i), gHash(i + vec2(1,0)), u.x), mix(gHash(i + vec2(0,1)), gHash(i + vec2(1,1)), u.x), u.y); }
   float gClump(vec2 wp){ return gNoise(wp*0.09)*0.6 + gNoise(wp*0.31 + 7.0)*0.4; }
-  float gDry(vec2 wp){ return smoothstep(0.52, 0.82, gNoise(wp*0.021 + 3.0)*0.7 + gNoise(wp*0.11)*0.3); }
+  float gDry(vec2 wp){ return smoothstep(0.6, 0.88, gNoise(wp*0.021 + 3.0)*0.7 + gNoise(wp*0.11)*0.3); }
   float gGust(vec2 wp, float t){ float g = sin(dot(wp, vec2(0.8, 0.6))*0.085 - t*1.6)*0.5 + 0.5; return g*g; }
 `;
 
@@ -47,10 +47,10 @@ export const GRASS_VERTEX_BLADE = `
   vec3 objectNormal = normalize(vec3(0.0, 1.0, 0.0) + xa*position.x*1.2 + vec3(wd.x, 0.0, wd.y)*bend*0.6);
   vGY = yn;
   float dry = gDry(p);
-  vec3 base = tc.rgb*mix(vec3(1.0), vec3(1.22, 1.1, 0.62), dry*0.55 + fract(rnd*2.71)*0.18);
+  vec3 base = tc.rgb*mix(vec3(1.0), vec3(1.12, 1.06, 0.74), dry*0.45 + fract(rnd*2.71)*0.12);
   base *= 0.86 + clump*0.26;
   vGCol = base*mix(0.6, 1.16, yn*yn*0.5 + yn*0.5);
-  vGCol = mix(vGCol, vGCol*vec3(1.1, 1.08, 0.8), smoothstep(0.75, 1.0, yn)*0.6);
+  vGCol = mix(vGCol, vGCol*vec3(1.08, 1.06, 0.84), smoothstep(0.75, 1.0, yn)*0.4);
   vGCol *= 1.0 + gust*0.08*uWind;
   vGCol *= cloudShade(p, uTime, uCSK);
 `;

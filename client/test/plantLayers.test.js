@@ -12,7 +12,7 @@ import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { createWorldScene } from "../public/js/view3d/scene/worldScene.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
-import { MASK, maskAt } from "../public/js/world/plan/masks.js";
+import { MASK, insideField, maskAt } from "../public/js/world/plan/masks.js";
 import { environmentAt, resolvePreset } from "../public/js/world/daylight.js";
 import { planOf, tinyWorld } from "./support/planFixture.js";
 
@@ -107,7 +107,7 @@ test("grass follows the camera", () => {
   layer.dispose();
 });
 
-test("grass grows on meadow, not on roads, fields, beaches or cliffs", () => {
+test("grass grows on meadow and the rim of fields, not on roads, field insides, beaches or cliffs", () => {
   const weights = grassWeights(ground.near, plan.masks);
   const { near } = ground;
   let meadow = 0;
@@ -116,7 +116,8 @@ test("grass grows on meadow, not on roads, fields, beaches or cliffs", () => {
     const x = near.x0 + (k % near.columns) * near.cell;
     const z = near.z0 + Math.floor(k / near.columns) * near.cell;
     const mask = maskAt(plan.masks, x, z);
-    if (mask !== MASK.free && mask !== MASK.verge) assert.equal(weights[k], 0, `mask at ${x},${z}`);
+    const rim = mask === MASK.field && !insideField(plan.masks, x, z);
+    if (mask !== MASK.free && mask !== MASK.verge && !rim) assert.equal(weights[k], 0, `mask at ${x},${z}`);
     if (mask === MASK.verge && weights[k] > 0) besideRoad += 1;
     if (near.heights[k] < near.water + 3) assert.equal(weights[k], 0, "beach");
     if (near.normals[k * 3 + 1] < 0.8) assert.equal(weights[k], 0, "cliff");
@@ -124,6 +125,28 @@ test("grass grows on meadow, not on roads, fields, beaches or cliffs", () => {
   }
   assert.ok(meadow > 100, "some meadow");
   assert.ok(besideRoad > 20, "grass grows right up to the road's edge");
+});
+
+test("the grass is a carpet up to the road: dense rings, and the verge strip is green grass at full weight", () => {
+  // the reference's high rings (roots per square metre): ours are at least as dense
+  const reference = { low: [26, 8, 1.5, 0.3], medium: [33, 10, 2, 0.38], high: [40, 12, 2.4, 0.45], ultra: [52, 14, 2.8, 0.55] };
+  for (const [level, dens] of Object.entries(reference)) {
+    qualitySettings(level).grassRings.forEach((ring, i) => assert.ok(ring.dens >= dens[i], `${level} ring ${i}`));
+  }
+  const weights = grassWeights(ground.near, plan.masks);
+  const { near } = ground;
+  let verge = 0;
+  let full = 0;
+  for (let k = 0; k < weights.length; k += 1) {
+    const x = near.x0 + (k % near.columns) * near.cell;
+    const z = near.z0 + Math.floor(k / near.columns) * near.cell;
+    if (maskAt(plan.masks, x, z) !== MASK.verge || near.heights[k] < near.water + 4 || near.normals[k * 3 + 1] < 0.9) continue;
+    verge += 1;
+    const [r, g, b] = near.colors.subarray(k * 3, k * 3 + 3);
+    if (weights[k] > 0.99 && g > r && g > b) full += 1;
+  }
+  assert.ok(verge > 20, "verge cells on the fixture");
+  assert.ok(full / verge > 0.8, `${full} of ${verge} verge cells are full green grass`);
 });
 
 test("the height sampler agrees with the grid at its vertices and between them", () => {

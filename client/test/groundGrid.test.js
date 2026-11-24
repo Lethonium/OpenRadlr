@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { groundGrid, groundColor } from "../public/js/world/groundGrid.js";
+import { VERGE_REACH, groundGrid, groundColor } from "../public/js/world/groundGrid.js";
 import { SEASON_LOOK } from "../public/js/world/seasons.js";
 import { buildSceneNow, transferList } from "../public/js/view3d/worldScene.js";
 
@@ -32,8 +32,17 @@ test("steep ground is rock", () => {
 });
 
 test("a road verge is soil", () => {
-  const [r, g] = groundColor({ ...base, roadDistance: 6 }, SEASON_LOOK.summer, 0);
+  const [r, g] = groundColor({ ...base, roadDistance: 3.5 }, SEASON_LOOK.summer, 0);
   assert.ok(r > g, "brown: red above green");
+});
+
+test("summer meadow is olive green up to the verge, with no straw-yellow patch", () => {
+  for (const noise of [0, 0.5, 1]) {
+    const [r, g, b] = groundColor({ ...base, roadDistance: 6, noise }, SEASON_LOOK.summer, 0);
+    assert.ok(g > r * 1.12 && g > b * 2, `noise ${noise}: green above red and blue`);
+  }
+  const edge = groundColor({ ...base, roadDistance: VERGE_REACH + 1.5, noise: 1 }, SEASON_LOOK.summer, 0);
+  assert.deepEqual(edge, groundColor({ ...base, roadDistance: 40, noise: 1 }, SEASON_LOOK.summer, 0), "grass right after the short soil shoulder");
 });
 
 test("the beach is sand", () => {
@@ -87,12 +96,14 @@ test("a field is earth under its crop", () => {
 test("the grid takes its tint from the regions and its earth from the field mask", () => {
   const regions = [{ id: "a", kind: "oliveTerraces", center: [0, 0], radius: 5000 }];
   const masks = { cell: 16, x0: -64, z0: -32, columns: 8, rows: 4, data: new Uint8Array(32) };
-  masks.data[1 * 8 + 4] = 3;
+  for (let j = 0; j < 3; j += 1) for (let i = 3; i < 6; i += 1) masks.data[j * 8 + i] = 3; // a 3 by 3 block: its middle is the inside
   const options = { bounds, cell: 16, water: 0, season: "summer", seed: 7 };
   const plain = groundGrid(stub(() => 20), options);
   const g = groundGrid(stub(() => 20), { ...options, regions, masks });
   const at = (grid, i, j) => [...grid.colors.slice(3 * (j * grid.columns + i), 3 * (j * grid.columns + i) + 3)];
   assert.notDeepEqual(at(g, 1, 1), at(plain, 1, 1));
   const [r, gr] = at(g, 4, 1);
-  assert.ok(r > gr, "the field cell is brown");
+  assert.ok(r > gr, "the inside of the field is brown");
+  const [rimR, rimG] = at(g, 3, 0);
+  assert.ok(rimG > rimR, "its rim keeps the meadow's green");
 });

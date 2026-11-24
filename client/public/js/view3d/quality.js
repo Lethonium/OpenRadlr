@@ -49,10 +49,10 @@ const level = (settings) =>
   Object.freeze({ ...settings, ssao: settings.ssao && Object.freeze(settings.ssao), treeLod: Object.freeze(settings.treeLod), cropStalks: Object.freeze(settings.cropStalks) });
 
 const RINGS = Object.freeze({
-  low: rings({ r: 10, dens: 26, w: 0.085, segs: 4 }, { r: 30, dens: 8, w: 0.17, segs: 3 }, { r: 80, dens: 1.5, w: 0.4, segs: 2, h: 1.05 }, { r: 160, dens: 0.3, w: 0.9, segs: 1, h: 1.1 }),
-  medium: rings({ r: 12, dens: 33, w: 0.077, segs: 4 }, { r: 37, dens: 10, w: 0.15, segs: 4 }, { r: 98, dens: 2, w: 0.35, segs: 3, h: 1.05 }, { r: 205, dens: 0.38, w: 0.8, segs: 2, h: 1.1 }),
-  high: rings({ r: 14, dens: 40, w: 0.07, segs: 5 }, { r: 44, dens: 12, w: 0.13, segs: 4 }, { r: 115, dens: 2.4, w: 0.3, segs: 3, h: 1.05 }, { r: 250, dens: 0.45, w: 0.68, segs: 2, h: 1.1 }),
-  ultra: rings({ r: 18, dens: 52, w: 0.065, segs: 5 }, { r: 56, dens: 14, w: 0.12, segs: 4 }, { r: 145, dens: 2.8, w: 0.27, segs: 3, h: 1.05 }, { r: 330, dens: 0.55, w: 0.6, segs: 2, h: 1.1 }),
+  low: rings({ r: 10, dens: 32, w: 0.085, segs: 4 }, { r: 30, dens: 10, w: 0.17, segs: 3 }, { r: 80, dens: 1.5, w: 0.4, segs: 2, h: 1.05 }, { r: 160, dens: 0.3, w: 0.9, segs: 1, h: 1.1 }),
+  medium: rings({ r: 12, dens: 44, w: 0.077, segs: 4 }, { r: 37, dens: 13, w: 0.15, segs: 4 }, { r: 98, dens: 2, w: 0.35, segs: 3, h: 1.05 }, { r: 205, dens: 0.38, w: 0.8, segs: 2, h: 1.1 }),
+  high: rings({ r: 14, dens: 54, w: 0.07, segs: 5 }, { r: 44, dens: 16, w: 0.13, segs: 4 }, { r: 115, dens: 3.2, w: 0.3, segs: 3, h: 1.05 }, { r: 250, dens: 0.45, w: 0.68, segs: 2, h: 1.1 }),
+  ultra: rings({ r: 18, dens: 68, w: 0.065, segs: 5 }, { r: 56, dens: 19, w: 0.12, segs: 4 }, { r: 145, dens: 3.6, w: 0.27, segs: 3, h: 1.05 }, { r: 330, dens: 0.55, w: 0.6, segs: 2, h: 1.1 }),
 });
 
 const SETTINGS = Object.freeze({
