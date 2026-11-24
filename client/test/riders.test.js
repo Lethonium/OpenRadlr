@@ -6,6 +6,10 @@ import {
   saveRiders,
   addRider,
   removeRider,
+  setActive,
+  setLock,
+  clearLock,
+  isLocked,
 } from "../public/js/profile/riders.js";
 
 const fakeStorage = (value) => {
@@ -78,4 +82,46 @@ test("saveRiders_then_loadRiders_round_trips", () => {
   const roster = { active: "k3x9q2ab", ids: ["main", "k3x9q2ab"] };
   assert.equal(saveRiders(storage, roster), true);
   assert.deepEqual(loadRiders(storage), roster);
+});
+
+const record = { salt: "c2FsdA==", hash: "aGFzaA==", iterations: 10 };
+
+test("setLock_keeps_the_record_for_that_rider_only", () => {
+  const roster = { active: "main", ids: ["main", "bbbbbbbb"] };
+  const locked = setLock(roster, "bbbbbbbb", record);
+  assert.equal(isLocked(locked, "bbbbbbbb"), true);
+  assert.equal(isLocked(locked, "main"), false);
+});
+
+test("setLock_for_an_unknown_rider_changes_nothing", () => {
+  const roster = { active: "main", ids: ["main"] };
+  assert.deepEqual(setLock(roster, "zzzzzzzz", record), roster);
+});
+
+test("clearLock_removes_the_record_and_leaves_no_empty_locks_behind", () => {
+  const locked = setLock({ active: "main", ids: ["main"] }, "main", record);
+  assert.deepEqual(clearLock(locked, "main"), { active: "main", ids: ["main"] });
+});
+
+test("saveRiders_then_loadRiders_keeps_the_locks", () => {
+  const storage = fakeStorage();
+  const roster = setLock({ active: "main", ids: ["main", "bbbbbbbb"] }, "bbbbbbbb", record);
+  saveRiders(storage, roster);
+  assert.deepEqual(loadRiders(storage), roster);
+});
+
+test("loadRiders_drops_damaged_locks_and_locks_of_unknown_riders", () => {
+  const stored = { active: "main", ids: ["main"], locks: { main: { salt: 1 }, ghost: record } };
+  assert.deepEqual(loadRiders(fakeStorage(JSON.stringify(stored))), { active: "main", ids: ["main"] });
+});
+
+test("removeRider_takes_that_riders_lock_with_it", () => {
+  const roster = setLock({ active: "main", ids: ["main", "bbbbbbbb"] }, "bbbbbbbb", record);
+  assert.equal(isLocked(removeRider(roster, "bbbbbbbb"), "bbbbbbbb"), false);
+});
+
+test("addRider_and_setActive_keep_existing_locks", () => {
+  const roster = setLock({ active: "main", ids: ["main"] }, "main", record);
+  assert.equal(isLocked(addRider(roster, sequence(...drawsFor("k3x9q2ab"))).roster, "main"), true);
+  assert.equal(isLocked(setActive({ ...roster, ids: ["main", "bbbbbbbb"] }, "bbbbbbbb"), "main"), true);
 });
