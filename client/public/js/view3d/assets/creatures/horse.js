@@ -12,11 +12,11 @@ export const horse = defineCreature({ id: "horse", name: "Horse", description: "
     for (const side of [-1, 1]) head.push(cone(0.06, 0.2, 4, coat, side * 0.1, 2.6, 1.7));
     head.push(box(0.22, 0.26, 0.2, mane, 0, 2.2, 2.35));
   }
-  const tail = [cone(0.12, 1, 6, mane).rotateX(Math.PI).translate(0, 1.1, -1.25)];
+  const tail = [cone(0.12, 1, 6, mane).rotateX(Math.PI).translate(0, 1.1, -1.05)];
   const legs = [[0.22, 0.62], [-0.22, 0.62], [0.22, -0.62], [-0.22, -0.62]].map(([x, z]) => {
     const parts = [box(0.15, 1.1, 0.15, coat, x, 0.65, z)];
     if (detail) parts.push(box(0.17, 0.14, 0.17, colour("#2a2522"), x, 0.07, z));
     return legAt(parts, [x, 1.2, z]);
   });
-  return { body, limbs: [limb(head, [0, 1.95, 0.85], "head"), limb(tail, [0, 1.6, -1.1], "tail"), ...legs] };
+  return { body, limbs: [limb(head, [0, 1.95, 0.85], "head"), limb(tail, [0, 1.6, -1], "tail"), ...legs] };
 });

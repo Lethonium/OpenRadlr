@@ -165,3 +165,53 @@ test("the sources of a creature never touch Math.random", async () => {
   const dir = new URL("../public/js/view3d/assets/creatures/", import.meta.url);
   for (const file of readdirSync(dir)) assert.ok(!readFileSync(new URL(file, dir), "utf8").includes("Math.random"), file);
 });
+
+test("every limb touches the body at rest", () => {
+  for (const id of IDS) {
+    for (const seed of SEEDS) {
+      const built = build(id, { seed });
+      built.body.computeBoundingBox();
+      const body = built.body.boundingBox.clone().expandByScalar(0.05);
+      for (const limb of built.limbs) {
+        limb.geometry.computeBoundingBox();
+        assert.ok(body.intersectsBox(limb.geometry.boundingBox), `${id} ${limb.swing} at ${limb.pivot.map((n) => n.toFixed(2))} floats off the body`);
+      }
+    }
+  }
+});
+
+test("every limb's pivot lies on or beside its own geometry", () => {
+  for (const id of IDS) {
+    const built = build(id);
+    for (const limb of built.limbs) {
+      limb.geometry.computeBoundingBox();
+      const box = limb.geometry.boundingBox.clone().expandByScalar(0.15);
+      assert.ok(box.containsPoint(new THREE.Vector3(...limb.pivot)), `${id} ${limb.swing} pivot ${limb.pivot.map((n) => n.toFixed(2))} is away from its geometry`);
+    }
+  }
+});
+
+/** Triangles of a geometry as bounding boxes. */
+function triangleBoxes(geometry) {
+  const position = geometry.attributes.position;
+  const boxes = [];
+  for (let i = 0; i + 2 < position.count; i += 3) {
+    const box = new THREE.Box3();
+    for (let k = 0; k < 3; k += 1) box.expandByPoint(new THREE.Vector3().fromBufferAttribute(position, i + k));
+    boxes.push(box);
+  }
+  return boxes;
+}
+
+test("each animal is one piece at rest: no part floats free of the rest", () => {
+  for (const id of IDS) {
+    const boxes = geometries(build(id)).flatMap(triangleBoxes).map((box) => box.expandByScalar(0.03));
+    const parent = boxes.map((_, i) => i);
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) if (boxes[i].intersectsBox(boxes[j])) parent[find(i)] = find(j);
+    }
+    const pieces = new Set(boxes.map((_, i) => find(i)));
+    assert.equal(pieces.size, 1, `${id} falls into ${pieces.size} pieces`);
+  }
+});
