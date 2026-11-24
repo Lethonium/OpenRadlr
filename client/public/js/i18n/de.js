@@ -533,6 +533,7 @@ export default {
   "training.next": "Als Nächstes: {label} {time} · {watts} W",
   "training.lastBlock": "Letzter Block",
   "view.needsWebgl": "3D braucht WebGL 2",
+  "quality.picked2d": "Dein Gerät läuft am besten mit der 2D-Ansicht. Im Menü kannst du zu 3D wechseln.",
   "view.unavailable": "3D-Ansicht auf diesem Gerät nicht verfügbar",
   "workout.buildingGym": "Das Gym wird aufgebaut…",
   "view.gymNeeds3d": "Das Gym braucht 3D (WebGL2), das dieses Gerät nicht hat. Timer und Ansagen funktionieren weiter.",

@@ -18,6 +18,7 @@ export const DEVICE_KEYS = [
   "openradlr.cockpit",
   "openradlr.cockpit.layout",
   "openride.quality",
+  "openride.qualityAuto",
 ];
 export const DEVICE_PREFIXES = ["openradlr.strava-upload."];
 export const RIDER_PREFIX = "openradlr.rider.";

@@ -533,6 +533,7 @@ export default {
   "training.next": "Next: {label} {time} · {watts} W",
   "training.lastBlock": "Last block",
   "view.needsWebgl": "3D needs WebGL 2",
+  "quality.picked2d": "Your device works best with the 2D view. You can switch to 3D in the menu.",
   "view.unavailable": "3D view unavailable on this device",
   "workout.buildingGym": "Building the gym…",
   "view.gymNeeds3d": "The gym needs 3D (WebGL2), which this device lacks. The timer and cues still work.",

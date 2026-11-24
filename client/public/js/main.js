@@ -120,6 +120,7 @@ import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
+import { adjustQuality, firstRunQuality } from "./view3d/qualityPick.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
@@ -155,6 +156,9 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+/** "1" while the stored quality was picked for the device and no ride has tested it yet. */
+const QUALITY_PROBE_FRAMES = 90;
+const QUALITY_AUTO_KEY = "openride.qualityAuto";
 /** Before seasons the look was a biome; a saved "winter" still opens in winter. */
 const BIOME_KEY = "openride.biome";
 const SEASON_KEY = "openride.season";
@@ -898,6 +902,45 @@ function openStartMenu() {
   app.infoTimer = setInterval(refresh, INFO_REFRESH_MS);
 }
 
+/** First run only: store a graphics level (or the 2D view) that suits this device; a stored choice stays. */
+function applyFirstRunQuality() {
+  const pick = firstRunQuality(
+    readSetting(QUALITY_KEY),
+    {
+      webgl2: isWebGl2Available(),
+      deviceMemory: globalThis.navigator?.deviceMemory,
+      saveData: Boolean(globalThis.navigator?.connection?.saveData),
+      coarsePointer: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches),
+    },
+    readSetting(VIEW_KEY),
+  );
+  if (!pick) return;
+  writeSetting(QUALITY_KEY, pick.quality);
+  if (pick.auto) writeSetting(QUALITY_AUTO_KEY, "1");
+  if (pick.view) writeSetting(VIEW_KEY, pick.view);
+  if (pick.notice) notify(t("quality.picked2d"));
+}
+
+/**
+ * The first 3D ride on an automatically picked level: after 90 frames its median
+ * frame time may step the level down (or to 2D). Runs once, then the pick is final.
+ */
+function probeFirstRide(time) {
+  if (readSetting(QUALITY_AUTO_KEY) !== "1" || app.viewMode !== "3d") return;
+  const probe = (app.qualityProbe ??= { last: null, frameMs: [] });
+  if (probe.last !== null && time - probe.last < 1) probe.frameMs.push((time - probe.last) * 1000);
+  probe.last = time;
+  if (probe.frameMs.length < QUALITY_PROBE_FRAMES) return;
+  writeSetting(QUALITY_AUTO_KEY, "0");
+  const next = adjustQuality(qualityLevel(readSetting(QUALITY_KEY)), probe.frameMs);
+  if (next === "2d") {
+    setViewMode("2d");
+    notify(t("quality.picked2d"));
+  } else {
+    setQuality(next);
+  }
+}
+
 /**
  * The menu's stage: map and profile of the picked route and, where the device
  * can afford it, the 3D island behind the menu. The ride's 3D canvas lives in
@@ -905,6 +948,7 @@ function openStartMenu() {
  */
 function initMenuStage() {
   initSeasonPicker();
+  applyFirstRunQuality();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
   const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -5370,7 +5414,10 @@ function initViews() {
   $("view-3d").addEventListener("click", () => setViewMode("3d"));
   $("view-2d").addEventListener("click", () => setViewMode("2d"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
-  $("quality-mode").addEventListener("click", () => setQuality(nextQuality(app.view3d.quality)));
+  $("quality-mode").addEventListener("click", () => {
+    writeSetting(QUALITY_AUTO_KEY, "0");
+    setQuality(nextQuality(app.view3d.quality));
+  });
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
   setViewMode("2d", { remember: false });
@@ -5802,6 +5849,7 @@ function frame() {
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
+  probeFirstRide(time);
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else {
