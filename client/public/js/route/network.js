@@ -71,6 +71,13 @@ export class RoadNetwork {
       geometry.edge = { id: e.id, from: e.from, to: e.to, type: e.type ?? "road", markers: e.markers ?? [] };
       this.edges.set(e.id, geometry);
     }
+    // Regions: hand-placed circles in the same coordinates as nodes (x east, y north).
+    this.regions = (file.regions ?? []).map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      center: [Number(r.x), -Number(r.y)],
+      radius: Number(r.radius),
+    }));
     this.routes = (file.routes ?? []).map((r) => ({ id: r.id, name: r.name, walk: r.walk ?? [] }));
   }
 
