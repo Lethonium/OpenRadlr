@@ -61,6 +61,14 @@ test("a dolphin jumps above the water and dives below it", () => {
   assert.ok(Math.min(...heights) < 0, "dives under it");
 });
 
+test("every animal mesh is drawn wherever the camera looks (instances spread over the world cannot be culled)", () => {
+  const layer = make("high");
+  const all = meshes(layer);
+  assert.ok(all.length > 0);
+  for (const mesh of all) assert.equal(mesh.frustumCulled, false, mesh.name);
+  layer.dispose();
+});
+
 test("only nearby animals are re-posed", () => {
   const layer = make("high");
   layer.setEnvironment(day);
