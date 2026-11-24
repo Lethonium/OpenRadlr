@@ -96,6 +96,8 @@ pub struct AppState {
     pub pair_codes: crate::pair_codes::PairCodes,
     /// Hosts and watchers of paired screens.
     pub screens: crate::screens::Screens,
+    /// The account service at `/id` (ADR 0032), if this server runs it.
+    pub id: Option<Arc<openradlr_id::service::IdService>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -117,6 +119,8 @@ pub struct InfoResponse {
     pub route: RouteSummary,
     pub routes: Vec<RouteSummary>,
     pub strava: StravaInfo,
+    /// Whether this server offers accounts at `/id` (ADR 0032).
+    pub account: bool,
     /// Server clock (Unix seconds), to read `events` against.
     pub now_s: f64,
     /// Scheduled events of all worlds, soonest start first.
@@ -298,6 +302,12 @@ pub struct RouteQuery {
 /// `headers` (see [`crate::headers`]) go on every response that doesn't set them itself.
 pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::HeaderName, String)]) -> Router {
     let client_requests = state.client_requests.clone();
+    let accounts = state.id.clone().map(|id| {
+        openradlr_id::http::router(id).layer(middleware::from_fn_with_state(
+            state.protection.trust_proxy,
+            tag_client_ip,
+        ))
+    });
     let router = Router::new()
         .route("/healthz", get(healthz))
         .route("/internal/metrics", get(metrics))
@@ -316,8 +326,12 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
             "/api/strava/upload",
             post(auth::upload).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
         )
-        .route("/api/strava/upload/{id}", get(auth::upload_status))
-        .with_state(state);
+        .route("/api/strava/upload/{id}", get(auth::upload_status));
+    let router = match accounts {
+        Some(accounts) => router.nest("/id", accounts),
+        None => router,
+    }
+    .with_state(state);
 
     let router = match static_dir {
         // Revalidate on every load (cheap: 304 when unchanged), so a deploy never
@@ -339,6 +353,19 @@ pub fn router(state: AppState, static_dir: Option<&Path>, headers: &[(header::He
         .layer(CompressionLayer::new().br(true).gzip(true))
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(client_requests, count_client_request))
+}
+
+/// Tells the account service who is asking, for its rate limits (behind a trusted proxy, from
+/// `X-Forwarded-For`, see [`client_ip`]).
+async fn tag_client_ip(State(trust_proxy): State<bool>, mut request: Request, next: Next) -> Response {
+    let peer = request.extensions().get::<ConnectInfo<SocketAddr>>().map(|info| info.0);
+    let forwarded_for = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok());
+    let ip = client_ip(peer, forwarded_for, trust_proxy);
+    request.extensions_mut().insert(openradlr_id::http::ClientIp(ip));
+    next.run(request).await
 }
 
 async fn count_client_request(State(stats): State<ClientRequests>, request: Request, next: Next) -> Response {
@@ -467,6 +494,7 @@ async fn info(State(state): State<AppState>) -> Json<InfoResponse> {
             enabled: state.strava.is_some(),
             required: state.strava.as_ref().is_some_and(|s| s.required),
         },
+        account: state.id.is_some(),
         now_s,
         events,
         studio: state.worlds.studio().map(|entry| StudioSummary::of(entry, now_s)),

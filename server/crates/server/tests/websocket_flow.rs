@@ -1395,3 +1395,38 @@ async fn every_connection_gets_its_own_challenge() {
     }
     assert_ne!(challenges[0], challenges[1]);
 }
+
+fn account_config(dir: &std::path::Path) -> Config {
+    Config {
+        id: Some(openradlr_server::config::IdConfig {
+            origin: "http://localhost:8080".into(),
+            smtp: None,
+        }),
+        data_dir: Some(dir.to_owned()),
+        secret_key: Some("0123456789abcdef0123".into()), // pragma: allowlist secret (a test placeholder)
+        ..test_config(0)
+    }
+}
+
+#[tokio::test]
+async fn a_server_with_accounts_says_so_and_serves_them_at_id() {
+    let dir = std::env::temp_dir().join(format!("openradlr-id-test-{}", std::process::id()));
+    let addr = start_server_with(account_config(&dir)).await;
+    let (_, info) = http_get(addr, "/api/info").await;
+    assert_eq!(serde_json::from_str::<Value>(&info).unwrap()["account"], true);
+    let (status, body) = http_get(addr, "/id/v1/me").await;
+    assert_eq!(
+        (status, serde_json::from_str::<Value>(&body).unwrap()["error"].clone()),
+        (401, "signed_out".into())
+    );
+    assert!(dir.join("id.sqlite").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_server_without_accounts_has_no_id_routes() {
+    let addr = start_server(0).await;
+    let (_, info) = http_get(addr, "/api/info").await;
+    assert_eq!(serde_json::from_str::<Value>(&info).unwrap()["account"], false);
+    assert_eq!(http_get(addr, "/id/v1/me").await.0, 404);
+}

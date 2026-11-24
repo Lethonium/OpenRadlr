@@ -5,6 +5,8 @@
 # Local configuration
 .env
 .env.dev
+# make dev-id: local accounts and their key
+/.data/
 
 # Editors and OS
 .idea/

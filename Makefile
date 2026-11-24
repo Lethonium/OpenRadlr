@@ -120,6 +120,10 @@ dev: ## Run the server locally with cargo on http://localhost:8080 (reads .env.d
 		OPENRADLR_STATIC_DIR=../client/public OPENRADLR_ROUTE_FILE=../routes/rolling-hills.json \
 		OPENRADLR_BIND=127.0.0.1:8080 RUST_LOG=$${RUST_LOG:-info,openradlr_server=debug} cargo run --bin openradlr-server
 
+.PHONY: dev-id
+dev-id: ## Like dev, with accounts on http://localhost:8090 (codes by mail with the OPENRADLR_SMTP_* settings in .env, else in the log)
+	sh tools/dev-id.sh
+
 .PHONY: test
 test: test-server test-client ## Run all tests
 
