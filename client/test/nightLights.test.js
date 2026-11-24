@@ -131,6 +131,21 @@ test("the lighthouse beam turns and shows only at night", () => {
   layer.dispose();
 });
 
+test("the lighthouse beam is a faint additive shaft that fades along its length and at its edges", () => {
+  const layer = createLandmarkLayer(plan, options());
+  const light = layer.landmarks.find((l) => l.kind === "lighthouse");
+  const material = light.beam.children[0].material;
+  assert.equal(material.isShaderMaterial, true, "a shader fades it");
+  assert.equal(material.blending, THREE.AdditiveBlending);
+  assert.equal(material.transparent, true);
+  assert.equal(material.depthWrite, false);
+  assert.equal(material.fog, true, "the shader reads the scene's fog");
+  assert.ok(material.uniforms.uOpacity.value <= 0.35, "faint even at the lamp");
+  assert.match(material.fragmentShader, /vAlong/, "fades along its length");
+  assert.match(material.fragmentShader, /vEdge/, "fades at its edges");
+  layer.dispose();
+});
+
 test("night lights dispose everything", () => {
   const tracker = createTracker();
   const layer = make("high", tracker.track);

@@ -18,10 +18,50 @@ const BALLOON_NEAR = 2;
 const BOB = Object.freeze({ height: 3, rate: 0.21, phase: 3 });
 /** The sails' turning speed, radians a second: 0.28 to 0.4 by mill. */
 const SAILS = Object.freeze({ base: 0.28, spread: 0.12 });
-/** The lighthouse beam: lantern height above the member's base, cone length and half-width, seconds a turn takes. */
-const BEAM = Object.freeze({ height: 28, length: 400, radius: 18, turn: 10, opacity: 0.16 });
+/** The lighthouse beam: lantern height above the member's base, cone length and half-width, seconds a turn takes, and its peak opacity at the lamp. */
+const BEAM = Object.freeze({ height: 28, length: 400, radius: 9, turn: 10, opacity: 0.18 });
 /** The building each landmark kind stands as. */
 const ASSET = Object.freeze({ lighthouse: "lighthouse", castle: "castle", seaArch: "seaArch", windmills: "windmill" });
+
+const BEAM_VERTEX = `
+  varying float vAlong; varying float vEdge;
+  uniform float uLength;
+  #include <fog_pars_vertex>
+  void main() {
+    vAlong = clamp(position.x / uLength, 0.0, 1.0);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vEdge = abs(dot(normalize(normalMatrix * normal), normalize(-mvPosition.xyz)));
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }`;
+const BEAM_FRAGMENT = `
+  varying float vAlong; varying float vEdge;
+  uniform vec3 uColor; uniform float uOpacity;
+  #include <fog_pars_fragment>
+  void main() {
+    float fade = pow(1.0 - vAlong, 2.0) * smoothstep(0.0, 0.9, vEdge);
+    #ifdef USE_FOG
+      fade *= exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
+    #endif
+    gl_FragColor = vec4(uColor * fade * uOpacity, 1.0);
+  }`;
+
+/**
+ * The beam's material: additive light that is strongest at the lamp, fades to nothing along the length (so there is
+ * no end cap) and towards the cone's silhouette (soft edges), and thins with the scene's fog instead of ignoring it.
+ */
+function beamMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uLength: { value: BEAM.length }, uColor: { value: new THREE.Color(0xfff2c0) }, uOpacity: { value: BEAM.opacity } }]),
+    vertexShader: BEAM_VERTEX,
+    fragmentShader: BEAM_FRAGMENT,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: true,
+  });
+}
 
 /**
  * Where a balloon is at `t` seconds on the clock, as [x, y, z]: round its loop, bobbing a few metres.
@@ -55,9 +95,9 @@ export function createLandmarkLayer(plan, { season = "summer", settings, uniform
     beam.name = "lighthouse-beam";
     beam.position.set(member.x, member.y + BEAM.height, member.z);
     beam.visible = false;
-    const material = own(new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: BEAM.opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    const material = own(beamMaterial());
     for (const turn of [0, Math.PI]) {
-      const cone = own(new THREE.ConeGeometry(BEAM.radius, BEAM.length, 16, 1, true));
+      const cone = own(new THREE.ConeGeometry(BEAM.radius, BEAM.length, 24, 1, true));
       cone.translate(0, -BEAM.length / 2, 0).rotateZ(Math.PI / 2).rotateY(turn);
       const mesh = new THREE.Mesh(cone, material);
       mesh.frustumCulled = false;
