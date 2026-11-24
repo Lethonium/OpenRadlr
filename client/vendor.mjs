@@ -4,8 +4,7 @@
 //
 // Three.js addons import the bare specifier `three`, which a page without an
 // import map cannot resolve, so the copies we take get that import rewritten to
-// a relative path to the vendored core. The list is empty today; step 3 of the
-// Three.js world adds the addons it needs.
+// a relative path to the vendored core. The list holds the addons the new world needs.
 //
 //   npm install three@<version>
 //   npm run vendor
@@ -20,8 +19,20 @@ const SOURCE = join(HERE, "node_modules", "three");
 const TARGET = join(HERE, "public", "vendor", "three");
 const CORE = "three.module.min.js";
 
-/** Addons to copy, relative to `three/examples/jsm`. Empty until step 3 needs one. */
-export const ADDONS = Object.freeze([]);
+/** Addons to copy, relative to `three/examples/jsm`: the post chain and geometry merging. */
+export const ADDONS = Object.freeze([
+  "postprocessing/EffectComposer.js",
+  "postprocessing/RenderPass.js",
+  "postprocessing/ShaderPass.js",
+  "postprocessing/MaskPass.js",
+  "postprocessing/Pass.js",
+  "postprocessing/UnrealBloomPass.js",
+  "postprocessing/OutputPass.js",
+  "shaders/CopyShader.js",
+  "shaders/LuminosityHighPassShader.js",
+  "shaders/OutputShader.js",
+  "utils/BufferGeometryUtils.js",
+]);
 
 /**
  * An addon's source with its `from 'three'` imports pointed at the vendored core.
