@@ -1,7 +1,7 @@
 /**
- * Dev-only plant workbench: every plant of the world kit on a turntable,
+ * Dev-only asset workbench: every plant, building and prop of the world kit on a turntable,
  * lit by the world's daylight and drawn through the same engine and post
- * chain. The asset list is `NATURE`; the options panel is built from each
+ * chain. The asset list is `WORKBENCH_ASSETS`; the options panel is built from each
  * asset's `meta.options`. Not loaded by the app: open `/workbench.html`,
  * optionally with `?asset=olive&season=autumn&time=dusk`.
  *
@@ -9,16 +9,15 @@
  * English on purpose (`// i18n-ok`), like the gallery's were: it is a dev page.
  */
 import * as THREE from "./three.js";
-import { NATURE } from "./view3d/assets/nature/index.js";
 import { engineFor } from "./view3d/engine/engine.js";
 import { QUALITY_LEVELS, qualitySettings } from "./view3d/quality.js";
 import { createWorldScene } from "./view3d/scene/worldScene.js";
 import { createTracker } from "./view3d/scene/tracker.js";
 import { TIME_PRESETS, environmentAt, resolvePreset } from "./world/daylight.js";
 import { SEASONS } from "./world/seasons.js";
-import { WORKBENCH_TIMES, workbenchState } from "./workbenchState.js";
+import { WORKBENCH_ASSETS, WORKBENCH_TIMES, workbenchState } from "./workbenchState.js";
 
-const IDS = Object.keys(NATURE);
+const IDS = Object.keys(WORKBENCH_ASSETS);
 const GROUND = Object.freeze({ spring: "#7fae4f", summer: "#7aa24a", autumn: "#9a9a50", winter: "#e9eef2" });
 const TURN_SPEED = 0.35;
 const el = (id) => document.getElementById(id);
@@ -45,7 +44,7 @@ let readyFrames = 0;
 function build(refit) {
   asset?.dispose();
   if (asset) world.scene.remove(asset.object);
-  asset = NATURE[state.asset].create({ ...state.options, season: state.season, track: tracker.track, uniforms: world.uniforms });
+  asset = WORKBENCH_ASSETS[state.asset].create({ ...state.options, season: state.season, track: tracker.track, uniforms: world.uniforms });
   world.scene.add(asset.object);
   asset.object.updateMatrixWorld(true);
   if (refit) {
@@ -130,7 +129,7 @@ function renderControls() {
 function renderOptions() {
   const box = el("options");
   box.replaceChildren();
-  const meta = NATURE[state.asset].meta;
+  const meta = WORKBENCH_ASSETS[state.asset].meta;
   const description = document.createElement("p");
   description.className = "wb-desc";
   description.textContent = meta.description;
@@ -143,7 +142,7 @@ function renderList() {
   list.replaceChildren(
     ...IDS.map((id) => {
       const button = document.createElement("button");
-      button.textContent = NATURE[id].meta.name;
+      button.textContent = WORKBENCH_ASSETS[id].meta.name;
       button.classList.toggle("on", id === state.asset);
       button.addEventListener("click", () => api.select(id));
       return button;
@@ -156,7 +155,7 @@ function renderList() {
 const api = {
   ready: false,
   select(id) {
-    if (!NATURE[id]) return;
+    if (!WORKBENCH_ASSETS[id]) return;
     state.asset = id;
     state.options = {};
     renderList();

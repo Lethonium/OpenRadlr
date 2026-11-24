@@ -7,7 +7,7 @@
  * 1.5 m below the origin so buildings sit cleanly on sloping ground.
  */
 import { MeshBuilder } from "./meshBuilder.js";
-import { add, cross, normalize, placement, scale, sub } from "./math.js";
+import { add, cross, normalize, scale, sub } from "./math.js";
 
 export const PALETTE = Object.freeze({
   walls: [
@@ -77,103 +77,6 @@ export function gableRoof(m, w, d, h, rise, color, wallColor, overhang = 0.45) {
   }
 }
 
-/** Windows on one wall: `normal` is the outward wall direction (±X or ±Z). */
-function windows(m, w, d, floors, normal, color) {
-  const along = normal[0] !== 0 ? d : w;
-  const count = Math.max(1, Math.floor((along - 1.5) / 2.4));
-  for (let f = 0; f < floors; f += 1) {
-    const y = 1.6 + f * 2.8;
-    for (let i = 0; i < count; i += 1) {
-      const t = (i + 0.5) / count - 0.5;
-      const offset = t * (along - 1.2);
-      const pos = normal[0] !== 0 ? [(normal[0] * w) / 2 + normal[0] * 0.04, y, offset] : [offset, y, (normal[2] * d) / 2 + normal[2] * 0.04];
-      m.box(pos, normal[0] !== 0 ? [0.08, 1.0, 0.85] : [0.85, 1.0, 0.08], color);
-    }
-  }
-}
-
-/**
- * A house: `w` wide (along the road), `d` deep, `floors` storeys.
- * @param {{w: number, d: number, floors: number, wall: number[], roof: number[], chimney?: boolean}} spec
- */
-export function buildHouse({ w, d, floors, wall, roof, chimney = false }) {
-  const m = new MeshBuilder();
-  const h = floors * 2.8 + 0.3;
-  m.box([0, (h - 1.5) / 2, 0], [w, h + 1.5, d], wall);
-  gableRoof(m, w, d, h, d * 0.42, roof, wall);
-  m.box([w * 0.18, 1.05, -d / 2 - 0.04], [1.0, 2.1, 0.1], PALETTE.door);
-  for (const normal of [
-    [0, 0, -1],
-    [0, 0, 1],
-    [1, 0, 0],
-    [-1, 0, 0],
-  ]) {
-    windows(m, w, d, floors, normal, PALETTE.window);
-  }
-  if (chimney) m.box([-w * 0.25, h + d * 0.3, d * 0.12], [0.6, d * 0.42, 0.6], PALETTE.stoneDark);
-  return m.build();
-}
-
-/** A village church: nave with a tower and spire facing the road. */
-export function buildChurch() {
-  const m = new MeshBuilder();
-  const w = 9;
-  const d = 17;
-  const h = 7.5;
-  // Nave: modelled with its ridge along X, then turned so the ridge runs away from the road.
-  const nave = new MeshBuilder();
-  nave.box([0, (h - 1.5) / 2, 0], [d, h + 1.5, w], PALETTE.walls[0]);
-  gableRoof(nave, d, w, h, 4.2, PALETTE.roofs[2], PALETTE.walls[0], 0.5);
-  for (let i = 0; i < 4; i += 1) {
-    for (const side of [-1, 1]) nave.box([-5.4 + i * 3.6, 3.4, side * (w / 2 + 0.04)], [1.0, 2.6, 0.08], PALETTE.window);
-  }
-  m.append(nave.build(), placement([0, 0, 1], Math.PI / 2));
-  // Tower with clock and spire at the front.
-  const tz = 1 - d / 2 - 2.2;
-  m.box([0, (16 - 1.5) / 2, tz], [4.4, 16 + 1.5, 4.4], PALETTE.walls[1]);
-  m.cone([0, 16, tz], 3.3, 9, PALETTE.roofs[2], 4, Math.PI / 4);
-  m.box([0, 13, tz - 2.24], [1.6, 1.6, 0.08], PALETTE.white);
-  m.box([0, 13.2, tz - 2.3], [0.1, 0.65, 0.04], PALETTE.black);
-  m.box([0, 1.4, tz - 2.24], [1.4, 2.8, 0.1], PALETTE.door);
-  return m.build();
-}
-
-export function buildBarn() {
-  const m = new MeshBuilder();
-  const w = 15;
-  const d = 10;
-  const h = 5;
-  m.box([0, (h - 1.5) / 2, 0], [w, h + 1.5, d], PALETTE.barn);
-  gableRoof(m, w, d, h, 4.2, PALETTE.barnRoof, PALETTE.barn, 0.6);
-  m.box([0, 1.9, -d / 2 - 0.05], [4.2, 3.8, 0.1], PALETTE.door);
-  m.box([0, 1.9, -d / 2 - 0.09], [0.15, 3.8, 0.06], PALETTE.white);
-  return m.build();
-}
-
-export function buildSilo() {
-  const m = new MeshBuilder();
-  m.cylinder([0, -1, 0], 2.3, 13, PALETTE.silo, 12, 2.3, false);
-  m.cone([0, 12, 0], 2.4, 2.2, PALETTE.metal, 12);
-  return m.build();
-}
-
-/** A round hay bale lying on its side (axis along X). */
-export function buildHayBale() {
-  const m = new MeshBuilder();
-  m.wheel([0, 0.7, 0], 0.72, 1.25, PALETTE.hay, 10);
-  return m.build();
-}
-
-/** Street lamp at the kerb; the arm reaches over the road along −Z. */
-export function buildStreetLamp() {
-  const pole = new MeshBuilder();
-  pole.cylinder([0, 0, 0], 0.08, 5.2, PALETTE.pole, 6, 0.06);
-  pole.segment([0, 5.1, 0], [0, 5.3, -1.3], 0.06, 0.06, PALETTE.pole);
-  const head = new MeshBuilder();
-  head.box([0, 5.18, -1.45], [0.32, 0.12, 0.55], PALETTE.lamp);
-  return { pole: pole.build(), head: head.build() };
-}
-
 /** Warning triangle sign on a post, facing −Z. */
 export function buildWarningSign() {
   const post = new MeshBuilder();
@@ -195,64 +98,6 @@ export function buildVillageSign() {
   face.box([0, 1.75, -0.08], [1.48, 0.58, 0.03], PALETTE.yellow);
   face.box([0, 1.75, -0.1], [1.0, 0.12, 0.02], PALETTE.black);
   return { post: post.build(), face: face.build() };
-}
-
-/** Wind turbine tower and nacelle; the rotor is a separate, spinning mesh. */
-export function buildTurbineTower(height = 62) {
-  const m = new MeshBuilder();
-  m.cylinder([0, -2, 0], 2.1, height + 2, PALETTE.white, 10, 1.2);
-  m.box([0.6, height + 1.2, 0], [7, 2.6, 2.6], PALETTE.white);
-  return m.build();
-}
-
-/** Three-bladed rotor in the YZ plane, spinning around X; hub at the origin. */
-export function buildRotor(radius = 24) {
-  const m = new MeshBuilder();
-  m.ellipsoid([0, 0, 0], [1.6, 1.1, 1.1], PALETTE.white, 3, 8);
-  for (let i = 0; i < 3; i += 1) {
-    const angle = (i / 3) * Math.PI * 2;
-    const tip = [0, Math.cos(angle) * radius, Math.sin(angle) * radius];
-    const mid = [0, Math.cos(angle + 0.04) * radius * 0.35, Math.sin(angle + 0.04) * radius * 0.35];
-    m.segment([0, 0, 0], mid, 0.35, 1.6, PALETTE.white);
-    m.segment(mid, tip, 0.25, 0.9, PALETTE.white);
-  }
-  return m.build();
-}
-
-export function buildCow(brown = false) {
-  const m = new MeshBuilder();
-  const coat = brown ? PALETTE.cowBrown : PALETTE.cowWhite;
-  m.box([0, 1.15, 0], [0.85, 0.95, 2.0], coat);
-  if (!brown) {
-    m.box([0.43, 1.2, 0.3], [0.04, 0.5, 0.7], PALETTE.dark);
-    m.box([-0.43, 1.1, -0.4], [0.04, 0.45, 0.6], PALETTE.dark);
-  }
-  m.box([0, 1.3, -1.2], [0.5, 0.55, 0.65], coat);
-  m.box([0, 1.15, -1.55], [0.42, 0.3, 0.12], PALETTE.skin);
-  for (const [x, z] of [
-    [-0.3, -0.75],
-    [0.3, -0.75],
-    [-0.3, 0.75],
-    [0.3, 0.75],
-  ]) {
-    m.box([x, 0.38, z], [0.18, 0.8, 0.18], coat);
-  }
-  return m.build();
-}
-
-export function buildSheep() {
-  const m = new MeshBuilder();
-  m.ellipsoid([0, 0.75, 0], [0.45, 0.4, 0.65], PALETTE.sheep, 3, 7);
-  m.box([0, 0.85, -0.68], [0.24, 0.28, 0.3], PALETTE.dark);
-  for (const [x, z] of [
-    [-0.2, -0.35],
-    [0.2, -0.35],
-    [-0.2, 0.35],
-    [0.2, 0.35],
-  ]) {
-    m.box([x, 0.25, z], [0.09, 0.5, 0.09], PALETTE.dark);
-  }
-  return m.build();
 }
 
 /** A spectator facing −Z. The shirt is tinted per person (alpha = 1). */

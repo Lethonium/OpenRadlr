@@ -1,8 +1,8 @@
 /**
  * Builds the static 3D world for a route: road, verge, lane markings, posts,
  * the ground as grids (an island: fine over the land, coarse out to the
- * horizon; the main thread tiles them, see scene/terrainLayer.js), arches and far-off
- * islands (the plants are the scene's layers). The sea
+ * horizon; the main thread tiles them, see scene/terrainLayer.js) and arches (the plants, towns, farms,
+ * landmarks and far islands are the scene's layers). The sea
  * and the sky are scene layers, not meshes of the world.
  * Everything is derived deterministically from the route files (geometry +
  * seeds), so every client sees the same world. Routes on one shared map
@@ -18,11 +18,8 @@ import {
   buildBikeCafe,
   buildOutdoorGym,
   studioSite,
-  buildFarms,
   buildRoadside,
   buildSpectators,
-  buildVillage,
-  buildWindTurbines,
 } from "./features.js";
 import { COAST } from "../world/island.js";
 import {
@@ -41,7 +38,6 @@ import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "../world/zones.js";
 import { add, normalize, scale } from "./math.js";
-import { seededRandom } from "../world/noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
 import { planWorld } from "../world/plan/index.js";
@@ -148,38 +144,6 @@ export function buildArches(route, { biome = temperate } = {}) {
 }
 
 /**
- * Far-off islands on the horizon, out at sea around the map's island: a few
- * hazy rocky hills, some in small groups.
- */
-export function buildFarIslands(route, terrain, { count = 11, distance = 1300, biome = temperate } = {}) {
-  const random = seededRandom((terrain.seed ?? route.seed >>> 0) ^ 0x3a7);
-  const mesh = new MeshBuilder();
-  const island = terrain.island;
-  const [cx, cz] = island?.center ?? terrain.index.center;
-  const sea = terrain.seaLevel ?? waterLevel(terrain.index);
-  for (let i = 0; i < count; i += 1) {
-    const angle = ((i + random() * 0.6) / count) * Math.PI * 2;
-    const coast = island ? island.radiusAt(angle) : 1500;
-    const far = coast + distance + random() * 2400;
-    const hills = 1 + Math.floor(random() * 3);
-    for (let h = 0; h < hills; h += 1) {
-      const height = (h === 0 ? 120 : 50) + random() * (h === 0 ? 260 : 110);
-      const radius = height * (1.6 + random() * 0.8);
-      const a = angle + (random() - 0.5) * 0.08;
-      const d = far + radius + random() * 300;
-      const x = cx + Math.cos(a) * d;
-      const z = cz + Math.sin(a) * d;
-      const color = random() < 0.5 ? biome.farIsland : biome.farIslandDark;
-      // A rounded hump, mostly under water, with a rocky top on the taller ones.
-      const depth = height * 0.4;
-      mesh.ellipsoid([x, sea - depth, z], [radius, height + depth, radius * (0.55 + random() * 0.4)], color, 5, 9, random() * Math.PI);
-      if (height > 220) mesh.cone([x, sea + height * 0.55, z], radius * 0.28, height * 0.62, biome.rock, 6, random() * Math.PI);
-    }
-  }
-  return mesh.build();
-}
-
-/**
  * What a camera flying over the map needs to know, as plain data: the
  * island's centre and size, the sea level, and a coarse height grid so it
  * never flies into a hill.
@@ -260,15 +224,15 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * Builds the whole world for a route and the `others` on its map, or, given
  * the map's road `network` (#26), for the route on that network.
  *
- * Shared things (terrain, rivers, villages, farms, trees) are built for all
+ * Shared things (terrain, rivers, the plan) are built for all
  * routes in a fixed order, so the world looks the same whichever route you
  * ride; markers, arches, spectators and signs belong to the ridden route.
  * With a network they are built per road instead, so a road several routes
  * share is decorated once, and every café of the map gets its café.
  *
  * Returns chunked groups (drawn and shadowed only near the camera/rider),
- * always-drawn meshes (horizon, far islands, arches), blended meshes (sea,
- * rivers) and dynamic objects the view animates (turbine rotors, spectators).
+ * always-drawn meshes (arches), blended meshes (sea,
+ * rivers) and dynamic objects the view animates (spectators).
  */
 export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
@@ -346,11 +310,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const avoid = (x, z, radius = 0) => nearRiver(x, z, radius) || terrain.height(x, z) < ground.water + 2.5 || nearRoad(x, z, radius);
   const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
 
-  for (const r of ordered) {
-    for (const village of zonesOf.get(r).villages) {
-      buildVillage(r, terrain, village, { structures: chunks.structures, bright: chunks.bright, occupancy, seed: r.seed >>> 0, avoid, biome });
-    }
-  }
   // The bike café where rides start, before anything else claims the spot
   // (one for all routes that start at the same place). A network has its
   // cafés as places: each gets one, beside the ridden route where it starts.
@@ -379,18 +338,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
   }
-  // Route files: seven farms each. Network roads: about one per kilometre.
-  const farmsOn = (r) => (network ? Math.max(1, Math.round(r.length / 1000)) : undefined);
-  for (const r of ordered) buildFarms(r, terrain, { structures: chunks.structures, occupancy, seed: r.seed >>> 0, count: farmsOn(r), lakeLevel: ground.water, avoid, biome });
-  const rotors = buildWindTurbines(route, terrain, {
-    structures: chunks.structures,
-    occupancy,
-    seed,
-    bounds: ground.bounds,
-    lakeLevel: ground.water,
-    avoid,
-    biome,
-  });
   const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // The crowd's two poses are biome models like every other shape; the view
   // only alternates them (and adds the hop) while drawing.
@@ -399,6 +346,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     const { villages, cliffs } = zonesOf.get(r);
     buildRoadside(r, terrain, {
       cliffs,
+      villages,
       structures: chunks.structures,
       bright: chunks.bright,
       markers: r === route,
@@ -431,12 +379,10 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     meshes: {
       arches: buildArches(route, { biome }),
-      islands: buildFarIslands(route, terrain, { biome }),
     },
     weather: buildWeather(terrain, { biome }),
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
-    rotors,
     spectators,
     spectatorMeshes,
   };

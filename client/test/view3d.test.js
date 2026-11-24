@@ -336,10 +336,9 @@ function gymView(gyms, biome = "temperate", weather = null, renderer = new StubR
   const route = squareRoute();
   const world = {
     biome,
-    meshes: { islands: emptyMesh(), arches: emptyMesh() },
+    meshes: { arches: emptyMesh() },
     chunks: { scenery: [], structures: [] },
     weather,
-    rotors: [],
     spectators: [],
     gyms,
     studio,
@@ -919,9 +918,12 @@ test("a bot rides in its team's kit; one without a known team in the bot colour"
 test("a world without a studio site has no studio and ignores studio riders", () => {
   const { view, renderer } = gymView([]);
   view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 1, colors });
+  const without = renderer.draws.length;
+  renderer.draws.length = 0;
   view.render({ riders: [{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }], myId: null, timeS: 1, colors });
   assert.equal(view.studioSite, null);
-  assert.equal(renderer.draws.length > 0, true);
+  assert.equal(renderer.draws.length, without, "a studio rider adds nothing without a studio");
 });
 
 test("a world with a studio site draws the building and its riders", () => {
@@ -1010,7 +1012,7 @@ function worldView({ timeMode = "day", sideView = null } = {}) {
   const renderer = new StubRenderer();
   renderer.calls = log;
   const gym = testGym();
-  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { islands: emptyMesh(), arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, rotors: [], spectators: [], gyms: [gym] };
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, spectators: [], gyms: [gym] };
   const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
   const view = new View3D(canvas, null, squareRoute(), world, { renderer, engine });
   view.setTimeMode(timeMode);

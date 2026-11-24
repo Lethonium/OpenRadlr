@@ -11,18 +11,9 @@
 import {
   GYM_SIGN,
   PALETTE,
-  buildBarn,
   buildCafe,
-  buildChurch,
-  buildCow,
-  buildHayBale,
-  buildHouse,
   buildOutdoorGymModel,
-  buildSheep,
-  buildSilo,
   buildSpectator,
-  buildStreetLamp,
-  buildTurbineTower,
   buildVillageSign,
   buildWarningSign,
 } from "../structures.js";
@@ -40,8 +31,6 @@ export const COLORS = Object.freeze({
   climb: [0.86, 0.3, 0.3],
   sprint: [0.3, 0.7, 0.95],
   post: [0.92, 0.92, 0.92],
-  farIsland: [0.4, 0.46, 0.4],
-  farIslandDark: [0.45, 0.45, 0.42],
   cloud: [1, 1, 1, 1], // tinted by the time of day
   water: [0.16, 0.42, 0.56],
   river: [0.22, 0.45, 0.6],
@@ -100,21 +89,11 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
 
 /** Buildings and props: a biome swaps these for its own shapes and skins. */
 const models = Object.freeze({
-  house: buildHouse,
-  church: buildChurch,
-  barn: buildBarn,
-  silo: buildSilo,
-  bale: buildHayBale,
-  lamp: buildStreetLamp,
   warning: buildWarningSign,
   villageSign: buildVillageSign,
-  animal1: () => buildCow(false),
-  animal2: () => buildCow(true),
-  animal3: buildSheep,
   cafe: buildCafe,
   gym: buildOutdoorGymModel,
   gymSign: GYM_SIGN,
-  turbine: buildTurbineTower,
 });
 
 export const temperate = Object.freeze({
@@ -165,8 +144,6 @@ export const temperate = Object.freeze({
       segments: Object.freeze([5, 10]),
     }),
   }),
-  farIsland: COLORS.farIsland,
-  farIslandDark: COLORS.farIslandDark,
   rock: COLORS.rock,
   sand: SAND,
   /** Colours of the 2D map's symbols: buildings and their outlines (0–1 RGB like the rest). */

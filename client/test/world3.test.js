@@ -7,7 +7,7 @@ import { Occupancy, buildRoadside } from "../public/js/view3d/features.js";
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/rivers.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
-import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
+import { buildSpectator } from "../public/js/view3d/structures.js";
 import { inStretch, resolveZones } from "../public/js/world/zones.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
 import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
@@ -92,7 +92,7 @@ test("chunked meshes split by tile and keep every triangle", () => {
   for (const target of [chunked, plain]) {
     target.box([10, 0, 10], [2, 2, 2], [1, 0, 0]);
     target.box([250, 0, 10], [2, 2, 2], [0, 1, 0]);
-    target.append(buildRotor(5), placement([450, 0, 40], 0.3));
+    target.append(buildSpectator(true), placement([450, 0, 40], 0.3));
   }
   const chunks = chunked.build();
   assert.equal(chunks.length, 3);
@@ -120,20 +120,7 @@ test("occupancy blocks overlapping circles only", () => {
 
 // --- structures ---------------------------------------------------------------
 
-test("houses, churches and spectators produce sensible models", () => {
-  const house = buildHouse({ w: 8, d: 7, floors: 2, wall: PALETTE.walls[0], roof: PALETTE.roofs[0], chimney: true });
-  let top = -Infinity;
-  let bottom = Infinity;
-  for (let i = 1; i < house.positions.length; i += 3) {
-    top = Math.max(top, house.positions[i]);
-    bottom = Math.min(bottom, house.positions[i]);
-  }
-  assert.ok(top > 7 && top < 12, `roof height ${top}`);
-  close(bottom, -1.5, 1e-6);
-  const church = buildChurch();
-  let spire = -Infinity;
-  for (let i = 1; i < church.positions.length; i += 3) spire = Math.max(spire, church.positions[i]);
-  assert.ok(spire > 22, "the church tower is the village landmark");
+test("the crowd's two poses have the same vertex count", () => {
   const up = buildSpectator(true);
   const down = buildSpectator(false);
   assert.equal(up.vertexCount, down.vertexCount);
@@ -166,12 +153,10 @@ test("the river crosses the road only at the bridge, below it and above the lake
   assert.ok(world.rivers.bridges.vertexCount > 0, "a bridge carries the road");
 });
 
-test("the world has a village, farms, turbines and spectators off the road", () => {
+test("the world has village boards, lamps and spectators off the road", () => {
   const halfRoad = roadHalfWidth(route.lanes);
   assert.ok(world.chunks.structures.length > 5);
   assert.ok(world.chunks.bright.length > 0, "lamp heads and sign faces");
-  assert.ok(world.rotors.length >= 3, "a row of turbines");
-  for (const rotor of world.rotors) assert.ok(world.terrain.index.farDistance(rotor.hub[0], rotor.hub[2]) > 170);
   assert.ok(world.spectators.length >= 32);
   for (const person of world.spectators) {
     const d = world.terrain.distanceToRoad(person.position[0], person.position[2]);
@@ -182,7 +167,7 @@ test("the world has a village, farms, turbines and spectators off the road", () 
 
 test("the world is deterministic", () => {
   const again = buildWorld(riversideFlats());
-  assert.deepEqual(again.rotors.map((r) => r.hub), world.rotors.map((r) => r.hub));
+  assert.deepEqual(again.plan.turbines, world.plan.turbines);
   assert.deepEqual(again.spectators.map((p) => p.position), world.spectators.map((p) => p.position));
   assert.equal(again.chunks.structures.length, world.chunks.structures.length);
 });
@@ -580,7 +565,7 @@ test("the map world looks the same whichever route you ride", () => {
   // From a track, the other way round from the road the world was built from.
   const fromTrack = buildWorld(tracks[1], { network, others: [...valley, ...tracks] });
   assert.deepEqual(fromTrack.ground.near.heights, mapWorld.ground.near.heights, "ground");
-  assert.deepEqual(fromTrack.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
+  assert.deepEqual(fromTrack.plan.turbines, mapWorld.plan.turbines, "turbines");
   // Only the ridden route has arches and spectators.
   assert.notDeepEqual(fromTrack.spectators.map((p) => p.position), mapWorld.spectators.map((p) => p.position));
 });
@@ -602,7 +587,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "plan", "rivers", "roads", "rotors", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "ground", "gyms", "meshes", "overview", "plan", "rivers", "roads", "season", "spectatorMeshes", "spectators", "studio", "weather"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));
@@ -635,7 +620,7 @@ test("without workers the scene is built in place, and a failing worker falls ba
 });
 
 test("a worker's scene is used as it arrives", async () => {
-  const scene = { meshes: {}, chunks: {}, rotors: [], spectators: [] };
+  const scene = { meshes: {}, chunks: {}, spectators: [] };
   const worker = {
     postMessage(message) {
       assert.equal(message.route.id, "tiny");

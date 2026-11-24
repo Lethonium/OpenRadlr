@@ -1,10 +1,10 @@
 /**
- * World features placed along a route: river with a bridge, village, farms
- * with animals, wind turbines, spectators, guard rails and signs.
+ * World features placed along a route: spectators, guard rails, signs, village name boards, the café, the
+ * outdoor gym and the studio's site. (Towns, farms, turbines, landmarks and far islands are scene layers.)
  *
  * All placement is deterministic (route geometry + seed). Builders write into
  * mesh targets passed in (usually chunked), and return lists of dynamic
- * objects (turbine rotors, spectators) that the view animates per frame.
+ * objects (spectators) that the view animates per frame.
  */
 import { CROWD } from "./crowd.js";
 import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
@@ -12,8 +12,6 @@ import { seededRandom } from "../world/noise.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
 
-export const PAVEMENT = 2.4;
-export const WIND = normalize([1, 0, 0.35]);
 
 // ----------------------------------------------------------------- spatial ---
 
@@ -42,248 +40,34 @@ export class Occupancy {
   }
 }
 
-// ----------------------------------------------------------------- village ---
+// ------------------------------------------------------------ shared models ---
 
-const houseCaches = new Map();
-function houseVariant(biome, index) {
-  let cache = houseCaches.get(biome.id);
-  if (!cache) {
-    cache = new Map();
-    houseCaches.set(biome.id, cache);
-  }
-  if (!cache.has(index)) {
-    const random = seededRandom(9001 + index);
-    const pick = (list) => list[Math.floor(random() * list.length)];
-    cache.set(index, {
-      mesh: biome.models.house({
-        w: 7 + random() * 3.5,
-        d: 6 + random() * 3,
-        floors: random() < 0.6 ? 2 : random() < 0.5 ? 1 : 3,
-        wall: pick(biome.palette.walls),
-        roof: pick(biome.palette.roofs),
-        chimney: random() < 0.6,
-      }),
-    });
-  }
-  return cache.get(index).mesh;
-}
-const HOUSE_VARIANTS = 14;
+/** Metres from the road's edge to a village name board. */
+const BOARD_SETBACK = 3.2;
 
 const modelsByBiome = new Map();
 function sharedModels(biome) {
   let models = modelsByBiome.get(biome.id);
   if (!models) {
-    models = {
-      church: biome.models.church(),
-      barn: biome.models.barn(),
-      silo: biome.models.silo(),
-      bale: biome.models.bale(),
-      lamp: biome.models.lamp(),
-      warning: biome.models.warning(),
-      villageSign: biome.models.villageSign(),
-      animal1: biome.models.animal1(),
-      animal2: biome.models.animal2(),
-      animal3: biome.models.animal3(),
-    };
+    models = { warning: biome.models.warning(), villageSign: biome.models.villageSign() };
     modelsByBiome.set(biome.id, models);
   }
   return models;
 }
 
-/** Lowest terrain height under a rectangular footprint (so nothing floats). */
-function groundUnder(terrain, center, yaw, w, d) {
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  let lowest = Infinity;
-  for (const [lx, lz] of [
-    [-w / 2, -d / 2],
-    [w / 2, -d / 2],
-    [-w / 2, d / 2],
-    [w / 2, d / 2],
-    [0, 0],
-  ]) {
-    const x = center[0] + lx * c + lz * s;
-    const z = center[2] - lx * s + lz * c;
-    lowest = Math.min(lowest, terrain.height(x, z));
-  }
-  return lowest;
-}
-
-/**
- * A village along `zone`: pavements, houses on both sides facing the road,
- * a church, street lamps and name boards at both ends.
- */
-export function buildVillage(route, terrain, zone, { structures, bright, occupancy, seed, avoid = () => false, biome = temperate }) {
-  const random = seededRandom(seed ^ Math.round(zone.from * 7));
+/** The village name boards at both ends of each zone, facing approaching riders. */
+function buildVillageSigns(route, villages, terrain, { structures, bright, biome }) {
   const half = roadHalfWidth(route.lanes);
   const m = sharedModels(biome);
-  const palette = biome.palette;
-  const houses = [];
-
-  // Pavements with kerbs, covering the verge.
-  for (let d = zone.from; d < zone.to; d += 4) {
-    const f0 = roadFrame(route, d);
-    const f1 = roadFrame(route, Math.min(zone.to, d + 4));
-    for (const side of [-1, 1]) {
-      const at = (f, o, y) => add(add(f.center, scale(f.right, side * o)), [0, y, 0]);
-      const inner = half + 0.02;
-      const outer = half + PAVEMENT;
-      structures.triangleFacing(at(f0, inner, 0.14), at(f0, outer, 0.14), at(f1, outer, 0.14), palette.pavement, [0, 1, 0]);
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, outer, 0.14), at(f1, inner, 0.14), palette.pavement, [0, 1, 0]);
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.14), at(f1, inner, 0.0), palette.kerb, scale(f0.right, -side));
-      structures.triangleFacing(at(f0, inner, 0.14), at(f1, inner, 0.0), at(f0, inner, 0.0), palette.kerb, scale(f0.right, -side));
-      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, 0.14), at(f1, outer, -0.8), palette.kerb, scale(f0.right, side));
-      structures.triangleFacing(at(f0, outer, 0.14), at(f1, outer, -0.8), at(f0, outer, -0.8), palette.kerb, scale(f0.right, side));
-    }
-  }
-
-  // Church in the middle on the right.
-  const middle = (zone.from + zone.to) / 2;
-  const cf = roadFrame(route, middle);
-  const churchPos = add(cf.center, scale(cf.right, half + PAVEMENT + 15));
-  if (!avoid(churchPos[0], churchPos[2], 16)) {
-    const yaw = yawFor(scale(cf.right, -1));
-    const y = groundUnder(terrain, churchPos, yaw, 10, 22);
-    structures.append(m.church, placement([churchPos[0], y, churchPos[2]], yaw));
-    occupancy.add(churchPos[0], churchPos[2], 18);
-  }
-
-  // Houses on both sides.
-  for (const side of [-1, 1]) {
-    let d = zone.from + 8 + random() * 6;
-    while (d < zone.to - 6) {
+  for (const zone of villages) {
+    for (const d of [zone.from, zone.to]) {
       const f = roadFrame(route, d);
-      const variant = Math.floor(random() * HOUSE_VARIANTS);
-      const depth = 9;
-      const setback = half + PAVEMENT + 2.5 + random() * 3.5 + depth / 2;
-      const pos = add(f.center, scale(f.right, side * setback));
-      const nearChurch = side > 0 && Math.abs(d - middle) < 17;
-      if (!nearChurch && random() < 0.88 && !avoid(pos[0], pos[2], 7) && !occupancy.blocked(pos[0], pos[2], 5)) {
-        const yaw = yawFor(scale(f.right, -side));
-        const y = groundUnder(terrain, pos, yaw, 11, 10);
-        structures.append(houseVariant(biome, variant), placement([pos[0], y, pos[2]], yaw));
-        occupancy.add(pos[0], pos[2], 7);
-        houses.push(pos);
-      }
-      d += 13 + random() * 7;
+      const pos = add(f.center, scale(f.right, half + BOARD_SETBACK));
+      const model = placement([pos[0], terrain.height(pos[0], pos[2]), pos[2]], yawFor(scale(f.forward, -1)));
+      structures.append(m.villageSign.post, model);
+      bright.append(m.villageSign.face, model);
     }
   }
-
-  // Street lamps on alternating sides; heads go into the "bright" mesh.
-  let lampSide = 1;
-  for (let d = zone.from + 6; d < zone.to; d += 26) {
-    const f = roadFrame(route, d);
-    const pos = add(f.center, scale(f.right, lampSide * (half + PAVEMENT - 0.3)));
-    const model = placement([pos[0], f.center[1] + 0.14, pos[2]], yawFor(scale(f.right, -lampSide)));
-    structures.append(m.lamp.pole, model);
-    bright.append(m.lamp.head, model);
-    lampSide = -lampSide;
-  }
-
-  // Name boards at both ends, facing approaching riders.
-  for (const d of [zone.from, zone.to]) {
-    const f = roadFrame(route, d);
-    const pos = add(f.center, scale(f.right, half + PAVEMENT + 0.8));
-    const model = placement([pos[0], terrain.height(pos[0], pos[2]), pos[2]], yawFor(scale(f.forward, -1)));
-    structures.append(m.villageSign.post, model);
-    bright.append(m.villageSign.face, model);
-  }
-  return { houses };
-}
-
-// ------------------------------------------------------------------- farms ---
-
-/** Farmsteads (barn, house, silo, hay bales) with grazing animals nearby. */
-export function buildFarms(route, terrain, { structures, occupancy, seed, count = 7, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
-  const random = seededRandom(seed ^ 0xfa53);
-  const m = sharedModels(biome);
-  const farms = [];
-  let attempts = 0;
-  while (farms.length < count && attempts < count * 40) {
-    attempts += 1;
-    const d = random() * route.length;
-    const f = roadFrame(route, d);
-    const side = random() < 0.5 ? -1 : 1;
-    const offset = 75 + random() * 170;
-    const pos = add(f.center, scale(f.right, side * offset));
-    if (avoid(pos[0], pos[2], 40) || occupancy.blocked(pos[0], pos[2], 40)) continue;
-    if (terrain.distanceToRoad(pos[0], pos[2]) < 55) continue;
-    const samples = [-18, 18].flatMap((dx) => [-18, 18].map((dz) => terrain.height(pos[0] + dx, pos[2] + dz)));
-    if (Math.max(...samples) - Math.min(...samples) > 6 || Math.min(...samples) < lakeLevel + 2) continue;
-
-    const yaw = yawFor(scale(f.right, -side)) + (random() - 0.5) * 0.5;
-    const local = (lx, lz) => {
-      const c = Math.cos(yaw);
-      const s = Math.sin(yaw);
-      return [pos[0] + lx * c + lz * s, 0, pos[2] - lx * s + lz * c];
-    };
-    const place = (mesh, lx, lz, turn, w, dpt) => {
-      const p = local(lx, lz);
-      const y = groundUnder(terrain, p, yaw + turn, w, dpt);
-      structures.append(mesh, placement([p[0], y, p[2]], yaw + turn));
-    };
-    place(m.barn, 0, 0, 0, 15, 10);
-    place(houseVariant(biome, Math.floor(random() * HOUSE_VARIANTS)), -17, -4, 0, 10, 9);
-    place(m.silo, 10.5, 6, 0, 5, 5);
-    for (let b = 0; b < 4 + Math.floor(random() * 4); b += 1) {
-      place(m.bale, 4 + random() * 14, -9 - random() * 8, random() * Math.PI, 1.3, 1.5);
-    }
-
-    // A herd in a field further from the road: usually the first two animals
-    // in small groups, sometimes a larger herd of the third.
-    const field = local((random() - 0.5) * 30, 45 + random() * 20);
-    const third = random() < 0.4;
-    const animals = third ? 7 + Math.floor(random() * 6) : 4 + Math.floor(random() * 5);
-    for (let a = 0; a < animals; a += 1) {
-      const angle = random() * Math.PI * 2;
-      const r = random() * 16;
-      const x = field[0] + Math.cos(angle) * r;
-      const z = field[2] + Math.sin(angle) * r;
-      if (avoid(x, z, 2) || terrain.height(x, z) < lakeLevel + 1) continue;
-      const mesh = third ? m.animal3 : random() < 0.5 ? m.animal1 : m.animal2;
-      structures.append(mesh, placement([x, terrain.height(x, z) - 0.05, z], random() * Math.PI * 2));
-    }
-    occupancy.add(pos[0], pos[2], 30);
-    occupancy.add(field[0], field[2], 20);
-    farms.push(pos);
-  }
-  return farms;
-}
-
-// ---------------------------------------------------------------- turbines ---
-
-/** A row of wind turbines on the highest ground near the route. Returns rotor hubs. */
-export function buildWindTurbines(route, terrain, { structures, occupancy, seed, bounds, count = 6, lakeLevel = -Infinity, avoid = () => false, biome = temperate }) {
-  const random = seededRandom(seed ^ 0x7b1e);
-  const height = 62;
-  let best = null;
-  for (let i = 0; i < 300; i += 1) {
-    const x = bounds.x0 - 300 + random() * (bounds.x1 - bounds.x0 + 600);
-    const z = bounds.z0 - 300 + random() * (bounds.z1 - bounds.z0 + 600);
-    const road = terrain.index.farDistance(x, z);
-    if (road < 260 || road > 950 || avoid(x, z, 60)) continue;
-    const y = terrain.height(x, z);
-    if (!best || y > best.y) best = { x, z, y };
-  }
-  if (!best) return [];
-  const across = [-WIND[2], 0, WIND[0]];
-  const yaw = Math.atan2(-WIND[2], WIND[0]);
-  const tower = biome.models.turbine(height);
-  const rotors = [];
-  for (let i = 0; i < count; i += 1) {
-    const offset = (i - (count - 1) / 2) * 170 + (random() - 0.5) * 30;
-    const x = best.x + across[0] * offset;
-    const z = best.z + across[2] * offset;
-    if (terrain.index.farDistance(x, z) < 180 || avoid(x, z, 30)) continue;
-    const y = terrain.height(x, z);
-    if (y < lakeLevel + 2) continue;
-    structures.append(tower, placement([x, y, z], yaw));
-    occupancy.add(x, z, 12);
-    // The hub sits at the windward end of the nacelle (local −X).
-    const hub = [x - Math.cos(yaw) * 3.4, y + height + 1.2, z + Math.sin(yaw) * 3.4];
-    rotors.push({ hub, yaw, phase: random() * Math.PI * 2, speed: 0.9 + random() * 0.4 });
-  }
-  return rotors;
 }
 
 // -------------------------------------------------------------- spectators ---
@@ -397,13 +181,14 @@ function seaDistance(terrain, x, z, dx, dz) {
  * one kilometre before the finish (without `markers`: guard rails only;
  * without `rails`: signs only). `twoWay` roads get rails where they are
  * steeper (5 %) either way, since a climb is a descent the other way.
- * `cliffs` are stretches along a cliff: a rail on the side where the ground
+ * `villages` are zone stretches whose ends get a name board. `cliffs` are stretches along a cliff: a rail on the side where the ground
  * falls away (the sea side), whichever way the road runs.
  */
-export function buildRoadside(route, terrain, { structures, bright, skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [], biome = temperate }) {
+export function buildRoadside(route, terrain, { structures, bright, skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [], villages = [], biome = temperate }) {
   const half = roadHalfWidth(route.lanes) + VERGE;
   const m = sharedModels(biome);
   const palette = biome.palette;
+  buildVillageSigns(route, villages, terrain, { structures, bright, biome });
 
   // Guard rails wherever the road descends steeply (either way on a two-way road).
   for (let d = 0; rails && d < route.length; d += railStep) {

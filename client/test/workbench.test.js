@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { BUILDINGS } from "../public/js/view3d/assets/buildings/index.js";
 import { NATURE } from "../public/js/view3d/assets/nature/index.js";
-import { workbenchState } from "../public/js/workbenchState.js";
+import { PROPS } from "../public/js/view3d/assets/props/index.js";
+import { WORKBENCH_ASSETS, workbenchState } from "../public/js/workbenchState.js";
 
 const FIRST = Object.keys(NATURE)[0];
 
@@ -30,4 +32,22 @@ test("every plant of the kit can be asked for", () => {
 test("the asset list is the caller's when it brings one", () => {
   assert.equal(workbenchState("?asset=b", ["a", "b"]).asset, "b");
   assert.equal(workbenchState("?asset=olive", ["a", "b"]).asset, "a");
+});
+
+test("the bench offers the plants, the buildings and the props, each id once", () => {
+  const ids = Object.keys(WORKBENCH_ASSETS);
+  assert.equal(ids.length, Object.keys(NATURE).length + Object.keys(BUILDINGS).length + Object.keys(PROPS).length);
+  for (const id of ["windmill", "lighthouse", "balloon", "bench"]) assert.equal(workbenchState(`?asset=${id}`).asset, id);
+});
+
+test("every building and prop on the bench builds with the bench's options and frees what it made", async () => {
+  const { createTracker } = await import("../public/js/view3d/scene/tracker.js");
+  const { createSharedUniforms } = await import("../public/js/view3d/assets/materials.js");
+  for (const id of [...Object.keys(BUILDINGS), ...Object.keys(PROPS)]) {
+    const tracker = createTracker();
+    const made = WORKBENCH_ASSETS[id].create({ season: "summer", track: tracker.track, uniforms: createSharedUniforms() });
+    assert.ok(made.object.children.length > 0, id);
+    made.dispose();
+    assert.equal(tracker.live(), 0, id);
+  }
 });

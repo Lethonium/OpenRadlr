@@ -39,7 +39,7 @@ import {
 import { blend, bodyTransforms, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { buildLemon } from "./lemonModel.js";
-import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
+import { buildFlag, buildSpectator } from "./structures.js";
 import { buildStatues, statueSlots } from "./statues.js";
 import { INSTRUCTOR } from "./studioLayout.js";
 import { StudioLayer } from "./studioLayer.js";
@@ -63,7 +63,6 @@ const SCENE = Object.freeze({
   shadowRange: 65,
   /** How far each chunk group is drawn (metres); fog hides the cut. */
   drawDistance: { structures: 2600, bright: 1200 },
-  rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
   lemonReach: { behind: 30, ahead: 260 },
@@ -405,8 +404,6 @@ export class View3D {
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
     this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
-    this.rotors = world.rotors;
-    this.rotor = this.renderer.upload(buildRotor());
     this.lemonMesh = this.renderer.upload(buildLemon());
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
@@ -833,9 +830,6 @@ export class View3D {
 
     const eye = this.camera.eye;
     const forward = normalize(sub(this.camera.target, eye));
-    const rotorMatrices = this.rotors
-      .filter((r) => Math.hypot(r.hub[0] - eye[0], r.hub[2] - eye[2]) < SCENE.rotorDistance)
-      .map((r) => ({ hub: r.hub, model: multiply(placement(r.hub, r.yaw), rotationXAbout([0, 0, 0], r.phase + timeS * r.speed)) }));
     // More riders online, more of the crowd out; the ones near a rider cheer it on.
     const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
     const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
@@ -902,7 +896,7 @@ export class View3D {
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
-    const scene = { light, lens, shadows, visible, vehicles, crowd, lemons, rotorMatrices };
+    const scene = { light, lens, shadows, visible, vehicles, crowd, lemons };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
     // Which riders that could get a label are in sight, for the next frames' labels.
@@ -968,9 +962,8 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, shadows, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+  #drawWorld({ light, lens, shadows, visible, vehicles, crowd, lemons }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
-    this.renderer.draw(this.meshes.islands, this.identity);
     for (const [group, chunks] of Object.entries(this.chunks)) {
       // Seen from the drone, small things reach a little further, not as far as the haze.
       const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
@@ -982,7 +975,6 @@ export class View3D {
     }
     this.renderer.drawBright(this.meshes.arches, this.identity);
     for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
-    for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
     for (const p of crowd) {
       this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
       if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
@@ -1112,7 +1104,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
     if (this.weather) handles.push(this.weather);
     this.#highlights = [];
     this.#disposeStatues();

@@ -84,8 +84,6 @@ export const winter = Object.freeze({
       segments: Object.freeze([5, 10]),
     }),
   }),
-  farIsland: Object.freeze([0.6, 0.65, 0.7]),
-  farIslandDark: Object.freeze([0.48, 0.53, 0.58]),
   rock: Object.freeze([0.45, 0.47, 0.5]),
   sand: Object.freeze([0.8, 0.86, 0.92]),
   seaFloor: Object.freeze([0.18, 0.26, 0.32]),
