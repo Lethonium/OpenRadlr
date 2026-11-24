@@ -11,7 +11,7 @@
  */
 import { seededRandom } from "../world/noise.js";
 import { LANE_WIDTH, SHOULDER } from "../world/roads.js";
-import { inStretch, resolveZones } from "../view3d/zones.js";
+import { inStretch, resolveZones } from "../world/zones.js";
 
 const PAVEMENT = 2.4;
 const CAFE_DISTANCE = 45;

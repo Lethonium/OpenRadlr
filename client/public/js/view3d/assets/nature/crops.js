@@ -7,7 +7,7 @@
 import * as THREE from "../../../three.js";
 import { addHook, cloudShadows } from "../materials.js";
 import { CROP_COLOR, CROP_FRAGMENT_HEAD, CROP_VERTEX, CROP_VERTEX_HEAD } from "./cropShader.js";
-import { colour, cylinder, deepFreeze, ico, merge } from "./geom.js";
+import { colour, cylinder, deepFreeze, ico, merge } from "../geom.js";
 
 /**
  * h crop height (m), a main colour, b row colour, period row spacing (m), stripe row contrast,

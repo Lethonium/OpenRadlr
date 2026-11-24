@@ -7,7 +7,7 @@ import { seededRandom } from "../../../world/noise.js";
 import { defineAsset } from "./asset.js";
 import { bodyMaterial, foliageDepth, foliageMaterial } from "./foliage.js";
 import { needleTexture } from "./foliageTextures.js";
-import { colour, cone, cylinder, merge, shadeY } from "./geom.js";
+import { colour, cone, cylinder, merge, shadeY } from "../geom.js";
 
 /** radius, height, centre height, branches per tier */
 const TIERS = Object.freeze([[2.6, 3.0, 3.0, 13], [2.05, 2.6, 4.6, 12], [1.5, 2.2, 6.0, 10], [0.95, 1.7, 7.3, 8], [0.5, 1.1, 8.4, 5]].map((tier) => Object.freeze(tier)));

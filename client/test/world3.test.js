@@ -8,7 +8,7 @@ import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/ri
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
 import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
-import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
+import { inStretch, resolveZones } from "../public/js/world/zones.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
 import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
 import { squareRoute } from "./helpers.js";

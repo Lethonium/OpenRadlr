@@ -7,7 +7,7 @@ import { seededRandom } from "../../../world/noise.js";
 import { defineAsset } from "./asset.js";
 import { bodyMaterial, foliageDepth, foliageMaterial, leafCards } from "./foliage.js";
 import { leafTexture } from "./foliageTextures.js";
-import { colour, deepFreeze, groundAll, ico, merge, shadeY } from "./geom.js";
+import { colour, deepFreeze, groundAll, ico, merge, shadeY } from "../geom.js";
 
 const CLUSTERS = deepFreeze([{ x: 0, y: 0.6, z: 0, r: 1 }, { x: 0.7, y: 0.45, z: 0.2, r: 0.75 }, { x: -0.6, y: 0.4, z: -0.2, r: 0.7 }]);
 const COLOURS = deepFreeze({

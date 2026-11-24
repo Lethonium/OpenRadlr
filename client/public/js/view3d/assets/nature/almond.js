@@ -2,7 +2,7 @@
  * The almond tree: pink blossom in spring, green in summer, bare in winter. New in this renderer (no reference file).
  */
 import { crownTree } from "./crown.js";
-import { deepFreeze } from "./geom.js";
+import { deepFreeze } from "../geom.js";
 
 const ALMOND = {
   seed: 33,

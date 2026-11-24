@@ -3171,6 +3171,18 @@
     { "id": "wetland", "kind": "wetland", "x": 990, "y": -2850, "radius": 420 },
     { "id": "high-country", "kind": "highCountry", "x": 390, "y": 2380, "radius": 1100 }
   ],
+  "landmarks": [
+    { "id": "cape-light", "kind": "lighthouse", "x": 4500, "y": -2960, "yaw": 0, "apron": 60 },
+    { "id": "sw-ruin", "kind": "castle", "x": -270, "y": -1920, "yaw": 0, "apron": 70 },
+    { "id": "south-arch", "kind": "seaArch", "x": 1550, "y": -4200, "yaw": 0, "apron": 40 },
+    { "id": "farm-mills", "kind": "windmills", "x": -1170, "y": -2000, "yaw": 0, "apron": 16, "count": 5 },
+    { "id": "valley-balloons", "kind": "balloons", "x": 600, "y": -300, "yaw": 0, "apron": 0, "count": 4 }
+  ],
+  "settlements": [
+    { "id": "hilltop", "kind": "city", "x": 2400, "y": 950, "radius": 420, "seed": 7101 },
+    { "id": "southwest", "kind": "village", "x": -350, "y": -2190, "radius": 260, "seed": 7102 },
+    { "id": "harbour", "kind": "harbour", "x": 4450, "y": -4125, "radius": 220, "seed": 7103 }
+  ],
   "routes": [
     {
       "id": "riverside-flats",

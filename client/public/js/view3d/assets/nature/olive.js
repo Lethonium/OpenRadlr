@@ -2,7 +2,7 @@
  * The olive tree of the dry coast: a short twisted trunk and silver leaves, green all year. New in this renderer (no reference file).
  */
 import { crownTree } from "./crown.js";
-import { deepFreeze } from "./geom.js";
+import { deepFreeze } from "../geom.js";
 
 const same = (colours) => ({ spring: colours, summer: colours, autumn: colours, winter: colours });
 

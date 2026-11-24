@@ -39,7 +39,7 @@ import {
 } from "../world/roads.js";
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/rivers.js";
 import { MeshBuilder } from "./meshBuilder.js";
-import { inStretch, resolveZones } from "./zones.js";
+import { inStretch, resolveZones } from "../world/zones.js";
 import { add, normalize, scale } from "./math.js";
 import { seededRandom } from "../world/noise.js";
 import { resolveBiome, temperate } from "./biomes/index.js";

@@ -2,17 +2,17 @@
  * Small geometry kit for the plant assets: vertex-coloured, non-indexed,
  * no UVs, ground at y = 0. Every function returns a fresh geometry.
  */
-import * as THREE from "../../../three.js";
-import { mergeGeometries } from "../../../../vendor/three/addons/utils/BufferGeometryUtils.js";
+import * as THREE from "../../three.js";
+import { mergeGeometries } from "../../../vendor/three/addons/utils/BufferGeometryUtils.js";
 
 /** A sRGB hex or CSS colour as linear RGB, the space vertex colours are in. */
 export const colour = (value) => new THREE.Color(value);
 
 /**
  * Non-indexed, no UVs, with a flat vertex colour.
- * @param {import("../../../three.js").BufferGeometry} source
- * @param {import("../../../three.js").Color} color
- * @returns {import("../../../three.js").BufferGeometry}
+ * @param {import("../../three.js").BufferGeometry} source
+ * @param {import("../../three.js").Color} color
+ * @returns {import("../../three.js").BufferGeometry}
  */
 export function paint(source, color) {
   const geometry = source.index ? source.toNonIndexed() : source;
@@ -80,8 +80,8 @@ export function lumpy(geometry, amount = 0.06) {
 
 /**
  * Merges geometries with the same attributes and disposes of the inputs.
- * @param {import("../../../three.js").BufferGeometry[]} list
- * @returns {import("../../../three.js").BufferGeometry}
+ * @param {import("../../three.js").BufferGeometry[]} list
+ * @returns {import("../../three.js").BufferGeometry}
  */
 export function merge(list) {
   const merged = mergeGeometries(list, false);
@@ -109,8 +109,8 @@ export function deepFreeze(value) {
 
 /**
  * Moves geometries together so the lowest point of all of them is on y = 0.
- * @param {import("../../../three.js").BufferGeometry[]} list
- * @returns {import("../../../three.js").BufferGeometry[]} the same geometries
+ * @param {import("../../three.js").BufferGeometry[]} list
+ * @returns {import("../../three.js").BufferGeometry[]} the same geometries
  */
 export function groundAll(list) {
   const lowest = Math.min(...list.map((geometry) => (geometry.computeBoundingBox(), geometry.boundingBox.min.y)));

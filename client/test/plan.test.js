@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildMasks, clearAt, maskAt } from "../public/js/world/plan/masks.js";
+import { MASK, buildMasks, clearAt, maskAt, stampBuilt, stampField } from "../public/js/world/plan/masks.js";
 import { PLAN_BUDGET } from "../public/js/world/plan/index.js";
 import { REGION_STYLE } from "../public/js/world/regionKinds.js";
 import { regionMix } from "../public/js/world/regions.js";
@@ -54,6 +54,20 @@ test("masks mark roads and rivers and leave the rest free", () => {
   assert.equal(maskAt(masks, inRiver.x, inRiver.z), 2);
   assert.equal(clearAt(masks, tiny.bounds.x0 + 1, tiny.bounds.z0 + 1), true);
   assert.equal(clearAt(masks, tiny.bounds.x0 - 500, 0), false, "outside the box is not free");
+});
+
+test("a built rectangle takes free and field cells but not road cells", () => {
+  const masks = buildMasks({ roads: tiny.roads, rivers: tiny.rivers, bounds: tiny.bounds });
+  const free = { x: tiny.bounds.x0 + 1, z: tiny.bounds.z0 + 1 };
+  stampBuilt(masks, { x: free.x, z: free.z, width: 12, depth: 12, yaw: 0 });
+  assert.equal(maskAt(masks, free.x, free.z), MASK.built);
+  stampField(masks, { x: free.x + 40, z: free.z, width: 12, depth: 12, yaw: 0 });
+  assert.equal(maskAt(masks, free.x + 40, free.z), MASK.field);
+  stampBuilt(masks, { x: free.x + 40, z: free.z, width: 12, depth: 12, yaw: 0 });
+  assert.equal(maskAt(masks, free.x + 40, free.z), MASK.built);
+  const onRoad = tiny.roads.samples[10];
+  stampBuilt(masks, { x: onRoad.x, z: onRoad.z, width: 40, depth: 40, yaw: 0 });
+  assert.equal(maskAt(masks, onRoad.x, onRoad.z), MASK.road);
 });
 
 test("masks stay under their cell budget on a huge island", () => {

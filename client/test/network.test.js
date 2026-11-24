@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { NETWORK_LANES, RoadNetwork, hashSeed } from "../public/js/route/network.js";
 import { fetchMapNetwork, roadNetworkOf } from "../public/js/route/worldMap.js";
@@ -150,4 +151,23 @@ test("the menu map draws the island and every road of the network", () => {
   drawMapPreview(canvas, { routes: [loop], selectedId: loop.id, network: tinyNetworkFile() });
   assert.ok(calls.lineTo > 200, "coast, roads and the route");
   assert.equal(calls.arcs, 1, "the start");
+});
+
+// --- settlements and landmarks -----------------------------------------------------
+
+test("the valley lists three settlements and five landmarks", () => {
+  const map = new RoadNetwork(JSON.parse(readFileSync(new URL("../../routes/maps/valley.json", import.meta.url))));
+  assert.deepEqual(map.settlements.map((s) => s.id), ["hilltop", "southwest", "harbour"]);
+  assert.deepEqual(map.landmarks.map((l) => l.id), ["cape-light", "sw-ruin", "south-arch", "farm-mills", "valley-balloons"]);
+  assert.deepEqual(map.settlements[0].center, [2400, -950]);
+  assert.equal(map.landmarks[3].count, 5);
+});
+
+test("a map without settlements or landmarks has none", () => {
+  const bare = JSON.parse(readFileSync(new URL("../../routes/maps/valley.json", import.meta.url)));
+  delete bare.settlements;
+  delete bare.landmarks;
+  const map = new RoadNetwork(bare);
+  assert.deepEqual(map.settlements, []);
+  assert.deepEqual(map.landmarks, []);
 });

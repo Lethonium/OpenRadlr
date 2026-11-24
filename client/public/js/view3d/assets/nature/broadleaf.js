@@ -5,7 +5,7 @@
  * season and the winter crowns are bare twigs.
  */
 import { crownTree } from "./crown.js";
-import { deepFreeze } from "./geom.js";
+import { deepFreeze } from "../geom.js";
 
 const LEAVES = {
   spring: ["#5a8f38", "#4d8233", "#6a9b40", "#447a2e", "#76a446"],

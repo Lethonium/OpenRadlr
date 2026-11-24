@@ -10,7 +10,7 @@ import { seededRandom } from "../../../world/noise.js";
 import { defineAsset } from "./asset.js";
 import { bodyMaterial, foliageDepth, foliageMaterial, leafCards } from "./foliage.js";
 import { leafTexture } from "./foliageTextures.js";
-import { colour, cylinder, ico, lumpy, merge, rod, shadeY, spread } from "./geom.js";
+import { colour, cylinder, ico, lumpy, merge, rod, shadeY, spread } from "../geom.js";
 
 const SNOW = colour("#eef2f7");
 const FAR_BLOBS = 4;

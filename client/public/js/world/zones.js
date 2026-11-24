@@ -6,7 +6,7 @@
  * defaults are derived from the route and its seed. Either way the result is
  * deterministic, so every client builds the same world.
  */
-import { seededRandom } from "../world/noise.js";
+import { seededRandom } from "./noise.js";
 
 const KNOWN = new Set(["village", "river", "forest", "cliff"]);
 

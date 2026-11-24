@@ -9,9 +9,10 @@ import { VERGE, roadHalfWidth } from "../roads.js";
 
 /**
  * Values in `masks.data`. A road or river outranks a field. `verge` is the strip beside a road
- * (past its asphalt and verge, within `ROAD_MARGIN`): clear of trees and fields, but grass grows there.
+ * (past its asphalt and verge, within `ROAD_MARGIN`): clear of trees and fields, but grass grows there. `built` is a
+ * house, farm yard or landmark apron: nothing grows there.
  */
-export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3, verge: 4 });
+export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3, verge: 4, built: 5 });
 /** Metres past the verge that stay clear of trees: canopy and the gap between road samples. */
 export const ROAD_MARGIN = 4.5;
 /** Metres past a river's water that stay clear: its bank. */
@@ -31,7 +32,7 @@ const RIVER_SAMPLE_STEP = 8; // half the path step: gaps between samples never o
  */
 
 /** Marks every free cell a disc of radius `r` at (x, z) touches. */
-function stamp(masks, x, z, r, value) {
+export function stampDisc(masks, x, z, r, value) {
   const { cell, x0, z0, columns, rows, data } = masks;
   const i0 = Math.max(0, Math.floor((x - r - x0) / cell));
   const i1 = Math.min(columns - 1, Math.floor((x + r - x0) / cell));
@@ -60,19 +61,19 @@ export function buildMasks({ roads, rivers, bounds, cell = 4, maxCells = MAX_CEL
   const masks = { cell: size, x0: bounds.x0, z0: bounds.z0, columns, rows, data: new Uint8Array(columns * rows) };
   const reach = RIVER.halfWidth + RIVER_MARGIN + RIVER_SAMPLE_STEP;
   for (const river of rivers) {
-    for (const p of river.points) stamp(masks, p.x, p.z, reach, MASK.river);
+    for (const p of river.points) stampDisc(masks, p.x, p.z, reach, MASK.river);
     for (const pond of river.ponds) {
       for (const radius of [0, 12, 24]) {
         const around = radius === 0 ? 1 : 12;
         for (let a = 0; a < around; a += 1) {
           const angle = (a / around) * Math.PI * 2;
-          stamp(masks, pond.x + Math.cos(angle) * radius, pond.z + Math.sin(angle) * radius, reach, MASK.river);
+          stampDisc(masks, pond.x + Math.cos(angle) * radius, pond.z + Math.sin(angle) * radius, reach, MASK.river);
         }
       }
     }
   }
-  for (const s of roads.samples) stamp(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + 0.5, MASK.road);
-  for (const s of roads.samples) stamp(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + ROAD_MARGIN, MASK.verge);
+  for (const s of roads.samples) stampDisc(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + 0.5, MASK.road);
+  for (const s of roads.samples) stampDisc(masks, s.x, s.z, roadHalfWidth(s.route.lanes) + VERGE + ROAD_MARGIN, MASK.verge);
   return masks;
 }
 
@@ -114,6 +115,31 @@ export function stampField(masks, { x, z, width, depth, yaw }) {
       const across = -dx * s + dz * c;
       const index = j * masks.columns + i;
       if (Math.abs(along) <= width / 2 + masks.cell / 2 && Math.abs(across) <= depth / 2 + masks.cell / 2 && masks.data[index] === MASK.free) masks.data[index] = MASK.field;
+    }
+  }
+}
+
+/**
+ * Marks the rectangle (centre, size, `yaw` of its width axis) as built: free, verge and field cells become built,
+ * road and river cells keep their value.
+ */
+export function stampBuilt(masks, { x, z, width, depth, yaw }) {
+  const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
+  const reach = Math.hypot(width, depth) / 2 + masks.cell;
+  const i0 = Math.max(0, Math.floor((x - reach - masks.x0) / masks.cell));
+  const i1 = Math.min(masks.columns - 1, Math.floor((x + reach - masks.x0) / masks.cell));
+  const j0 = Math.max(0, Math.floor((z - reach - masks.z0) / masks.cell));
+  const j1 = Math.min(masks.rows - 1, Math.floor((z + reach - masks.z0) / masks.cell));
+  for (let j = j0; j <= j1; j += 1) {
+    for (let i = i0; i <= i1; i += 1) {
+      const dx = masks.x0 + (i + 0.5) * masks.cell - x;
+      const dz = masks.z0 + (j + 0.5) * masks.cell - z;
+      const along = dx * c + dz * s;
+      const across = -dx * s + dz * c;
+      const index = j * masks.columns + i;
+      const value = masks.data[index];
+      const builtable = value === MASK.free || value === MASK.verge || value === MASK.field;
+      if (builtable && Math.abs(along) <= width / 2 + masks.cell / 2 && Math.abs(across) <= depth / 2 + masks.cell / 2) masks.data[index] = MASK.built;
     }
   }
 }

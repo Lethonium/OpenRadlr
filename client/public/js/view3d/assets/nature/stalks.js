@@ -10,7 +10,7 @@ import * as THREE from "../../../three.js";
 import { addHook, noFlip, windify } from "../materials.js";
 import { bodyMaterial } from "./foliage.js";
 import { lavender } from "./lavender.js";
-import { colour, cone, deepFreeze, ico, merge, rod, shadeY } from "./geom.js";
+import { colour, cone, deepFreeze, ico, merge, rod, shadeY } from "../geom.js";
 
 /** Sway (metres per metre of height) of each crop's plants. */
 export const STALK_WIND = deepFreeze({ wheat: 0.06, rapeseed: 0.045, sunflower: 0.02, corn: 0.03, stubble: 0.02, lavender: 0.03 });

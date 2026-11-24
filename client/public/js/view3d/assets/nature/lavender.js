@@ -6,7 +6,7 @@
 import { seededRandom } from "../../../world/noise.js";
 import { defineAsset } from "./asset.js";
 import { bodyMaterial } from "./foliage.js";
-import { colour, cone, ico, merge, rod, shadeY } from "./geom.js";
+import { colour, cone, ico, merge, rod, shadeY } from "../geom.js";
 
 const LEAF = Object.freeze({ spring: "#7d9a64", summer: "#6f8a5a", autumn: "#8a8760", winter: "#8d9484" });
 const SPIKE = Object.freeze({ spring: null, summer: "#8a63b8", autumn: "#7a6a78", winter: null });

@@ -2,7 +2,7 @@
  * The stone pine of the Mediterranean coast: a long bare trunk under a flat green dome. New in this renderer (no reference file).
  */
 import { crownTree } from "./crown.js";
-import { deepFreeze } from "./geom.js";
+import { deepFreeze } from "../geom.js";
 
 const same = (colours) => ({ spring: colours, summer: colours, autumn: colours, winter: colours });
 

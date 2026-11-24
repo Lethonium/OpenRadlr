@@ -6,7 +6,7 @@ import * as THREE from "../../../three.js";
 import { mergeVertices } from "../../../../vendor/three/addons/utils/BufferGeometryUtils.js";
 import { defineAsset } from "./asset.js";
 import { bodyMaterial } from "./foliage.js";
-import { colour, paint } from "./geom.js";
+import { colour, paint } from "../geom.js";
 
 const STONE = Object.freeze({ spring: "#99928a", summer: "#99928a", autumn: "#938b82", winter: "#9aa3b3" });
 const MOSS = Object.freeze({ spring: "#6f8a4a", summer: "#6f8a4a", autumn: "#8a8250", winter: "#f2f5f9" });

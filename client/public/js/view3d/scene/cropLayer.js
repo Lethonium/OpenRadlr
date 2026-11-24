@@ -6,7 +6,7 @@ import * as THREE from "../../three.js";
 import { seededRandom } from "../../world/noise.js";
 import { baleGeometry, cropMaterial, fieldExtras, fieldGeometry, pumpkinGeometry } from "../assets/nature/crops.js";
 import { bodyMaterial } from "../assets/nature/foliage.js";
-import { colour } from "../assets/nature/geom.js";
+import { colour } from "../assets/geom.js";
 import { heightSampler } from "./grassField.js";
 import { STALK_CROPS } from "../../world/plan/stalks.js";
 import { createStalkLayer } from "./stalkLayer.js";
