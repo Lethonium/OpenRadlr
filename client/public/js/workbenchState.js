@@ -2,6 +2,7 @@
  * What the workbench page shows, read from its address: `?asset=<id>&season=<s>&time=<t>`.
  * Pure, so the page's composition root has no parsing of its own.
  */
+import * as THREE from "./three.js";
 import { BUILDINGS } from "./view3d/assets/buildings/index.js";
 import { CREATURES } from "./view3d/assets/creatures/index.js";
 import { NATURE } from "./view3d/assets/nature/index.js";
@@ -33,4 +34,12 @@ export function workbenchState(search, ids = Object.keys(WORKBENCH_ASSETS)) {
     season: SEASONS.includes(season) ? season : "summer",
     time: WORKBENCH_TIMES.includes(time) ? time : "day",
   };
+}
+
+/** Lifts `object` so its lowest point rests on y = 0: the centred animals (dolphin, bird, butterfly) would otherwise sink into the ground. Standing things stay. */
+export function groundAsset(object) {
+  object.position.y = 0;
+  const { min } = new THREE.Box3().setFromObject(object.updateMatrixWorld(true) || object);
+  object.position.y = Math.max(0, -min.y);
+  object.updateMatrixWorld(true);
 }

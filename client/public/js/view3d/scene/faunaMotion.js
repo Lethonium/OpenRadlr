@@ -11,8 +11,12 @@ const BIRD_FLAP = 14;
 const BUTTERFLY_FLAP = 30;
 /** Share of the herd radius an animal wanders on each axis (the diagonal stays inside the radius). */
 const WANDER = 0.7;
-/** Dolphins: seconds per breach cycle, the share of it spent above water, the jump's height, the loop they swim. */
-const DOLPHIN = Object.freeze({ period: 9, above: 0.3, height: 2.4, depth: -1.5, loop: 18, speed: 4 });
+/**
+ * Dolphins: seconds per breach cycle, the share of it spent in the air, the jump's height, the loop they swim. Between
+ * jumps they swim along the surface, the body rolling `roll` metres either side of `ride` (a negative offset: the back
+ * and fin break the water, the belly stays under) once every `rollPeriod` seconds.
+ */
+const DOLPHIN = Object.freeze({ period: 9, above: 0.3, height: 2.4, ride: -0.3, roll: 0.3, rollPeriod: 3, loop: 18, speed: 4 });
 
 /** A repeatable pseudo-random number in [0, 1) for `seed` and a slot. */
 const unit = (seed, slot) => {
@@ -79,7 +83,7 @@ export function flockPose(flock, index, t, speed) {
 }
 
 /**
- * A dolphin swimming a wide loop, surfacing and jumping once a cycle.
+ * A dolphin swimming a wide loop along the surface, rolling up and down, and jumping once a cycle.
  * @param {{x: number, z: number, seed: number}} dolphin
  * @param {number} t
  */
@@ -92,12 +96,15 @@ export function dolphinPose(dolphin, t) {
   const jump = u < DOLPHIN.above;
   const arc = jump ? Math.sin((u / DOLPHIN.above) * Math.PI) : 0;
   const slope = jump ? (Math.cos((u / DOLPHIN.above) * Math.PI) * Math.PI) / DOLPHIN.above : 0;
+  const rolling = (t / DOLPHIN.rollPeriod + unit(seed, 4)) * TAU;
+  const swim = DOLPHIN.ride + DOLPHIN.roll * Math.sin(rolling);
+  const swimSlope = (DOLPHIN.roll * Math.cos(rolling) * TAU) / DOLPHIN.rollPeriod / DOLPHIN.speed;
   return {
     x: x + loop * Math.cos(a),
-    y: jump ? arc * DOLPHIN.height + DOLPHIN.depth * (1 - arc) * 0.2 : DOLPHIN.depth,
+    y: swim + arc * DOLPHIN.height,
     z: z + loop * Math.sin(a),
     yaw: Math.atan2(-Math.sin(a), Math.cos(a)),
-    pitch: jump ? -Math.atan(slope * 0.4) : 0,
+    pitch: jump ? -Math.atan(slope * 0.4) : -Math.atan(swimSlope),
     roll: 0,
     gait: 0,
     legs: 0,

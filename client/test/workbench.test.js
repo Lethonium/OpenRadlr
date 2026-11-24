@@ -5,7 +5,8 @@ import { BUILDINGS } from "../public/js/view3d/assets/buildings/index.js";
 import { NATURE } from "../public/js/view3d/assets/nature/index.js";
 import { CREATURES } from "../public/js/view3d/assets/creatures/index.js";
 import { PROPS } from "../public/js/view3d/assets/props/index.js";
-import { WORKBENCH_ASSETS, workbenchState } from "../public/js/workbenchState.js";
+import * as THREE from "../public/js/three.js";
+import { WORKBENCH_ASSETS, groundAsset, workbenchState } from "../public/js/workbenchState.js";
 
 const FIRST = Object.keys(NATURE)[0];
 
@@ -51,4 +52,16 @@ test("every building and prop on the bench builds with the bench's options and f
     made.dispose();
     assert.equal(tracker.live(), 0, id);
   }
+});
+
+const lowest = (object) => new THREE.Box3().setFromObject(object.updateMatrixWorld(true) || object).min.y;
+
+test("a centred animal is lifted to sit on the ground, a standing one stays put", () => {
+  const dolphin = WORKBENCH_ASSETS.dolphin.create({});
+  assert.ok(lowest(dolphin.object) < -0.1, "centred, so half of it is underground");
+  groundAsset(dolphin.object);
+  assert.ok(Math.abs(lowest(dolphin.object)) < 1e-6, "now rests on y = 0");
+  const cow = WORKBENCH_ASSETS.cow.create({});
+  groundAsset(cow.object);
+  assert.equal(cow.object.position.y, 0);
 });

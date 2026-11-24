@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "../public/js/three.js";
+import { CREATURES } from "../public/js/view3d/assets/creatures/index.js";
 import { createSharedUniforms } from "../public/js/view3d/assets/materials.js";
 import { QUALITY_LEVELS, qualitySettings } from "../public/js/view3d/quality.js";
 import { createFaunaLayer } from "../public/js/view3d/scene/faunaLayer.js";
@@ -54,11 +55,25 @@ test("poses are pure functions of time", () => {
   assert.deepEqual(butterflyPose({ x: 0, z: 0, seed: 6 }, 3), butterflyPose({ x: 0, z: 0, seed: 6 }, 3));
 });
 
-test("a dolphin jumps above the water and dives below it", () => {
+test("a dolphin jumps clear of the water now and then", () => {
   const heights = [];
   for (let t = 0; t < 60; t += 0.25) heights.push(dolphinPose({ x: 0, z: 0, seed: 5 }, t).y);
   assert.ok(Math.max(...heights) > 1, "clears the surface");
-  assert.ok(Math.min(...heights) < 0, "dives under it");
+});
+
+test("a dolphin swims along the surface: most of the time its back is above the water", () => {
+  const { body } = CREATURES.dolphin.parts({ detail: true });
+  body.computeBoundingBox();
+  const half = (body.boundingBox.max.y - body.boundingBox.min.y) / 2;
+  for (const seed of [5, 11, 23]) {
+    let above = 0;
+    let samples = 0;
+    for (let t = 0; t < 120; t += 0.25) {
+      samples += 1;
+      if (dolphinPose({ x: 0, z: 0, seed }, t).y + half > 0) above += 1;
+    }
+    assert.ok(above / samples >= 0.6, `seed ${seed}: ${above}/${samples}`);
+  }
 });
 
 test("every animal mesh is drawn wherever the camera looks (instances spread over the world cannot be culled)", () => {

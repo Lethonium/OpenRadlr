@@ -15,7 +15,7 @@ import { createWorldScene } from "./view3d/scene/worldScene.js";
 import { createTracker } from "./view3d/scene/tracker.js";
 import { TIME_PRESETS, environmentAt, resolvePreset } from "./world/daylight.js";
 import { SEASONS } from "./world/seasons.js";
-import { WORKBENCH_ASSETS, WORKBENCH_TIMES, workbenchState } from "./workbenchState.js";
+import { WORKBENCH_ASSETS, WORKBENCH_TIMES, groundAsset, workbenchState } from "./workbenchState.js";
 
 const IDS = Object.keys(WORKBENCH_ASSETS);
 const GROUND = Object.freeze({ spring: "#7fae4f", summer: "#7aa24a", autumn: "#9a9a50", winter: "#e9eef2" });
@@ -46,7 +46,7 @@ function build(refit) {
   if (asset) world.scene.remove(asset.object);
   asset = WORKBENCH_ASSETS[state.asset].create({ ...state.options, season: state.season, track: tracker.track, uniforms: world.uniforms });
   world.scene.add(asset.object);
-  asset.object.updateMatrixWorld(true);
+  groundAsset(asset.object);
   if (refit) {
     const box = new THREE.Box3().setFromObject(asset.object);
     const size = box.getSize(new THREE.Vector3());
