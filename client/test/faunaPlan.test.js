@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CREATURES } from "../public/js/view3d/assets/creatures/index.js";
+import { buildWorld } from "../public/js/view3d/world.js";
 import { waterLevel } from "../public/js/world/roads.js";
 import { FAUNA_BUDGET, planFauna } from "../public/js/world/plan/fauna.js";
 import { MASK, maskAt } from "../public/js/world/plan/masks.js";
@@ -48,7 +49,8 @@ test("butterflies stay home in winter", () => {
 });
 
 test("every paddock has a herd and every yard chickens; pigs wait out the winter", () => {
-  const plan = { ...planFor("summer"), farms: planFor("summer").farms.slice(0, 8) }; // the herd budget serves the first farms
+  const plan = planFor("summer");
+  assert.equal(plan.farms.length, 30, "the valley's farms");
   const f = faunaOf(plan, "summer");
   const paddocks = plan.farms.filter((farm) => farm.paddock);
   assert.ok(paddocks.length > 0);
@@ -59,8 +61,7 @@ test("every paddock has a herd and every yard chickens; pigs wait out the winter
   }
   for (const farm of plan.farms) assert.ok(f.herds.some((h) => h.kind === "chicken" && Math.hypot(h.x - farm.x, h.z - farm.z) < 42 && h.count >= 6 && h.count <= 9), "chickens");
   assert.ok(f.herds.some((h) => h.kind === "pig"));
-  const winter = planFor("winter");
-  assert.ok(!faunaOf({ ...winter, farms: winter.farms.slice(0, 8) }, "winter").herds.some((h) => h.kind === "pig"));
+  assert.ok(!faunaOf(planFor("winter"), "winter").herds.some((h) => h.kind === "pig"));
 });
 
 test("wild deer and foxes keep 40 m from the road", () => {
@@ -84,4 +85,21 @@ test("each level stays in its budget and low plans fewer than medium", () => {
 test("the fauna plan is deterministic", () => {
   const plan = planFor("summer");
   assert.deepEqual(faunaOf(plan, "summer"), faunaOf(plan, "summer"));
+});
+
+test("no herd or wild animal stands in a river of the valley as built", () => {
+  const built = buildWorld(world.network.roads()[0], { network: world.network, detail: "low" });
+  const { terrain, plan } = built;
+  assert.ok(plan.fauna.herds.length > 0 && plan.fauna.wild.length > 0);
+  for (const h of plan.fauna.herds) assert.ok(terrain.riverDistance(h.x, h.z) > h.radius, `${h.kind} herd clear of rivers`);
+  for (const w of plan.fauna.wild) assert.ok(terrain.riverDistance(w.x, w.z) > 0, `${w.kind} clear of rivers`);
+});
+
+test("the herd budget covers every paddock from medium up, in priority order", () => {
+  const plan = planFor("summer", "medium");
+  const f = faunaOf(plan, "summer", "medium");
+  for (const { paddock } of plan.farms.filter((farm) => farm.paddock)) assert.ok(f.herds.some((h) => ["cow", "sheep", "horse"].includes(h.kind) && Math.hypot(h.x - paddock.x, h.z - paddock.z) < 1));
+  const low = faunaOf(planFor("summer", "low"), "summer", "low");
+  const kinds = low.herds.map((h) => h.kind);
+  assert.ok(!kinds.includes("chicken") && !kinds.includes("pig"), "a tight budget keeps paddocks first");
 });

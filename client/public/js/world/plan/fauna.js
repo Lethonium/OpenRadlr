@@ -8,12 +8,12 @@ import { seededRandom } from "../noise.js";
 import { regionMix } from "../regions.js";
 import { MASK, maskAt } from "./masks.js";
 
-/** Most of each group per detail level. */
+/** Most of each group per detail level. Herds are instanced, so a count of them is cheap; medium and up cover every farm's herds. */
 export const FAUNA_BUDGET = Object.freeze({
   low: Object.freeze({ herds: 8, wild: 20, flocks: 3, butterflies: 0, dolphins: 2 }),
-  medium: Object.freeze({ herds: 16, wild: 50, flocks: 6, butterflies: 40, dolphins: 4 }),
-  high: Object.freeze({ herds: 30, wild: 90, flocks: 10, butterflies: 80, dolphins: 6 }),
-  ultra: Object.freeze({ herds: 45, wild: 140, flocks: 14, butterflies: 140, dolphins: 8 }),
+  medium: Object.freeze({ herds: 60, wild: 50, flocks: 6, butterflies: 40, dolphins: 4 }),
+  high: Object.freeze({ herds: 100, wild: 90, flocks: 10, butterflies: 80, dolphins: 6 }),
+  ultra: Object.freeze({ herds: 140, wild: 140, flocks: 14, butterflies: 140, dolphins: 8 }),
 });
 
 export const FAUNA = Object.freeze({
@@ -75,12 +75,14 @@ export function planFauna({ farms = [], trees, terrain, roads, regions = [], see
   const addHerd = (kind, x, z, radius, count) => {
     if (herds.length < budget.herds) herds.push({ kind, x, z, radius, count, seed: next() });
   };
+  // In priority order, so the budget cuts from the end: paddock herds, chickens, pigs, then meadow herds.
   for (const farm of farms) {
-    if (farm.paddock) {
-      const kind = pick(random, FAUNA.paddockKinds);
-      addHerd(kind, farm.paddock.x, farm.paddock.z, Math.min(farm.paddock.width, farm.paddock.depth) / 2 - 4, FAUNA.herdSize[kind]);
-    }
-    addHerd("chicken", ...toWorld(farm, ...FAUNA.yardSpots.chicken), FAUNA.yardRadius, whole(random, FAUNA.chickens));
+    if (!farm.paddock) continue;
+    const kind = pick(random, FAUNA.paddockKinds);
+    addHerd(kind, farm.paddock.x, farm.paddock.z, Math.min(farm.paddock.width, farm.paddock.depth) / 2 - 4, FAUNA.herdSize[kind]);
+  }
+  for (const farm of farms) addHerd("chicken", ...toWorld(farm, ...FAUNA.yardSpots.chicken), FAUNA.yardRadius, whole(random, FAUNA.chickens));
+  for (const farm of farms) {
     const pigs = whole(random, FAUNA.pigs);
     if (season !== "winter") addHerd("pig", ...toWorld(farm, ...FAUNA.yardSpots.pig), FAUNA.yardRadius, pigs);
   }
