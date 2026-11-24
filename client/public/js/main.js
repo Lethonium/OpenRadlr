@@ -112,7 +112,8 @@ import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
-import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
+import { seasonChoices } from "./view/seasonPicker.js";
+import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
@@ -150,7 +151,10 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+/** Before seasons the look was a biome; a saved "winter" still opens in winter. */
 const BIOME_KEY = "openride.biome";
+const SEASON_KEY = "openride.season";
+const SEASON_PICKERS = ["biome-mode", "start-biome", "menu-biome"];
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
@@ -179,45 +183,31 @@ const writeSetting = (key, value) => {
 };
 
 /**
- * The biome to draw: `?biome=winter` previews one (not saved), else the
- * rider's saved pick, else the default.
+ * The season to draw: `?season=autumn` (or the old `?biome=winter`) previews
+ * one (not saved), else the rider's saved pick, else the calendar's.
  */
-function biomeSetting() {
-  const param = new URLSearchParams(location.search).get("biome");
-  if (param) return resolveBiome(param).id;
-  const saved = readSetting(BIOME_KEY);
-  return saved && resolveBiome(saved).id === saved ? saved : DEFAULT_BIOME;
+function seasonState() {
+  return seasonFromLocation(location.search, { season: readSetting(SEASON_KEY), biome: readSetting(BIOME_KEY) }, new Date());
 }
 
-/** Adds the three swatches that preview a season next to its picker. */
-function paintBiomePreview(select, id) {
-  let preview = select.biomePreview;
-  if (!preview) {
-    preview = document.createElement("span");
-    preview.className = "biome-preview";
-    preview.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < 3; i += 1) preview.append(document.createElement("i"));
-    select.after(preview);
-    select.biomePreview = preview;
-  }
-  const { sky, ground, accent } = resolveBiome(id).preview;
-  [sky, ground, accent].forEach((color, i) => {
-    preview.children[i].style.backgroundColor = `rgb(${color.map((c) => Math.round(c * 255)).join(" ")})`;
-  });
+/** Applies a season state to the app: the mode, the resolved season and the biome that goes with it. */
+function applySeason({ mode, season }) {
+  app.seasonMode = mode;
+  app.season = season;
+  app.biome = biomeForSeason(season);
 }
 
-/** Fills the season pickers from the biome registry and binds them once. */
-function initBiomePicker() {
-  for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
+/** Fills the season pickers and binds them once. */
+function initSeasonPicker() {
+  for (const id of SEASON_PICKERS) {
     const select = $(id);
     if (!select) continue;
-    select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
-    select.value = app.biome;
-    paintBiomePreview(select, app.biome);
+    select.replaceChildren(...seasonChoices().map((choice) => new Option(t(choice.label), choice.id)));
+    select.value = app.seasonMode;
     // The menu picker stays on the page between rides, so bind it only once.
-    if (!select.biomeListening) {
-      select.addEventListener("change", (event) => setBiome(event.target.value));
-      select.biomeListening = true;
+    if (!select.seasonListening) {
+      select.addEventListener("change", (event) => setSeason(event.target.value));
+      select.seasonListening = true;
     }
   }
 }
@@ -227,16 +217,13 @@ function initBiomePicker() {
  * menu, or the ride's world rebuilt in the background. Only the look changes,
  * never the road, the café or where anything stands.
  */
-function setBiome(id) {
-  const biome = resolveBiome(id);
-  app.biome = biome.id;
-  writeSetting(BIOME_KEY, biome.id);
-  for (const picker of ["biome-mode", "start-biome", "menu-biome"]) {
+function setSeason(mode) {
+  const state = seasonFromLocation("", { season: mode }, new Date());
+  applySeason(state);
+  writeSetting(SEASON_KEY, state.mode);
+  for (const picker of SEASON_PICKERS) {
     const select = $(picker);
-    if (select) {
-      select.value = biome.id;
-      paintBiomePreview(select, biome.id);
-    }
+    if (select) select.value = state.mode;
   }
   if (app.studio) return;
   if (app.view3d) buildRideWorld();
@@ -255,15 +242,16 @@ function buildRideWorld() {
   const ride = app.ride;
   const routeFile = app.routeFile;
   const biome = app.biome;
+  const season = app.season;
   if (!ride || !routeFile) return;
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
       // The season changed while this was building: build the picked one instead.
-      if (app.biome !== biome) return buildRideWorld();
+      if (app.season !== season) return buildRideWorld();
       // Drop the old world's buffers before the new one is uploaded: two full
       // maps at once are too much for a low-end GPU.
       app.view3d?.dispose();
@@ -478,8 +466,10 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
-  /** The biome this rider sees; every client may pick its own (cosmetic only). */
-  biome: biomeSetting(),
+  /** The season picker's choice (auto or a season), the season it shows now and the biome that goes with it; every client may pick its own (cosmetic only). */
+  seasonMode: seasonState().mode,
+  season: seasonState().season,
+  biome: biomeForSeason(seasonState().season),
   /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
   activity: null,
   /** The route the Ride tab goes back to. */
@@ -691,7 +681,7 @@ function fillSetupFields() {
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initSeasonPicker);
   $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   fillSetupFields();
   // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
@@ -900,7 +890,7 @@ function openStartMenu() {
  * the menu's background until joining, so the built world carries over.
  */
 function initMenuStage() {
-  initBiomePicker();
+  initSeasonPicker();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
   const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -942,6 +932,7 @@ function initMenuStage() {
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
     biome: () => app.biome,
+    season: () => app.season,
     createView: use3d
       ? (route, scene) => {
           const view = new View3D(canvas, $("labels3d"), route, scene);
@@ -1132,15 +1123,15 @@ function applyRoster(roster) {
   app.rideRouteId = app.routeId;
   app.rideMode = readSetting(RIDE_MODE_KEY);
   app.coachVoice = readSetting(COACH_VOICE_KEY) === "on";
-  const biome = app.biome;
-  app.biome = biomeSetting();
+  const season = app.season;
+  applySeason(seasonState());
   // The rider's own language wins over the browser's; the text is drawn again like after changeLanguage.
   initLocale({ storage: browserStorage(), languages: navigator.languages });
   fillSetupFields();
   toggleRiderPicker(false);
   // The hooks draw the start menu, the pickers and the units; then the parts that read stores.
   relocalise();
-  if (app.biome !== biome) app.menu?.biomeChanged();
+  if (app.season !== season) app.menu?.biomeChanged();
   else app.redrawStage?.();
   renderRideModes();
   app.unfinished = null;
@@ -2245,7 +2236,7 @@ function endRide() {
   for (const id of ["world3d", "labels3d"]) fresh.querySelector(`#${id}`).replaceWith($(id));
   $("ride").replaceWith(fresh);
   // The template predates the pickers being filled: build the fresh screen's options too.
-  initBiomePicker();
+  initSeasonPicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
   setNativeImmersive(false);
@@ -2783,7 +2774,7 @@ function buildStudioWorld() {
   const ride = app.ride;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   $("view-note").textContent = t("view.building");
-  studioWorld({ routes: routesOf(app.info), biome: app.biome, fetchRouteFile, fetchNetwork: fetchNetworkFile, buildScene })
+  studioWorld({ routes: routesOf(app.info), biome: app.biome, season: app.season, fetchRouteFile, fetchNetwork: fetchNetworkFile, buildScene })
     .then((world) => {
       if (app.ride !== ride) return;
       if (!world) return studioRoomOnly();

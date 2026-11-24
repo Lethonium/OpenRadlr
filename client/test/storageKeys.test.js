@@ -19,6 +19,7 @@ const RIDER_KEYS = [
   "openride.camera",
   "openride.time",
   "openride.biome",
+  "openride.season",
   "openride.layout",
   "openride.route",
   "openride.rideMode",

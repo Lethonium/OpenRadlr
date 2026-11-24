@@ -101,3 +101,18 @@ export function seasonSetting({ season, biome } = {}) {
 export function biomeForSeason(season) {
   return season === "winter" ? "winter" : "temperate";
 }
+
+/**
+ * The season to show from the page address and the saved settings:
+ * `?season=autumn` (or the old `?biome=winter`) previews without saving.
+ * @param {string} search `location.search`
+ * @param {{season?: string|null, biome?: string|null}} stored
+ * @param {Date} date
+ * @returns {{mode: string, season: Season, preview: boolean}}
+ */
+export function seasonFromLocation(search, stored, date) {
+  const params = new URLSearchParams(search);
+  const asked = params.get("season") ?? params.get("biome") ?? "";
+  const mode = SEASON_MODES.includes(asked) ? asked : seasonSetting(stored);
+  return { mode, season: resolveSeason(mode, date), preview: mode === asked };
+}
