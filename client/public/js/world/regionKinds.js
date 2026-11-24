@@ -39,6 +39,7 @@ const DRY = { spring: list("wheat"), summer: list("wheat"), autumn: list("stubbl
  * @property {{mix: Record<string, number>, perMetre: number}} verge
  * @property {{kinds: readonly string[], every: number}} props roadside props, one per `every` metres
  * @property {number} fieldShare share of the land that is farmed
+ * @property {"cottage"|"timber"|"stone"|"whitewashed"} houses the house style of a town here
  * @property {Record<Season, readonly string[]>} crops
  */
 
@@ -50,6 +51,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.5, broadleaf: 0.3, birch: 0.2 }, perMetre: 0.14 },
     props: { kinds: list("picketFence", "hayBale"), every: 60 },
     fieldShare: 0.36,
+    houses: "cottage",
     crops: ARABLE,
   },
   farmBelt: {
@@ -58,6 +60,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.5, poplar: 0.3, broadleaf: 0.2 }, perMetre: 0.12 },
     props: { kinds: list("hayBale", "picketFence"), every: 36 },
     fieldShare: 0.55,
+    houses: "cottage",
     crops: ARABLE,
   },
   deepWood: {
@@ -66,6 +69,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.6, birch: 0.2, pine: 0.2 }, perMetre: 0.18 },
     props: { kinds: list("logPile"), every: 56 },
     fieldShare: 0.05,
+    houses: "timber",
     crops: ARABLE,
   },
   wetland: {
@@ -74,6 +78,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.7, poplar: 0.3 }, perMetre: 0.16 },
     props: { kinds: list("boardwalk"), every: 50 },
     fieldShare: 0.1,
+    houses: "timber",
     crops: ARABLE,
   },
   highCountry: {
@@ -82,6 +87,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.4, rock: 0.4, pine: 0.2 }, perMetre: 0.1 },
     props: { kinds: list("cairn", "snowPole"), every: 64 },
     fieldShare: 0.05,
+    houses: "stone",
     crops: ARABLE,
   },
   pineCoast: {
@@ -90,6 +96,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.5, umbrellaPine: 0.4, rock: 0.1 }, perMetre: 0.16 },
     props: { kinds: list("stoneWall", "boardwalk"), every: 40 },
     fieldShare: 0.15,
+    houses: "whitewashed",
     crops: DRY,
   },
   oliveTerraces: {
@@ -98,6 +105,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { bush: 0.5, olive: 0.3, cypress: 0.2 }, perMetre: 0.16 },
     props: { kinds: list("stoneWall", "cart"), every: 30 },
     fieldShare: 0.15,
+    houses: "whitewashed",
     crops: DRY,
   },
   lavenderFields: {
@@ -106,6 +114,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { lavender: 0.6, bush: 0.4 }, perMetre: 0.2 },
     props: { kinds: list("picketFence", "bench"), every: 32 },
     fieldShare: 0.15,
+    houses: "stone",
     crops: { spring: list("lavender"), summer: list("lavender"), autumn: list("stubble"), winter: list("ploughed") },
   },
   almondValley: {
@@ -114,6 +123,7 @@ export const REGION_STYLE = frozen({
     verge: { mix: { almond: 0.4, bush: 0.6 }, perMetre: 0.18 },
     props: { kinds: list("picketFence", "mailbox", "beehive"), every: 28 },
     fieldShare: 0.15,
+    houses: "whitewashed",
     crops: DRY,
   },
 });

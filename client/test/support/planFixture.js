@@ -4,6 +4,7 @@ import { RIVER, buildRiverPath, withRivers } from "../../public/js/world/rivers.
 import { networkTerrain, terrainModel, waterLevel } from "../../public/js/world/roads.js";
 import { groundExtent } from "../../public/js/view3d/world.js";
 import { planWorld } from "../../public/js/world/plan/index.js";
+import { readFileSync } from "node:fs";
 import { tinyNetworkFile } from "../helpers.js";
 
 /** The tiny island with two regions (olive terraces, deep wood), one river across the south road and two junctions. */
@@ -41,3 +42,11 @@ export function longWorld() {
 
 /** `planWorld` on a fixture world; `options` override season and detail. */
 export const planOf = (world, options = {}) => planWorld({ season: "summer", detail: "high", ...world, ...options });
+
+/** The valley map (three settlements, five landmarks, no rivers) as a plan world; build once per test file, it is slow. */
+export function valleyWorld() {
+  const network = new RoadNetwork(JSON.parse(readFileSync(new URL("../../../routes/maps/valley.json", import.meta.url), "utf8")));
+  const roads = network.roads();
+  const terrain = networkTerrain(network, roads);
+  return { network, terrain, roads: terrain.index, routes: roads, rivers: [], regions: network.regions, seed: network.seed, bounds: groundExtent(terrain).bounds, settlements: network.settlements };
+}
