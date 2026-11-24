@@ -30,7 +30,7 @@ import { fbm, valueNoise } from "../../world/noise.js";
 
 export const COLORS = Object.freeze({
   road: [0.25, 0.26, 0.28],
-  verge: [0.62, 0.58, 0.48],
+  verge: [0.3, 0.21, 0.12], // earth, linear (the reference's #9a8360 dirt); the sRGB beige read as pale concrete
   marking: [0.93, 0.93, 0.89],
   edge: [0.9, 0.9, 0.86],
   rock: [0.52, 0.51, 0.49],

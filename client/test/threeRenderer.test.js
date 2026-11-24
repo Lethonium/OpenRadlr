@@ -258,3 +258,11 @@ test("an own renderer goes with the adapter", () => {
   renderer.destroy();
   assert.equal(fake.calls.disposed, 1);
 });
+
+test("the adapter's ambient sky is the whitened horizon by day and the dark zenith at night", async () => {
+  const { ambientSky } = await import("../public/js/view3d/threeRenderer.js");
+  const day = ambientSky([0.08, 0.34, 0.8], [0.56, 0.78, 1.0]);
+  assert.ok(Math.abs(day[0] - day[2]) < 0.35, `a pale, nearly neutral fill, not navy: ${day}`);
+  assert.ok(day[0] > 0.6, `bright: ${day}`);
+  assert.deepEqual(ambientSky([0.03, 0.06, 0.17], [0.06, 0.11, 0.25]).map((c) => +c.toFixed(2)), [0.03, 0.06, 0.17]);
+});

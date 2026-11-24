@@ -73,6 +73,20 @@ function meshMaterial(transparent) {
 const IDENTITY = new THREE.Matrix4();
 
 /**
+ * The sky colour the adapter's meshes take their ambient light from. The zenith alone is a deep blue
+ * that turns every wall's shade navy; by day the fill is the bright horizon, whitened (as the world
+ * scene's hemisphere light is), and at night it stays the dark zenith.
+ * @param {number[]} zenith
+ * @param {number[]} horizon
+ * @returns {number[]}
+ */
+export function ambientSky(zenith, horizon) {
+  const luma = 0.299 * horizon[0] + 0.587 * horizon[1] + 0.114 * horizon[2];
+  const day = Math.min(1, Math.max(0, (luma - 0.15) / 0.35));
+  return zenith.map((z, i) => z + (horizon[i] + (1 - horizon[i]) * 0.4 - z) * day);
+}
+
+/**
  * The own renderer left WebGL's default depth test, LESS; Three's is LESS_EQUAL.
  * It matters for the sky, which is drawn at the far plane (depth exactly 1):
  * with LESS it never shows, and the ride's sky is the flat horizon colour the
@@ -413,7 +427,7 @@ export class ThreeRenderer {
       u.u_cameraPosition.value.fromArray(frame.camera);
       u.u_sunDirection.value.fromArray(frame.sun);
       u.u_sunColor.value.fromArray(frame.sunColor);
-      u.u_skyColor.value.fromArray(frame.zenith);
+      u.u_skyColor.value.fromArray(ambientSky(frame.zenith, frame.horizon));
       u.u_groundColor.value.fromArray(frame.ground);
       u.u_fogColor.value.fromArray(frame.horizon);
       u.u_fogRange.value.fromArray(frame.fog);

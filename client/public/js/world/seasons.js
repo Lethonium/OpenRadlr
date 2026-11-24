@@ -26,30 +26,33 @@ const rgb = (r, g, b) => Object.freeze([r, g, b]);
 
 /** @type {Readonly<Record<Season, Readonly<SeasonLook>>>} */
 export const SEASON_LOOK = Object.freeze({
+  // The reference's palettes (sRGB): spring #4c8231, summer #98a752 (a pale, sunlit olive),
+  // autumn #ab8a3c, winter #e8edf3; the dry colour is the palette's second entry. The soil is its `dirt`
+  // (#9a8360), the rock #7b756c, the sand #d8c592.
   spring: Object.freeze({
-    grass: rgb(0.34, 0.5, 0.2),
-    grassDry: rgb(0.52, 0.54, 0.3),
-    soil: rgb(0.4, 0.31, 0.22),
-    rock: rgb(0.5, 0.48, 0.45),
-    sand: rgb(0.8, 0.74, 0.58),
+    grass: rgb(0.3, 0.51, 0.19),
+    grassDry: rgb(0.42, 0.61, 0.26),
+    soil: rgb(0.6, 0.51, 0.38),
+    rock: rgb(0.48, 0.46, 0.42),
+    sand: rgb(0.85, 0.77, 0.57),
     snowCover: 0,
     snowLine: NO_SNOW_LINE,
   }),
   summer: Object.freeze({
-    grass: rgb(0.3, 0.46, 0.2),
-    grassDry: rgb(0.55, 0.5, 0.3),
-    soil: rgb(0.42, 0.32, 0.22),
-    rock: rgb(0.52, 0.49, 0.45),
-    sand: rgb(0.84, 0.77, 0.6),
+    grass: rgb(0.6, 0.65, 0.32),
+    grassDry: rgb(0.71, 0.68, 0.38),
+    soil: rgb(0.6, 0.51, 0.38),
+    rock: rgb(0.48, 0.46, 0.42),
+    sand: rgb(0.85, 0.77, 0.57),
     snowCover: 0,
     snowLine: NO_SNOW_LINE,
   }),
   autumn: Object.freeze({
-    grass: rgb(0.42, 0.44, 0.2),
-    grassDry: rgb(0.6, 0.45, 0.22),
-    soil: rgb(0.38, 0.28, 0.2),
-    rock: rgb(0.48, 0.45, 0.42),
-    sand: rgb(0.78, 0.7, 0.54),
+    grass: rgb(0.67, 0.54, 0.24),
+    grassDry: rgb(0.63, 0.38, 0.18),
+    soil: rgb(0.56, 0.46, 0.34),
+    rock: rgb(0.48, 0.46, 0.42),
+    sand: rgb(0.82, 0.74, 0.54),
     snowCover: 0,
     snowLine: NO_SNOW_LINE,
   }),

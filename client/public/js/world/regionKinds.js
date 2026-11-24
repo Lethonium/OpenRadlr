@@ -45,7 +45,7 @@ const DRY = { spring: list("wheat"), summer: list("wheat"), autumn: list("stubbl
 /** @type {Readonly<Record<string, Readonly<RegionStyle>>>} */
 export const REGION_STYLE = frozen({
   meadow: {
-    ground: ground(rgb(0.9, 1.04, 0.86), rgb(0.96, 1, 0.82), rgb(1.02, 0.94, 0.78), rgb(0.94, 0.96, 0.98)),
+    ground: ground(rgb(0.95, 1.02, 0.93), rgb(0.98, 1, 0.91), rgb(1.02, 0.94, 0.78), rgb(0.94, 0.96, 0.98)),
     trees: { mix: { broadleaf: 0.6, birch: 0.2, poplar: 0.1, bush: 0.1 }, density: 14 },
     verge: { mix: { bush: 0.5, broadleaf: 0.3, birch: 0.2 }, perMetre: 0.14 },
     props: { kinds: list("picketFence", "hayBale"), every: 60 },
@@ -53,7 +53,7 @@ export const REGION_STYLE = frozen({
     crops: ARABLE,
   },
   farmBelt: {
-    ground: ground(rgb(0.92, 1.04, 0.8), rgb(1, 1, 0.76), rgb(1.06, 0.94, 0.72), rgb(0.94, 0.95, 0.96)),
+    ground: ground(rgb(0.96, 1.02, 0.9), rgb(1, 1, 0.88), rgb(1.06, 0.94, 0.72), rgb(0.94, 0.95, 0.96)),
     trees: { mix: { poplar: 0.4, broadleaf: 0.4, bush: 0.2 }, density: 8 },
     verge: { mix: { bush: 0.5, poplar: 0.3, broadleaf: 0.2 }, perMetre: 0.12 },
     props: { kinds: list("hayBale", "picketFence"), every: 36 },
@@ -61,7 +61,7 @@ export const REGION_STYLE = frozen({
     crops: ARABLE,
   },
   deepWood: {
-    ground: ground(rgb(0.7, 0.9, 0.7), rgb(0.66, 0.84, 0.66), rgb(0.82, 0.78, 0.6), rgb(0.82, 0.88, 0.9)),
+    ground: ground(rgb(0.85, 0.95, 0.85), rgb(0.83, 0.92, 0.83), rgb(0.82, 0.78, 0.6), rgb(0.82, 0.88, 0.9)),
     trees: { mix: { broadleaf: 0.45, pine: 0.3, birch: 0.25 }, density: 40 },
     verge: { mix: { bush: 0.6, birch: 0.2, pine: 0.2 }, perMetre: 0.18 },
     props: { kinds: list("logPile"), every: 56 },
@@ -69,7 +69,7 @@ export const REGION_STYLE = frozen({
     crops: ARABLE,
   },
   wetland: {
-    ground: ground(rgb(0.84, 1, 0.8), rgb(0.86, 0.96, 0.76), rgb(0.96, 0.9, 0.72), rgb(0.88, 0.92, 0.94)),
+    ground: ground(rgb(0.92, 1, 0.9), rgb(0.93, 0.98, 0.88), rgb(0.96, 0.9, 0.72), rgb(0.88, 0.92, 0.94)),
     trees: { mix: { poplar: 0.5, broadleaf: 0.2, bush: 0.3 }, density: 9 },
     verge: { mix: { bush: 0.7, poplar: 0.3 }, perMetre: 0.16 },
     props: { kinds: list("boardwalk"), every: 50 },
@@ -77,7 +77,7 @@ export const REGION_STYLE = frozen({
     crops: ARABLE,
   },
   highCountry: {
-    ground: ground(rgb(0.86, 0.94, 0.82), rgb(0.9, 0.92, 0.8), rgb(0.96, 0.9, 0.78), rgb(0.96, 0.97, 1)),
+    ground: ground(rgb(0.93, 0.97, 0.91), rgb(0.95, 0.96, 0.9), rgb(0.96, 0.9, 0.78), rgb(0.96, 0.97, 1)),
     trees: { mix: { pine: 0.7, birch: 0.2, rock: 0.1 }, density: 5 },
     verge: { mix: { bush: 0.4, rock: 0.4, pine: 0.2 }, perMetre: 0.1 },
     props: { kinds: list("cairn", "snowPole"), every: 64 },
@@ -85,7 +85,7 @@ export const REGION_STYLE = frozen({
     crops: ARABLE,
   },
   pineCoast: {
-    ground: ground(rgb(1, 1, 0.8), rgb(1.08, 1, 0.78), rgb(1.08, 0.96, 0.74), rgb(0.98, 0.97, 0.94)),
+    ground: ground(rgb(1, 1, 0.9), rgb(1.04, 1, 0.89), rgb(1.08, 0.96, 0.74), rgb(0.98, 0.97, 0.94)),
     trees: { mix: { umbrellaPine: 0.7, pine: 0.15, bush: 0.15 }, density: 12 },
     verge: { mix: { bush: 0.5, umbrellaPine: 0.4, rock: 0.1 }, perMetre: 0.16 },
     props: { kinds: list("stoneWall", "boardwalk"), every: 40 },
@@ -93,7 +93,7 @@ export const REGION_STYLE = frozen({
     crops: DRY,
   },
   oliveTerraces: {
-    ground: ground(rgb(1, 1, 0.76), rgb(1.14, 1.02, 0.72), rgb(1.1, 0.96, 0.7), rgb(0.98, 0.96, 0.92)),
+    ground: ground(rgb(1, 1, 0.88), rgb(1.07, 1.01, 0.86), rgb(1.1, 0.96, 0.7), rgb(0.98, 0.96, 0.92)),
     trees: { mix: { olive: 0.75, cypress: 0.1, bush: 0.15 }, density: 16 },
     verge: { mix: { bush: 0.5, olive: 0.3, cypress: 0.2 }, perMetre: 0.16 },
     props: { kinds: list("stoneWall", "cart"), every: 30 },
@@ -101,7 +101,7 @@ export const REGION_STYLE = frozen({
     crops: DRY,
   },
   lavenderFields: {
-    ground: ground(rgb(1, 1, 0.8), rgb(1.1, 1, 0.78), rgb(1.06, 0.94, 0.74), rgb(0.97, 0.96, 0.96)),
+    ground: ground(rgb(1, 1, 0.9), rgb(1.05, 1, 0.89), rgb(1.06, 0.94, 0.74), rgb(0.97, 0.96, 0.96)),
     trees: { mix: { olive: 0.5, cypress: 0.3, bush: 0.2 }, density: 3 },
     verge: { mix: { lavender: 0.6, bush: 0.4 }, perMetre: 0.2 },
     props: { kinds: list("picketFence", "bench"), every: 32 },
@@ -109,7 +109,7 @@ export const REGION_STYLE = frozen({
     crops: { spring: list("lavender"), summer: list("lavender"), autumn: list("stubble"), winter: list("ploughed") },
   },
   almondValley: {
-    ground: ground(rgb(0.96, 1.06, 0.84), rgb(0.96, 1.02, 0.8), rgb(1.04, 0.95, 0.76), rgb(0.95, 0.96, 0.97)),
+    ground: ground(rgb(0.98, 1.03, 0.92), rgb(0.98, 1.01, 0.9), rgb(1.04, 0.95, 0.76), rgb(0.95, 0.96, 0.97)),
     trees: { mix: { almond: 0.75, olive: 0.1, bush: 0.15 }, density: 14 },
     verge: { mix: { almond: 0.4, bush: 0.6 }, perMetre: 0.18 },
     props: { kinds: list("picketFence", "mailbox", "beehive"), every: 28 },

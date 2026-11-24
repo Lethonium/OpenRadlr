@@ -21,7 +21,7 @@ export const TIME_PRESETS = Object.freeze({
     // pull a pale sky to grey, so these come out as a clear blue.
     zenith: [0.08, 0.34, 0.8],
     horizon: [0.56, 0.78, 1.0],
-    ground: [0.4, 0.38, 0.3],
+    ground: [0.48, 0.42, 0.28],
     cloudTint: [1, 1, 1],
     fog: [260, 4200],
     shadowStrength: 0.62,
@@ -94,15 +94,16 @@ const linear = (rgb) => Object.freeze(rgb.map(toLinear));
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
 /**
- * How each look is lit in the world scene, from the reference: the exposure
+ * How each look is lit in the world scene, from the reference (its hemisphere light is 0.6 of the table's value
+ * plus an environment map of the sky at 0.6, which the scene has no map for; the hemisphere here carries both): the exposure
  * (night is lifted), the key and the hemisphere's strength and sky colour
  * (sRGB; the zenith is far too dark and blue to light a night, and the day
  * sky is brighter and whiter than its zenith), and the exponential-squared
  * fog's density per metre, about 2% of the view left at twelve kilometres by day.
  */
 export const LOOKS = Object.freeze({
-  day: Object.freeze({ exposure: 1.05, sun: 2.6, hemi: 0.7, hemiSky: [0.8, 0.9, 1.0], fog: 0.00016 }),
-  golden: Object.freeze({ exposure: 1.05, sun: 2.6, hemi: 0.7, hemiSky: [1.0, 0.82, 0.67], fog: 0.0002 }),
+  day: Object.freeze({ exposure: 1.05, sun: 3.1, hemi: 0.95, hemiSky: [0.84, 0.93, 1.0], fog: 0.00016 }),
+  golden: Object.freeze({ exposure: 1.05, sun: 2.6, hemi: 0.9, hemiSky: [1.0, 0.82, 0.67], fog: 0.0002 }),
   dusk: Object.freeze({ exposure: 1.1, sun: 2.0, hemi: 0.6, hemiSky: [0.62, 0.5, 0.62], fog: 0.00024 }),
   night: Object.freeze({ exposure: 1.5, sun: 1.8, hemi: 1.4, hemiSky: [0.25, 0.36, 0.62], fog: 0.00026 }),
 });
