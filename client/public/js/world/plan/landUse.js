@@ -264,3 +264,68 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
   return { parcels };
 }
 
+
+/** Floats per edge segment: x, y, z of its middle, yaw, horizontal length, pitch (rise over run, as an angle). */
+export const EDGE_STRIDE = 6;
+/** Longest edge segment (m): longer sides are cut so the edge follows the ground. */
+export const MAX_SEGMENT = 12;
+/** Neighbouring parcels leave one mask cell (~4 m) between them: sides this close (m) and parallel within `SHARED_ANGLE` are one side. */
+const SHARED_DISTANCE = 6;
+const SHARED_ANGLE = (5 * Math.PI) / 180;
+/** Side of the cells the kept sides are looked up by (m), above any side a parcel has. */
+const SIDE_CELL = 160;
+
+/**
+ * Every side of the parcels with an edge, neighbours' shared sides once. A side is shared when it is parallel
+ * to a side kept before within 5 degrees, its middle lies within 6 m (the 4 m gap plus 2 m) of that side's line,
+ * and at least half of it lies alongside that side; the later one is dropped.
+ * @param {Array<{corners: Float32Array, edge: "wall"|"hedge"|"none"}>} parcels
+ * @returns {{wall: Float32Array, hedge: Float32Array}} `EDGE_STRIDE` floats per segment of at most `MAX_SEGMENT`
+ */
+export function parcelEdges(parcels) {
+  const kept = new Map();
+  const lists = { wall: [], hedge: [] };
+  parcels.forEach((parcel, index) => {
+    if (parcel.edge !== "wall" && parcel.edge !== "hedge") return;
+    const c = parcel.corners;
+    for (let side = 0; side < 4; side += 1) {
+      const [a, b] = [side * 3, ((side + 1) % 4) * 3];
+      const [dx, dz] = [c[b] - c[a], c[b + 2] - c[a + 2]];
+      const length = Math.hypot(dx, dz);
+      if (length < 0.5) continue;
+      const [ux, uz] = [dx / length, dz / length];
+      const [mx, mz] = [(c[a] + c[b]) / 2, (c[a + 2] + c[b + 2]) / 2];
+      const [cx, cz] = [Math.floor(mx / SIDE_CELL), Math.floor(mz / SIDE_CELL)];
+      let shared = false;
+      for (let i = -1; i <= 1 && !shared; i += 1) {
+        for (let j = -1; j <= 1 && !shared; j += 1) {
+          for (const other of kept.get(`${cx + i},${cz + j}`) ?? []) {
+            if (other.index === index) continue;
+            const cross = Math.abs(ux * other.uz - uz * other.ux);
+            if (Math.asin(Math.min(1, cross)) > SHARED_ANGLE) continue;
+            if (Math.abs((mx - other.mx) * -other.uz + (mz - other.mz) * other.ux) > SHARED_DISTANCE) continue;
+            // This side's span along the other's direction, against the other's own span.
+            const along = (mx - other.mx) * other.ux + (mz - other.mz) * other.uz;
+            const half = (length / 2) * Math.abs(ux * other.ux + uz * other.uz);
+            const overlap = Math.min(along + half, other.length / 2) - Math.max(along - half, -other.length / 2);
+            if (overlap >= length / 2) shared = true;
+          }
+        }
+      }
+      if (shared) continue;
+      const key = `${cx},${cz}`;
+      if (!kept.has(key)) kept.set(key, []);
+      kept.get(key).push({ index, ux, uz, mx, mz, length });
+      const count = Math.ceil(length / MAX_SEGMENT);
+      const step = length / count;
+      const yaw = Math.atan2(dz, dx);
+      for (let n = 0; n < count; n += 1) {
+        const [t0, t1] = [n / count, (n + 1) / count];
+        const [y0, y1] = [c[a + 1] + (c[b + 1] - c[a + 1]) * t0, c[a + 1] + (c[b + 1] - c[a + 1]) * t1];
+        const t = (t0 + t1) / 2;
+        lists[parcel.edge].push(c[a] + dx * t, (y0 + y1) / 2, c[a + 2] + dz * t, yaw, step, Math.atan2(y1 - y0, step));
+      }
+    }
+  });
+  return { wall: Float32Array.from(lists.wall), hedge: Float32Array.from(lists.hedge) };
+}

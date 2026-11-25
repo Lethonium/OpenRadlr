@@ -6,6 +6,7 @@
 import { almond } from "./almond.js";
 import { birch, broadleaf, cypress, poplar } from "./broadleaf.js";
 import { bush } from "./bush.js";
+import { hedge, fieldWall } from "./fieldEdge.js";
 import { hayBale } from "./hayBale.js";
 import { lavender } from "./lavender.js";
 import { olive } from "./olive.js";
@@ -16,4 +17,4 @@ import { vine } from "./vine.js";
 
 export { CROPS } from "./crops.js";
 
-export const NATURE = Object.freeze({ almond, birch, broadleaf, bush, cypress, hayBale, lavender, olive, pine, poplar, rock, umbrellaPine, vine });
+export const NATURE = Object.freeze({ almond, birch, broadleaf, bush, cypress, hayBale, hedge, lavender, olive, pine, poplar, rock, fieldWall, umbrellaPine, vine });
