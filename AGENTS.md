@@ -9,6 +9,8 @@ repeat it. Here is the operational knowledge on top of that.
   (`OPENRADLR_STATIC_DIR=../client/public`, route file `rolling-hills.json`).
   Cold cargo build takes ~75s. It reads `.env.dev` if present (gitignored; see
   `.env.dev.example`): e.g. all routes, or Strava as in production.
+- `make dev-id` — like `make dev` with accounts (ADR 0032) on 127.0.0.1:8090; codes go
+  out with the `OPENRADLR_SMTP_*` settings from `.env`, else to the log. See `docs/accounts.md`.
 - `make up` — Docker Compose stack (creates `.env` from `.env.example` via `make setup`).
 - The client is plain ES modules — **no build step**. But the start menu fetches
   `/api/info` on load; served statically without a backend, it renders with an empty

@@ -10,7 +10,21 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+axum = { version = "0.8", default-features = false, features = ["json", "query"] }
 base64 = "0.22"
-# Rider keys are ECDSA P-256 (WebCrypto).
+hmac = "0.13"
+# Codes go out over SMTP with rustls and bundled roots (no system OpenSSL).
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "pool", "smtp-transport", "tokio1-rustls-tls"] }
+# Rider keys and passkeys are ECDSA P-256 (WebCrypto and WebAuthn ES256).
 p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sha2 = "0.11"
+tracing = "0.1"
+
+[dev-dependencies]
+http-body-util = "0.1"
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8", "alloc"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["util"] }

@@ -107,6 +107,8 @@ pub struct Config {
     pub privacy_url: Option<String>,
     /// Optional community invite (`OPENRADLR_DISCORD_URL`); unset hides the link.
     pub discord_url: Option<String>,
+    /// The account service at `/id` (ADR 0032), with `OPENRADLR_ID=on`; `None` = no accounts.
+    pub id: Option<IdConfig>,
     /// The OpenBikeNet server to share the velodrome with (`OPENRADLR_OBN_URL`); `None` = not connected.
     pub obn_url: Option<String>,
     /// Base of the reconnect delay to OpenBikeNet (no environment variable; for tests).
@@ -114,6 +116,41 @@ pub struct Config {
     /// When a quiet OpenBikeNet server is pinged and given up on (no environment variable;
     /// the spec's 20 s and 10 s, shorter in tests).
     pub obn_heartbeat: Heartbeat,
+}
+
+/// The account service (`OPENRADLR_ID=on`): it lives on the public URL and keeps its data
+/// in the data dir, keyed with the secret key, which the config requires for it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IdConfig {
+    /// The origin passkeys are bound to: `OPENRADLR_PUBLIC_URL`.
+    pub origin: String,
+    /// How sign-in codes are mailed; `None` writes them to the log (development only).
+    pub smtp: Option<SmtpConfig>,
+}
+
+/// `OPENRADLR_SMTP_*`. The password is never printed.
+#[derive(Clone, PartialEq)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub from: String,
+    /// `OPENRADLR_SMTP_TLS=tls`: TLS from the start (465); `starttls` (default, 587) upgrades.
+    pub implicit_tls: bool,
+}
+
+impl fmt::Debug for SmtpConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtpConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &"(hidden)")
+            .field("from", &self.from)
+            .field("implicit_tls", &self.implicit_tls)
+            .finish()
+    }
 }
 
 /// A Plausible-compatible analytics script the client loads on request of the operator.
@@ -331,6 +368,27 @@ impl Config {
                 "must be at least 16 characters (try `openssl rand -hex 32`)",
             )?;
         }
+        let id = if reader.flag("OPENRADLR_ID", false)? {
+            let missing = |needs: &str| ConfigError {
+                key: "OPENRADLR_ID",
+                value: "on".into(),
+                reason: format!("needs {needs}"),
+            };
+            let origin = public_url
+                .clone()
+                .ok_or_else(|| missing("OPENRADLR_PUBLIC_URL (passkeys are bound to it)"))?;
+            if data_dir.is_none() || secret_key.is_none() {
+                return Err(missing(
+                    "OPENRADLR_DATA_DIR and OPENRADLR_SECRET_KEY (accounts are stored there)",
+                ));
+            }
+            Some(IdConfig {
+                origin,
+                smtp: smtp_config(&reader)?,
+            })
+        } else {
+            None
+        };
         let require_strava = reader.flag("OPENRADLR_REQUIRE_STRAVA", false)?;
         if require_strava && strava.is_none() {
             return Err(ConfigError {
@@ -455,6 +513,7 @@ impl Config {
             analytics,
             privacy_url,
             discord_url,
+            id,
             obn_url,
             obn_backoff_unit: Duration::from_secs(1),
             obn_heartbeat: Heartbeat::default(),
@@ -482,6 +541,51 @@ impl Config {
             ..SimConfig::default()
         }
     }
+}
+
+/// `OPENRADLR_SMTP_*`: all of host, user, password and sender, or none of them.
+fn smtp_config(reader: &Reader) -> Result<Option<SmtpConfig>, ConfigError> {
+    let value = |key| reader.raw(key).filter(|v| !v.is_empty());
+    let (host, username, password, from) = (
+        value("OPENRADLR_SMTP_HOST"),
+        value("OPENRADLR_SMTP_USERNAME"),
+        value("OPENRADLR_SMTP_PASSWORD"),
+        value("OPENRADLR_SMTP_FROM"),
+    );
+    let (Some(host), Some(username), Some(password), Some(from)) = (host.clone(), username, password, from) else {
+        if host.is_some() {
+            return Err(ConfigError {
+                key: "OPENRADLR_SMTP_HOST",
+                value: String::new(),
+                reason: "also needs OPENRADLR_SMTP_USERNAME, OPENRADLR_SMTP_PASSWORD and OPENRADLR_SMTP_FROM".into(),
+            });
+        }
+        return Ok(None);
+    };
+    let implicit_tls = match reader
+        .raw("OPENRADLR_SMTP_TLS")
+        .map(|v| v.to_ascii_lowercase())
+        .as_deref()
+    {
+        None | Some("" | "starttls") => false,
+        Some("tls") => true,
+        Some(other) => {
+            return Err(ConfigError {
+                key: "OPENRADLR_SMTP_TLS",
+                value: other.to_owned(),
+                reason: "must be starttls or tls".into(),
+            })
+        }
+    };
+    let port = reader.parse("OPENRADLR_SMTP_PORT", if implicit_tls { 465 } else { 587 })?;
+    Ok(Some(SmtpConfig {
+        host,
+        port,
+        username,
+        password,
+        from,
+        implicit_tls,
+    }))
 }
 
 struct Reader<'a> {
@@ -554,6 +658,66 @@ mod tests {
     fn config(vars: &[(&str, &str)]) -> Result<Config, ConfigError> {
         let map: HashMap<String, String> = vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         Config::from_lookup(|key| map.get(key).cloned())
+    }
+
+    const ID_BASE: [(&str, &str); 4] = [
+        ("OPENRADLR_ID", "on"),
+        ("OPENRADLR_PUBLIC_URL", "https://app.openradlr.com/"),
+        ("OPENRADLR_DATA_DIR", "/data"),
+        ("OPENRADLR_SECRET_KEY", "0123456789abcdef0123"), // pragma: allowlist secret (a test placeholder)
+    ];
+
+    #[test]
+    fn accounts_are_off_by_default() {
+        assert_eq!(config(&[]).unwrap().id, None);
+    }
+
+    #[test]
+    fn accounts_live_on_the_public_url() {
+        let id = config(&ID_BASE).unwrap().id.unwrap();
+        assert_eq!((id.origin.as_str(), id.smtp), ("https://app.openradlr.com", None));
+    }
+
+    #[test]
+    fn accounts_need_a_public_url_a_data_dir_and_a_key() {
+        for left_out in ["OPENRADLR_PUBLIC_URL", "OPENRADLR_DATA_DIR", "OPENRADLR_SECRET_KEY"] {
+            let vars: Vec<_> = ID_BASE.iter().copied().filter(|(k, _)| *k != left_out).collect();
+            assert_eq!(config(&vars).unwrap_err().key, "OPENRADLR_ID", "without {left_out}");
+        }
+    }
+
+    #[test]
+    fn smtp_settings_are_read_with_starttls_by_default() {
+        let mut vars = ID_BASE.to_vec();
+        vars.extend([
+            ("OPENRADLR_SMTP_HOST", "smtp.example.org"),
+            ("OPENRADLR_SMTP_USERNAME", "u"),
+            ("OPENRADLR_SMTP_PASSWORD", "p"), // pragma: allowlist secret (a test placeholder)
+            ("OPENRADLR_SMTP_FROM", "OpenRadlr <noreply@example.org>"),
+        ]);
+        let smtp = config(&vars).unwrap().id.unwrap().smtp.unwrap();
+        assert_eq!((smtp.port, smtp.implicit_tls), (587, false));
+        vars.push(("OPENRADLR_SMTP_TLS", "tls"));
+        assert_eq!(config(&vars).unwrap().id.unwrap().smtp.unwrap().port, 465);
+    }
+
+    #[test]
+    fn an_smtp_host_without_credentials_is_an_error() {
+        let mut vars = ID_BASE.to_vec();
+        vars.push(("OPENRADLR_SMTP_HOST", "smtp.example.org"));
+        assert_eq!(config(&vars).unwrap_err().key, "OPENRADLR_SMTP_HOST");
+    }
+
+    #[test]
+    fn the_smtp_password_is_not_debug_printed() {
+        let mut vars = ID_BASE.to_vec();
+        vars.extend([
+            ("OPENRADLR_SMTP_HOST", "smtp.example.org"),
+            ("OPENRADLR_SMTP_USERNAME", "u"),
+            ("OPENRADLR_SMTP_PASSWORD", "hunter2"), // pragma: allowlist secret (a test placeholder)
+            ("OPENRADLR_SMTP_FROM", "a@example.org"),
+        ]);
+        assert!(!format!("{:?}", config(&vars).unwrap()).contains("hunter2"));
     }
 
     #[test]

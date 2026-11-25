@@ -325,6 +325,11 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         None => None,
     };
 
+    let id = match &config.id {
+        Some(id_config) => Some(Arc::new(account_service(config, id_config)?)),
+        None => None,
+    };
+
     let state = AppState {
         client_requests: crate::client_requests::ClientRequests::with_releases(&config.app_metric_releases)
             .expect("validated app release allowlist"),
@@ -348,9 +353,49 @@ pub fn build_with_stats(config: &Config) -> Result<(Router, DistanceStats), BoxE
         afk: AfkStats::default(),
         pair_codes: crate::pair_codes::PairCodes::new(),
         screens: crate::screens::Screens::new(),
+        id,
     };
     let headers = crate::headers::security_headers(config.analytics.as_ref(), config.public_url.as_deref());
     Ok((router(state, config.static_dir.as_deref(), &headers), stats))
+}
+
+/// The account service (ADR 0032) on `id.sqlite` in the data dir, mailing codes over SMTP
+/// (or to the log, without SMTP settings).
+fn account_service(
+    config: &Config,
+    id_config: &crate::config::IdConfig,
+) -> Result<openradlr_id::service::IdService, BoxError> {
+    use openradlr_id::mailer::{LogMailer, Mailer, SmtpMailer, SmtpSettings};
+    use openradlr_id::service::{IdService, Settings};
+    let (Some(dir), Some(secret)) = (&config.data_dir, &config.secret_key) else {
+        return Err("accounts need OPENRADLR_DATA_DIR and OPENRADLR_SECRET_KEY".into());
+    };
+    let settings = Settings::for_origin(&id_config.origin, secret.as_bytes().to_vec())
+        .ok_or("OPENRADLR_PUBLIC_URL is not an origin (scheme, host and port only)")?;
+    let mailer: Arc<dyn Mailer> = match &id_config.smtp {
+        Some(smtp) => Arc::new(SmtpMailer::new(&SmtpSettings {
+            host: smtp.host.clone(),
+            port: smtp.port,
+            username: smtp.username.clone(),
+            password: smtp.password.clone(),
+            from: smtp.from.clone(),
+            implicit_tls: smtp.implicit_tls,
+        })?),
+        None => {
+            tracing::warn!("accounts without OPENRADLR_SMTP_*: sign-in codes are only written to this log");
+            Arc::new(LogMailer)
+        }
+    };
+    std::fs::create_dir_all(dir)?;
+    let store = openradlr_id::store::Store::open(&dir.join("id.sqlite"))?;
+    tracing::info!(origin = %settings.origin, "accounts enabled at /id");
+    Ok(IdService::new(
+        store,
+        settings,
+        mailer,
+        Arc::new(|| unix_now_s() as i64),
+        Arc::new(crate::secure_random::random_bytes),
+    ))
 }
 
 pub fn unix_now_s() -> f64 {
