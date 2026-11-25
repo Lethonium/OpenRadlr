@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { ChunkedMesh, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
-import { Occupancy, buildRoadside } from "../public/js/view3d/features.js";
+import { Occupancy, roadsideFurniture } from "../public/js/view3d/features.js";
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/rivers.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { placement } from "../public/js/view3d/math.js";
@@ -676,11 +676,9 @@ test("Island Tour rides the coast", () => {
 
 test("a cliff zone gets a guard rail on the sea side only", () => {
   const road = new RouteGeometry({ id: "c", name: "c", lanes: 4, seed: 1, loop: false, points: [[0, 0, 10], [600, 0, 10]], zones: [] });
-  const posts = [];
-  const structures = { box: (at) => posts.push(at), orientedBox: () => {} };
   // The ground falls away on one side of the road: that is the sea.
   const terrain = { height: (x, z) => (z > 0 ? -5 : 25) };
-  buildRoadside(road, terrain, { structures, bright: {}, markers: false, cliffs: [{ from: 100, to: 400 }] });
+  const posts = roadsideFurniture(road, terrain, { markers: false, cliffs: [{ from: 100, to: 400 }] }).rails.map((rail) => rail.a);
   assert.ok(posts.length > 30, `${posts.length} posts`);
   for (const [x, , z] of posts) {
     assert.ok(x >= 99 && x <= 401, `post at ${x} m is outside the cliff zone`);
@@ -691,9 +689,7 @@ test("a cliff zone gets a guard rail on the sea side only", () => {
 test("on the real map the cliff rail is on the side the sea is nearer", () => {
   const road = roads.find((r) => r.edge.id === "south-coast");
   const { seaLevel } = mapWorld.terrain;
-  const posts = [];
-  const structures = { box: (at) => posts.push(at), orientedBox: () => {} };
-  buildRoadside(road, mapWorld.terrain, { structures, bright: {}, markers: false, twoWay: true, railGrade: 1000, cliffs: resolveZones(road).cliffs });
+  const posts = roadsideFurniture(road, mapWorld.terrain, { markers: false, twoWay: true, railGrade: 1000, cliffs: resolveZones(road).cliffs }).rails.map((rail) => rail.a);
   const toSea = (x, z, dx, dz) => {
     for (let m = 20; m <= 400; m += 20) if (mapWorld.terrain.height(x + dx * m, z + dz * m) < seaLevel) return m;
     return Infinity;

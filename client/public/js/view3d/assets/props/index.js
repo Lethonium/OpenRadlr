@@ -12,6 +12,7 @@ import * as lemon from "./lemon.js";
 import { logPile } from "./logPile.js";
 import { mailbox } from "./mailbox.js";
 import * as routeArch from "./routeArch.js";
+import { villageSign, warningSign } from "./roadSigns.js";
 import { picketFence } from "./picketFence.js";
 import { snowPole } from "./snowPole.js";
 import { stoneWall } from "./stoneWall.js";
@@ -22,4 +23,6 @@ export const PROPS = Object.freeze({ beehive, bench, boardwalk, cairn, cart, log
 export const FLOATERS = Object.freeze({
   lemon: Object.freeze({ meta: lemon.meta, create: lemon.create }),
   "route-arch": Object.freeze({ meta: routeArch.meta, create: routeArch.create }),
+  "warning-sign": warningSign,
+  "village-sign": villageSign,
 });

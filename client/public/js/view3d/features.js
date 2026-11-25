@@ -40,34 +40,23 @@ export class Occupancy {
   }
 }
 
-// ------------------------------------------------------------ shared models ---
+// ------------------------------------------------------------- village boards ---
 
 /** Metres from the road's edge to a village name board. */
 const BOARD_SETBACK = 3.2;
 
-const modelsByBiome = new Map();
-function sharedModels(biome) {
-  let models = modelsByBiome.get(biome.id);
-  if (!models) {
-    models = { warning: biome.models.warning(), villageSign: biome.models.villageSign() };
-    modelsByBiome.set(biome.id, models);
-  }
-  return models;
-}
-
 /** The village name boards at both ends of each zone, facing approaching riders. */
-function buildVillageSigns(route, villages, terrain, { structures, bright, biome }) {
+function villageSigns(route, villages, terrain) {
   const half = roadHalfWidth(route.lanes);
-  const m = sharedModels(biome);
+  const signs = [];
   for (const zone of villages) {
     for (const d of [zone.from, zone.to]) {
       const f = roadFrame(route, d);
       const pos = add(f.center, scale(f.right, half + BOARD_SETBACK));
-      const model = placement([pos[0], terrain.height(pos[0], pos[2]), pos[2]], yawFor(scale(f.forward, -1)));
-      structures.append(m.villageSign.post, model);
-      bright.append(m.villageSign.face, model);
+      signs.push({ kind: "village", position: [pos[0], terrain.height(pos[0], pos[2]), pos[2]], yaw: yawFor(scale(f.forward, -1)) });
     }
   }
+  return signs;
 }
 
 // -------------------------------------------------------------- spectators ---
@@ -179,16 +168,19 @@ function seaDistance(terrain, x, z, dx, dz) {
 /**
  * Guard rails on descents, warning signs around climbs and a flamme rouge
  * one kilometre before the finish (without `markers`: guard rails only;
- * without `rails`: signs only). `twoWay` roads get rails where they are
- * steeper (5 %) either way, since a climb is a descent the other way.
- * `villages` are zone stretches whose ends get a name board. `cliffs` are stretches along a cliff: a rail on the side where the ground
+ * without `rails`: signs only), as placement data for scene/furnitureLayer.js:
+ * `rails` are segments (`a`, `b`: their ends on the road's height), `signs` are
+ * `warning` or `village` boards (`position` on the ground, `yaw` facing the
+ * approaching rider), `flammeRouge` the pennant's spot (`position` the road's
+ * centre, `halfWidth` the posts' offset) or null. `twoWay` roads get rails
+ * where they are steeper (5 %) either way, since a climb is a descent the
+ * other way. `villages` are zone stretches whose ends get a name board.
+ * `cliffs` are stretches along a cliff: a rail on the side where the ground
  * falls away (the sea side), whichever way the road runs.
  */
-export function buildRoadside(route, terrain, { structures, bright, skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [], villages = [], biome = temperate }) {
+export function roadsideFurniture(route, terrain, { skip = () => false, markers = true, rails = true, twoWay = false, railGrade = 3, railStep = 4, cliffs = [], villages = [] }) {
   const half = roadHalfWidth(route.lanes) + VERGE;
-  const m = sharedModels(biome);
-  const palette = biome.palette;
-  buildVillageSigns(route, villages, terrain, { structures, bright, biome });
+  const furniture = { rails: [], signs: villageSigns(route, villages, terrain), flammeRouge: null };
 
   // Guard rails wherever the road descends steeply (either way on a two-way road).
   for (let d = 0; rails && d < route.length; d += railStep) {
@@ -201,41 +193,29 @@ export function buildRoadside(route, terrain, { structures, bright, skip = () =>
       const gap = (side) => seaDistance(terrain, f0.center[0], f0.center[2], f0.right[0] * side, f0.right[2] * side);
       sides = [gap(1) < gap(-1) ? 1 : -1];
     }
-    for (const side of sides) {
-      const p0 = add(f0.center, scale(f0.right, side * (half + 0.3)));
-      const p1 = add(f1.center, scale(f1.right, side * (half + 0.3)));
-      structures.box([p0[0], p0[1] + 0.2, p0[2]], [0.12, 0.9, 0.12], palette.pole);
-      const mid = scale(add(p0, p1), 0.5);
-      structures.orientedBox([mid[0], mid[1] + 0.55, mid[2]], sub(p1, p0), [0, 0.3, 0], scale(f0.right, 0.06), palette.metal);
-    }
+    for (const side of sides) furniture.rails.push({ a: add(f0.center, scale(f0.right, side * (half + 0.3))), b: add(f1.center, scale(f1.right, side * (half + 0.3))) });
   }
 
   // Signs and the flamme rouge belong to the ridden route only.
-  if (!markers) return;
+  if (!markers) return furniture;
 
-  const sign = (distance, model) => {
+  const sign = (distance) => {
     const f = roadFrame(route, distance);
     const pos = add(f.center, scale(f.right, half + 0.9));
-    const placementMatrix = placement([pos[0], terrain.height(pos[0], pos[2]), pos[2]], yawFor(scale(f.forward, -1)));
-    structures.append(model.post, placementMatrix);
-    bright.append(model.face, placementMatrix);
+    furniture.signs.push({ kind: "warning", position: [pos[0], terrain.height(pos[0], pos[2]), pos[2]], yaw: yawFor(scale(f.forward, -1)) });
   };
   for (const marker of route.markers) {
     if (marker.type !== "climb") continue;
-    sign(marker.distance - 120, m.warning);
-    sign(marker.distance + (marker.length ?? 0) + 25, m.warning);
+    sign(marker.distance - 120);
+    sign(marker.distance + (marker.length ?? 0) + 25);
   }
 
   // Flamme rouge: red pennant over the road one kilometre before the finish.
   if (route.length > 1500) {
     const f = roadFrame(route, route.length - 1000);
-    const width = half + 0.6;
-    for (const side of [-1, 1]) structures.box(add(add(f.center, scale(f.right, side * width)), [0, 2.6, 0]), [0.25, 5.2, 0.25], palette.white);
-    structures.orientedBox(add(f.center, [0, 5.3, 0]), scale(f.right, 2 * width + 0.3), [0, 0.3, 0], scale(normalize([f.forward[0], 0, f.forward[2]]), -0.2), palette.white);
-    const face = scale(normalize([f.forward[0], 0, f.forward[2]]), -1);
-    const top = add(f.center, [0, 5.15, 0]);
-    bright.triangleFacing(add(top, scale(f.right, -1.4)), add(top, scale(f.right, 1.4)), add(f.center, [0, 3.6, 0]), palette.red, face);
+    furniture.flammeRouge = { position: [...f.center], yaw: yawFor(scale(normalize([f.forward[0], 0, f.forward[2]]), -1)), halfWidth: half + 0.6 };
   }
+  return furniture;
 }
 
 // --------------------------------------------------------------- bike café ---

@@ -19,7 +19,7 @@ import {
   buildOutdoorGym,
   gymClearing,
   studioSite,
-  buildRoadside,
+  roadsideFurniture,
   buildSpectators,
 } from "./features.js";
 import { COAST } from "../world/island.js";
@@ -316,22 +316,26 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // The crowd's two poses are biome models like every other shape; the view
   // only alternates them (and adds the hop) while drawing.
   const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
+  // Rails and signs are placement data for the furniture layer; barriers join them with the crowd's.
+  const furniture = { rails: [], signs: [], flammeRouge: null, barriers: [] };
+  const collect = (found) => {
+    for (const rail of found.rails) furniture.rails.push(rail);
+    for (const sign of found.signs) furniture.signs.push(sign);
+    furniture.flammeRouge ??= found.flammeRouge;
+  };
   for (const r of ordered) {
     const { villages, cliffs } = zonesOf.get(r);
-    buildRoadside(r, terrain, {
+    collect(roadsideFurniture(r, terrain, {
       cliffs,
       villages,
-      structures: chunks.structures,
-      bright: chunks.bright,
       markers: r === route,
       twoWay: Boolean(network),
-      biome,
       ...(long ? { railGrade: LONG.railGrade, railStep: LONG.railStep } : {}),
       skip: (d) => (!network && onStretches(shared.get(r), d)) || onBridge(r, d) || inStretch(r, villages, d, 10),
-    });
+    }));
   }
   // On a network the roads have the rails; the ridden route adds its signs.
-  if (network) buildRoadside(route, terrain, { structures: chunks.structures, bright: chunks.bright, rails: false, biome });
+  if (network) collect(roadsideFurniture(route, terrain, { rails: false }));
 
   // The river's colour is a bare colour or an object with colour, opacity and (frozen) ice patches.
   const river = Array.isArray(biome.river) ? { color: biome.river } : (biome.river ?? {});
@@ -352,6 +356,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     arches: archPlacements(route),
+    furniture,
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
     spectators,
