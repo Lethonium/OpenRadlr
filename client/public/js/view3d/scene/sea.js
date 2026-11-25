@@ -37,13 +37,28 @@ export function seaLight(env) {
   return 0.18 + 0.82 * t * t * (3 - 2 * t);
 }
 
-/** Water depth below the sea level as a texture: red is depth over `SEA.depthRange`, clamped. */
-function depthTexture(grid) {
+/** Metres from a depth grid's border over which the water deepens to the full depth: outside the grid the sea is deep, a shelf that ends at the border would show as a straight line. */
+const EDGE_FADE = 64;
+
+/** Water depth below the sea level as RGBA bytes: red is depth over `SEA.depthRange`, clamped, and full at the grid's border. */
+export function seaDepthData(grid) {
   const data = new Uint8Array(grid.columns * grid.rows * 4);
-  for (let k = 0; k < grid.columns * grid.rows; k += 1) {
-    data[k * 4] = Math.round(Math.min(1, Math.max(0, (grid.water - grid.heights[k]) / SEA.depthRange)) * 255);
-    data[k * 4 + 3] = 255;
+  for (let j = 0; j < grid.rows; j += 1) {
+    for (let i = 0; i < grid.columns; i += 1) {
+      const k = j * grid.columns + i;
+      const t = Math.min(1, (Math.min(i, j, grid.columns - 1 - i, grid.rows - 1 - j) * grid.cell) / EDGE_FADE);
+      const deepen = 1 - t * t * (3 - 2 * t);
+      const depth = Math.min(1, Math.max(0, (grid.water - grid.heights[k]) / SEA.depthRange));
+      data[k * 4] = Math.round((depth + (1 - depth) * deepen) * 255);
+      data[k * 4 + 3] = 255;
+    }
   }
+  return data;
+}
+
+/** Water depth below the sea level as a texture (see `seaDepthData`). */
+function depthTexture(grid) {
+  const data = seaDepthData(grid);
   const texture = new THREE.DataTexture(data, grid.columns, grid.rows, THREE.RGBAFormat);
   texture.magFilter = texture.minFilter = THREE.LinearFilter;
   texture.needsUpdate = true;

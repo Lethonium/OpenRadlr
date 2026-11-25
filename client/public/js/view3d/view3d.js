@@ -156,7 +156,9 @@ export function isWebGl2Available(doc = globalThis.document) {
  * rider, the drone at least 70 m above the ground.
  */
 export const RIDE_LENS = Object.freeze({ near: 1, far: 9000, haze: 1, shadows: true });
-export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 2.6, shadows: false });
+export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 1.5, shadows: false });
+/** The drone's haze before it thickened: its draw reach (`reach`) is still what this clearer air gave. */
+const CLEAR_HAZE = 2.6;
 
 /**
  * The menu's gym orbit drops far below the drone (about 17 m up over the mat,
@@ -168,14 +170,14 @@ export const GYM_LENS = Object.freeze({ ...DRONE_LENS, near: 2 });
 
 /**
  * The drone's lens for an island of `overview.radius` metres: the haze grows
- * with the island, so the far coast stays clear from the orbit (the fixed
- * DRONE_LENS was made for a 2.5 km island and fogged a 6 km one over).
+ * with a big island, so its far coast stays a silhouette in the haze rather than
+ * being fogged out (the fixed DRONE_LENS was made for a 2.5 km island).
  */
 export function droneLens(overview) {
   const radius = overview?.radius ?? 0;
-  const haze = Math.max(DRONE_LENS.haze, radius / 1500);
-  // Small things reach as far as before (`reach`): the clearer air must not cost frames.
-  return Object.freeze({ ...DRONE_LENS, haze, reach: Math.sqrt(DRONE_LENS.haze), far: Math.max(DRONE_LENS.far, radius * 3.4) });
+  const haze = Math.max(DRONE_LENS.haze, radius / 3000);
+  // Small things reach as far as the clearer air let them (`reach`): the thicker haze must not cost the view its depth.
+  return Object.freeze({ ...DRONE_LENS, haze, reach: Math.sqrt(CLEAR_HAZE), far: Math.max(DRONE_LENS.far, radius * 3.4) });
 }
 
 /**

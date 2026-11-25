@@ -592,7 +592,13 @@ test("the drone's haze grows with the island, its draw reach does not", async ()
   assert.deepEqual({ ...droneLens({ radius: 2000 }), reach: undefined }, { ...DRONE_LENS, reach: undefined });
   const big = droneLens({ radius: 6500 });
   assert.ok(big.haze > DRONE_LENS.haze && big.far >= 6500 * 3);
-  assert.equal(big.reach, Math.sqrt(DRONE_LENS.haze));
+  assert.equal(big.reach, Math.sqrt(2.6), "the draw reach stays what the old, clearer air gave");
+});
+
+test("the drone's haze is thicker than before", async () => {
+  const { droneLens } = await import("../public/js/view3d/view3d.js");
+  assert.equal(droneLens({ radius: 3000 }).haze, 1.5);
+  assert.equal(droneLens({ radius: 9000 }).haze, 3);
 });
 
 test("the gym's lens keeps the low orbit's foreground out of the near plane", async () => {
