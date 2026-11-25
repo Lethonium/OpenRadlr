@@ -109,6 +109,7 @@ import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
+import { ownAvatar } from "./workout/ownAvatar.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
@@ -2891,8 +2892,8 @@ function workoutFrame() {
     app.view3d?.setStatueGlow(null, null);
   }
   if (app.state && app.viewMode === "3d") {
-    // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
+    // My avatar keeps step with my timer: its exercise and clip start with the block, not when the server echoed it.
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId ? ownAvatar(rider, workout, blockStart) : rider));
     app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, utcSeconds: Date.now() / 1000, colors: themeColors() });
   }
 }
