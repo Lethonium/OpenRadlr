@@ -161,19 +161,34 @@ test("the height sampler agrees with the grid at its vertices and between them",
   assert.ok(mid >= lo - 1e-4 && mid <= hi + 1e-4);
 });
 
-test("one crop mesh per field, laid inside the field's corners", () => {
+test("fields lie in merged meshes, each holding its fields' corners", () => {
   assert.ok(plan.fields.length > 0, "the fixture has fields");
   const layer = createCropLayer(plan, { ...options(), ground });
-  assert.equal(layer.fields.length, plan.fields.length);
-  layer.fields.forEach((mesh, i) => {
-    const box = new THREE.Box3().setFromObject(mesh);
-    const { corners } = plan.fields[i];
-    const xs = [0, 3, 6, 9].map((k) => corners[k]);
-    const zs = [0, 3, 6, 9].map((k) => corners[k + 2]);
-    assert.ok(box.min.x >= Math.min(...xs) - 1 && box.max.x <= Math.max(...xs) + 1, `field ${i} x`);
-    assert.ok(box.min.z >= Math.min(...zs) - 1 && box.max.z <= Math.max(...zs) + 1, `field ${i} z`);
+  assert.equal(layer.fields.length, layer.stats().meshes);
+  assert.ok(layer.fields.length <= plan.fields.length);
+  const boxes = layer.fields.map((mesh) => new THREE.Box3().setFromObject(mesh));
+  plan.fields.forEach(({ corners, crop }, i) => {
+    const holds = layer.fields.some((mesh, m) => {
+      if (mesh.name !== `field-${crop}`) return false;
+      return [0, 3, 6, 9].every((k) => boxes[m].min.x <= corners[k] + 1 && boxes[m].max.x >= corners[k] - 1 && boxes[m].min.z <= corners[k + 2] + 1 && boxes[m].max.z >= corners[k + 2] - 1);
+    });
+    assert.ok(holds, `field ${i} lies in a ${crop} mesh`);
   });
   layer.dispose();
+});
+
+test("fields share one mesh per crop and chunk", () => {
+  const field = (x, z, crop) => ({ width: 40, depth: 30, x, z, yaw: 0, crop });
+  const crops = ["wheat", "rapeseed"];
+  const together = Array.from({ length: 50 }, (_, i) => field(10 + (i % 10) * 15, 10 + Math.floor(i / 10) * 15, crops[i % 2]));
+  const one = createCropLayer({ fields: together }, { ...options(low), ground });
+  assert.equal(one.stats().meshes, 2, "50 fields of 2 crops in one chunk");
+  one.dispose();
+  const apart = together.map((f, i) => ({ ...f, x: f.x + (i % 3) * 1000 }));
+  const spread = createCropLayer({ fields: apart }, { ...options(low), ground });
+  assert.ok(spread.stats().meshes <= 6, `${spread.stats().meshes} meshes over 3 chunks`);
+  assert.ok(spread.stats().meshes > 2);
+  spread.dispose();
 });
 
 test("field extras are grouped by area so the camera culls them", () => {
@@ -251,6 +266,20 @@ test("a quality change rebuilds the plant layers to the new level", () => {
   assert.equal(blades(), wanted(high));
   scene.setQuality(low);
   assert.equal(blades(), wanted(low));
+  scene.dispose();
+  assert.equal(tracker.live(), 0);
+});
+
+test("a quality change rebuilds the land layers without leaks", () => {
+  const tracker = createTracker();
+  const scene = createWorldScene({ ground, plan, season: "summer" }, { settings: high, track: tracker.track });
+  scene.setQuality(low);
+  const after = tracker.live();
+  const crops = scene.scene.getObjectByName("crops");
+  scene.setQuality(qualitySettings("ultra"));
+  assert.notEqual(scene.scene.getObjectByName("crops"), crops, "crops rebuilt");
+  scene.setQuality(low);
+  assert.equal(tracker.live(), after, "back to the same live count");
   scene.dispose();
   assert.equal(tracker.live(), 0);
 });

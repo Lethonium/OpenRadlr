@@ -94,16 +94,16 @@ test("a huge island plans in time", () => {
   assert.ok(took < 5000, `took ${Math.round(took)} ms`);
 });
 
-test("fields come from the arable parcels near roads", () => {
+test("fields are the arable parcels, all over the island", () => {
   const plan = planOf(valley);
   const arable = plan.landUse.parcels.filter((p) => p.kind === "arable");
   assert.ok(plan.fields.length > 0);
   for (const f of plan.fields) {
     const parcel = arable.find((p) => p.x === f.x && p.z === f.z && p.width === f.width && p.depth === f.depth && p.yaw === f.yaw && p.crop === f.crop);
     assert.ok(parcel, `field at ${f.x},${f.z} is no arable parcel`);
-    const near = valley.roads.nearest(f.x, f.z, 5);
-    assert.ok(near && near.distance <= 260, "field within 260 m of a road");
   }
+  assert.equal(plan.fields.length, arable.length, "every arable parcel is a field");
+  assert.ok(plan.fields.some((f) => valley.roads.nearest(f.x, f.z, 5)?.distance > 260 || !valley.roads.nearest(f.x, f.z, 5)), "some lie far from any road");
 });
 
 test("the plan hands the land use to the page", () => {

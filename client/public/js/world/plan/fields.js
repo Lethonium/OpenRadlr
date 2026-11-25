@@ -1,10 +1,9 @@
 /**
- * Crop fields: the arable parcels of the island's land use that lie near a
- * road. Crops, stalks, farms and fauna take them as `Field`s.
+ * Crop fields: the arable parcels of the island's land use. Crops, stalks, farms and fauna take them as `Field`s.
  */
 
-/** Metres from a road within which an arable parcel is drawn as a 3D field. */
-export const FIELD_REACH = 260;
+/** Metres from a road within which an arable parcel is drawn as a 3D field: all of them. */
+export const FIELD_REACH = Infinity;
 
 /**
  * @typedef {object} Field
@@ -21,15 +20,17 @@ export const FIELD_REACH = 260;
 /**
  * @param {import("./landUse.js").Parcel[]} parcels
  * @param {import("../roads.js").RoadIndex} roads
- * @param {{reach?: number}} [options]
+ * @param {{reach?: number}} [options] `reach` limits the fields to those this near a road (metres; default all)
  * @returns {Field[]}
  */
 export function fieldsFromParcels(parcels, roads, { reach = FIELD_REACH } = {}) {
   const fields = [];
   for (const { kind, x, z, width, depth, yaw, crop, corners } of parcels) {
     if (kind !== "arable") continue;
-    const near = roads.nearest(x, z, Math.ceil(reach / roads.cell));
-    if (!near || near.distance > reach) continue;
+    if (reach < Infinity) {
+      const near = roads.nearest(x, z, Math.ceil(reach / roads.cell));
+      if (!near || near.distance > reach) continue;
+    }
     fields.push({ x, z, width, depth, yaw, crop, corners });
   }
   return fields;

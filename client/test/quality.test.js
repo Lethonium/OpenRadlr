@@ -115,3 +115,15 @@ test("every level has riders full and reach", () => {
   assert.deepEqual(fulls, [...fulls].sort((a, b) => a - b));
   assert.ok(fulls[0] >= 1);
 });
+
+test("every level sets the land-use reaches, growing from low to ultra", () => {
+  let before = null;
+  for (const level of QUALITY_LEVELS) {
+    const { landUse } = qualitySettings(level);
+    for (const key of ["rows", "edges", "scrub"]) {
+      assert.ok(landUse[key] > 0, `${level}.${key}`);
+      if (before) assert.ok(landUse[key] > before[key], `${level}.${key} grows`);
+    }
+    before = landUse;
+  }
+});

@@ -171,7 +171,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
+    rebuild("islands", "forest", "crops", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
   };
   setQuality(settings);
 

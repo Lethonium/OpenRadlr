@@ -1,6 +1,6 @@
 /**
- * The island's crop fields: one draped, shader-drawn rectangle per planned
- * field, and the pumpkins and round bales that lie on some of them.
+ * The island's crop fields: draped, shader-drawn rectangles, merged into one
+ * mesh per crop and 250 m area, and the pumpkins and round bales that lie on some of them.
  */
 import * as THREE from "../../three.js";
 import { seededRandom } from "../../world/noise.js";
@@ -18,6 +18,23 @@ const PUMPKIN = colour("#f28a1e");
 
 /** Side of the areas the extras are grouped in, so the camera culls the far ones. */
 const CELL = 250;
+
+/** The non-indexed field geometries (same attributes) as one; the pieces are freed. */
+function mergeFieldGeometries(geometries) {
+  const merged = new THREE.BufferGeometry();
+  for (const name of ["position", "normal", "aF"]) {
+    const data = new Float32Array(geometries.reduce((n, g) => n + g.getAttribute(name).array.length, 0));
+    let at = 0;
+    for (const g of geometries) {
+      data.set(g.getAttribute(name).array, at);
+      at += g.getAttribute(name).array.length;
+    }
+    merged.setAttribute(name, new THREE.BufferAttribute(data, 3));
+  }
+  for (const g of geometries) g.dispose();
+  merged.computeBoundingSphere();
+  return merged;
+}
 
 /** One instanced mesh per area of `things`, each placed by `place(thing, matrix, colour)`; geometry and material are shared. */
 function instances(things, geometry, material, own, place) {
@@ -61,14 +78,21 @@ export function createCropLayer(plan, { ground, uniforms, track, settings }) {
   const random = seededRandom(SEED);
   const pumpkins = [];
   const bales = [];
-  const fields = plan.fields.map((field) => {
-    const mesh = new THREE.Mesh(own(fieldGeometry({ ...field, heightAt, edgeBand: STALK_CROPS[field.crop] ? (settings?.cropStalks?.edgeBand ?? 0) : 0 })), material(field.crop));
-    mesh.receiveShadow = true;
-    mesh.name = `field-${field.crop}`;
-    object.add(mesh);
+  // The fields of one 250 m area and crop share a mesh, so the island's fields cost a few draw calls and the camera culls the far areas.
+  const chunks = new Map();
+  for (const field of plan.fields) {
+    const key = `${field.crop}|${Math.floor(field.x / CELL)},${Math.floor(field.z / CELL)}`;
+    if (!chunks.has(key)) chunks.set(key, { crop: field.crop, geometries: [] });
+    chunks.get(key).geometries.push(fieldGeometry({ ...field, heightAt, edgeBand: STALK_CROPS[field.crop] ? (settings?.cropStalks?.edgeBand ?? 0) : 0 }));
     const extras = fieldExtras({ ...field, heightAt, random });
     pumpkins.push(...extras.pumpkins);
     bales.push(...extras.bales);
+  }
+  const fields = [...chunks.values()].map(({ crop, geometries }) => {
+    const mesh = new THREE.Mesh(own(mergeFieldGeometries(geometries)), material(crop));
+    mesh.receiveShadow = true;
+    mesh.name = `field-${crop}`;
+    object.add(mesh);
     return mesh;
   });
   const euler = new THREE.Euler();
@@ -99,6 +123,8 @@ export function createCropLayer(plan, { ground, uniforms, track, settings }) {
     object,
     fields,
     stalks,
+    /** How many field meshes are drawn: one per crop and area. */
+    stats: () => ({ meshes: fields.length }),
     /** Plants the fields near the camera, and draws the bales and pumpkins of the areas within reach. */
     update(frame) {
       const { position } = frame.camera;
