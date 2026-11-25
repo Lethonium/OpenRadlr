@@ -1,9 +1,9 @@
 /**
  * Name labels over other riders: whether each shows and how it looks.
  *
- * Whether a rider is in sight comes from the GPU (occlusion queries, see
- * `Renderer.queryOcclusion`) a frame or two late, and flickers where a rider
- * passes the edge of a house or a hill. So a label goes only after its rider
+ * Whether a rider is in sight comes from sight lines over the ground and the
+ * houses (`labelSight.js`), and flickers where a rider passes the edge of a
+ * house or a hill. So a label goes only after its rider
  * has been out of sight for `hideS`, and comes back after `showS` in sight.
  */
 export class LabelVisibility {

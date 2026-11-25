@@ -388,12 +388,13 @@ test("disposing a winter view frees the penguin rig", () => {
   for (const handle of handles) assert.ok(renderer.disposed.includes(handle));
 });
 
-test("a workout rider with no gym in reach stays on its bike on the road", () => {
+test("a workout rider with no gym in reach rides the road in the world scene", () => {
   const { view, renderer } = gymView([]);
+  const frames = recordFrames(view);
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  const bike = renderer.draws.find((d) => d.handle === view.bodies[riderLook(7).variant]).model;
-  const road = riderPosition(squareRoute(), 100, 1).position;
-  closeVec([bike[12], bike[13], bike[14]], road, 0.01);
+  assert.equal(renderer.draws.filter((d) => d.handle === view.bodies[riderLook(7).variant]).length, 0);
+  const [entry] = frames.at(-1).riders;
+  closeVec(entry.position, riderPosition(squareRoute(), 100, 1).position, 0.01);
 });
 
 test("the gym camera looks at the mat centre from its road side", () => {
@@ -782,21 +783,30 @@ class TransparentRecorder extends RecordingRenderer {
   }
 }
 
-test("my best lap's ghost is drawn see-through, casting no shadow, never solid", () => {
+/** Records what the view hands the world scene each frame, then runs the real update. */
+function recordFrames(view) {
+  const frames = [];
+  const update = view.worldScene.update;
+  view.worldScene.update = (frame) => {
+    frames.push(frame);
+    return update(frame);
+  };
+  return frames;
+}
+
+test("my best lap's ghost goes to the world scene as a see-through rider, never to the adapter", () => {
   const { view, renderer } = gymView([], "temperate", new TransparentRecorder());
+  const frames = recordFrames(view);
   const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
   const ghost = { id: -1, name: "Best lap", distance: 200, lane: 2, speed: 8, power: 0, ghost: true };
   // 100 m ahead: past label range, so no DOM is needed.
   view.render({ riders: [me, ghost], myId: 1, timeS: 3, colors });
+  const entry = frames.at(-1).riders.find((r) => r.id === -1);
+  assert.equal(entry.ghost, true);
+  closeVec(entry.position, riderPosition(squareRoute(), 200, 2).position);
+  assert.equal(frames.at(-1).riders.find((r) => r.id === 1).ghost, false);
   const bike = view.bodies[riderLook(-1).variant];
-  const seeThrough = renderer.transparent.filter((d) => d.handle === bike);
-  assert.equal(seeThrough.length, 1, "the ghost's bike is see-through");
-  assert.ok(seeThrough[0].options.alpha < 0.6);
-  const road = riderPosition(squareRoute(), 200, 2).position;
-  close(seeThrough[0].model[12], road[0], 0.01);
-  const solidAtGhost = (list) => list.filter((d) => d.handle === bike && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
-  assert.equal(solidAtGhost(renderer.draws).length, 0, "not drawn solid");
-  assert.equal(solidAtGhost(renderer.casters).length, 0, "no shadow");
+  for (const list of [renderer.draws, renderer.transparent, renderer.casters]) assert.equal(list.filter((d) => d.handle === bike).length, 0);
 });
 
 test("past the ends of a route that isn't a loop the road keeps its direction", () => {
@@ -860,20 +870,76 @@ test("a penguin holds its flag lower, in its flipper", () => {
 // --- bot kits (#64) ------------------------------------------------------------------
 
 test("a bot rides in its team's kit; one without a known team in the bot colour", () => {
-  const { view, renderer } = gymView([], "temperate", new RecordingRenderer());
+  const { view } = gymView([], "temperate", new RecordingRenderer());
+  const frames = recordFrames(view);
   const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
   // Past label range, so no DOM is needed.
   const teamed = { id: 41, name: "Gus Tailwind", is_bot: true, team: "moos", distance: 200, lane: 0, speed: 8, power: 150 };
   const plain = { id: 42, name: "Sally Sprocket", is_bot: true, distance: 205, lane: 3, speed: 8, power: 150 };
   view.render({ riders: [me, teamed, plain], myId: 1, timeS: 3, colors });
-  const tintAt = (rider) => {
-    const road = riderPosition(squareRoute(), rider.distance, rider.lane).position;
-    const body = view.bodies[riderLook(rider.id).variant];
-    const draw = renderer.draws.find((d) => d.handle === body && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
-    return draw.tint.map((c) => Math.round(c * 255));
-  };
-  assert.deepEqual(tintAt(teamed), [0x4f, 0x8f, 0x3a]);
-  assert.deepEqual(tintAt(plain), [0, 0, 255]);
+  // The layer takes linear colours; the colour code is in sRGB.
+  const srgb = (rider) => frames.at(-1).riders.find((r) => r.id === rider.id).tint.map((c) => Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055) * 255));
+  assert.deepEqual(srgb(teamed), [0x4f, 0x8f, 0x3a]);
+  assert.deepEqual(srgb(plain), [0, 0, 255]);
+});
+
+test("road riders reach the world scene, not the adapter", () => {
+  const { view, renderer } = gymView([], "temperate", new RecordingRenderer());
+  const frames = recordFrames(view);
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const human = { id: 2, name: "Ann", distance: 300, lane: 2, speed: 6, power: 100 };
+  const bot = { id: 3, name: "Bo", is_bot: true, distance: 310, lane: 0, speed: 7, power: 0 };
+  view.render({ riders: [me, human, bot], myId: 1, myCadence: 77, timeS: 3, colors });
+  const riders = frames.at(-1).riders;
+  assert.equal(riders.length, 3);
+  assert.deepEqual(riders.map((r) => [r.id, r.me, r.ghost]), [[1, true, false], [2, false, false], [3, false, false]]);
+  assert.deepEqual(riders.map((r) => r.tint), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+  assert.deepEqual(riders.map((r) => r.cadence), [77, 85, 0]);
+  assert.deepEqual(riders.map((r) => r.speed), [8, 6, 7]);
+  const first = riderPosition(squareRoute(), 100, 1);
+  closeVec(riders[0].position, first.position);
+  closeVec(riders[0].forward, first.forward);
+  assert.equal(riders[0].grade, squareRoute().gradeAt(100));
+  for (const draws of [renderer.draws, renderer.casters]) {
+    assert.equal(draws.filter((d) => view.bodies.includes(d.handle) || view.wheel === d.handle).length, 0, "no bike, wheel or body from the adapter");
+  }
+});
+
+test("a rider on a vehicle stays with the adapter", () => {
+  const { view } = gymView([], "temperate", new RecordingRenderer());
+  const frames = recordFrames(view);
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const seated = { id: 2, name: "Ann", distance: 300, lane: 1, speed: 8, power: 100, vehicle: { id: 5, kind: "tandem", seat: 0, seats: 2 } };
+  view.render({ riders: [me, seated], myId: 1, timeS: 3, colors });
+  assert.deepEqual(frames.at(-1).riders.map((r) => r.id), [1]);
+});
+
+/** A bare stand-in for the DOM a label is made of. */
+function labelDom(t) {
+  const labels = [];
+  const element = () => ({ style: {}, classList: { toggle() {} }, hidden: false, append() {}, remove() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+  return { layer: { append: (el) => labels.push(el) }, labels };
+}
+
+test("a label behind a house is hidden once its rider has been out of sight a moment", (t) => {
+  const { layer, labels } = labelDom(t);
+  const { view } = gymView([]);
+  view.labelLayer = layer;
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const other = { id: 2, name: "Ann", distance: 125, lane: 1, speed: 8, power: 100 };
+  view.render({ riders: [me, other], myId: 1, timeS: 3, colors });
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0].hidden, false, "in sight on the open road");
+  const head = [...riderPosition(squareRoute(), 125, 1).position];
+  const eye = view.camera.eye;
+  view.sight.boxes = [{ x: (eye[0] + head[0]) / 2, z: (eye[2] + head[2]) / 2, halfX: 6, halfZ: 6, yaw: 0, top: head[1] + 40 }];
+  view.render({ riders: [me, other], myId: 1, timeS: 3.05, colors });
+  assert.equal(labels[0].hidden, false, "not at once");
+  view.render({ riders: [me, other], myId: 1, timeS: 4, colors });
+  assert.equal(labels[0].hidden, true);
 });
 
 test("a world without a studio site has no studio and ignores studio riders", () => {

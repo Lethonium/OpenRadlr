@@ -25,7 +25,6 @@ import {
   buildBike,
   buildCrankset,
   buildFoot,
-  buildLabelProbe,
   buildRiderShadow,
   buildShin,
   buildShoe,
@@ -54,6 +53,7 @@ import { riderPosition } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
+import { groundHeight, labelInSight, plotBoxes } from "./labelSight.js";
 import { isRemote } from "../view/remoteRiders.js";
 import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
 
@@ -80,6 +80,11 @@ export function hexToRgb(hex) {
   const n = Number.parseInt(full, 16);
   if (!Number.isFinite(n) || full.length !== 6) return [0.6, 0.6, 0.6];
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/** A colour code's sRGB tint as the linear colour the world scene's rider layer takes. */
+function linearOf(tint) {
+  return tint.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 }
 
 /** Bot teams' kit colours as tints (#64). */
@@ -444,7 +449,8 @@ export class View3D {
     this.crankset = this.renderer.upload(buildCrankset());
     this.wheel = this.renderer.upload(buildWheel());
     this.riderShadow = this.renderer.upload(buildRiderShadow());
-    this.labelProbe = this.renderer.upload(buildLabelProbe());
+    /** What hides a label: the ground and the plots' boxes, built once per world. */
+    this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
     this.identity = placement([0, 0, 0]);
   }
 
@@ -817,14 +823,19 @@ export class View3D {
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
     const visible = [];
+    // Road riders go to the world scene's rider layer; workout riders (at the gym) stay with the adapter.
+    const roadRiders = [];
     for (const { rider, position, forward, gym } of placed.filter((p) => !p.rider.vehicle)) {
       const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
       const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-      const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
-      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
+      if (!gym) {
+        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), tint: linearOf(tint), ghost: Boolean(rider.ghost) });
+        continue;
+      }
+      visible.push({ rider, position, forward, fromCamera, tint, ghost: false, ...this.#workoutParts(rider, gym, timeS) });
     }
 
     // Seated riders are drawn through their vehicle, once per vehicle.
@@ -887,7 +898,7 @@ export class View3D {
       }
       this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
       for (const part of visible) {
-        if (part.ghost || Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
+        if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
         for (const piece of part.torso) this.renderer.drawShadowCaster(piece.mesh, piece.model);
         for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
@@ -920,18 +931,12 @@ export class View3D {
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
     const scene = { light, lens, shadows, visible, vehicles, crowd, lemons };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
-
-    // Which riders that could get a label are in sight, for the next frames' labels.
-    const probes = this.#labelProbes(placed, myId, seatHeads);
-    if (this.renderer.queryOcclusion) {
-      for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
-    }
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
     if (me?.gym && this.sideView && this.renderer.viewport) {
@@ -959,7 +964,7 @@ export class View3D {
       }
     }
 
-    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
+    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, timeS);
     const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
     for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
@@ -969,6 +974,13 @@ export class View3D {
     this.renderer.end();
     this.frameStats = this.engine.frameStats?.() ?? null;
     this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
+  }
+
+  /** The grade in percent under a rider on a route (0 on a road of the network or on an unknown route). */
+  #gradeOf(rider) {
+    if (rider.route === null) return 0;
+    const route = !rider.route || rider.route === this.route.id ? this.route : this.routes?.get(rider.route);
+    return route ? route.gradeAt(rider.distance) : 0;
   }
 
   /** Points a Three.js camera where the adapter's matrices look, through the lens' near and far planes. */
@@ -1002,7 +1014,6 @@ export class View3D {
     }
     for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
     for (const part of visible) {
-      if (part.ghost) continue;
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
       for (const limb of part.limbs) this.renderer.draw(limb.mesh, limb.model);
@@ -1025,19 +1036,10 @@ export class View3D {
 
     // Pass 2: blended — soft contact shadows under the bikes.
     for (const part of visible) {
-      if (part.ghost || part.fromCamera > 150) continue;
+      if (part.fromCamera > 150) continue;
       this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
     }
     this.#studio?.draw("glass", eye);
-    // Ghosts last, see-through over everything else.
-    for (const part of visible) {
-      if (!part.ghost) continue;
-      const look = { ...SCENE.ghost, tint: part.tint };
-      this.renderer.drawTransparent(this.bodies[part.variant], part.model, look);
-      for (const piece of part.torso) this.renderer.drawTransparent(piece.mesh, piece.model, look);
-      for (const limb of part.limbs) this.renderer.drawTransparent(limb.mesh, limb.model, look);
-      for (const wheel of part.wheels) this.renderer.drawTransparent(this.wheel, wheel, look);
-    }
   }
 
   /** Model matrices of the lemons not yet collected near my rider on my route: spinning slowly, bobbing at handlebar height. */
@@ -1056,37 +1058,25 @@ export class View3D {
     return models;
   }
 
-  /** Riders near enough for a label (not mine), with where their probe stands: at the bike, or below a seated rider's head. */
-  #labelProbes(placed, myId, seatHeads) {
-    const probes = new Map();
-    for (const { rider, position } of placed) {
-      if (rider.id === myId) continue;
-      if (Math.hypot(...position.map((v, i) => v - this.camera.eye[i])) > SCENE.labelDistance) continue;
-      const head = seatHeads.get(rider.id);
-      probes.set(rider.id, head ? [head[0], head[1] - 1.6, head[2]] : position);
-    }
-    return probes;
-  }
-
   /**
    * `seatHeads`: the point over each seated rider's head (riders in vehicles are labelled over their seat).
-   * A rider out of sight (behind a house or a hill) gets no label; without
-   * occlusion queries every rider counts as in sight.
+   * A rider out of sight (behind a house or a hill) gets no label once it has been hidden a moment.
    */
-  #updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS) {
+  #updateLabels(placed, myId, viewProjection, width, height, seatHeads, timeS) {
+    const eye = this.camera.eye;
     const candidates = [];
+    const ids = new Set();
     for (const { rider, position } of placed) {
-      if (!probes.has(rider.id)) continue;
-      const seen = this.renderer.occlusion ? this.renderer.occlusion(rider.id) : true;
-      if (!this.#labelVisibility.update(rider.id, seen, timeS)) continue;
-      const distance = Math.hypot(...position.map((v, i) => v - this.camera.eye[i]));
+      if (rider.id === myId) continue;
+      const distance = Math.hypot(...position.map((v, i) => v - eye[i]));
+      if (distance > SCENE.labelDistance) continue;
+      ids.add(rider.id);
       const head = seatHeads.get(rider.id) ?? [position[0], position[1] + RIDER_GEOMETRY.headHeight + 0.55, position[2]];
+      if (!this.#labelVisibility.update(rider.id, labelInSight(eye, head, this.sight), timeS)) continue;
       const screen = projectToScreen(viewProjection, head, width, height);
       if (screen) candidates.push({ rider, distance, screen });
     }
-    const ids = new Set(probes.keys());
     this.#labelVisibility.keep(ids);
-    this.renderer.keepOcclusion?.(ids);
     const shown = visibleLabels(candidates, myId);
     for (const { rider, distance, screen } of shown) {
       const label = this.#label(rider, myId);
@@ -1129,7 +1119,7 @@ export class View3D {
     this.#highlights = [];
     this.#disposeStatues();
     const workoutHandles = this.workoutParts ? [...this.workoutParts.values()] : [];
-    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, ...workoutHandles, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
+    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, ...workoutHandles, this.crankset, this.wheel, this.riderShadow, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
       this.renderer.dispose(handle);
     }
     this.#labels.forEach((element) => element.remove());
