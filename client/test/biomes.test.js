@@ -128,14 +128,8 @@ test("a biome has its own crowd", () => {
 });
 
 test("winter's workout figures are penguins", () => {
-  const winter = resolveBiome("winter");
-  const temperate = resolveBiome("temperate");
-  assert.equal(temperate.workout, undefined, "temperate keeps the human rig");
-  assert.ok(winter.workout, "winter supplies a workout rig");
-  const names = ["pelvis", "torso", "head", "upperArmL", "upperArmR", "forearmL", "forearmR", "thighL", "thighR", "shinL", "shinR", "footL", "footR"];
-  assert.deepEqual(Object.keys(winter.workout.parts).sort(), names.sort(), "the rig has every rider part");
-  for (const [name, build] of Object.entries(winter.workout.parts)) assert.ok(build().vertexCount > 0, name);
-  assert.ok(winter.workout.scale > 0 && winter.workout.scale < 1, "a penguin is shorter than a rider");
+  assert.equal(resolveBiome("temperate").workoutFigure, undefined, "temperate keeps the human rig");
+  assert.equal(resolveBiome("winter").workoutFigure, "penguin");
 });
 
 test("a junction apron flattens winter's ploughed bank", () => {

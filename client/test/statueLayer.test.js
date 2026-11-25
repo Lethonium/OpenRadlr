@@ -111,3 +111,8 @@ test("a row of one sits in the middle", () => {
   near((only.box.min.x + only.box.max.x) / 2, 0, 0.5, "figure centre");
   near(layer.meshOf(gym).parent.position.x, 10, 1e-9, "row placed at the gym");
 });
+
+test("an unknown material throws", () => {
+  const { layer } = make();
+  assert.throws(() => layer.setRows([row(gymAt(), ["squats"], "jade")]), /material/i);
+});

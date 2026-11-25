@@ -11,7 +11,7 @@ import { bikeGeometry, createBike } from "../assets/riders/bicycle.js";
 import { kitTexture } from "../assets/riders/kitPainter.js";
 import { lookOf } from "../assets/riders/look.js";
 import { dressAsPenguin } from "../assets/riders/penguinOutfit.js";
-import { settleOnRig } from "../assets/riders/retarget.js";
+import { JOINT_BONES, settleOnRig } from "../assets/riders/retarget.js";
 import { createRider } from "../assets/riders/rider.js";
 import { createOwner } from "./tracker.js";
 
@@ -40,6 +40,8 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
 const boneOfMesh = (mesh) => mesh.replace(/([LR])$/, "_$1");
 /** Yaw about y that takes the rig's +x to our forward (yaw 0 faces -Z). */
 const turnOf = (yaw) => Math.PI / 2 + yaw;
+/** The bones the clips turn: their mean position says where the body lies. */
+const BODY_BONES = [...new Set(Object.values(JOINT_BONES).flat())];
 
 /**
  * @param {{settings: import("../quality.js").QualitySettings, uniforms?: object, track: import("./tracker.js").Tracker["track"]}} options
@@ -66,7 +68,8 @@ export function createAthleteLayer({ uniforms, track }) {
   };
 
   const create = (entry) => {
-    const record = { key: `${entry.id}|${entry.figure}`, id: entry.id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, group: new THREE.Group(), bike: null, plantMesh: null, plant: null };
+    const record = { key: `${entry.id}|${entry.figure}`, id: entry.id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, group: new THREE.Group(), bike: null, bikeShown: false, plantMesh: null, plant: null };
+    record.group.userData.athlete = entry.id;
     const look = { ...lookOf(entry.id), primary: hexOf(entry.tint) };
     paint(record, entry.tint);
     record.rig = createRider(look, { own: record.owner.own, uniforms, texture: record.texture });
@@ -108,6 +111,7 @@ export function createAthleteLayer({ uniforms, track }) {
 
   /** The parked bike of a record, built on first use, placed at the rack. */
   const park = (record, bike) => {
+    record.bikeShown = Boolean(bike);
     if (!bike) {
       if (record.bike) record.bike.object.visible = false;
       return;
@@ -116,6 +120,7 @@ export function createAthleteLayer({ uniforms, track }) {
       const look = lookOf(record.id);
       const scale = Math.min(SCALE_RANGE[1], Math.max(SCALE_RANGE[0], look.height / REFERENCE_HEIGHT));
       record.bike = createBike({ type: look.bike, frame: look.frame, accent: look.frameAccent, scale, saddleHeight: record.rig.saddleFor(bikeGeometry(look.bike, { scale })), own: record.owner.own, uniforms });
+      record.bike.object.userData.athlete = record.id;
     }
     if (!record.bike.object.parent) object.add(record.bike.object);
     record.bike.object.visible = true;
@@ -144,6 +149,20 @@ export function createAthleteLayer({ uniforms, track }) {
     rigOf: (id) => [...active.values()].find((record) => record.id === id && record.drawn)?.rig ?? null,
     /** The parked bike of this athlete id, or null. */
     bikeOf: (id) => [...active.values()].find((record) => record.id === id && record.drawn)?.bike ?? null,
+    /** How far ahead of its spot (along the way it faces, metres) the body lies on average, or 0 when `id` is not drawn. */
+    aheadOf(id) {
+      const rig = [...active.values()].find((record) => record.id === id && record.drawn)?.rig;
+      if (!rig) return 0;
+      return (rig.object.scale.x * BODY_BONES.reduce((sum, bone) => sum + rig.boneWorld(bone).x, 0)) / BODY_BONES.length;
+    },
+    /** Shows only athlete `id` (and its bike) until called with `null`: the side view's picture of my rider alone. */
+    isolate(id) {
+      for (const record of active.values()) {
+        const shown = id === null || record.id === id;
+        record.group.visible = shown;
+        if (record.bike) record.bike.object.visible = shown && record.bikeShown;
+      }
+    },
     setEnvironment() {},
     /** @param {{camera: import("../../three.js").Camera, athletes?: AthleteEntry[]}} frame */
     update(frame) {

@@ -49,6 +49,7 @@ const LIGHTNING = 3;
  * @property {boolean} [shadows] false switches the sun's shadow off for this frame (the drone)
  * @property {import("./riderLayer.js").RiderEntry[]} [riders] the road riders to draw (none when missing)
  * @property {import("./athleteLayer.js").AthleteEntry[]} [athletes] the gym athletes to draw (none when missing)
+ * @property {import("./riderLayer.js").VehicleEntry[]} [vehicles] the shared vehicles with their seated riders (none when missing)
  * @property {{gym: object, index: number} | null} [statueGlow] the statue plinth to light (none when missing)
  */
 
@@ -126,6 +127,7 @@ export function createWorldScene(world, { settings, track }) {
   sun.shadow.camera.far = SUN.far;
   scene.add(sun, sun.target);
 
+  const named = (name) => layers.find((layer) => layer.object.name === name);
   const weather = () => layers.find((layer) => layer.object.name === "weather");
   const keyDirection = new THREE.Vector3(0, 1, 0);
   let shadowSize = 0;
@@ -206,6 +208,12 @@ export function createWorldScene(world, { settings, track }) {
       statueRows = rows;
       layers.find((layer) => layer.object.name === "statues").setRows(rows);
     },
+    /** World points above each seated rider's head after the last update, for the view's name labels. */
+    seatHeads: () => named("riders").seatHeads(),
+    /** How far ahead of its spot the gym athlete `id`'s body lies on average (metres), 0 when not drawn. */
+    athleteAhead: (id) => named("athletes").aheadOf(id),
+    /** Draws only gym athlete `id` until called with `null` (the workout's side view shows my rider alone). */
+    isolateAthlete: (id) => named("athletes").isolate(id),
     setEnvironment(env) {
       environment = env;
       uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH * (env.sunShare ?? 1));

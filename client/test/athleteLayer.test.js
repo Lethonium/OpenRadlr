@@ -137,3 +137,23 @@ test("dispose frees everything", () => {
   layer.dispose();
   assert.equal(tracker.live(), 0);
 });
+
+test("the body's reach ahead of the spot is 0 for an athlete that is not drawn, and follows a pose for one that is", () => {
+  const { layer } = make();
+  assert.equal(layer.aheadOf(1), 0);
+  layer.update(frame([entry(1, [0, 0, -10], { pose: poseAt(CLIPS.plank, 0), plantMesh: "footR" })]));
+  const ahead = layer.aheadOf(1);
+  assert.ok(Number.isFinite(ahead) && Math.abs(ahead) > 0.02, `ahead ${ahead}`);
+});
+
+test("isolating one athlete hides the others and their bikes until it is lifted", () => {
+  const { layer } = make();
+  const bike = { position: [3, 0, -10], yaw: 0 };
+  layer.update(frame([entry(1, [0, 0, -10], { bike }), entry(2, [2, 0, -10], { bike })]));
+  const shown = () => [...new Set(layer.object.children.filter((c) => c.visible).map((c) => c.userData.athlete))].sort();
+  assert.deepEqual(shown(), [1, 2]);
+  layer.isolate(2);
+  assert.deepEqual(shown(), [2]);
+  layer.isolate(null);
+  assert.deepEqual(shown(), [1, 2]);
+});
