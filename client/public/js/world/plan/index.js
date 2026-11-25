@@ -47,7 +47,7 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   if (!budget) throw new Error(`Unknown detail level "${detail}"`);
   const water = waterLevel(roads);
   const masks = buildMasks({ roads, rivers, bounds });
-  for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built);
+  for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built, [MASK.verge]);
   const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water, clearings });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
   const fields = planFields({ terrain, roads, regions, seed, season, masks, water });
@@ -55,7 +55,7 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   const turbines = planTurbines({ terrain, roads, seed, masks, water, bounds });
   const islands = planFarIslands({ terrain, seed: terrain.seed ?? seed });
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
-  const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside });
+  const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside, clearings });
   const fauna = planFauna({ farms, fields, trees, terrain, roads, regions, seed, season, masks, water, detail });
   return { trees, fields, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
 }

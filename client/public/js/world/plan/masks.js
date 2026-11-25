@@ -31,8 +31,8 @@ const RIVER_SAMPLE_STEP = 8; // half the path step: gaps between samples never o
  * @property {Uint8Array} data row by row, one `MASK` value per cell
  */
 
-/** Marks every free cell a disc of radius `r` at (x, z) touches. */
-export function stampDisc(masks, x, z, r, value) {
+/** Marks every cell a disc of radius `r` at (x, z) touches whose value is free, or one of `also`. */
+export function stampDisc(masks, x, z, r, value, also = []) {
   const { cell, x0, z0, columns, rows, data } = masks;
   const i0 = Math.max(0, Math.floor((x - r - x0) / cell));
   const i1 = Math.min(columns - 1, Math.floor((x + r - x0) / cell));
@@ -42,7 +42,7 @@ export function stampDisc(masks, x, z, r, value) {
     const dz = Math.max(z0 + j * cell - z, 0, z - (z0 + (j + 1) * cell));
     for (let i = i0; i <= i1; i += 1) {
       const dx = Math.max(x0 + i * cell - x, 0, x - (x0 + (i + 1) * cell));
-      if (dx * dx + dz * dz < r * r && data[j * columns + i] === MASK.free) data[j * columns + i] = value;
+      if (dx * dx + dz * dz < r * r && (data[j * columns + i] === MASK.free || also.includes(data[j * columns + i]))) data[j * columns + i] = value;
     }
   }
 }

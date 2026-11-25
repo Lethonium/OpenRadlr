@@ -49,10 +49,10 @@ function frames(samples) {
 const propIndex = (s, spacing, every) => (Math.floor((s.distance + spacing) / every) > Math.floor(s.distance / every) ? Math.floor(s.distance / every) : -1);
 
 /**
- * @param {{terrain: object, roads: import("../roads.js").RoadIndex, regions: object[], seed: number, masks: import("./masks.js").Masks, water: number, budget: number}} input
+ * @param {{terrain: object, roads: import("../roads.js").RoadIndex, regions: object[], seed: number, masks: import("./masks.js").Masks, water: number, budget: number, clearings?: {x: number, z: number, radius: number}[]}} input
  * @returns {Record<string, Float32Array>} per plant or prop id: x, y, z, yaw, scale for each item; the yaw is the world angle of the item's own x axis
  */
-export function planRoadside({ terrain, roads, regions, seed, masks, water, budget }) {
+export function planRoadside({ terrain, roads, regions, seed, masks, water, budget, clearings = [] }) {
   const { samples } = roads;
   const around = frames(samples);
   const mixes = samples.map((s) => regionMix(s.x, s.z, regions, seed));
@@ -73,6 +73,7 @@ export function planRoadside({ terrain, roads, regions, seed, masks, water, budg
     const z = s.z + tangent[1] * along + tangent[0] * side * off;
     const cell = maskAt(masks, x, z);
     if (cell === MASK.field || cell === MASK.river || cell === MASK.built) return;
+    if (clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.radius)) return; // a café's or gym's ground, road cells included
     const near = roads.nearest(x, z, 2);
     if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + 1.5) return;
     if ((terrain.riverDistance?.(x, z) ?? Infinity) < ROADSIDE.riverClear) return;

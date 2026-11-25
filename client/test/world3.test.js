@@ -695,3 +695,19 @@ test("the plan keeps plants off every outdoor gym's pad and statue row", () => {
     }
   }
 });
+
+test("no verge plant or tree stands inside a café or gym clearing", () => {
+  const clearings = [
+    ...mapWorld.cafeSites.map((site) => ({ x: site.position[0], z: site.position[2], radius: 14 })),
+    ...mapWorld.gyms.map((gym) => ({ x: gym.position[0] + 3 * Math.sin(gym.yaw), z: gym.position[2] + 3 * Math.cos(gym.yaw), radius: 12 })),
+  ];
+  assert.ok(clearings.length >= 8);
+  let plants = 0;
+  for (const list of [...Object.values(mapWorld.plan.roadside), ...Object.values(mapWorld.plan.trees)]) {
+    for (let i = 0; i < list.length; i += 5) {
+      plants += 1;
+      for (const c of clearings) assert.ok(Math.hypot(list[i] - c.x, list[i + 2] - c.z) >= c.radius, `a plant at ${list[i].toFixed(0)}, ${list[i + 2].toFixed(0)} stands in a clearing`);
+    }
+  }
+  assert.ok(plants > 100, "the world still has plants");
+});
