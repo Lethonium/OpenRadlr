@@ -1,11 +1,11 @@
 /**
  * Local rider profile.
  *
- * A profile is a key pair plus display data. The public key is sent with
- * "join" so servers can later recognise the same rider; in the proof of
- * concept servers run in "open" mode and do not verify it yet.
+ * A profile is display data plus the public key of the rider's key pair
+ * (profile/riderKey.js). The key is sent with "join", signed over the
+ * server's challenge, so servers recognise the same rider (ADR 0032).
  *
- * Storage and crypto are injected for testability.
+ * Storage and the key are injected for testability.
  */
 
 // Keeps the pre-rename key so existing profiles (and their key pairs) survive.
@@ -70,11 +70,11 @@ export function keepValid(previous, edited) {
 
 export class ProfileStore {
   /**
-   * @param {{storage?: Storage, subtle?: SubtleCrypto}} [deps]
+   * @param {{storage?: Storage, keys?: import("./riderKey.js").RiderKey, locale?: string}} [deps]
    */
-  constructor({ storage = globalThis.localStorage, subtle = globalThis.crypto?.subtle, locale = globalThis.navigator?.language } = {}) {
+  constructor({ storage = globalThis.localStorage, keys = null, locale = globalThis.navigator?.language } = {}) {
     this.storage = storage;
-    this.subtle = subtle;
+    this.keys = keys;
     // Profiles without a units choice (new, or saved before #66) follow the browser's region.
     this.defaults = { ...DEFAULT_PROFILE, units: defaultUnits(locale) };
   }
@@ -111,13 +111,18 @@ export class ProfileStore {
     return stored;
   }
 
-  /** Makes sure the profile has a key pair and returns the updated profile. */
+  /**
+   * Makes sure the rider has a key pair and returns the updated profile: with its public
+   * key, and an old private key moved out of it (riderKey.js). Unchanged without a key store.
+   */
   async ensureKeys(profile) {
-    if (profile.publicKey || !this.subtle) return profile;
-    const pair = await this.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
-    const spki = await this.subtle.exportKey("spki", pair.publicKey);
-    const privateJwk = await this.subtle.exportKey("jwk", pair.privateKey);
-    const publicKey = btoa(String.fromCharCode(...new Uint8Array(spki)));
-    return this.save({ ...profile, publicKey, privateKeyJwk: privateJwk });
+    if (!this.keys) return profile;
+    const kept = await this.keys.ensure(profile);
+    return kept === profile ? profile : this.save(kept);
+  }
+
+  /** The rider key's signature over `message`, or `null` (no key store, no key, or not the profile's key). */
+  async sign(message) {
+    return this.keys ? this.keys.sign(message, this.load().publicKey) : null;
   }
 }

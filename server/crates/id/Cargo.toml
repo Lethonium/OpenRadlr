@@ -1,0 +1,16 @@
+[package]
+name = "openradlr-id"
+description = "OpenRadlr accounts: signed rider keys, sign-in by email code or passkey, and rider backups."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64 = "0.22"
+# Rider keys are ECDSA P-256 (WebCrypto).
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+sha2 = "0.11"

@@ -38,6 +38,8 @@ pub struct ResumePoint {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+// `join` is the big one; a message lives only while it is handled, so boxing would buy nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum ClientMessage {
     Hello {
         protocol_version: u32,
@@ -47,9 +49,13 @@ pub enum ClientMessage {
     Join {
         name: String,
         weight_kg: f64,
-        /// Reserved for signed profiles; ignored while the server runs in open mode.
+        /// The rider's public key, base64 SPKI (ADR 0003).
         #[serde(default)]
         public_key: Option<String>,
+        /// The rider's signature over `openradlr-join\n<challenge>` with that key, base64
+        /// raw `r‖s` (ADR 0032). Without it the key is treated as unverified.
+        #[serde(default)]
+        signature: Option<String>,
         /// Which world to join (see `/api/info`); the default route if omitted.
         #[serde(default)]
         route_id: Option<String>,
@@ -273,6 +279,8 @@ pub enum ServerMessage {
         /// Seconds a rider lingers after their socket dies before being
         /// removed; `0` removes at once.
         grace_s: f64,
+        /// Random per connection: what `join` signs to prove its `public_key` (ADR 0032).
+        challenge: String,
     },
     /// The rider has sent 0 W for a long time. Answer with `stay` (if
     /// `can_stay`) or the ride ends in `leave_in_s` seconds with `afk_timeout`.
@@ -1247,6 +1255,7 @@ mod tests {
                 name: "Anna".into(),
                 weight_kg: 70.0,
                 public_key: None,
+                signature: None,
                 route_id: Some("alpine".into()),
                 ftp_w: None,
                 level_w: None,
@@ -1264,6 +1273,7 @@ mod tests {
                 name: "Anna".into(),
                 weight_kg: 70.0,
                 public_key: None,
+                signature: None,
                 route_id: None,
                 ftp_w: None,
                 level_w: Some(245.0),
@@ -1583,6 +1593,7 @@ mod tests {
             auth_mode: "open".into(),
             route_id: "loop".into(),
             grace_s: 60.0,
+            challenge: "c".into(),
         }
         .to_json();
         assert!(json.contains(r#""grace_s":60.0"#));
