@@ -5,7 +5,8 @@ import { MASK, buildMasks, maskAt, stampDisc } from "../public/js/world/plan/mas
 import { planLandUse } from "../public/js/world/plan/landUse.js";
 import { planSettlements } from "../public/js/world/plan/settlements/plan.js";
 import { waterLevel } from "../public/js/world/roads.js";
-import { valleyWorld } from "./support/planFixture.js";
+import { sceneOf } from "../public/js/view3d/worldScene.js";
+import { planOf, valleyWorld } from "./support/planFixture.js";
 
 const valley = valleyWorld();
 
@@ -91,4 +92,21 @@ test("a huge island plans in time", () => {
   const took = performance.now() - start;
   assert.ok(parcels.length > 0);
   assert.ok(took < 5000, `took ${Math.round(took)} ms`);
+});
+
+test("fields come from the arable parcels near roads", () => {
+  const plan = planOf(valley);
+  const arable = plan.landUse.parcels.filter((p) => p.kind === "arable");
+  assert.ok(plan.fields.length > 0);
+  for (const f of plan.fields) {
+    const parcel = arable.find((p) => p.x === f.x && p.z === f.z && p.width === f.width && p.depth === f.depth && p.yaw === f.yaw && p.crop === f.crop);
+    assert.ok(parcel, `field at ${f.x},${f.z} is no arable parcel`);
+    const near = valley.roads.nearest(f.x, f.z, 5);
+    assert.ok(near && near.distance <= 260, "field within 260 m of a road");
+  }
+});
+
+test("the plan hands the land use to the page", () => {
+  const scene = sceneOf({ plan: planOf(valley) });
+  assert.ok(scene.plan.landUse.parcels.length > 0);
 });

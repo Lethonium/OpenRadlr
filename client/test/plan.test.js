@@ -220,7 +220,7 @@ test("a route file without a network gets a plan", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url))));
   assert.ok(count(scene.plan.trees) > 100);
   assert.ok(count(scene.plan.roadside) > 50);
-  assert.deepEqual(Object.keys(scene.plan).sort(), ["farms", "fauna", "fields", "islands", "landmarks", "masks", "roadside", "settlements", "trees", "turbines"]);
+  assert.deepEqual(Object.keys(scene.plan).sort(), ["farms", "fauna", "fields", "islands", "landUse", "landmarks", "masks", "roadside", "settlements", "trees", "turbines"]);
 });
 
 test("the plan transfers", () => {

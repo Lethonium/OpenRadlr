@@ -6,10 +6,11 @@
  */
 import { waterLevel } from "../roads.js";
 import { planFarms } from "./farms.js";
-import { planFields } from "./fields.js";
+import { fieldsFromParcels } from "./fields.js";
 import { planFauna } from "./fauna.js";
 import { planFarIslands } from "./islands.js";
 import { planLandmarks } from "./landmarks.js";
+import { planLandUse } from "./landUse.js";
 import { MASK, buildMasks, stampDisc } from "./masks.js";
 import { planRoadside } from "./roadside.js";
 import { planSettlements } from "./settlements/plan.js";
@@ -27,7 +28,8 @@ export const PLAN_BUDGET = Object.freeze({
 /**
  * @typedef {object} WorldPlan
  * @property {Record<string, Float32Array>} trees per plant id: x, y, z, yaw, scale for each tree (`forests` are points along the route's forest stretches, wooded densely)
- * @property {import("./fields.js").Field[]} fields
+ * @property {import("./fields.js").Field[]} fields the arable parcels near roads
+ * @property {{parcels: import("./landUse.js").Parcel[]}} landUse every parcel of the island
  * @property {Record<string, Float32Array>} roadside per plant or prop id, like `trees`
  * @property {ReturnType<typeof planSettlements>} settlements towns, villages and harbours: plots, streets, props
  * @property {import("./landmarks.js").Landmark[]} landmarks
@@ -50,12 +52,13 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built, [MASK.verge]);
   const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water, clearings });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
-  const fields = planFields({ terrain, roads, regions, seed, season, masks, water });
+  const landUse = planLandUse({ terrain, roads, regions, settlements: villages, seed, season, masks, water, bounds });
+  const fields = fieldsFromParcels(landUse.parcels, roads);
   const farms = planFarms({ fields, terrain, roads, regions, seed, masks, water, settlements: villages });
   const turbines = planTurbines({ terrain, roads, seed, masks, water, bounds });
   const islands = planFarIslands({ terrain, seed: terrain.seed ?? seed });
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
   const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside, clearings });
   const fauna = planFauna({ farms, fields, trees, terrain, roads, regions, seed, season, masks, water, detail });
-  return { trees, fields, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
+  return { trees, fields, landUse, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
 }
