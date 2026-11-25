@@ -115,3 +115,16 @@ test("a new season rebuilds without leaks", () => {
   make({ tracker, season: "winter" });
   assert.equal(tracker.live(), one);
 });
+
+test("the side view draws only the sky, ground and athletes, then restores every layer", () => {
+  const { world } = make();
+  const layers = world.scene.children.filter((child) => ["sky", "sea", "terrain", "athletes", "riders", "statues", "weather", "nightLights"].includes(child.name));
+  const weather = world.scene.getObjectByName("weather");
+  weather.visible = false; // hidden by quality before the side view
+  const before = layers.map((layer) => layer.visible);
+  world.isolateAthlete("me");
+  const shown = layers.filter((layer) => layer.visible).map((layer) => layer.name).sort();
+  assert.deepEqual(shown, ["athletes", "sea", "sky", "terrain"]);
+  world.isolateAthlete(null);
+  assert.deepEqual(layers.map((layer) => layer.visible), before);
+});

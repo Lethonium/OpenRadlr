@@ -30,6 +30,8 @@ import { createOwner } from "./tracker.js";
 
 /** Sun placement and shadow box, in metres. */
 export const SUN = Object.freeze({ distance: 1800, shadowHalf: 130, near: 10, far: 4000, bias: -0.00025, normalBias: 0.35 });
+/** The layers the workout's side view keeps: backdrop, ground and my athlete. */
+const SIDE_VIEW_LAYERS = new Set(["sky", "sea", "terrain", "athletes"]);
 /** How much of the sun's colour shows through thin leaves and blades. */
 const SUN_THROUGH = 0.55;
 /** Strength of the drifting cloud shadows by day. */
@@ -132,6 +134,8 @@ export function createWorldScene(world, { settings, track }) {
   const keyDirection = new THREE.Vector3(0, 1, 0);
   let shadowSize = 0;
   let shadowsOn = true;
+  /** The layer objects the side view hid, with what they showed before; null outside the side view. */
+  let hidden = null;
 
   /** Applies the quality's shadow map: its size, or none. */
   const setQuality = (next) => {
@@ -212,8 +216,21 @@ export function createWorldScene(world, { settings, track }) {
     seatHeads: () => named("riders").seatHeads(),
     /** How far ahead of its spot the gym athlete `id`'s body lies on average (metres), 0 when not drawn. */
     athleteAhead: (id) => named("athletes").aheadOf(id),
-    /** Draws only gym athlete `id` until called with `null` (the workout's side view shows my rider alone). */
-    isolateAthlete: (id) => named("athletes").isolate(id),
+    /**
+     * Draws only gym athlete `id` over the sky and ground until called with `null` (the workout's side view shows my
+     * rider alone: no plants, towns, other riders or weather between the camera and the body). `null` puts every
+     * layer back exactly as it was, including those the quality had hidden.
+     */
+    isolateAthlete(id) {
+      if (id !== null && !hidden) {
+        hidden = layers.filter((layer) => !SIDE_VIEW_LAYERS.has(layer.object.name)).map((layer) => [layer.object, layer.object.visible]);
+        for (const [object] of hidden) object.visible = false;
+      } else if (id === null && hidden) {
+        for (const [object, visible] of hidden) object.visible = visible;
+        hidden = null;
+      }
+      named("athletes").isolate(id);
+    },
     setEnvironment(env) {
       environment = env;
       uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH * (env.sunShare ?? 1));
