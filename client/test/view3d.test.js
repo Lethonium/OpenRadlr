@@ -750,43 +750,48 @@ test("riding has no side view", () => {
 
 function lemonView() {
   const { view, renderer } = gymView([], "temperate", new RecordingRenderer());
-  return { view, renderer, me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
+  return { view, renderer, frames: recordFrames(view), me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
 }
 
-test("a lemon ahead of my rider floats over its lane, drawn bright", () => {
-  const { view, renderer, me } = lemonView();
+test("lemons near my rider go to the frame, collected ones and other routes' never", () => {
+  const { view, frames, me } = lemonView();
+  const lemons = [
+    { id: "a", distance: 50, lane: 0, collected: false },
+    { id: "b", distance: 60, lane: 0, collected: true },
+  ];
+  const mine = { ...me, distance: 0 };
+  view.setLemons(lemons);
+  view.render({ riders: [mine], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 1);
+  view.render({ riders: [{ ...mine, route: "somewhere-else" }], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 0);
+  lemons[0].collected = true;
+  view.render({ riders: [mine], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 0);
+});
+
+test("a lemon ahead of my rider floats over its lane at handlebar height", () => {
+  const { view, frames, me } = lemonView();
   view.setLemons([{ id: "a", distance: 130, lane: 2, collected: false }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const lemons = renderer.brights.filter((d) => d.handle === view.lemonMesh);
-  assert.equal(lemons.length, 1);
+  const [lemon] = frames.at(-1).lemons;
   const road = riderPosition(squareRoute(), 130, 2).position;
-  const model = lemons[0].model;
-  close(model[12], road[0], 0.01);
-  close(model[14], road[2], 0.01);
-  assert.ok(model[13] > road[1] + 0.9 && model[13] < road[1] + 1.6, "about handlebar height over the road");
+  close(lemon.position[0], road[0], 0.01);
+  close(lemon.position[2], road[2], 0.01);
+  assert.ok(lemon.position[1] > road[1] + 0.9 && lemon.position[1] < road[1] + 1.6, "about handlebar height over the road");
 });
 
-test("collected and far-off lemons are not drawn", () => {
-  const { view, renderer, me } = lemonView();
-  view.setLemons([
-    { id: "a", distance: 130, lane: 2, collected: true },
-    { id: "b", distance: 700, lane: 2, collected: false },
-  ]);
+test("far-off lemons are not in the frame", () => {
+  const { view, frames, me } = lemonView();
+  view.setLemons([{ id: "b", distance: 700, lane: 2, collected: false }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+  assert.equal(frames.at(-1).lemons.length, 0);
 });
 
-test("without lemons none are drawn", () => {
-  const { view, renderer, me } = lemonView();
+test("without lemons none are in the frame", () => {
+  const { view, frames, me } = lemonView();
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
-});
-
-test("disposing the view frees the lemon mesh", () => {
-  const { view, renderer } = lemonView();
-  const handle = view.lemonMesh;
-  view.dispose();
-  assert.ok(renderer.disposed.includes(handle));
+  assert.equal(frames.at(-1).lemons.length, 0);
 });
 
 // --- ghost lap -------------------------------------------------------------------

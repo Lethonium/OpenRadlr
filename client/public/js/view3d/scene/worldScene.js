@@ -12,6 +12,7 @@ import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
+import { createLemonLayer } from "./lemonLayer.js";
 import { createStatueLayer } from "./statueLayer.js";
 import { createRiderLayer } from "./riderLayer.js";
 import { createFarmLayer } from "./farmLayer.js";
@@ -52,6 +53,7 @@ const LIGHTNING = 3;
  * @property {import("./riderLayer.js").RiderEntry[]} [riders] the road riders to draw (none when missing)
  * @property {import("./athleteLayer.js").AthleteEntry[]} [athletes] the gym athletes to draw (none when missing)
  * @property {import("./riderLayer.js").VehicleEntry[]} [vehicles] the shared vehicles with their seated riders (none when missing)
+ * @property {{position: number[], yaw: number}[]} [lemons] the golden lemons to draw, `position` their centre (none when missing)
  * @property {{gym: object, index: number} | null} [statueGlow] the statue plinth to light (none when missing)
  */
 
@@ -90,6 +92,7 @@ export function createWorldScene(world, { settings, track }) {
     riders: () => createRiderLayer(plants()),
     athletes: () => createAthleteLayer(plants()),
     statues: () => createStatueLayer(plants()),
+    lemons: () => createLemonLayer(plants()),
     weather: () => createWeatherLayer(plants()),
     nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
@@ -101,7 +104,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.weather(), makers.nightLights());
+  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.lemons(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -151,7 +154,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "lemons", "weather", "nightLights");
   };
   setQuality(settings);
 
