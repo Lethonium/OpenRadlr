@@ -18,7 +18,7 @@ const COURSES = Object.freeze([
 const STONES = Object.freeze(["#a89f8c", "#b8b09e", "#968e7c", "#aea592"].map((c) => colour(c)));
 const WALL_CAP = colour("#c2baa8");
 
-const HEDGE = Object.freeze({ spring: "#5c8f3a", summer: "#3a6a2c", autumn: "#8b5a2b", winter: "#4a3828" });
+const HEDGE = Object.freeze({ spring: "#5c8f3a", summer: "#3a6a2c", autumn: "#8b5a2b", winter: "#8f8172" }); // winter: frosted grey twigs, a dark brown reads black on snow
 
 /** A stone `x0` to `x1` wide (unit-length coordinates) with its own tilt of shade. */
 function stone(course, n, x0, x1) {
