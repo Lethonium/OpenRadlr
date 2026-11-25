@@ -41,6 +41,13 @@ cd server && cargo run -p openradlr-id --example mail_preview -- /tmp/openradlr-
 
 The reverse proxy must pass `/id/*` to the server like everything else.
 
+With Docker Compose (`make up`, `make update`), put these in `.env`:
+`docker-compose.yml` hands them to the server, and the data dir is the `data`
+volume. Behind the bundled Caddy also set `OPENRADLR_TRUST_PROXY=true`. After
+`make update`, `/api/info` says `"account": true` and the log shows
+`accounts enabled at /id`; without SMTP settings it warns that codes only go to
+the log.
+
 **Mail delivery.** Send from an address of a domain you control (e.g.
 `OpenRadlr <noreply@openradlr.com>`) and set up SPF, DKIM and DMARC for it at
 your mail provider; without them codes land in spam or are rejected. Then
