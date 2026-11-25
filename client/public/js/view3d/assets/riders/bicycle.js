@@ -118,7 +118,7 @@ export function bikeGeometry(type = "road", { scale = 1, saddleHeight = null } =
 
 // ---------- mesh helpers
 
-const bucket = () => ({ paint: [], metal: [], rubber: [], glow: [] });
+export const bucket = () => ({ paint: [], metal: [], rubber: [], glow: [] });
 /** A rod between two vectors. */
 const rodBetween = (a, b, radius, value, segments = 10) => rodArrays(a.toArray(), b.toArray(), radius, colour(value), segments);
 const rodTo = (parts, kind, a, b, radius, value, segments = 10) => parts[kind].push(rodBetween(a, b, radius, value, segments));
@@ -144,7 +144,7 @@ const surfaceHook = (lights) =>
  * @param {(resource: any) => any} own
  * @param {ReturnType<typeof createSharedUniforms>} uniforms
  */
-function bikeMaterial(own, uniforms, lights) {
+export function bikeMaterial(own, uniforms, lights) {
   return own(addHook(addHook(addHook(new THREE.MeshStandardMaterial({ vertexColors: true }), surfaceHook(lights)), cloudShadows(uniforms)), heightFog(uniforms)));
 }
 
@@ -152,7 +152,7 @@ function bikeMaterial(own, uniforms, lights) {
  * Merges every bucket of a rigid part into one mesh on the bike material and adds it to `group`; each vertex carries
  * its kind's finish. `shift` moves the origin.
  */
-function flush(parts, group, kit, shift = null) {
+export function flush(parts, group, kit, shift = null) {
   const pieces = [];
   for (const kind of KINDS) {
     if (!parts[kind].length) continue;
@@ -174,7 +174,7 @@ function flush(parts, group, kit, shift = null) {
 }
 
 /** A tyre, rim, spokes, hub, brake rotor and (rear) cassette, wheel axis along z, hub at the origin. */
-function buildWheel(fit, { rear, rimColour, wall }, kit) {
+export function buildWheel(fit, { rear, rimColour, wall }, kit) {
   const T = fit.T;
   const parts = bucket();
   const R = T.R;
@@ -300,6 +300,61 @@ function saddleGeometries(kind, value) {
   out.push(shell);
   for (const z of [-0.035, 0.035]) out.push(rodBetween(vec(-0.1, -0.04, z), vec(0.08, -0.035, z), 0.0035, "#8d949b", 4));
   return out;
+}
+
+/**
+ * The crankset and the two pedals of `fit`, added to `parent` (the crank turns about the fit's bottom bracket).
+ * `setCrank(angle, pitchL, pitchR)` turns them as `Bike.setCrank` does.
+ * @param {BikeFit} fit
+ * @param {{own: (resource: any) => any, material: import("../../../three.js").Material}} kit
+ * @param {import("../../../three.js").Object3D} parent
+ */
+export function buildCrankset(fit, kit, parent) {
+  const { T, bb } = fit;
+  const dark = colour("#2a2c2e");
+  const alloy = "#c9cdd2";
+  const chain = "#6b7075";
+  const ringRadius = T.rings[0] * CHAINRING_TOOTH;
+  const crank = new THREE.Group();
+  crank.position.copy(bb);
+  parent.add(crank);
+  const crankParts = bucket();
+  const length = fit.crankLen;
+  T.rings.forEach((teeth, i) => crankParts.metal.push(chainring(teeth, 0.046 - i * 0.007, i ? "#4a4d50" : "#2a2c2e")));
+  crankParts.metal.push(painted(new THREE.TorusGeometry(ringRadius + 0.002, 0.003, 4, 40), chain).translate(0, 0, 0.046));
+  for (let k = 0; k < 4; k += 1) {
+    const angle = (k / 4) * Math.PI * 2 + 0.4;
+    crankParts.metal.push(rodBetween(vec(0, 0, 0.05), vec(Math.cos(angle) * ringRadius * 0.85, Math.sin(angle) * ringRadius * 0.85, 0.05), 0.006, dark, 4));
+  }
+  crankParts.metal.push(box(length, 0.03, 0.018, dark, length / 2, 0, 0.08), box(length, 0.03, 0.018, dark, -length / 2, 0, -0.08), cylinder(0.012, 0.012, 0.16, 8, colour("#8d949b")).rotateX(Math.PI / 2));
+  flush(crankParts, crank, kit);
+  const pedals = [-1, 1].map((side) => {
+    const pedal = new THREE.Group();
+    parent.add(pedal);
+    const pedalParts = bucket();
+    if (T.pedal === "clip") pedalParts.metal.push(box(0.085, 0.016, 0.07, dark), box(0.06, 0.005, 0.05, colour(alloy), 0, 0.009, 0));
+    else {
+      pedalParts.metal.push(box(0.1, 0.014, 0.1, dark));
+      for (const x of [-0.04, 0.04]) for (const z of [-0.04, 0.04]) pedalParts.metal.push(cylinder(0.003, 0.003, 0.02, 4, colour("#b9bec4"), x, 0.005, z));
+    }
+    pedalParts.metal.push(cylinder(0.005, 0.005, 0.03, 6, colour("#8d949b")).rotateX(Math.PI / 2).translate(0, 0, -side * 0.035));
+    flush(pedalParts, pedal, kit);
+    return pedal;
+  });
+
+
+  const pedalPos = (side, angle, out = vec()) => {
+    const a = side > 0 ? angle : angle + Math.PI;
+    return out.set(bb.x + Math.cos(a) * length, bb.y + Math.sin(a) * length, side * fit.q);
+  };
+  const setCrank = (angle, pitchL = 0, pitchR = 0) => {
+    crank.rotation.z = angle;
+    pedalPos(-1, angle, pedals[0].position);
+    pedalPos(1, angle, pedals[1].position);
+    pedals[0].rotation.z = pitchL;
+    pedals[1].rotation.z = pitchR;
+  };
+  return { crank, pedals, pedalPos, setCrank };
 }
 
 /**
@@ -533,32 +588,7 @@ export function createBike({
   steer.add(frontWheel);
 
   // ---- crankset (turns about the BB) and pedals (kept level, ankled by the rider)
-  const crank = new THREE.Group();
-  crank.position.copy(bb);
-  root.add(crank);
-  const crankParts = bucket();
-  const length = fit.crankLen;
-  T.rings.forEach((teeth, i) => crankParts.metal.push(chainring(teeth, 0.046 - i * 0.007, i ? "#4a4d50" : "#2a2c2e")));
-  crankParts.metal.push(painted(new THREE.TorusGeometry(ringRadius + 0.002, 0.003, 4, 40), chain).translate(0, 0, 0.046));
-  for (let k = 0; k < 4; k += 1) {
-    const angle = (k / 4) * Math.PI * 2 + 0.4;
-    crankParts.metal.push(rodBetween(vec(0, 0, 0.05), vec(Math.cos(angle) * ringRadius * 0.85, Math.sin(angle) * ringRadius * 0.85, 0.05), 0.006, dark, 4));
-  }
-  crankParts.metal.push(box(length, 0.03, 0.018, dark, length / 2, 0, 0.08), box(length, 0.03, 0.018, dark, -length / 2, 0, -0.08), cylinder(0.012, 0.012, 0.16, 8, colour("#8d949b")).rotateX(Math.PI / 2));
-  flush(crankParts, crank, kit);
-  const pedals = [-1, 1].map((side) => {
-    const pedal = new THREE.Group();
-    root.add(pedal);
-    const pedalParts = bucket();
-    if (T.pedal === "clip") pedalParts.metal.push(box(0.085, 0.016, 0.07, dark), box(0.06, 0.005, 0.05, colour(alloy), 0, 0.009, 0));
-    else {
-      pedalParts.metal.push(box(0.1, 0.014, 0.1, dark));
-      for (const x of [-0.04, 0.04]) for (const z of [-0.04, 0.04]) pedalParts.metal.push(cylinder(0.003, 0.003, 0.02, 4, colour("#b9bec4"), x, 0.005, z));
-    }
-    pedalParts.metal.push(cylinder(0.005, 0.005, 0.03, 6, colour("#8d949b")).rotateX(Math.PI / 2).translate(0, 0, -side * 0.035));
-    flush(pedalParts, pedal, kit);
-    return pedal;
-  });
+  const { crank, pedals, pedalPos, setCrank } = buildCrankset(fit, kit, root);
 
   const steerAxis = up.clone().normalize();
   const bike = {
@@ -576,17 +606,8 @@ export function createBike({
     setSteer(angle) {
       steer.quaternion.setFromAxisAngle(steerAxis, angle);
     },
-    pedalPos(side, angle, out = vec()) {
-      const a = side > 0 ? angle : angle + Math.PI;
-      return out.set(bb.x + Math.cos(a) * length, bb.y + Math.sin(a) * length, side * fit.q);
-    },
-    setCrank(angle, pitchL = 0, pitchR = 0) {
-      crank.rotation.z = angle;
-      bike.pedalPos(-1, angle, pedals[0].position);
-      bike.pedalPos(1, angle, pedals[1].position);
-      pedals[0].rotation.z = pitchL;
-      pedals[1].rotation.z = pitchR;
-    },
+    pedalPos,
+    setCrank,
   };
   bike.setCrank(0.6);
   return bike;

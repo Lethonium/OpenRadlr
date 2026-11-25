@@ -188,3 +188,19 @@ test("seat counts the vehicles do not come in are rejected", () => {
   assert.throws(() => vehicleLayout("beer_bike", 6));
   assert.equal(vehicleLayout("beer_bike", 5).seats.length, 5);
 });
+
+test("every seat has two grips in reach", () => {
+  for (const [kind, count] of [["tandem", 2], ["beer_bike", 5], ["beer_bike", 7], ["beer_bike", 9]]) {
+    const { seats } = vehicleLayout(kind, count);
+    seats.forEach((seat, i) => {
+      assert.equal(seat.grips.length, 2, `${kind} ${count} seat ${i}`);
+      const forward = [-Math.sin(seat.yaw), 0, -Math.cos(seat.yaw)];
+      for (const grip of seat.grips) {
+        const offset = grip.map((v, a) => v - seat.hip[a]);
+        const reach = Math.hypot(...offset);
+        assert.ok(reach >= 0.45 && reach <= 0.75, `${kind} ${count} seat ${i}: grip ${reach} m from the hip`);
+        assert.ok(offset[0] * forward[0] + offset[2] * forward[2] > 0, `${kind} ${count} seat ${i}: grip behind the hip`);
+      }
+    });
+  }
+});

@@ -37,9 +37,9 @@ test("the asset list is the caller's when it brings one", () => {
   assert.equal(workbenchState("?asset=olive", ["a", "b"]).asset, "a");
 });
 
-test("the bench offers the plants, the buildings, the props, the animals and the riders, each id once", () => {
+test("the bench offers the plants, the buildings, the props, the animals, the riders and the vehicles, each id once", () => {
   const ids = Object.keys(WORKBENCH_ASSETS);
-  assert.equal(ids.length, Object.keys(NATURE).length + Object.keys(BUILDINGS).length + Object.keys(PROPS).length + Object.keys(CREATURES).length + Object.keys(RIDERS).length);
+  assert.equal(ids.length, Object.keys(NATURE).length + Object.keys(BUILDINGS).length + Object.keys(PROPS).length + Object.keys(CREATURES).length + Object.keys(RIDERS).length + 2); // the tandem and the beer bike
   for (const id of ["windmill", "lighthouse", "balloon", "bench"]) assert.equal(workbenchState(`?asset=${id}`).asset, id);
 });
 

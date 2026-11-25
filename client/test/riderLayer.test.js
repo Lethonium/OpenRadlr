@@ -8,6 +8,7 @@ import { lookOf } from "../public/js/view3d/assets/riders/look.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { createRiderLayer } from "../public/js/view3d/scene/riderLayer.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
+import { vehicleLayout } from "../public/js/view3d/vehicleModel.js";
 
 const make = (level = "high") => {
   const tracker = createTracker();
@@ -166,4 +167,75 @@ test("dispose frees everything", () => {
   layer.update(frame([], 3));
   layer.dispose();
   assert.equal(tracker.live(), 0);
+});
+
+// ---- vehicles
+
+const vehicleEntry = (id, kind, seatCount, seats, extra = {}) => ({
+  id, kind, layout: vehicleLayout(kind, seatCount), position: [10, 0, 0], forward: [0, 0, -1], speed: 5, seats, ...extra,
+});
+const occupant = (id, extra = {}) => ({ id, me: false, cadence: 80, tint: [0.5, 0.2, 0.2], ...extra });
+const vframe = (vehicles, dt = 0.1) => ({ ...frame([], dt), vehicles });
+const beer = (seats, extra) => vehicleEntry(1, "beer_bike", 7, seats, extra);
+
+test("a vehicle carries its riders", () => {
+  const { layer } = make("high");
+  layer.update(vframe([beer([occupant(11), null, occupant(12), null, null, occupant(13), null])]));
+  const vehicle = layer.vehicleOf(1);
+  assert.ok(vehicle, "the vehicle is drawn");
+  let rigs = 0;
+  for (let i = 0; i < 7; i += 1) {
+    const here = vehicle.seatFrame(i).children.filter((child) => child.visible && child.type === "Group" && child.getObjectByProperty("isSkinnedMesh", true));
+    rigs += here.length;
+    assert.equal(here.length, [0, 2, 5].includes(i) ? 1 : 0, `seat ${i}`);
+  }
+  assert.equal(rigs, 3);
+  assert.deepEqual([11, 12, 13].map((id) => Boolean(layer.seatedOf(id))), [true, true, true]);
+  assert.equal(layer.seatedOf(14), null);
+  vehicle.object.updateMatrixWorld(true);
+  const ahead = new THREE.Vector3(1, 0, 0).transformDirection(vehicle.object.matrixWorld);
+  assert.ok(Math.abs(ahead.x) < 1e-6 && Math.abs(ahead.z + 1) < 1e-6, `faces ${ahead.toArray()}`);
+  assert.equal(layer.stats().full, 0, "seated riders are not counted as full");
+});
+
+test("seated riders get a label point above their heads", () => {
+  const { layer } = make("high");
+  layer.update(vframe([beer([occupant(11), null, occupant(12), null, null, null, null])]));
+  const heads = layer.seatHeads();
+  assert.deepEqual([...heads.keys()].sort(), [11, 12]);
+  for (const point of heads.values()) assert.ok(point.every(Number.isFinite) && point[1] > 1.5, `head at ${point}`);
+});
+
+test("vehicle wheels turn with speed", () => {
+  const { layer } = make("high");
+  layer.update(vframe([beer([occupant(11), null, null, null, null, null, null], { speed: 5 })], 1));
+  const wheel = layer.vehicleOf(1).object.getObjectByName("wheel-0");
+  assert.ok(Math.abs(wheel.rotation.z + 5 / vehicleLayout("beer_bike", 7).wheelRadius) < 1e-6, `turned ${wheel.rotation.z}`);
+});
+
+test("vehicles leave and return without leaking", () => {
+  const { layer, tracker } = make("high");
+  const there = [beer([occupant(11), null, occupant(12), null, null, occupant(13), null])];
+  layer.update(vframe(there));
+  const baseline = tracker.live();
+  for (let i = 0; i < 10; i += 1) {
+    layer.update(vframe([]));
+    layer.update(vframe(there));
+  }
+  assert.equal(tracker.live(), baseline);
+  for (let i = 0; i < 10; i += 1) {
+    layer.update(vframe([], 3)); // long enough to be pooled
+    layer.update(vframe(there));
+  }
+  assert.equal(tracker.live(), baseline);
+  layer.dispose();
+  assert.equal(tracker.live(), 0);
+});
+
+test("a vehicle past the reach is not drawn unless I am aboard", () => {
+  const { layer } = make("high");
+  layer.update(vframe([beer([occupant(11), null, null, null, null, null, null], { position: [900, 0, 0] })]));
+  assert.equal(layer.vehicleOf(1), null);
+  layer.update(vframe([beer([occupant(11, { me: true }), null, null, null, null, null, null], { position: [900, 0, 0] })]));
+  assert.ok(layer.vehicleOf(1));
 });

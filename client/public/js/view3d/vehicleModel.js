@@ -42,8 +42,11 @@ const HIP_TO_BB = RIDER_GEOMETRY.bottomBracket.map((v, i) => v - RIDER_GEOMETRY.
 /** `placement`'s turn around Y (yaw 0 = facing −Z) applied to a vector. */
 const turn = (yaw, [x, y, z]) => [x * Math.cos(yaw) + z * Math.sin(yaw), y, -x * Math.sin(yaw) + z * Math.cos(yaw)];
 
-function seatAt(hip, yaw) {
-  return { hip, bottomBracket: add(hip, turn(yaw, HIP_TO_BB)), yaw };
+/** The two hand points (left, right), `forward` metres in front of the hip, `half` to each side and `drop` below it. */
+const gripsAt = (hip, yaw, { forward, half, drop }) => [-half, half].map((x) => add(hip, turn(yaw, [x, drop, -forward])));
+
+function seatAt(hip, yaw, hands) {
+  return { hip, bottomBracket: add(hip, turn(yaw, HIP_TO_BB)), yaw, grips: gripsAt(hip, yaw, hands) };
 }
 
 /** Round-ish tube between two points, any direction (a four-sided box along the axis). */
@@ -89,6 +92,8 @@ const TANDEM = Object.freeze({
 
 /** Bike parts of one seat relative to its hip: seat tube top, saddle, head tube, bars. */
 const TANDEM_BAR_Y = 0.98;
+/** Height of the bar ends, where the hands rest. */
+const TANDEM_BAR_END = 0.88;
 
 export function buildTandemFrame() {
   const m = new MeshBuilder();
@@ -139,7 +144,11 @@ function tandemLayout() {
   const y = RIDER_GEOMETRY.hip[1];
   const hubY = RIDER_GEOMETRY.wheelRadius;
   return {
-    seats: [seatAt([0, y, TANDEM.captainZ], 0), seatAt([0, y, TANDEM.stokerZ], 0)],
+    // Hands on the bar ends: the captain's, and the stoker's on the stem behind the captain's saddle.
+    seats: [
+      seatAt([0, y, TANDEM.captainZ], 0, { forward: 0.39, half: 0.2, drop: TANDEM_BAR_END - y }),
+      seatAt([0, y, TANDEM.stokerZ], 0, { forward: 0.64, half: 0.2, drop: TANDEM_BAR_END - y }),
+    ],
     wheels: [
       [0, hubY, -TANDEM.hubZ],
       [0, hubY, TANDEM.hubZ],
@@ -198,11 +207,12 @@ function beerPlan(seatCount) {
   const rows = (seatCount - 1) / 2;
   const lastRow = BEER.firstRow + (rows - 1) * BEER.rowGap;
   const captainZ = lastRow + COUNTER_END + BEER.captainBehind;
-  const seats = [seatAt([0, BEER.hipY, captainZ], 0)];
+  // The captain holds the steering wheel; the others rest their hands on the counter edge in front of the seat.
+  const seats = [seatAt([0, BEER.hipY, captainZ], 0, { forward: -HIP_HAND_Z, half: 0.2, drop: HIP_HAND_Y })];
   for (let j = 0; j < seatCount - 1; j += 1) {
     const left = j % 2 === 0;
     const z = BEER.firstRow + (j >> 1) * BEER.rowGap;
-    seats.push(seatAt([left ? -BEER.hipX : BEER.hipX, BEER.hipY, z], left ? -Math.PI / 2 : Math.PI / 2));
+    seats.push(seatAt([left ? -BEER.hipX : BEER.hipX, BEER.hipY, z], left ? -Math.PI / 2 : Math.PI / 2, { forward: 0.5, half: 0.16, drop: -0.07 }));
   }
   const tailZ = captainZ + BEER.tailPast;
   const frontHub = BEER.noseZ + 0.45;
@@ -220,7 +230,7 @@ function beerLayout(seatCount) {
   const plan = beerPlan(seatCount);
   const shift = (p) => [p[0], p[1], p[2] - plan.middle];
   return {
-    seats: plan.seats.map((seat) => ({ hip: shift(seat.hip), bottomBracket: shift(seat.bottomBracket), yaw: seat.yaw })),
+    seats: plan.seats.map((seat) => ({ hip: shift(seat.hip), bottomBracket: shift(seat.bottomBracket), yaw: seat.yaw, grips: seat.grips.map(shift) })),
     wheels: plan.hubs.map(shift),
     wheelRadius: BEER.wheelRadius,
     cameraBack: 7 + 0.3 * seatCount,
@@ -433,7 +443,7 @@ export function buildBeerBike(seats) {
  * Where the riders sit.
  * @param {"tandem" | "beer_bike"} kind
  * @param {number} seats 2 for the tandem, 5, 7 or 9 for the beer bike
- * @returns {{seats: {hip: number[], bottomBracket: number[], yaw: number}[], wheels: number[][],
+ * @returns {{seats: {hip: number[], bottomBracket: number[], yaw: number, grips: number[][]}[], wheels: number[][],
  *            wheelRadius: number, cameraBack: number, cameraUp: number}}
  */
 export function vehicleLayout(kind, seats) {
