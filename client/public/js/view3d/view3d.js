@@ -38,7 +38,6 @@ import {
 } from "./riderModel.js";
 import { blend, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
-import { buildFlag, buildSpectator } from "./structures.js";
 import { PLINTHS, statueSlots } from "./statues.js";
 import { INSTRUCTOR } from "./studioLayout.js";
 import { StudioLayer } from "./studioLayer.js";
@@ -406,9 +405,7 @@ export class View3D {
     );
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
-    this.spectators = world.spectators;
-    this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
-    this.flagMesh = this.renderer.upload(buildFlag());
+    this.crowd = world.crowd ?? { people: [], figure: "person" };
     this.bodies = [];
     this.bodyParts = [];
     this.thighs = [];
@@ -804,19 +801,13 @@ export class View3D {
     // More riders online, more of the crowd out; the ones near a rider cheer it on.
     const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
     const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
-    const crowd = this.spectators
-      .filter((p) => {
-        const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
-        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide && (p.rank ?? 0) < share;
-      })
-      .map((p) => {
-        const { yaw, lift, pose } = cheer(p, fans, timeS);
-        const position = [p.position[0], p.position[1] + lift, p.position[2]];
-        const model = multiply(placement(position, yaw), scaling(p.scale));
-        // The flag swings about its pole in the raised hand.
-        const flagModel = p.flag ? multiply(model, placement(this.biome.people?.flagHand ?? [0.36, 1.85, -0.05], Math.sin(timeS * 2.6 + p.phase) * 0.5)) : null;
-        return { ...p, pose, model, flagModel };
-      });
+    const crowd = [];
+    this.crowd.people.forEach((p, index) => {
+      const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
+      if (d >= SCENE.spectatorDistance || d <= SCENE.nearCameraHide || (p.rank ?? 0) >= share) return;
+      const { yaw, lift, pose } = cheer(p, fans, timeS);
+      crowd.push({ index, yaw, lift, pose, flagSwing: Math.sin(timeS * 2.6 + p.phase) * 0.5 });
+    });
 
     const lemons = me && !me.gym ? this.#lemonFrames(me.rider, timeS) : [];
 
@@ -835,12 +826,6 @@ export class View3D {
         for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
         for (const wheel of part.wheels) this.renderer.drawShadowCaster(this.wheel, wheel);
       }
-      for (const p of crowd) {
-        if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
-          this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
-          if (p.flagModel) this.renderer.drawShadowCaster(this.flagMesh, p.flagModel);
-        }
-      }
       this.renderer.endShadows();
     }
 
@@ -849,11 +834,11 @@ export class View3D {
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, lemons, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
-    const scene = { light, lens, shadows, visible, crowd };
+    const scene = { light, lens, shadows, visible };
     this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
@@ -877,7 +862,7 @@ export class View3D {
         this.engine.renderScene(this.worldScene.scene, this.sideCamera, rect);
         this.worldScene.isolateAthlete(null);
         this.#drawWorld(
-          { ...scene, visible: [], crowd: [] },
+          { ...scene, visible: [] },
           { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
         );
         this.renderer.viewport(null);
@@ -914,7 +899,7 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, shadows, visible, crowd }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+  #drawWorld({ light, lens, shadows, visible }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
     for (const [group, chunks] of Object.entries(this.chunks)) {
       // Seen from the drone, small things reach a little further, not as far as the haze.
@@ -924,10 +909,6 @@ export class View3D {
         if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" || light.key === "night" ? 0.95 : 0.55);
         else this.renderer.draw(chunk.handle, this.identity);
       }
-    }
-    for (const p of crowd) {
-      this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
-      if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
     }
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
@@ -1019,7 +1000,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...chunkHandles, this.flagMesh, ...this.spectatorMeshes];
+    const handles = chunkHandles;
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
       this.renderer.dispose(handle);
     }

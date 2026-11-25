@@ -7,6 +7,7 @@ import { CREATURES } from "../public/js/view3d/assets/creatures/index.js";
 import { RIDERS } from "../public/js/view3d/assets/riders/index.js";
 import { FLOATERS, PROPS } from "../public/js/view3d/assets/props/index.js";
 import * as THREE from "../public/js/three.js";
+import { PEOPLE } from "../public/js/view3d/assets/people/index.js";
 import { WORKBENCH_ASSETS, groundAsset, workbenchState } from "../public/js/workbenchState.js";
 
 const FIRST = Object.keys(NATURE)[0];
@@ -39,14 +40,14 @@ test("the asset list is the caller's when it brings one", () => {
 
 test("the bench offers the plants, the buildings, the props, the animals, the riders and the vehicles, each id once", () => {
   const ids = Object.keys(WORKBENCH_ASSETS);
-  assert.equal(ids.length, Object.keys(NATURE).length + Object.keys(BUILDINGS).length + Object.keys(PROPS).length + Object.keys(FLOATERS).length + Object.keys(CREATURES).length + Object.keys(RIDERS).length + 2); // the tandem and the beer bike
+  assert.equal(ids.length, Object.keys(NATURE).length + Object.keys(BUILDINGS).length + Object.keys(PROPS).length + Object.keys(FLOATERS).length + Object.keys(PEOPLE).length + Object.keys(CREATURES).length + Object.keys(RIDERS).length + 2); // the tandem and the beer bike
   for (const id of ["windmill", "lighthouse", "balloon", "bench"]) assert.equal(workbenchState(`?asset=${id}`).asset, id);
 });
 
 test("every building and prop on the bench builds with the bench's options and frees what it made", async () => {
   const { createTracker } = await import("../public/js/view3d/scene/tracker.js");
   const { createSharedUniforms } = await import("../public/js/view3d/assets/materials.js");
-  for (const id of [...Object.keys(BUILDINGS), ...Object.keys(PROPS), ...Object.keys(FLOATERS), ...Object.keys(CREATURES), ...Object.keys(RIDERS)]) {
+  for (const id of [...Object.keys(BUILDINGS), ...Object.keys(PROPS), ...Object.keys(FLOATERS), ...Object.keys(PEOPLE), ...Object.keys(CREATURES), ...Object.keys(RIDERS)]) {
     const tracker = createTracker();
     const made = WORKBENCH_ASSETS[id].create({ season: "summer", track: tracker.track, uniforms: createSharedUniforms() });
     assert.ok(made.object.children.length > 0, id);

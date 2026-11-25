@@ -328,7 +328,7 @@ function gymView(gyms, biome = "temperate", renderer = new StubRenderer(), studi
   const world = {
     biome,
     chunks: { scenery: [], structures: [] },
-    spectators: [],
+    crowd: { people: [], figure: "person" },
     gyms,
     studio,
   };
@@ -838,51 +838,59 @@ test("past the ends of a route that isn't a loop the road keeps its direction", 
 
 // --- crowds ------------------------------------------------------------------------
 
-/** A view with one spectator 12 m along the square route's first side, beside the road. */
-function crowdView(person, biome = "temperate") {
+/** A view whose crowd is `people` (the square route's first side runs along x, the road's centre at z = 0), recording its frames. */
+function crowdView(people, biome = "temperate") {
   const { view, renderer } = gymView([], biome, new RecordingRenderer());
   const base = { yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, rank: 0, flag: null };
-  view.spectators = [{ ...base, position: [112, 100, 8], ...person }];
-  return { view, renderer };
+  view.crowd.people = people.map((person) => ({ ...base, position: [112, 100, 8], ...person }));
+  return { view, renderer, frames: recordFrames(view) };
 }
-const spectatorDraws = (view, renderer) => renderer.draws.filter((d) => view.spectatorMeshes.includes(d.handle));
+const rider = (id, extra = {}) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, ...extra });
+const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
 
 test("a lining spectator comes out once enough riders are online", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const friends = [2, 3, 4, 5, 6].map((id) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200 }));
-  const alone = crowdView({ rank: 0.7 });
+  const friends = [2, 3, 4, 5, 6].map((id) => rider(id));
+  const alone = crowdView([{ rank: 0.7 }]);
   alone.view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(alone.view, alone.renderer).length, 0, "not out for one rider");
-  const busy = crowdView({ rank: 0.7 });
+  assert.equal(alone.frames.at(-1).crowd.length, 0, "not out for one rider");
+  const busy = crowdView([{ rank: 0.7 }]);
   busy.view.render({ riders: [me, ...friends], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(busy.view, busy.renderer).length, 1, "out for six");
+  assert.equal(busy.frames.at(-1).crowd.length, 1, "out for six");
 });
 
 test("bots don't bring out the crowd", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const bots = [2, 3, 4, 5, 6].map((id) => ({ id, name: `B${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, is_bot: true }));
-  const { view, renderer } = crowdView({ rank: 0.7 });
+  const bots = [2, 3, 4, 5, 6].map((id) => rider(id, { is_bot: true }));
+  const { view, frames } = crowdView([{ rank: 0.7 }]);
   view.render({ riders: [me, ...bots], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(view, renderer).length, 0);
+  assert.equal(frames.at(-1).crowd.length, 0);
 });
 
-test("a spectator with a flag waves it in its colour, beside its head", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9] });
+test("the crowd thins out when I ride alone and keeps clear of the camera", () => {
+  // A ring of lining spectators round the eye, at every rank, from point blank to 100 m.
+  const ring = (eye) => Array.from({ length: 40 }, (_, i) => ({ rank: (i % 10) / 10, position: [eye[0] + (i % 4) * 1.2 + (i % 5) * 20, 100, eye[2] + i * 0.5] }));
+  const { view, frames } = crowdView([]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const flags = renderer.draws.filter((d) => d.handle === view.flagMesh);
-  assert.equal(flags.length, 1);
-  assert.deepEqual(flags[0].tint, [0.1, 0.2, 0.9]);
-  assert.ok(Math.hypot(flags[0].model[12] - 112, flags[0].model[14] - 8) < 1, "at the spectator");
-  assert.ok(flags[0].model[13] > 101.5, "held up high");
+  const eye = view.camera.eye;
+  view.crowd.people = ring(eye).map((person) => ({ yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, flag: null, ...person }));
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const alone = frames.at(-1).crowd;
+  view.render({ riders: [me, ...Array.from({ length: 9 }, (_, i) => rider(i + 2))], myId: 1, timeS: 3, colors });
+  const busy = frames.at(-1).crowd;
+  assert.ok(alone.length > 0 && alone.length < busy.length, `${alone.length} alone, ${busy.length} with ten`);
+  for (const entry of busy) {
+    const at = view.crowd.people[entry.index].position;
+    assert.ok(Math.hypot(at[0] - eye[0], at[2] - eye[2]) > 4, "none within the near-camera cut");
+  }
 });
 
-test("a penguin holds its flag lower, in its flipper", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9], motion: "clap" }, "winter");
+test("a flag waver's entry carries the swing and a rider nearby makes the crowd hop", () => {
+  const { view, frames } = crowdView([{ flag: [0.1, 0.2, 0.9], phase: 0.5 }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const flag = renderer.draws.find((d) => d.handle === view.flagMesh);
-  assert.ok(flag.model[13] < 101.2, `at ${flag.model[13]}`);
+  const [entry] = frames.at(-1).crowd;
+  assert.equal(entry.index, 0);
+  assert.ok(Math.abs(entry.flagSwing - Math.sin(3 * 2.6 + 0.5) * 0.5) < 1e-9);
+  assert.equal(typeof entry.pose, "boolean");
+  assert.ok(entry.lift >= 0);
 });
 
 // --- bot kits (#64) ------------------------------------------------------------------
@@ -1096,7 +1104,7 @@ function worldView({ timeMode = "day", sideView = null } = {}) {
   const renderer = new StubRenderer();
   renderer.calls = log;
   const gym = testGym();
-  const world = { biome: "temperate", season: "summer", ground: groundFixture(), chunks: { scenery: [], structures: [] }, spectators: [], gyms: [gym] };
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), chunks: { scenery: [], structures: [] }, crowd: { people: [], figure: "person" }, gyms: [gym] };
   const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
   const view = new View3D(canvas, null, squareRoute(), world, { renderer, engine });
   view.setTimeMode(timeMode);

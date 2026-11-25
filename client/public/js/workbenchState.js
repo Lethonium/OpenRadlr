@@ -7,6 +7,7 @@ import { BUILDINGS } from "./view3d/assets/buildings/index.js";
 import { CREATURES } from "./view3d/assets/creatures/index.js";
 import { NATURE } from "./view3d/assets/nature/index.js";
 import { FLOATERS, PROPS } from "./view3d/assets/props/index.js";
+import { PEOPLE } from "./view3d/assets/people/index.js";
 import { RIDERS } from "./view3d/assets/riders/index.js";
 import { vehicleAssets } from "./view3d/assets/riders/vehicles.js";
 import { vehicleLayout } from "./view3d/vehicleModel.js";
@@ -17,7 +18,7 @@ import { TIME_PRESETS } from "./world/daylight.js";
  * Every asset on the bench by id: the plants, the buildings, the props, the animals, the riders and the vehicles with their seated riders. All take `create({season, track, ...options})`;
  * the buildings ignore the plants' `uniforms`.
  */
-export const WORKBENCH_ASSETS = Object.freeze({ ...NATURE, ...BUILDINGS, ...PROPS, ...FLOATERS, ...CREATURES, ...RIDERS, ...vehicleAssets(vehicleLayout) });
+export const WORKBENCH_ASSETS = Object.freeze({ ...NATURE, ...BUILDINGS, ...PROPS, ...FLOATERS, ...PEOPLE, ...CREATURES, ...RIDERS, ...vehicleAssets(vehicleLayout) });
 
 /** The times of day the workbench lights an asset with (no "auto": there is no clock here). */
 export const WORKBENCH_TIMES = Object.freeze(Object.keys(TIME_PRESETS));

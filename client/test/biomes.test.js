@@ -32,7 +32,6 @@ test("a biome brings everything the world draws with", () => {
     for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "preview", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
-    assert.equal(typeof biome.people.model, "function", `${id} draws its own crowd`);
     assert.equal(typeof biome.people.motion, "string", `${id} says how the crowd moves`);
     assert.ok(biome.people.shirts.length > 0, `${id} has crowd colours`);
     assert.equal(biome.road.barrier.stripes.length, 2, `${id} has two barrier stripes`);
@@ -120,11 +119,6 @@ test("a biome has its own crowd", () => {
   const winter = resolveBiome("winter");
   assert.equal(temperate.people.motion, "jump", "people jump in summer");
   assert.equal(winter.people.motion, "clap", "penguins clap in winter");
-
-  const idle = winter.people.model(false);
-  const clap = winter.people.model(true);
-  assert.ok(idle.vertexCount > 0, "the penguin has geometry");
-  assert.notDeepEqual(clap.positions, idle.positions, "the flippers move");
 });
 
 test("winter's workout figures are penguins", () => {
@@ -174,16 +168,16 @@ test("winter changes the look, not the layout", () => {
     assert.equal(winter.terrain.height(x, z), temperate.terrain.height(x, z), `terrain height at ${x},${z}`);
   }
 
-  assert.deepEqual(winter.spectators.map((p) => p.position), temperate.spectators.map((p) => p.position), "the crowd stands on the same spots");
-  assert.notDeepEqual(winter.spectators.map((p) => p.shirt), temperate.spectators.map((p) => p.shirt), "the winter crowd wears winter coats");
+  assert.deepEqual(winter.crowd.people.map((p) => p.position), temperate.crowd.people.map((p) => p.position), "the crowd stands on the same spots");
+  assert.notDeepEqual(winter.crowd.people.map((p) => p.shirt), temperate.crowd.people.map((p) => p.shirt), "the winter crowd wears winter coats");
   const winterBiome = resolveBiome("winter");
   const temperateBiome = resolveBiome("temperate");
   assert.notDeepEqual(winterBiome.road.barrier.stripes, temperateBiome.road.barrier.stripes, "the barriers change colour");
   assert.notDeepEqual(winterBiome.arch.chequer, temperateBiome.arch.chequer, "the start strip changes colour");
-  assert.equal(temperate.spectators[0].motion, "jump");
-  assert.equal(winter.spectators[0].motion, "clap", "the winter crowd claps");
-  assert.notDeepEqual(winter.spectatorMeshes[0].positions, temperate.spectatorMeshes[0].positions, "winter's crowd is penguins");
-  assert.notDeepEqual(winter.spectatorMeshes[1].positions, winter.spectatorMeshes[0].positions, "the clapping pose moves");
+  assert.equal(temperate.crowd.people[0].motion, "jump");
+  assert.equal(winter.crowd.people[0].motion, "clap", "the winter crowd claps");
+  assert.equal(temperate.crowd.figure, "person");
+  assert.equal(winter.crowd.figure, "penguin", "winter's crowd is penguins");
 
   const total = (scene) =>
     Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
@@ -192,8 +186,8 @@ test("winter changes the look, not the layout", () => {
   const t = total(temperate);
   const w = total(winter);
   assert.notEqual(winter.roads.strips.positions.length, temperate.roads.strips.positions.length, "the road itself is reshaped");
-  // The plants are scene layers now; what is left is the adapter's own drawing, where winter's snowmen posts and banked road weigh more.
-  assert.ok(w / t < 1.6, `winter stays within 60 % of temperate (${t} → ${w})`);
+  // The plants are scene layers now; what is left is the adapter's own drawing, where winter's snowmen posts and banked road weigh more (the crowd and its barriers left it too, so the share is larger).
+  assert.ok(w / t < 1.7, `winter stays within 70 % of temperate (${t} → ${w})`);
 });
 
 test("every biome keeps the world's places", () => {

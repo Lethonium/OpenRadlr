@@ -13,7 +13,6 @@ import {
   PALETTE,
   buildCafe,
   buildOutdoorGymModel,
-  buildSpectator,
   buildVillageSign,
   buildWarningSign,
 } from "../structures.js";
@@ -167,9 +166,8 @@ export const temperate = Object.freeze({
   seaFloor: SEA_FLOOR,
   palette: PALETTE,
   models,
-  /** `model(pose)` draws the two crowd poses; `motion` tells the view how to play them. */
-  /** `flagHand`: where a spectator holds its flag, in its own frame. */
-  people: Object.freeze({ model: buildSpectator, motion: "jump", tint: true, shirts: SHIRTS, flagHand: [0.36, 1.85, -0.05] }),
+  /** `motion` tells the view how the crowd cheers; the figures are assets/people. */
+  people: Object.freeze({ motion: "jump", tint: true, shirts: SHIRTS }),
   terrainColor,
   flora: Object.freeze({
     /** The two greens of the 2D map's tree dots. */

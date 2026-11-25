@@ -1,6 +1,6 @@
 /**
  * The road's furniture from the placements the world's worker made (`world.furniture`): guard rails (a post and a
- * beam per segment, each kind one instanced mesh), the warning triangles and village boards (a post mesh and a
+ * beam per segment, each kind one instanced mesh), the crowd barriers (a post and a striped board per segment), the warning triangles and village boards (a post mesh and a
  * painted-face mesh per kind) and the flamme rouge over the road. Static. The painted faces glow a little more at
  * dusk and night (`env.night`). Their colours are the biome's palette.
  */
@@ -16,6 +16,9 @@ const GLOW = Object.freeze({ day: 0.1, night: 0.6 });
 const BEAM = Object.freeze({ height: 0.3, depth: 0.06, lift: 0.55 });
 /** A rail's post: width, height and how far its centre stands over the road. */
 const POST = Object.freeze({ width: 0.12, height: 0.9, lift: 0.2 });
+/** A barrier's board: height, depth and how high it floats; its post's width and height. */
+const BOARD = Object.freeze({ height: 0.28, depth: 0.04, lift: 0.85 });
+const BARRIER_POST = Object.freeze({ width: 0.07, height: 1.0 });
 const UP = new THREE.Vector3(0, 1, 0);
 
 const linear = ([r, g, b]) => new THREE.Color().setRGB(r, g, b);
@@ -27,7 +30,7 @@ const linear = ([r, g, b]) => new THREE.Color().setRGB(r, g, b);
  */
 export function createFurnitureLayer(world, { biome, settings, uniforms, track }) {
   const { own, disposeAll } = createOwner(track);
-  const { rails = [], signs = [], flammeRouge = null } = world.furniture ?? {};
+  const { rails = [], signs = [], flammeRouge = null, barriers = [] } = world.furniture ?? {};
   const palette = biome.palette;
   const object = new THREE.Group();
   object.name = "furniture";
@@ -63,6 +66,23 @@ export function createFurnitureLayer(world, { biome, settings, uniforms, track }
       across.crossVectors(along, UP);
       return matrix.makeBasis(along, UP, across).setPosition(at.set(a[0], a[1], a[2]));
     });
+  }
+
+  if (barriers.length > 0) {
+    // The board is a unit box along x like a rail's beam; its stripe colour is the instance's.
+    const stripe = new THREE.Color();
+    const boards = instanced("barriers", merge([box(1, BOARD.height, BOARD.depth, new THREE.Color().setRGB(1, 1, 1), 0, 0, 0)]), solid(), barriers, ({ a, b }, matrix) => {
+      const { along, across, at } = scratch;
+      along.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      // Where the road's start cuts a segment to nothing there is nothing to draw.
+      if (along.lengthSq() < 1e-9) return matrix.makeScale(0, 0, 0);
+      across.crossVectors(along, UP).normalize();
+      return matrix.makeBasis(along, UP, across).setPosition(at.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + BOARD.lift, (a[2] + b[2]) / 2));
+    });
+    barriers.forEach(({ color }, i) => boards.setColorAt(i, stripe.setRGB(...color)));
+    boards.instanceColor.needsUpdate = true;
+    const post = box(BARRIER_POST.width, BARRIER_POST.height, BARRIER_POST.width, linear(biome.road.barrier.post), 0, BARRIER_POST.height / 2, 0);
+    instanced("barrier-posts", merge([post]), solid(), barriers, ({ a }, matrix) => matrix.makeTranslation(a[0], a[1], a[2]));
   }
 
   const placeSign = ({ position, yaw }, matrix) => {

@@ -312,12 +312,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
   }
-  const spectators = buildSpectators(route, terrain, { structures: chunks.structures, seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
-  // The crowd's two poses are biome models like every other shape; the view
-  // only alternates them (and adds the hop) while drawing.
-  const spectatorMeshes = [biome.people.model(false), biome.people.model(true)];
-  // Rails and signs are placement data for the furniture layer; barriers join them with the crowd's.
-  const furniture = { rails: [], signs: [], flammeRouge: null, barriers: [] };
+  const { people, barriers } = buildSpectators(route, terrain, { seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
+  // Rails, signs and the crowd's barriers are placement data for the furniture layer; the people are the crowd layer's.
+  const furniture = { rails: [], signs: [], flammeRouge: null, barriers };
   const collect = (found) => {
     for (const rail of found.rails) furniture.rails.push(rail);
     for (const sign of found.signs) furniture.signs.push(sign);
@@ -359,7 +356,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     furniture,
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
-    spectators,
-    spectatorMeshes,
+    crowd: { people, figure: biome.people.motion === "clap" ? "penguin" : "person" },
   };
 }

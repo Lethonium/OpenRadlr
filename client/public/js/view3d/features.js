@@ -7,7 +7,7 @@
  * objects (spectators) that the view animates per frame.
  */
 import { CROWD } from "./crowd.js";
-import { add, cellKey, normalize, placement, scale, sub, yawFor } from "./math.js";
+import { add, cellKey, normalize, placement, scale, yawFor } from "./math.js";
 import { seededRandom } from "../world/noise.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
@@ -77,9 +77,10 @@ const FLAGS = [
  * `CROWD.liningM` of each climb, thicker towards the top (`rank` in (0, 1):
  * out when `crowdShare` of the riders online is above it). Some wave a flag
  * (`flag`: its colour). `blocked(x, z)` keeps the lining out of buildings,
- * yards and rivers.
+ * yards and rivers. Returns placement data for scene/crowdLayer.js (`people`) and
+ * scene/furnitureLayer.js (`barriers`: segments `a` to `b` on the ground, `color` their stripe).
  */
-export function buildSpectators(route, terrain, { structures, seed, perSide = 16, biome = temperate, blocked = () => false }) {
+export function buildSpectators(route, terrain, { seed, perSide = 16, biome = temperate, blocked = () => false }) {
   const random = seededRandom(seed ^ 0x5bec);
   // Placement added later draws from its own stream: the first crowds stay where they always stood.
   const more = seededRandom(seed ^ 0xc4e3);
@@ -88,6 +89,7 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
   const barrier = biome.road.barrier ?? temperate.road.barrier;
   const half = roadHalfWidth(route.lanes) + VERGE;
   const people = [];
+  const barriers = [];
   const person = (p, facing, rank) => {
     // Drawn in the order the crowd always drew them, so the first crowds look as they did.
     const shirt = shirts[Math.floor(random() * shirts.length)];
@@ -110,11 +112,8 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
         const f1 = roadFrame(route, spot + s + 3);
         const p0 = add(f0.center, scale(f0.right, side * (half + 0.5)));
         const p1 = add(f1.center, scale(f1.right, side * (half + 0.5)));
-        const y0 = terrain.height(p0[0], p0[2]);
-        structures.box([p0[0], y0 + 0.5, p0[2]], [0.07, 1.0, 0.07], barrier.post);
-        const mid = scale(add(p0, p1), 0.5);
         const color = barrier.stripes[Math.floor((s + 24) / 3) % barrier.stripes.length];
-        structures.orientedBox([mid[0], y0 + 0.85, mid[2]], sub(p1, p0), [0, 0.28, 0], scale(f0.right, 0.04), color);
+        barriers.push({ a: [p0[0], terrain.height(p0[0], p0[2]), p0[2]], b: [p1[0], terrain.height(p1[0], p1[2]), p1[2]], color });
       }
     }
     // People, two loose rows per side.
@@ -149,7 +148,7 @@ export function buildSpectators(route, terrain, { structures, seed, perSide = 16
       }
     }
   }
-  return people;
+  return { people, barriers };
 }
 
 // ---------------------------------------------------------- infrastructure ---

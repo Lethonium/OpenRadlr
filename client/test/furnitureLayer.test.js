@@ -49,6 +49,17 @@ test("signs and the flamme rouge are drawn once each", () => {
   assert.equal(make({ biome: "temperate", furniture: { ...furniture, flammeRouge: null } }).layer.object.getObjectByName("flamme-rouge"), undefined);
 });
 
+test("each crowd barrier is a board and a post, coloured by its stripe", () => {
+  const barriers = [{ a: [0, 1, 4], b: [3, 1, 4], color: [0.9, 0.1, 0.1] }, { a: [3, 1, 4], b: [6, 1, 4], color: [0.1, 0.1, 0.9] }];
+  const { layer } = make({ biome: "temperate", furniture: { ...furniture, barriers } });
+  const boards = layer.object.getObjectByName("barriers");
+  assert.equal(boards.count, 2);
+  assert.equal(layer.object.getObjectByName("barrier-posts").count, 2);
+  const colour = new THREE.Color();
+  boards.getColorAt(1, colour);
+  assert.ok(Math.abs(colour.b - 0.9) < 1e-6);
+});
+
 test("dispose frees everything", () => {
   const { layer, tracker } = make();
   assert.ok(tracker.live() > 0);

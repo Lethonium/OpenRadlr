@@ -100,33 +100,6 @@ export function buildVillageSign() {
   return { post: post.build(), face: face.build() };
 }
 
-/** A spectator facing −Z. The shirt is tinted per person (alpha = 1). */
-export function buildSpectator(armsUp) {
-  const m = new MeshBuilder();
-  const shirt = [1, 1, 1, 1];
-  for (const x of [-0.11, 0.11]) m.segment([x, 0, 0], [x, 0.85, 0], 0.13, 0.13, PALETTE.pants);
-  m.box([0, 1.15, 0], [0.44, 0.62, 0.25], shirt);
-  m.ellipsoid([0, 1.62, 0], [0.12, 0.14, 0.12], PALETTE.skin, 3, 6);
-  for (const side of [-1, 1]) {
-    const shoulder = [side * 0.26, 1.4, 0];
-    const hand = armsUp ? [side * 0.42, 2.0, -0.05] : [side * 0.3, 0.9, -0.05];
-    m.segment(shoulder, hand, 0.09, 0.09, shirt);
-  }
-  return m.build();
-}
-
-/**
- * A flag a spectator waves, held at the hand: a pole leaning back from the
- * origin (the hand) and a white cloth (tinted per flag, alpha = 1) off its top.
- */
-export function buildFlag() {
-  const m = new MeshBuilder();
-  const cloth = [1, 1, 1, 1];
-  m.segment([0, -0.25, 0], [0, 1.55, 0.12], 0.035, 0.035, PALETTE.door);
-  m.box([0.36, 1.27, 0.1], [0.68, 0.46, 0.03], cloth);
-  return m.build();
-}
-
 /**
  * A roadside bike café: a single-storey building with a big glass front and a
  * striped awning, a wooden terrace with tables and parasols, a bike rack with

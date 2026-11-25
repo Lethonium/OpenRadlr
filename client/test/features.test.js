@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { roadsideFurniture } from "../public/js/view3d/features.js";
+import { readFileSync } from "node:fs";
+import { buildSpectators, roadsideFurniture } from "../public/js/view3d/features.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../public/js/world/roads.js";
 
 const flat = { height: () => 0 };
@@ -45,4 +46,34 @@ test("village boards stand at both ends of a zone", () => {
   const route = straight([[0, 0, 0], [1000, 0, 0]]);
   const { signs } = roadsideFurniture(route, flat, { markers: false, villages: [{ from: 200, to: 500 }] });
   assert.deepEqual(signs.map((s) => [s.kind, Math.round(s.position[0])]), [["village", 200], ["village", 500]]);
+});
+
+test("spectators stand where they always stood", () => {
+  // Recorded from the crowd the adapter drew before it moved to the new world.
+  const hills = new RouteGeometry(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
+  const terrain = { height: (x, z) => 0.01 * x + 0.005 * z, distanceToRoad: () => Infinity };
+  const { people } = buildSpectators(hills, terrain, { seed: hills.seed >>> 0 });
+  assert.equal(people.length, 231);
+  const first = people.slice(0, 5).map((p) => ({ position: p.position.map((v) => Math.round(v * 1e4) / 1e4), shirt: p.shirt, flag: p.flag }));
+  assert.deepEqual(first, [
+    { position: [2407.5981, 19.3755, -940.1048], shirt: [0.55, 0.3, 0.75], flag: null },
+    { position: [2409.0382, 19.4033, -937.4248], shirt: [0.2, 0.45, 0.85], flag: [0.18, 0.62, 0.3] },
+    { position: [2408.7767, 19.4152, -934.514], shirt: [0.15, 0.15, 0.18], flag: null },
+    { position: [2408.1242, 19.367, -942.8467], shirt: [0.2, 0.45, 0.85], flag: null },
+    { position: [2405.7885, 19.2956, -952.4521], shirt: [0.95, 0.95, 0.95], flag: null },
+  ]);
+});
+
+test("barriers line both sides of each crowd spot", () => {
+  // Three spots: the start line, the climb's top and the sprint line.
+  const route = straight([[0, 0, 0], [3000, 0, 0]], [{ type: "sprint", distance: 600, length: 0 }, { type: "climb", distance: 1800, length: 1000 }]);
+  const { barriers } = buildSpectators(route, { ...flat, distanceToRoad: () => Infinity }, { seed: 1 });
+  assert.equal(barriers.length, 3 * 2 * 16);
+  const half = roadHalfWidth(route.lanes) + VERGE + 0.5;
+  for (const { a, b, color } of barriers) {
+    assert.ok(Math.abs(Math.abs(a[2]) - half) < 0.01, `a stands ${a[2]} m off the centre line`);
+    assert.ok(b[0] - a[0] < 3.01, "at most three metres long (the first ones are cut at the road's start)");
+    assert.equal(color.length, 3);
+  }
+  assert.equal(new Set(barriers.map(({ color }) => color.join())).size, 2, "two stripe colours");
 });

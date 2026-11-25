@@ -5,7 +5,6 @@
  */
 import { winterModels } from "./buildings.js";
 import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
-import { buildPenguin } from "./people.js";
 import { terrainColor } from "./terrain.js";
 
 /** Muted winter coats; the crowd and the penguins' scarves take these colours. */
@@ -110,7 +109,7 @@ export const winter = Object.freeze({
   palette: WINTER_PALETTE,
   models: winterModels,
   /** The roadside crowd becomes clapping penguins; the scarf takes the per-person tint. */
-  people: Object.freeze({ model: buildPenguin, motion: "clap", tint: true, shirts: SHIRTS, flagHand: [0.5, 0.8, -0.1] }),
+  people: Object.freeze({ motion: "clap", tint: true, shirts: SHIRTS }),
   /** Workout riders and their statues become penguins too: the rigged rider in a penguin outfit. */
   workoutFigure: "penguin",
   /** Winter air: a pale, cool sky, snow bounce and a shorter haze. */
