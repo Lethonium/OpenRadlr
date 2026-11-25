@@ -1,8 +1,9 @@
 /**
  * The road: asphalt, verges, banks and ruts in one material, lane lines in
  * another drawn on top, the roadside posts and (with the rivers) the bridges.
- * The quads from the worker are cut into chunks of consecutive quads, so a
- * long route is frustum-culled piece by piece. The road receives the sun's
+ * The quads from the worker are grouped by the square area (`CELL`) their
+ * centre lies in, one mesh per area and material, so a long route is
+ * frustum-culled piece by piece without many tiny pieces. The road receives the sun's
  * shadows and the drifting clouds.
  */
 import * as THREE from "../../three.js";
@@ -11,8 +12,8 @@ import { asphaltTexture, kindColors } from "../assets/road.js";
 import { ROAD_KIND } from "../../world/plan/roadStrips.js";
 import { createOwner } from "./tracker.js";
 
-/** Quads per chunk: about 400 m of road with its verges. */
-export const CHUNK_QUADS = 300;
+/** Side (metres) of the square areas the road is cut into. */
+export const CELL = 500;
 const MARK_KINDS = new Set([ROAD_KIND.marking, ROAD_KIND.edge, ROAD_KIND.rut]);
 /** The surface sits just in front of the ground; marks and ruts in front of that. */
 const SURFACE_OFFSET = Object.freeze({ factor: -2, units: -4 });
@@ -22,18 +23,28 @@ const WET = Object.freeze({ shade: 0.6, markShade: 0.8, roughness: 0.45 });
 const DRY_ROUGHNESS = 0.95;
 
 /**
- * The quads of `strips` for which `keep(kind)` holds, as geometries of up to `CHUNK_QUADS` consecutive quads.
+ * The quads of `strips` for which `keep(kind)` holds, as one geometry per `CELL` square their centres fall in.
  * @param {import("../../world/plan/strips.js").Strips} strips
  * @param {(kind: number) => boolean} keep
  * @param {number[][]} palette colour per kind
  * @returns {import("../../three.js").BufferGeometry[]}
  */
-export function chunkGeometries(strips, keep, palette) {
+export function areaGeometries(strips, keep, palette) {
   const quads = strips.kinds.length / 4;
-  const geometries = [];
-  let list = [];
-  const flush = () => {
-    if (list.length === 0) return;
+  const areas = new Map();
+  for (let q = 0; q < quads; q += 1) {
+    if (!keep(strips.kinds[q * 4])) continue;
+    let x = 0;
+    let z = 0;
+    for (let k = 0; k < 4; k += 1) {
+      x += strips.positions[(q * 4 + k) * 3];
+      z += strips.positions[(q * 4 + k) * 3 + 2];
+    }
+    const key = `${Math.floor(x / 4 / CELL)},${Math.floor(z / 4 / CELL)}`;
+    if (!areas.has(key)) areas.set(key, []);
+    areas.get(key).push(q);
+  }
+  return [...areas.values()].map((list) => {
     const positions = new Float32Array(list.length * 12);
     const uvs = new Float32Array(list.length * 8);
     const colors = new Float32Array(list.length * 12);
@@ -46,7 +57,8 @@ export function chunkGeometries(strips, keep, palette) {
         colors.set([color[0] * shade, color[1] * shade, color[2] * shade], n * 12 + k * 3);
       }
     });
-    const indices = new Uint16Array(list.length * 6);
+    // A busy area holds more than 65 535 vertices.
+    const indices = list.length * 4 > 65535 ? new Uint32Array(list.length * 6) : new Uint16Array(list.length * 6);
     list.forEach((q, n) => {
       for (let k = 0; k < 6; k += 1) indices[n * 6 + k] = strips.indices[q * 6 + k] - q * 4 + n * 4;
     });
@@ -57,16 +69,8 @@ export function chunkGeometries(strips, keep, palette) {
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
-    geometries.push(geometry);
-    list = [];
-  };
-  for (let q = 0; q < quads; q += 1) {
-    if (!keep(strips.kinds[q * 4])) continue;
-    list.push(q);
-    if (list.length === CHUNK_QUADS) flush();
-  }
-  flush();
-  return geometries;
+    return geometry;
+  });
 }
 
 /**
@@ -106,7 +110,7 @@ export function createRoadLayer(roads, { uniforms, track }) {
     ["road-surface", (kind) => !MARK_KINDS.has(kind), surface],
     ["road-marks", (kind) => MARK_KINDS.has(kind), marks],
   ]) {
-    for (const geometry of chunkGeometries(roads.strips, keep, palette)) {
+    for (const geometry of areaGeometries(roads.strips, keep, palette)) {
       const mesh = new THREE.Mesh(own(geometry), made);
       mesh.name = name;
       mesh.receiveShadow = true;

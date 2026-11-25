@@ -16,6 +16,7 @@ import { environmentAt, resolvePreset } from "../public/js/world/daylight.js";
 import { ROAD_LIFT, VERGE, roadHalfWidth } from "../public/js/world/roads.js";
 import { riverStrips } from "../public/js/world/plan/riverStrips.js";
 import { ROAD_KIND, roadStrips } from "../public/js/world/plan/roadStrips.js";
+import { RouteGeometry } from "../public/js/route/geometry.js";
 import { squareRoute } from "./helpers.js";
 import { streetStrips } from "../public/js/world/plan/streetStrips.js";
 import { planOf, tinyWorld, valleyWorld } from "./support/planFixture.js";
@@ -49,6 +50,40 @@ test("the road is cut into chunks, markings drawn on top of the asphalt", () => 
   assert.equal(quads, roads().strips.indices.length / 6, "every quad is in exactly one chunk");
   layer.dispose();
   assert.equal(tracker.live(), 0);
+});
+
+test("the road is drawn in area-sized pieces: one road-marks mesh per 500 m cell the marks touch, no triangle lost", () => {
+  const CELL = 500;
+  const route = new RouteGeometry({
+    id: "long",
+    name: "Long",
+    lanes: 4,
+    seed: 1,
+    points: [[0, 0, 100], [1500, 0, 100], [1500, 1500, 110], [0, 1500, 110]],
+    markers: [{ type: "start_finish", distance: 0 }],
+  });
+  const strips = roadStrips(route, { lift: ROAD_LIFT.ridden });
+  const layer = createRoadLayer({ strips, style: roadStyle(biome), posts: null }, options(createTracker().track));
+  const marked = new Set([ROAD_KIND.marking, ROAD_KIND.edge, ROAD_KIND.rut]);
+  const cells = new Set();
+  const surfaceCells = new Set();
+  for (let q = 0; q < strips.kinds.length / 4; q += 1) {
+    let x = 0;
+    let z = 0;
+    for (let k = 0; k < 4; k += 1) {
+      x += strips.positions[(q * 4 + k) * 3] / 4;
+      z += strips.positions[(q * 4 + k) * 3 + 2] / 4;
+    }
+    (marked.has(strips.kinds[q * 4]) ? cells : surfaceCells).add(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
+  }
+  const meshes = layer.object.children;
+  assert.ok(cells.size > 4, "the marks cover several cells");
+  assert.equal(meshes.filter((m) => m.name === "road-marks").length, cells.size);
+  assert.equal(meshes.filter((m) => m.name === "road-surface").length, surfaceCells.size);
+  const triangles = meshes.reduce((sum, m) => sum + m.geometry.index.count / 3, 0);
+  assert.equal(triangles, strips.indices.length / 3, "every triangle is drawn once");
+  for (const mesh of meshes) assert.ok(mesh.geometry.boundingSphere.radius > 0, "culled by its sphere");
+  layer.dispose();
 });
 
 test("the river is blended and after the opaque; ice is opaque", () => {
