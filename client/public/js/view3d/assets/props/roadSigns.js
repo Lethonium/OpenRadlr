@@ -27,12 +27,12 @@ function triangle(a, b, c, color) {
   return paint(source, color);
 }
 
-/** The warning sign: a post and a red, white and black triangle on it. */
+/** The warning sign: a post and a red, white and black triangle on it, with a plain grey back for riders coming the other way. */
 export function warningSignParts(palette = SIGN_COLORS) {
   const c = (name) => linear(palette[name]);
   const triangleAt = (r, z, color) => triangle([-r, 2.1 - r * 0.6, z], [r, 2.1 - r * 0.6, z], [0, 2.1 + r * 1.1, z], color);
   return {
-    geometry: merge([box(0.08, 2.2, 0.08, c("metal"), 0, 1.1, 0)]),
+    geometry: merge([box(0.08, 2.2, 0.08, c("metal"), 0, 1.1, 0), triangle([0.55, 2.1 - 0.55 * 0.6, -0.05], [-0.55, 2.1 - 0.55 * 0.6, -0.05], [0, 2.1 + 0.55 * 1.1, -0.05], c("metal"))]),
     glow: merge([triangleAt(0.55, -0.06, c("red")), triangleAt(0.38, -0.08, c("white")), triangle([-0.22, 2.0, -0.1], [0.22, 2.0, -0.1], [0.22, 2.22, -0.1], c("black"))]),
   };
 }
