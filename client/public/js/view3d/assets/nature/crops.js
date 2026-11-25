@@ -195,7 +195,7 @@ export function fieldExtras({ width: w, depth: d, x = 0, z = 0, yaw = 0, crop, h
 
 /** One pumpkin centred on the origin with its stalk, unit size (scale by `s`, `sy`; `fieldExtras` gives the height). */
 export function pumpkinGeometry() {
-  return merge([ico(0.6, 1, colour("#f28a1e")), cylinder(0.06, 0.08, 0.4, 4, colour("#3f6b2a"), 0, 0.7, 0)]);
+  return merge([ico(0.6, 0, colour("#f28a1e")), cylinder(0.06, 0.08, 0.4, 4, colour("#3f6b2a"), 0, 0.7, 0)]);
 }
 
 /** One round bale lying on its side, centred on the origin raised by `lift` (0.8 stands it on the ground). */

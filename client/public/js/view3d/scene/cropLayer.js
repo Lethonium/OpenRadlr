@@ -16,20 +16,31 @@ import { createOwner } from "./tracker.js";
 const SEED = 0x51f15e;
 const PUMPKIN = colour("#f28a1e");
 
-/** One instanced mesh of `things`, each placed by `place(thing, matrix, colour)`. */
+/** Side of the areas the extras are grouped in, so the camera culls the far ones. */
+const CELL = 250;
+
+/** One instanced mesh per area of `things`, each placed by `place(thing, matrix, colour)`; geometry and material are shared. */
 function instances(things, geometry, material, own, place) {
-  const mesh = own(new THREE.InstancedMesh(geometry, material, things.length));
+  const cells = new Map();
+  for (const thing of things) {
+    const key = `${Math.floor(thing.x / CELL)},${Math.floor(thing.z / CELL)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(thing);
+  }
   const matrix = new THREE.Matrix4();
   const tint = new THREE.Color();
-  things.forEach((thing, n) => {
-    place(thing, matrix, tint);
-    mesh.setMatrixAt(n, matrix);
-    if (thing.color) mesh.setColorAt(n, tint);
+  return [...cells.values()].map((group) => {
+    const mesh = own(new THREE.InstancedMesh(geometry, material, group.length));
+    group.forEach((thing, n) => {
+      place(thing, matrix, tint);
+      mesh.setMatrixAt(n, matrix);
+      if (thing.color) mesh.setColorAt(n, tint);
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.computeBoundingSphere();
+    return mesh;
   });
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.computeBoundingSphere();
-  return mesh;
 }
 
 /**
@@ -65,20 +76,20 @@ export function createCropLayer(plan, { ground, uniforms, track, settings }) {
   const position = new THREE.Vector3();
   const scale = new THREE.Vector3();
   if (pumpkins.length) {
-    const mesh = instances(pumpkins, own(pumpkinGeometry()), own(bodyMaterial(uniforms, 0, 0.7)), own, (p, matrix, tint) => {
+    const meshes = instances(pumpkins, own(pumpkinGeometry()), own(bodyMaterial(uniforms, 0, 0.7)), own, (p, matrix, tint) => {
       matrix.compose(position.set(p.x, p.y, p.z), quaternion.setFromEuler(euler.set(0, p.yaw, 0)), scale.set(p.s, p.sy, p.s));
       tint.set(p.color);
       tint.setRGB(tint.r / PUMPKIN.r, tint.g / PUMPKIN.g, tint.b / PUMPKIN.b); // the geometry is painted orange: ratio to it
     });
-    mesh.name = "pumpkins";
-    object.add(mesh);
+    for (const mesh of meshes) mesh.name = "pumpkins";
+    object.add(...meshes);
   }
   if (bales.length) {
-    const mesh = instances(bales, own(baleGeometry(10)), own(bodyMaterial(uniforms, 0, 0.9)), own, (b, matrix) => {
+    const meshes = instances(bales, own(baleGeometry(10)), own(bodyMaterial(uniforms, 0, 0.9)), own, (b, matrix) => {
       matrix.compose(position.set(b.x, b.y, b.z), quaternion.setFromEuler(euler.set(0, b.yaw, 0)), scale.setScalar(b.s));
     });
-    mesh.name = "bales";
-    object.add(mesh);
+    for (const mesh of meshes) mesh.name = "bales";
+    object.add(...meshes);
   }
   const stalks = settings?.cropStalks && createStalkLayer(plan.fields, { settings: settings.cropStalks, heightAt, uniforms, own });
   if (stalks) object.add(stalks.object);

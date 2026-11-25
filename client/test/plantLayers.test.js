@@ -12,6 +12,8 @@ import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { createWorldScene } from "../public/js/view3d/scene/worldScene.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
+import { fieldExtras } from "../public/js/view3d/assets/nature/crops.js";
+import { seededRandom } from "../public/js/world/noise.js";
 import { MASK, insideField, maskAt, stampField } from "../public/js/world/plan/masks.js";
 import { environmentAt, resolvePreset } from "../public/js/world/daylight.js";
 import { planOf, tinyWorld } from "./support/planFixture.js";
@@ -171,6 +173,23 @@ test("one crop mesh per field, laid inside the field's corners", () => {
     assert.ok(box.min.x >= Math.min(...xs) - 1 && box.max.x <= Math.max(...xs) + 1, `field ${i} x`);
     assert.ok(box.min.z >= Math.min(...zs) - 1 && box.max.z <= Math.max(...zs) + 1, `field ${i} z`);
   });
+  layer.dispose();
+});
+
+test("field extras are grouped by area so the camera culls them", () => {
+  const field = (x) => ({ width: 120, depth: 80, x, z: 0, yaw: 0, crop: "pumpkin" });
+  const fields = [field(0), field(2000)];
+  const layer = createCropLayer({ fields }, { ...options(low), ground });
+  const meshes = [];
+  layer.object.traverse((o) => o.isInstancedMesh && o.name === "pumpkins" && meshes.push(o));
+  assert.ok(meshes.length >= 2, "one mesh per area");
+  for (const mesh of meshes) assert.ok(mesh.boundingSphere.radius < 400, "a small bounding sphere");
+  const SEED = 0x51f15e;
+  const random = seededRandom(SEED);
+  const heightAt = heightSampler(ground.near);
+  const expected = fields.reduce((n, f) => n + fieldExtras({ ...f, heightAt, random }).pumpkins.length, 0);
+  assert.ok(expected > 0);
+  assert.equal(meshes.reduce((n, m) => n + m.count, 0), expected);
   layer.dispose();
 });
 
