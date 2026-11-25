@@ -14,6 +14,11 @@ HEALTH_TIMEOUT ?= 90
 # Build number shown in the menu and /api/info (compose passes these as build args).
 export OPENRADLR_BUILD_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 export OPENRADLR_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%MZ)
+# `make update` pulls first, so the commit above is the one before the pull: its build
+# names the commit it pulled, read when it builds. A label given from outside is kept.
+ifeq ($(origin OPENRADLR_BUILD_SHA),file)
+  PULLED_BUILD = OPENRADLR_BUILD_SHA=$$(git rev-parse --short HEAD) OPENRADLR_BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%MZ)
+endif
 
 ifneq ($(shell command -v cargo 2>/dev/null),)
   CARGO := cd server && cargo
@@ -100,7 +105,7 @@ update: setup guard ## Pull, rebuild and restart (asks first if riders are on; F
 		echo "Local changes found — commit or stash them before updating."; exit 1; fi
 	git pull --ff-only
 	@$(MAKE) --no-print-directory setup
-	$(COMPOSE) build --pull
+	$(PULLED_BUILD) $(COMPOSE) build --pull
 	$(COMPOSE) up -d --remove-orphans
 	@$(MAKE) --no-print-directory health
 	docker image prune -f >/dev/null
