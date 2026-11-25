@@ -244,3 +244,13 @@ test("curveBars: each best effort as a share of the highest", () => {
   assert.deepEqual(bars.map((bar) => [bar.label, bar.watts, bar.share]), [["5 s", "600 W", 1], ["1 min", "300 W", 0.5]]);
   assert.deepEqual(curveBars(null), []);
 });
+
+test("curveBars: from a stream, every duration the ride is long enough for", () => {
+  const bars = curveBars({ 5: 600, 30: 450, 60: 400, 120: 350, 7200: null }, { every: true });
+  assert.deepEqual(bars.map((bar) => bar.label), ["5 s", "30 s", "1 min", "2 min"]);
+});
+
+test("curveBars: from a record, its key points and longest as before", () => {
+  const bars = curveBars({ 5: 600, 15: 500, 60: 400, 180: 380, 300: 300, 480: 280 });
+  assert.deepEqual(bars.map((bar) => bar.label), ["5 s", "1 min", "5 min", "8 min"]);
+});

@@ -1338,4 +1338,7 @@ export default {
   "account.passkeys.added": "Added {date}",
   "account.rider.full.title": "Your account is full",
   "account.rider.full.detail": "New rides aren't backed up any more. They stay on this device.",
+  "profilePage.rides.files": "Ride file",
+  "profilePage.rides.fileLabel": "Download the ride as {format}",
+  "profilePage.rides.fileMissing": "This ride's data can't be read in this browser any more.",
 };

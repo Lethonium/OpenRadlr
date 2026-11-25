@@ -19,6 +19,8 @@ import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
+import { STREAM_CURVE_DURATIONS, bestEfforts } from "./ride/powerAnalysis.js";
+import { rideFile, rideFileFormats } from "./view/rideFiles.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
@@ -3461,8 +3463,10 @@ function openProfile(page) {
 /** Reads the stores again; `keep` keeps the Rides page's paging (after a delete there). */
 async function loadProfile(keep) {
   const generation = app.riderGeneration;
-  const [records, bests] = await Promise.all([app.history.list(), app.ghosts.all()]);
+  const [records, bests, streamIds] = await Promise.all([app.history.list(), app.ghosts.all(), app.streams.ids()]);
   if (generation !== app.riderGeneration) return;
+  // The rides whose every second is kept: they offer their files and a finer curve.
+  app.profileStreamIds = new Set(streamIds);
   // Achievements are latched before the data page counts them.
   const achievements = reconcileAchievements(records);
   const items = await inventory(dataSources());
@@ -3649,22 +3653,24 @@ function profileRideDetail(record) {
     }));
     detail.append(tiles);
   }
+  const hasStream = app.profileStreamIds?.has(String(record.id)) ?? false;
   const bars = curveBars(record.curve);
   if (bars.length) {
     const section = document.createElement("section");
     section.className = "profile-ride-section";
     const list = document.createElement("ul");
     list.className = "profile-ride-curve";
-    list.append(...bars.map(({ label, watts, share }) => {
-      const bar = document.createElement("li");
-      const fill = document.createElement("span");
-      fill.className = "profile-ride-bar";
-      fill.style.setProperty("--share", String(share));
-      bar.append(textElement("span", label), fill, textElement("strong", watts));
-      return bar;
-    }));
+    fillCurve(list, bars);
     section.append(textElement("h3", t("profilePage.rides.curve")), list);
     detail.append(section);
+    // With its stream the curve gets every duration the ride was long enough for.
+    if (hasStream) {
+      rideRecording(record.id).then((recording) => {
+        if (!recording || !list.isConnected) return;
+        const finer = curveBars(bestEfforts(recording.samples, recording.pauses, STREAM_CURVE_DURATIONS), { every: true });
+        if (finer.length) fillCurve(list, finer);
+      });
+    }
   }
   // One split is the whole ride again: the table needs two (splitsView.js).
   if (record.splits?.length > 1) {
@@ -3679,12 +3685,63 @@ function profileRideDetail(record) {
     section.append(textElement("h3", t("profilePage.rides.splits")), scroller);
     detail.append(section);
   }
+  const formats = hasStream ? rideFileFormats(record) : [];
+  if (formats.length) {
+    const files = document.createElement("section");
+    files.className = "profile-ride-section profile-ride-files";
+    const buttons = document.createElement("div");
+    buttons.className = "profile-ride-file-buttons";
+    buttons.append(...formats.map((format) => {
+      const button = textElement("button", `.${format}`); // i18n-ok (a file format)
+      button.type = "button";
+      button.className = "secondary small";
+      button.setAttribute("aria-label", t("profilePage.rides.fileLabel", { format: format.toUpperCase() }));
+      button.addEventListener("click", async () => {
+        problem.hidden = await downloadRideFile(record, format);
+      });
+      return button;
+    }));
+    // Shown where the rider looks: the ride HUD's notices aren't on screen in the profile.
+    const problem = textElement("p", t("profilePage.rides.fileMissing"));
+    problem.className = "error";
+    problem.setAttribute("role", "alert");
+    problem.hidden = true;
+    files.append(textElement("h3", t("profilePage.rides.files")), buttons, problem);
+    detail.append(files);
+  }
   const remove = textElement("button", t("profilePage.delete.ride.action"));
   remove.type = "button";
   remove.className = "profile-ride-remove";
   remove.addEventListener("click", () => deleteRide(record));
   detail.append(remove);
   return detail;
+}
+
+/** Fills a best power list with its bars. */
+function fillCurve(list, bars) {
+  list.replaceChildren(...bars.map(({ label, watts, share }) => {
+    const bar = document.createElement("li");
+    const fill = document.createElement("span");
+    fill.className = "profile-ride-bar";
+    fill.style.setProperty("--share", String(share));
+    bar.append(textElement("span", label), fill, textElement("strong", watts));
+    return bar;
+  }));
+}
+
+/** The decoded stream of ride `id`, or null; the last one is kept, as an opened ride asks twice. */
+function rideRecording(id) {
+  if (app.openedStream?.id !== id) app.openedStream = { id, recording: app.streams.get(id) };
+  return app.openedStream.recording;
+}
+
+/** Saves one file of a past ride, made again from its stream; false when the stream can't be read. */
+async function downloadRideFile(record, format) {
+  const recording = await rideRecording(record.id);
+  if (!recording) return false;
+  const file = rideFile(format, record, recording, routesOf(app.info));
+  saveFiles([{ blob: new Blob([file.bytes], { type: file.type }), name: file.name }]);
+  return true;
 }
 
 async function deleteRide(record) {

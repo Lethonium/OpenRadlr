@@ -9,6 +9,8 @@
 
 /** Durations of the power curve, in seconds. */
 export const CURVE_DURATIONS = [5, 15, 60, 180, 300, 480, 720, 1200, 1800, 3600];
+/** Durations of the curve made from a ride stream (ride/rideStream.js): finer, and up to two hours. */
+export const STREAM_CURVE_DURATIONS = [5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600, 5400, 7200];
 /** Power spikes (a bad sensor reading) count as at most this many watts. */
 export const POWER_CAP_W = 2000;
 /** A gap between samples longer than this splits the stretch. */
@@ -66,21 +68,22 @@ function prefixSums(values) {
 }
 
 /**
- * Best average power for each of CURVE_DURATIONS, in whole watts; null when no stretch is that long.
+ * Best average power for each of `durations` (CURVE_DURATIONS unless given), in whole
+ * watts; null when no stretch is that long.
  * @returns {Object<number, ?number>}
  */
-export function bestEfforts(samples, pauses) {
-  const best = Object.fromEntries(CURVE_DURATIONS.map((d) => [d, null]));
+export function bestEfforts(samples, pauses, durations = CURVE_DURATIONS) {
+  const best = Object.fromEntries(durations.map((d) => [d, null]));
   for (const series of powerSeries(samples, pauses)) {
     const sums = prefixSums(series);
-    for (const d of CURVE_DURATIONS) {
+    for (const d of durations) {
       for (let end = d; end <= series.length; end += 1) {
         const mean = (sums[end] - sums[end - d]) / d;
         if (best[d] === null || mean > best[d]) best[d] = mean;
       }
     }
   }
-  for (const d of CURVE_DURATIONS) if (best[d] !== null) best[d] = Math.round(best[d]);
+  for (const d of durations) if (best[d] !== null) best[d] = Math.round(best[d]);
   return best;
 }
 
