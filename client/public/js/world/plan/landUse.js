@@ -4,7 +4,7 @@
  * the nearest road (or of a noise field away from roads) and drawn per place
  * from `landKindWeights`: the region, the distance to the sea and to a village,
  * the slope and the height. Wild land gets no parcel; the woods take it.
- * Pure and seeded; it stamps the parcels the woods must keep off (all but scrub, orchards and dunes) on the masks like a field.
+ * Pure and seeded; it stamps the parcels the woods must keep off (all but scrub and dunes) on the masks like a field.
  */
 import { LAND_STYLE, landKindWeights, regionEdge } from "../landKinds.js";
 import { fbm, seededRandom } from "../noise.js";
@@ -42,13 +42,14 @@ export const LAND_USE = Object.freeze({
  * @property {number} depth across it
  * @property {number} yaw angle of the width axis: (cos yaw, sin yaw) in world x/z
  * @property {Float32Array} corners x, y, z of the four corners (-w -d, +w -d, +w +d, -w +d), terrain heights
+ * @property {string} region kind of the strongest region at the parcel
  * @property {string|null} crop a plant id of the region's crops for the season (arable only)
  * @property {"wall"|"hedge"|"none"} edge
  * @property {number} tint per-parcel shade, -1 to 1
  */
 
-/** Parcels the woods may plant over: scrub, orchards and dunes are wooded land. */
-const OPEN_TO_TREES = new Set(["scrub", "orchard", "dune"]);
+/** Parcels the woods may plant over: scrub and dunes are wooded land; orchards and vineyards get rows of their own. */
+const OPEN_TO_TREES = new Set(["scrub", "dune"]);
 
 const lerp = ([a, b], t) => a + (b - a) * t;
 const pickKind = (weights, roll) => {
@@ -248,7 +249,7 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
           const [top] = mix;
           const crops = REGION_STYLE[top.kind].crops[season];
           parcels.push({
-            kind, ...parcel, corners,
+            kind, ...parcel, corners, region: top.kind,
             crop: kind === "arable" ? crops[Math.floor(rCrop * crops.length)] : null,
             edge: style.edge === "none" ? "none" : regionEdge(top.kind),
             tint: rTint * 2 - 1,
