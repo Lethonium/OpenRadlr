@@ -16,6 +16,7 @@ import { planRoadside } from "./roadside.js";
 import { planSettlements } from "./settlements/plan.js";
 import { planTurbines } from "./turbines.js";
 import { planLandRows } from "./rows.js";
+import { scrubPlants } from "./scrub.js";
 import { planWoods } from "./woods.js";
 
 /** Most trees and roadside items per detail level (the quality levels' names). */
@@ -31,6 +32,7 @@ export const PLAN_BUDGET = Object.freeze({
  * @property {Record<string, Float32Array>} trees per plant id: x, y, z, yaw, scale for each tree (`forests` are points along the route's forest stretches, wooded densely)
  * @property {import("./fields.js").Field[]} fields the arable parcels near roads
  * @property {{parcels: import("./landUse.js").Parcel[]}} landUse every parcel of the island
+ * @property {Record<string, Float32Array>} scrub per plant id: the scrub on the hills and the tufts on the dunes, like `trees`
  * @property {Record<string, Float32Array>} landRows per plant id: the plants of the orchards and vineyards in rows, like `trees`
  * @property {{wall: Float32Array, hedge: Float32Array}} landEdges the walls and hedges along the parcels' sides, `EDGE_STRIDE` floats per segment
  * @property {Record<string, Float32Array>} roadside per plant or prop id, like `trees`
@@ -67,6 +69,7 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   // A yard may take ground from the land use: the parcels it covers are dropped.
   const landUse = { parcels: planned.parcels.filter((p) => !builtUnder(masks, p)) };
   const landRows = planLandRows(landUse.parcels);
+  const scrub = scrubPlants(landUse.parcels, { seed });
   const landEdges = parcelEdges(landUse.parcels);
   const fields = fieldsFromParcels(landUse.parcels, roads);
   const turbines = planTurbines({ terrain, roads, seed, masks, water, bounds });
@@ -74,5 +77,5 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
   const roadside = planRoadside({ terrain, roads, regions, seed, masks, water, budget: budget.roadside, clearings });
   const fauna = planFauna({ farms, fields, trees, terrain, roads, regions, seed, season, masks, water, detail });
-  return { trees, fields, landUse, landRows, landEdges, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
+  return { trees, fields, landUse, landRows, scrub, landEdges, roadside, settlements: villages, landmarks: places, farms, turbines, islands, fauna, masks };
 }

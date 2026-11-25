@@ -31,6 +31,7 @@ import { createRiverLayer } from "./riverLayer.js";
 import { createRoadLayer } from "./roadLayer.js";
 import { createFieldEdgeLayer } from "./fieldEdgeLayer.js";
 import { createLandRowLayer } from "./landRowLayer.js";
+import { createScrubLayer } from "./scrubLayer.js";
 import { createRoadsideLayer } from "./roadsideLayer.js";
 import { createSettlementLayer } from "./settlementLayer.js";
 import { createSky } from "./sky.js";
@@ -97,6 +98,7 @@ export function createWorldScene(world, { settings, track }) {
     roadside: () => createRoadsideLayer(plan, { ...plants(), assets: NATURE }),
     fieldEdges: () => createFieldEdgeLayer(plan, { ...plants(), assets: NATURE }),
     landRows: () => createLandRowLayer(plan, { ...plants(), assets: NATURE }),
+    scrub: () => createScrubLayer(plan, { ...plants(), assets: NATURE }),
     grass: () => createGrassLayer(world.ground, plan, plants()),
     settlements: () => createSettlementLayer(plan, { ...plants(), grain, ground: world.ground }),
     farms: () => createFarmLayer(plan, { ...plants(), grain, ground: world.ground }),
@@ -120,7 +122,7 @@ export function createWorldScene(world, { settings, track }) {
   if (world.ground) {
     uniforms.fogBase.value = world.ground.near.water;
     layers.push(createSea(world.ground, { uniforms, track }), makers.terrain());
-    if (plan) layers.push(makers.islands(), makers.forest(), makers.crops(), makers.roadside(), makers.landRows(), makers.fieldEdges(), makers.grass(), makers.settlements(), makers.farms(), makers.landmarks(), makers.fauna());
+    if (plan) layers.push(makers.islands(), makers.forest(), makers.crops(), makers.roadside(), makers.landRows(), makers.scrub(), makers.fieldEdges(), makers.grass(), makers.settlements(), makers.farms(), makers.landmarks(), makers.fauna());
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
@@ -175,7 +177,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "crops", "roadside", "landRows", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
+    rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
   };
   setQuality(settings);
 
@@ -229,7 +231,7 @@ export function createWorldScene(world, { settings, track }) {
     setSeason(next, nextPlan = plan) {
       season = next;
       plan = nextPlan;
-      if (plan) rebuild("islands", "forest", "crops", "roadside", "landRows", "fieldEdges", "settlements", "farms", "landmarks", "fauna", "venues");
+      if (plan) rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "settlements", "farms", "landmarks", "fauna", "venues");
     },
     /** Replaces the gyms' statue rows (`{gym, figures, material, figure}`). */
     setStatues(rows) {

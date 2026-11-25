@@ -20,6 +20,12 @@ export function rowPlant({ kind, region }) {
   return null;
 }
 
+/** The ground height at `u, v` metres from the parcel's centre along its own axes, bilinear between the corners. */
+export function parcelHeight({ width, depth, corners }, u, v) {
+  const [a, b] = [u / width + 0.5, v / depth + 0.5];
+  return (1 - a) * (1 - b) * corners[1] + a * (1 - b) * corners[4] + a * b * corners[7] + (1 - a) * b * corners[10];
+}
+
 /** Positions `count` rows centred on 0 across `length`, `step` apart; one at 0 if there is room for no more. */
 function centred(length, step) {
   const count = Math.max(1, Math.floor(length / step) + 1);
@@ -35,21 +41,17 @@ function centred(length, step) {
  */
 export function parcelRows(parcel, { spacing = ROW_SPACING[parcel.kind] } = {}) {
   if (!spacing) return new Float32Array(0);
-  const { x, z, width, depth, yaw, corners } = parcel;
+  const { x, z, width, depth, yaw } = parcel;
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
   const us = centred(Math.max(0, width - 2 * ROW_MARGIN), spacing.plant);
   const vs = centred(Math.max(0, depth - 2 * ROW_MARGIN), spacing.row);
   const out = new Float32Array(us.length * vs.length * 5);
-  const height = (u, v) => {
-    const [a, b] = [u / width + 0.5, v / depth + 0.5];
-    return (1 - a) * (1 - b) * corners[1] + a * (1 - b) * corners[4] + a * b * corners[7] + (1 - a) * b * corners[10];
-  };
   let n = 0;
   for (const v of vs) {
     for (const u of us) {
       const hash = Math.sin((x + u * c - v * s) * 12.9898 + (z + u * s + v * c) * 78.233) * 43758.5453;
       const unit = hash - Math.floor(hash);
-      out.set([x + u * c - v * s, height(u, v), z + u * s + v * c, spacing.row > 3 ? unit * Math.PI * 2 : yaw, 0.9 + unit * 0.2], n * 5);
+      out.set([x + u * c - v * s, parcelHeight(parcel, u, v), z + u * s + v * c, spacing.row > 3 ? unit * Math.PI * 2 : yaw, 0.9 + unit * 0.2], n * 5);
       n += 1;
     }
   }
