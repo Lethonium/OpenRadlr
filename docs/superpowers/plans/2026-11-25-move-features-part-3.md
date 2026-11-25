@@ -44,15 +44,15 @@
   - `lemon.js`: `LEMON_COLORS` (moved from `lemonModel.js`: peel `[1.0, 0.8, 0.08]`, nub `[0.92, 0.68, 0.06]`, leaf `[0.24, 0.62, 0.22]`), `lemonGeometry() -> THREE.BufferGeometry` (about 1 m long along x, centred on the origin, vertex colours: the ellipsoid 0.44 × 0.3 × 0.3, a nub at each end, a leaf), and workbench `meta`/`create` as the other props.
   - `createLemonLayer({settings, uniforms, track})`: one `InstancedMesh` (capacity 64, name `"lemons"`), vertex-coloured standard material with an emissive glow of 0.5 × the peel colour; casts shadows when `settings.shadows`. Reads `frame.lemons: {position: number[], yaw: number}[]` (position is the lemon's centre). `stats() -> {drawn}`.
   - View: `frame.lemons` from today's `#lemonModels` logic (same reach `SCENE.lemonReach`, same bob `sin(t·2.2 + distance)·0.1`, height 1.25, spin `t·1.6 + distance`); the layer applies today's nose-up tilt of 0.35 rad (Euler YXZ) at full size.
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `lemonLayer.test.js` › `each lemon is an instance at its position and turn` — two entries → `count` 2, instance 1's matrix translation equals entry 1's position ± 1e-6 and its rotation about y equals the yaw.
   - › `more lemons than the capacity are cut, not thrown` — 70 entries → `count` 64.
   - › `dispose frees everything` — tracker live 0.
   - `view3d.test.js` › `lemons near my rider go to the frame, collected ones and other routes' never` — `setLemons([{distance: 50, lane: 0, collected: false}, {distance: 60, lane: 0, collected: true}])` with my rider at 0 on the view's route: `frame.lemons.length` 1; my rider on another route id: 0; after marking the first collected: 0 the next frame.
-- [ ] **Step 2:** Run the two files → FAIL.
-- [ ] **Step 3:** Implement; remove the adapter's lemon draw, shadow cast and `lemonMesh` upload/dispose.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Float the golden lemons in the new world`.
+- [x] **Step 2:** Run the two files → FAIL.
+- [x] **Step 3:** Implement; remove the adapter's lemon draw, shadow cast and `lemonMesh` upload/dispose.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Float the golden lemons in the new world`.
 
 ### Task 2: Route highlight in the menu
 
@@ -66,14 +66,14 @@
   - `buildHighlight(route, opts) -> {positions: Float32Array, colors: Float32Array, glow?: undefined}` — same options and geometry as today (band quads every `step` m, `lift`, beacon at the start), `positions` xyz per vertex (non-indexed triangles), `colors` linear-free rgb 0–1 per vertex as today's tints.
   - `scene.setHighlights(bands: {band: ReturnType<buildHighlight>, glow: number}[])`: replaces the shown bands (disposes the old geometries). `highlightLayer`: one `Mesh` per band, `MeshBasicMaterial({vertexColors: true, toneMapped: false, transparent: false})`, colour scaled by `glow` (1 picked, 0.35 others, as today), `renderOrder` above the road, `frustumCulled` true with a computed bounding sphere. Kept across `setQuality` rebuilds (the scene re-sends the last bands, as `setStatues` does).
   - `View3D.setHighlights(bands)` keeps its signature (`{mesh, glow}` from callers becomes `{band, glow}`; update `main.js` and `view/menuStage.js` doc).
-- [ ] **Step 1: failing tests** (`highlightLayer.test.js`)
+- [x] **Step 1: failing tests** (`highlightLayer.test.js`)
   - `a band is drawn in its colours, scaled by its glow` — a 2-triangle band with colour (1, 0.5, 0), glow 0.35 → one mesh, its vertex colours times material colour equal (0.35, 0.175, 0) ± 1e-6.
   - `setting bands again replaces them and leaks nothing` — set 3 bands 30 times, then `[]`: tracker live equals the empty layer's baseline; `object.children.length` 0.
   - `bands survive a quality rebuild` — `scene.setHighlights([b])`, `scene.setQuality("low")`: the rebuilt layer shows 1 band.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement; remove the adapter's `#highlights` uploads and `drawBright` of bands.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Light the picked route in the new world's menu`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement; remove the adapter's `#highlights` uploads and `drawBright` of bands.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Light the picked route in the new world's menu`.
 
 ### Task 3: Route arches and banners
 
@@ -90,16 +90,16 @@
   - `world.arches: {kind, text, position: number[], yaw: number, halfWidth: number, height: number, banner: boolean}[]` — position the road centre at the spot (ground height), yaw from the level road frame (`yawFor` of the frame's forward), `halfWidth = roadHalfWidth(lanes) + 0.6`, `height` 5.2 for arches, `BANNERS.bottom + BANNERS.height` for banners.
   - `routeArch.js`: `createRouteArch({kind, text, halfWidth, height, colors: {post, beam, ink}, banner, own, uniforms}) -> THREE.Group` — arch: two round posts and a beam (the reference's inflatable shape), text on both faces; banner: two thin posts and a cloth beam `BANNERS.height` tall with the text; the start/finish beam keeps a chequered strip. Colours: arch beam `biome.arch.start|climb|sprint`, posts `biome.arch.post`, banner cloth `biome.arch.climb` or `BANNERS.halfway`, ink white or dark as today.
   - `createArchLayer(world, {biome, settings, uniforms, track})`: one group per placement, all casting shadows; static.
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `textTexture.test.js` › `the text is inked in the middle and the edges stay background` — "KOM" 128×32 dark on white: the centre row has ink pixels, column 0 and column 127 are all background.
   - › `unknown characters do not throw` — "Ü✓" paints without throwing.
   - `archLayer.test.js` › `an arch spans the road at its spot, facing along it` — a placement at (10, 2, −5), yaw 0.3, halfWidth 6: the group's bounding box spans ≥ 12 m across (rotated frame) and its lowest y is 2 ± 0.05.
   - › `every marker of a route gets its arch and text` — `archSpots(route)` of rolling-hills has one entry per marker, the start/finish text `ARCH_TEXT.start_finish`.
   - › `dispose frees everything`.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Raise the route arches and banners in the new world`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Raise the route arches and banners in the new world`.
 
 ### Task 4: Guard rails, road signs and the flamme rouge
 
@@ -114,17 +114,17 @@
   - `world.furniture = {rails, signs, flammeRouge, barriers}` (rails and signs concatenated over the roads as today's calls; `barriers` from Task 5's `buildSpectators`, empty until then).
   - `roadSigns.js`: `warningSignParts()`, `villageSignParts()` (post + face, the face's colours from today's biome models), `flammeRougeParts(halfWidth)`; each returns `{geometry, glow?: geometry}` with vertex colours; faces slightly emissive at dusk/night like today's `bright` group.
   - `createFurnitureLayer(world, {settings, uniforms, track})`: rails as one `InstancedMesh` of a unit rail (post + beam, scaled along the segment) using `biome.palette.pole`/`metal`; signs as one `InstancedMesh` per kind; the flamme rouge as a mesh; `setEnvironment(env)` raises the faces' glow with `env.night`.
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `features.test.js` › `rails follow steep descents on both sides of a two-way road` — a straight test route with a 6 % descent stretch: rails only inside the stretch, two per step.
   - › `the flamme rouge stands a kilometre before the finish` — route of 3000 m: `flammeRouge.position` equals `roadFrame(route, 2000).center` x/z ± 0.01; a 1200 m route: `null`.
   - › `climb warnings stand before and after each climb` — two signs per climb marker, at `distance − 120` and `top + 25`.
   - `furnitureLayer.test.js` › `each rail segment is one instance from a to b` — 3 segments → instance count 3; instance 0's matrix maps local (0,0,0) to the midpoint ± 1e-6 and local x ±0.5 to `a`/`b` ± 1e-3.
   - › `night lights the sign faces` — `setEnvironment({night: 1})` makes the face material's emissive intensity higher than at `night: 0`.
   - › `dispose frees everything`.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement; `world.js` no longer passes `structures`/`bright` to the roadside code.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Put guard rails and road signs in the new world`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement; `world.js` no longer passes `structures`/`bright` to the roadside code.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Put guard rails and road signs in the new world`.
 
 ### Task 5: The roadside crowd and its barriers
 
@@ -141,7 +141,7 @@
   - `world.crowd.figure`: `"penguin"` when `biome.people.motion === "clap"`, else `"person"`.
   - `createCrowdLayer(world, {settings, uniforms, track})`: per pose two `InstancedMesh`es (body, shirt with `instanceColor`) plus one flag `InstancedMesh` (`instanceColor` = flag colour); capacity = `world.crowd.people.length`. Reads `frame.crowd: {index: number, yaw: number, lift: number, pose: boolean, flagSwing: number}[]` (index into `world.crowd.people`). `stats() -> {drawn}`.
   - View: `frame.crowd` from today's filter and `cheer(p, fans, timeS)` (same `crowdShare`, `SCENE.spectatorDistance`, `SCENE.nearCameraHide`), `flagSwing = sin(t·2.6 + phase)·0.5`; the flag's hand point from `biome.people.flagHand` moves into the asset (person `[0.36, 1.85, −0.05]`, penguin `[0.5, 0.8, −0.1]`).
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `features.test.js` › `spectators stand where they always stood` — rolling-hills: the first 5 people's positions and shirts equal a snapshot taken before the change (record it in the test from the current code first).
   - › `barriers line both sides of each crowd spot` — 16 segments per side per spot.
   - `crowdLayer.test.js` › `a pose picks its mesh and the shirt keeps its colour` — 3 entries (2 arms up): arms-up body count 2, down count 1; shirt instance colour of entry 0 equals person 0's shirt (linear) ± 1e-6.
@@ -149,10 +149,10 @@
   - › `only flag wavers carry a flag` — flag count equals entries whose person has `flag`.
   - › `winter crowds are penguins` — `figure: "penguin"` builds the penguin geometry (its bounding box height < 1.2 m).
   - `view3d.test.js` › `the crowd thins out when I ride alone and keeps clear of the camera` — 1 human vs 10: fewer `frame.crowd` entries alone; no entry within `SCENE.nearCameraHide` of the eye.
-- [ ] **Step 2:** Run → FAIL (record the snapshot first, then change the code).
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Bring the roadside crowd into the new world`.
+- [x] **Step 2:** Run → FAIL (record the snapshot first, then change the code).
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Bring the roadside crowd into the new world`.
 
 ### Task 6: Bike cafés and outdoor gyms, clear of the towns
 
@@ -171,17 +171,17 @@
   - `bikeCafe.js`: `createBikeCafe({style, name, snow, own, uniforms}) -> THREE.Group` after the reference's `bike-cafe` (all four styles; front faces +z then turned by the layer so it faces the road), name board via `textTexture`, a bike rack with three parked bikes baked from `createBike` into one mesh.
   - `outdoorGym.js`: `createOutdoorGym({drop, signLift, own, uniforms}) -> THREE.Group` after the reference's `outdoor-gym` (pad with kerbs reaching `drop` down, mat with seams, pull-up rig, dip bars, sit-up bench, beam, sign "OUTDOOR GYM" via `textTexture`); mat top at `GYM_TOP`; no athletes (part 2 draws them).
   - `createVenueLayer(world, {season, settings, uniforms, track})`: cafés (snow in winter), forecourts as one mesh, gyms; static; casts and receives shadows.
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `world3.test.js` › `no town plot overlaps a café or a gym` — the browser's world (`buildWorld(new RouteGeometry(rolling-hills), {network: roadNetworkOf(valley)})`): for every plot of every settlement, its centre is farther than `radius + max(width, depth)/2` from each clearing; and `world.cafeSites` has all four cafés of the valley map with their styles (`valley-cafe` valley, `forge-hut` hut, `hill-cafe` hilltop, `beach-cafe` beach), each with a gym in `world.gyms` (the beach gym keeps `cafeId` `beach-cafe`, so its yoga venue still finds it).
   - `features.test.js` › `the gym's spots sit on the mat` — every spot's y equals `base + GYM_TOP` ± 1e-6.
   - `venueLayer.test.js` › `a café faces the road` — for one café site, the group's +z (after the layer's turn) points towards the road (dot with `−right` > 0.9).
   - › `the gym's mat top meets the spots` — the mesh's highest point over the mat's centre region is within 0.02 of `base + GYM_TOP`.
   - › `each style builds` — the four styles create without throwing and differ in vertex count.
   - › `dispose frees everything`.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `feat(client): Build the bike cafés and outdoor gyms in the new world, clear of the towns`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `feat(client): Build the bike cafés and outdoor gyms in the new world, clear of the towns`.
 
 ### Task 7: The old chunks go
 
@@ -192,17 +192,17 @@
 
 **Interfaces:**
 - Consumes: every layer of Tasks 1–6.
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
   - `worldScene.test.js` › `a quality change keeps the arches, furniture, cafés and gyms` — make the scene from a built world, `setQuality("low")` then `"high"`: the `arches`, `furniture` and `venues` layers have the same child/instance counts as before.
   - `view3d.test.js` › `the adapter draws no world chunks` — after a render the fake renderer saw no `draw` call with a chunk handle (the view has no `chunks` field).
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement and delete.
-- [ ] **Step 4:** Gate → PASS.
-- [ ] **Step 5:** Commit `refactor(client): Drop the old world chunks`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement and delete.
+- [x] **Step 4:** Gate → PASS.
+- [x] **Step 5:** Commit `refactor(client): Drop the old world chunks`.
 
 ### Task 8: Shots, draw calls, memory (main session)
 
-- [ ] **Step 1:** Restart the dev server fresh (40 bots), run `drawcalls.mjs` → `~/.cache/openradlr/screenshots/move3/after.txt`; compare with `move2/after.txt`; Low and Medium within +10 %.
-- [ ] **Step 2:** Workbench round: `lemon`, `route-arch` (start and climb), `warning-sign`, `village-sign`, `bike-cafe` (valley, hut, hilltop, beach), `outdoor-gym`, the spectator (person, penguin).
-- [ ] **Step 3:** One ride round (Simulator, High), aimed from the browser's world: start arch with the Valley Café, a climb top with the crowd and barriers, a descent with rails, Forge Hut, Hilltop Café in town, the Beach Café with its yoga gym (Cape Loop), a winter crowd, the menu highlight (menu shot), lemons if the day has them. A second round only for fixes.
-- [ ] **Step 4:** Contact sheet, upload to `pr-screenshots` `polished-world/move3/`, push the branch, update the `polished-world` memory.
+- [x] **Step 1:** Restart the dev server fresh (40 bots), run `drawcalls.mjs` → `~/.cache/openradlr/screenshots/move3/after.txt`; compare with `move2/after.txt`; Low and Medium within +10 %.
+- [x] **Step 2:** Workbench round: `lemon`, `route-arch` (start and climb), `warning-sign`, `village-sign`, `bike-cafe` (valley, hut, hilltop, beach), `outdoor-gym`, the spectator (person, penguin).
+- [x] **Step 3:** One ride round (Simulator, High), aimed from the browser's world: start arch with the Valley Café, a climb top with the crowd and barriers, a descent with rails, Forge Hut, Hilltop Café in town, the Beach Café with its yoga gym (Cape Loop), a winter crowd, the menu highlight (menu shot), lemons if the day has them. A second round only for fixes.
+- [x] **Step 4:** Contact sheet, upload to `pr-screenshots` `polished-world/move3/`, push the branch, update the `polished-world` memory.
