@@ -167,16 +167,16 @@
   - `cafeClearing(route) -> {x, z, radius: 14}` (centre = today's café position); `planWorld` gets café and gym clearings; `planSettlements` drops any plot whose footprint comes within a clearing's radius (streets and squares stay).
   - `buildBikeCafe(route, terrain, {occupancy, avoid}) -> {position, distance, yaw, forecourt: {inner: number[][], outer: number[][]}} | null` (same spot rules; `forecourt` the paved edge points every 2 m from `center − 11` to `center + 11`, inner at `half + 0.02`, outer at `half + 10`, y = road + 0.1).
   - `buildOutdoorGym(...)` as today plus `{position: number[] (pad origin), base: number, drop: number, signLift: number}`; `GYM_TOP` exported (the mat's top over `base`, today's `gym.top` value) so spots keep their height.
-  - `world.cafeSites: {id: string|null, name: string, style: "valley"|"hut"|"hilltop", position, yaw, forecourt}[]` — style by id: `valley-cafe` → valley, `forge-hut` → hut, `hill-cafe` → hilltop, anything else → valley; name from the network node.
-  - `bikeCafe.js`: `createBikeCafe({style, name, snow, own, uniforms}) -> THREE.Group` after the reference's `bike-cafe` (three styles; front faces +z then turned by the layer so it faces the road), name board via `textTexture`, a bike rack with three parked bikes baked from `createBike` into one mesh.
+  - `world.cafeSites: {id: string|null, name: string, style: "valley"|"hut"|"hilltop"|"beach", position, yaw, forecourt}[]` — style by id: `valley-cafe` → valley, `forge-hut` → hut, `hill-cafe` → hilltop, `beach-cafe` → beach (the Cape Loop's start, next to the yoga gym), anything else → valley; name from the network node.
+  - `bikeCafe.js`: `createBikeCafe({style, name, snow, own, uniforms}) -> THREE.Group` after the reference's `bike-cafe` (all four styles; front faces +z then turned by the layer so it faces the road), name board via `textTexture`, a bike rack with three parked bikes baked from `createBike` into one mesh.
   - `outdoorGym.js`: `createOutdoorGym({drop, signLift, own, uniforms}) -> THREE.Group` after the reference's `outdoor-gym` (pad with kerbs reaching `drop` down, mat with seams, pull-up rig, dip bars, sit-up bench, beam, sign "OUTDOOR GYM" via `textTexture`); mat top at `GYM_TOP`; no athletes (part 2 draws them).
   - `createVenueLayer(world, {season, settings, uniforms, track})`: cafés (snow in winter), forecourts as one mesh, gyms; static; casts and receives shadows.
 - [ ] **Step 1: failing tests**
-  - `world3.test.js` › `no town plot overlaps a café or a gym` — the browser's world (`buildWorld(new RouteGeometry(rolling-hills), {network: roadNetworkOf(valley)})`): for every plot of every settlement, its centre is farther than `radius + max(width, depth)/2` from each clearing; and `world.cafeSites` has `hill-cafe` with style `hilltop`.
+  - `world3.test.js` › `no town plot overlaps a café or a gym` — the browser's world (`buildWorld(new RouteGeometry(rolling-hills), {network: roadNetworkOf(valley)})`): for every plot of every settlement, its centre is farther than `radius + max(width, depth)/2` from each clearing; and `world.cafeSites` has all four cafés of the valley map with their styles (`valley-cafe` valley, `forge-hut` hut, `hill-cafe` hilltop, `beach-cafe` beach), each with a gym in `world.gyms` (the beach gym keeps `cafeId` `beach-cafe`, so its yoga venue still finds it).
   - `features.test.js` › `the gym's spots sit on the mat` — every spot's y equals `base + GYM_TOP` ± 1e-6.
   - `venueLayer.test.js` › `a café faces the road` — for one café site, the group's +z (after the layer's turn) points towards the road (dot with `−right` > 0.9).
   - › `the gym's mat top meets the spots` — the mesh's highest point over the mat's centre region is within 0.02 of `base + GYM_TOP`.
-  - › `each style builds` — the three styles create without throwing and differ in vertex count.
+  - › `each style builds` — the four styles create without throwing and differ in vertex count.
   - › `dispose frees everything`.
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3:** Implement.
@@ -203,6 +203,6 @@
 ### Task 8: Shots, draw calls, memory (main session)
 
 - [ ] **Step 1:** Restart the dev server fresh (40 bots), run `drawcalls.mjs` → `~/.cache/openradlr/screenshots/move3/after.txt`; compare with `move2/after.txt`; Low and Medium within +10 %.
-- [ ] **Step 2:** Workbench round: `lemon`, `route-arch` (start and climb), `warning-sign`, `village-sign`, `bike-cafe` (each style), `outdoor-gym`, the spectator (person, penguin).
-- [ ] **Step 3:** One ride round (Simulator, High), aimed from the browser's world: start arch with the Valley Café, a climb top with the crowd and barriers, a descent with rails, Forge Hut, Hilltop Café in town, a winter crowd, the menu highlight (menu shot), lemons if the day has them. A second round only for fixes.
+- [ ] **Step 2:** Workbench round: `lemon`, `route-arch` (start and climb), `warning-sign`, `village-sign`, `bike-cafe` (valley, hut, hilltop, beach), `outdoor-gym`, the spectator (person, penguin).
+- [ ] **Step 3:** One ride round (Simulator, High), aimed from the browser's world: start arch with the Valley Café, a climb top with the crowd and barriers, a descent with rails, Forge Hut, Hilltop Café in town, the Beach Café with its yoga gym (Cape Loop), a winter crowd, the menu highlight (menu shot), lemons if the day has them. A second round only for fixes.
 - [ ] **Step 4:** Contact sheet, upload to `pr-screenshots` `polished-world/move3/`, push the branch, update the `polished-world` memory.
