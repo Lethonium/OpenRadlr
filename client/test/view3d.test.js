@@ -327,7 +327,6 @@ function gymView(gyms, biome = "temperate", renderer = new StubRenderer(), studi
   const route = squareRoute();
   const world = {
     biome,
-    chunks: { scenery: [], structures: [] },
     crowd: { people: [], figure: "person" },
     gyms,
     studio,
@@ -1183,4 +1182,11 @@ test("the quality reaches the engine and the world scene", () => {
   view.setQuality("low");
   assert.equal(engine.qualities.at(-1).shadowMapSize, 0);
   assert.equal(view.worldScene.sun.castShadow, false);
+});
+
+test("the adapter draws no world chunks", () => {
+  const { view, renderer } = gymView([], "temperate", new RecordingRenderer());
+  view.render({ riders: [], myId: null, timeS: 1, colors });
+  assert.equal("chunks" in view, false, "the view keeps no chunk list");
+  assert.equal(renderer.draws.filter((d) => d.handle?.chunk).length, 0);
 });

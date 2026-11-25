@@ -128,3 +128,28 @@ test("the side view draws only the sky, ground and athletes, then restores every
   world.isolateAthlete(null);
   assert.deepEqual(layers.map((layer) => layer.visible), before);
 });
+
+test("a quality change keeps the arches, furniture, cafés and gyms", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { buildSceneNow } = await import("../public/js/view3d/worldScene.js");
+  const file = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
+  const scene = buildSceneNow(file);
+  const world = createWorldScene(scene, { settings: qualitySettings("high"), track: createTracker().track });
+  world.setEnvironment(day);
+  const counts = () =>
+    Object.fromEntries(
+      ["arches", "furniture", "venues"].map((name) => {
+        let n = 0;
+        world.scene.getObjectByName(name).traverse((o) => {
+          n += o.isInstancedMesh ? o.count : 1;
+        });
+        return [name, n];
+      }),
+    );
+  const before = counts();
+  for (const name of Object.keys(before)) assert.ok(before[name] > 1, `${name} has something in it`);
+  world.setQuality(qualitySettings("low"));
+  world.setQuality(qualitySettings("high"));
+  assert.deepEqual(counts(), before);
+  world.dispose();
+});

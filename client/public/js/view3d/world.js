@@ -12,7 +12,6 @@
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
 import { ARCH_HEIGHT, BANNERS, archSpots, bannerPlacements } from "./banners.js";
-import { ChunkedMesh } from "./chunks.js";
 import {
   Occupancy,
   buildBikeCafe,
@@ -207,9 +206,8 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * With a network they are built per road instead, so a road several routes
  * share is decorated once, and every café of the map gets its café.
  *
- * Returns chunked groups (drawn and shadowed only near the camera/rider),
- * placement data for the new world (arches, furniture, crowd, cafés and gyms), blended meshes (sea,
- * rivers) and dynamic objects the view animates (spectators).
+ * Returns placement data for the new world (arches, furniture, crowd, cafés and gyms), the road and river strips
+ * and the ground grids.
  */
 export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
   biome = resolveBiome(typeof biome === "string" ? biome : biome.id);
@@ -229,11 +227,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const rivers = ordered.flatMap((r) => zonesOf.get(r).rivers.map((z) => ({ ...buildRiverPath(r, base, z.at, r.seed >>> 0, sea), route: r })));
   const terrain = rivers.length > 0 ? withRivers(base, rivers, sea - RIVER.mouthDepth) : { ...base, riverDistance: () => Infinity };
   const half = roadHalfWidth(route.lanes) + VERGE;
-
-  const chunks = {
-    structures: new ChunkedMesh(),
-    bright: new ChunkedMesh(),
-  };
 
   const long = route.length > LONG_ROUTE_M;
   const ground = groundExtent(terrain);
@@ -358,7 +351,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     ground: grids,
     plan,
     overview: worldOverview(terrain, ground.water),
-    chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
     arches: archPlacements(route),
     furniture,
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },

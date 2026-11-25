@@ -10,9 +10,6 @@ import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 
 const route = JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url)));
 
-const triangles = (scene) =>
-  Object.fromEntries(Object.entries(scene.chunks).map(([name, chunks]) => [name, chunks.reduce((n, chunk) => n + chunk.mesh.positions.length / 9, 0)]));
-
 test("the registry knows every biome and falls back to the default", () => {
   assert.ok(BIOMES[DEFAULT_BIOME], "the default is registered");
   assert.equal(DEFAULT_BIOME, "temperate", "new riders see the valley they know");
@@ -180,13 +177,12 @@ test("winter changes the look, not the layout", () => {
   assert.equal(winter.crowd.figure, "penguin", "winter's crowd is penguins");
 
   const total = (scene) =>
-    Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
     scene.rivers.strips.indices.length / 3 +
     scene.roads.strips.indices.length / 3;
   const t = total(temperate);
   const w = total(winter);
   assert.notEqual(winter.roads.strips.positions.length, temperate.roads.strips.positions.length, "the road itself is reshaped");
-  // The plants are scene layers now; what is left is the adapter's own drawing, where winter's snowmen posts and banked road weigh more (the crowd and its barriers left it too, so the share is larger).
+  // The plants are scene layers now; what is left is the adapter's own drawing, where winter's snowmen posts and banked road weigh more (the crowd and its barriers left it too, so the share is larger; the chunks are gone).
   assert.ok(w / t < 1.7, `winter stays within 70 % of temperate (${t} → ${w})`);
 });
 
@@ -209,7 +205,7 @@ test("a season changes the look, not the layout", () => {
   const base = buildSceneNow(route, [], null, DEFAULT_BIOME);
   // An unknown id is the default biome, so the same world comes out exactly.
   const again = buildSceneNow(route, [], null, "no-such-biome");
-  assert.deepEqual(triangles(again), triangles(base), "one triangle per place, either way");
+  assert.deepEqual(again.roads.strips, base.roads.strips, "the same road, either way");
   assert.deepEqual(again.gyms, base.gyms, "workout riders stand on the same spots");
   assert.deepEqual(again.overview, base.overview, "the menu camera opens on the same island");
   assert.deepEqual(again.arches, base.arches, "start and finish stay put");

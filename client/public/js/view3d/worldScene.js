@@ -9,10 +9,10 @@ import { RouteGeometry } from "../route/geometry.js";
 import { roadNetworkOf } from "../route/worldMap.js";
 import { buildWorld } from "./world.js";
 
-/** What the view draws: meshes, chunks, the placements for the arches, furniture, crowd and cafés, the animated objects and the gyms' spots and the studio's site (no functions). */
+/** What the view draws: the placements for the arches, furniture, crowd and cafés, the animated objects and the gyms' spots and the studio's site (no functions). */
 export function sceneOf(world) {
-  const { biome, season, meshes, chunks, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan } = world;
-  return { biome, season, meshes, chunks, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan };
+  const { biome, season, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan } = world;
+  return { biome, season, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan };
 }
 
 /** Every typed array buffer in `value`, for a zero-copy postMessage. */

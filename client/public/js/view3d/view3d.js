@@ -6,7 +6,6 @@
 import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "./clips.js";
-import { chunkNear, chunkVisible } from "./chunks.js";
 import * as THREE from "../three.js";
 import { TIME_MODES, TIME_PRESETS, environmentAt, resolvedLight, resolvePreset } from "../world/daylight.js";
 import { SEASONS } from "../world/seasons.js";
@@ -58,8 +57,6 @@ export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
-  /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { structures: 2600, bright: 1200 },
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
   lemonReach: { behind: 30, ahead: 260 },
@@ -400,9 +397,6 @@ export class View3D {
 
     this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
 
-    this.chunks = Object.fromEntries(
-      Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
-    );
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
     this.crowd = world.crowd ?? { people: [], figure: "person" };
@@ -811,14 +805,11 @@ export class View3D {
 
     const lemons = me && !me.gym ? this.#lemonFrames(me.rider, timeS) : [];
 
-    // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
+    // Pass 0: shadow map around my rider (or the camera target), my riders.
     if (this.shadowsEnabled && shadows && lens.shadows) {
       const focus = me ? me.position : this.camera.target;
       const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
       this.renderer.beginShadows(lightMatrix);
-      for (const chunk of this.chunks.structures) {
-        if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
-      }
       for (const part of visible) {
         if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
@@ -839,7 +830,7 @@ export class View3D {
 
     // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
     const scene = { light, lens, shadows, visible };
-    this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye, forward });
+    this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye });
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
     if (me?.gym && this.sideView && this.renderer.viewport) {
@@ -863,7 +854,7 @@ export class View3D {
         this.worldScene.isolateAthlete(null);
         this.#drawWorld(
           { ...scene, visible: [] },
-          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
+          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye },
         );
         this.renderer.viewport(null);
       }
@@ -899,17 +890,8 @@ export class View3D {
    * Sky, the lit world and the blended pass, as seen through `view`: drawn
    * once for the screen and, in a workout, once more for the side view.
    */
-  #drawWorld({ light, lens, shadows, visible }, { viewProjection, inverseViewProjection, view, projection, eye, forward }) {
+  #drawWorld({ light, shadows, visible }, { viewProjection, inverseViewProjection, view, projection, eye }) {
     this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
-    for (const [group, chunks] of Object.entries(this.chunks)) {
-      // Seen from the drone, small things reach a little further, not as far as the haze.
-      const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
-      for (const chunk of chunks) {
-        if (!chunkVisible(chunk, eye, forward, range)) continue;
-        if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" || light.key === "night" ? 0.95 : 0.55);
-        else this.renderer.draw(chunk.handle, this.identity);
-      }
-    }
     for (const part of visible) {
       this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
       for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
@@ -999,9 +981,7 @@ export class View3D {
 
   dispose() {
     this.#studio?.dispose();
-    const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = chunkHandles;
-    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
+    for (const handle of [...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
       this.renderer.dispose(handle);
     }
     this.#labels.forEach((element) => element.remove());

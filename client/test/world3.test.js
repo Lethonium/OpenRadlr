@@ -2,11 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { ChunkedMesh, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
 import { GYM_SIGN } from "../public/js/world/venues.js";
 import { Occupancy, roadsideFurniture } from "../public/js/view3d/features.js";
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/rivers.js";
-import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
 import { inStretch, resolveZones } from "../public/js/world/zones.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
 import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
@@ -83,32 +81,6 @@ test("stretches wrap around the start line", () => {
   assert.ok(!inStretch(r, [{ from: 100, to: 200 }], 300));
 });
 
-// --- chunks -------------------------------------------------------------------
-
-test("chunked meshes split by tile and keep every triangle", () => {
-  const chunked = new ChunkedMesh(100);
-  const plain = new MeshBuilder();
-  for (const target of [chunked, plain]) {
-    target.box([10, 0, 10], [2, 2, 2], [1, 0, 0]);
-    target.box([250, 0, 10], [2, 2, 2], [0, 1, 0]);
-    target.box([450, 0, 40], [0.5, 1.8, 0.5], [0, 0, 1]);
-  }
-  const chunks = chunked.build();
-  assert.equal(chunks.length, 3);
-  assert.equal(chunks.reduce((sum, c) => sum + c.mesh.vertexCount, 0), plain.build().vertexCount);
-  for (const c of chunks) assert.equal(c.mesh.colors.length, c.mesh.vertexCount * 4);
-});
-
-test("chunk visibility: distance, behind the camera, inside the chunk", () => {
-  const chunk = { center: [100, 0, 0], radius: 20 };
-  assert.ok(chunkVisible(chunk, [0, 0, 0], [1, 0, 0], 500));
-  assert.ok(!chunkVisible(chunk, [0, 0, 0], [1, 0, 0], 50), "too far");
-  assert.ok(!chunkVisible(chunk, [0, 0, 0], [-1, 0, 0], 500), "behind");
-  assert.ok(chunkVisible(chunk, [100, 0, 5], [-1, 0, 0], 500), "camera inside");
-  assert.ok(chunkNear(chunk, [150, 0, 0], 40));
-  assert.ok(!chunkNear(chunk, [300, 0, 0], 40));
-});
-
 test("occupancy blocks overlapping circles only", () => {
   const occupancy = new Occupancy(50);
   occupancy.add(100, 100, 10);
@@ -155,7 +127,6 @@ test("the world is deterministic", () => {
   const again = buildWorld(riversideFlats());
   assert.deepEqual(again.plan.turbines, world.plan.turbines);
   assert.deepEqual(again.crowd.people.map((p) => p.position), world.crowd.people.map((p) => p.position));
-  assert.equal(again.chunks.structures.length, world.chunks.structures.length);
 });
 
 // --- bike café ------------------------------------------------------------------
@@ -572,7 +543,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["arches", "biome", "cafeSites", "chunks", "crowd", "furniture", "ground", "gyms", "meshes", "overview", "plan", "rivers", "roads", "season", "studio"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["arches", "biome", "cafeSites", "crowd", "furniture", "ground", "gyms", "overview", "plan", "rivers", "roads", "season", "studio"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));
@@ -605,7 +576,7 @@ test("without workers the scene is built in place, and a failing worker falls ba
 });
 
 test("a worker's scene is used as it arrives", async () => {
-  const scene = { meshes: {}, chunks: {}, crowd: { people: [], figure: "person" } };
+  const scene = { crowd: { people: [], figure: "person" } };
   const worker = {
     postMessage(message) {
       assert.equal(message.route.id, "tiny");

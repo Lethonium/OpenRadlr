@@ -54,32 +54,31 @@ test("a 50 km route builds its terrain with the horizon around the whole island"
   }
 });
 
-/** Triangles of the adapter's chunks, the road's quads and its posts. */
-const chunkTriangles = (scene) =>
-  Object.values(scene.chunks).reduce((sum, chunks) => sum + chunks.reduce((n, c) => n + c.mesh.positions.length / 9, 0), 0) +
+/** Triangles of the road's quads and its posts (the adapter draws nothing else of the world). */
+const roadTriangles = (scene) =>
   scene.roads.strips.indices.length / 3 +
   scene.roads.posts.vertexCount / 3;
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
-  // 41390: the adapter's chunks (none now: the café and the gym are the new world's), the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
-  // flowers went (the scene draws plants from the plan); the ground is not a chunk (the main thread tiles `scene.ground`).
-  assert.equal(chunkTriangles(scene), 41390);
+  // 41390: the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
+  // flowers went (the scene draws plants from the plan); the ground is tiled by the main thread from `scene.ground`.
+  assert.equal(roadTriangles(scene), 41390);
 });
 
 test("a long route's world is thinned to a size a browser can build", () => {
   const route = bigLoop(30000, 20000);
   const scene = buildSceneNow({ id: "big", name: "Big", lanes: 4, seed: 9, points: route.nodes.map((n) => [n.x, n.y, n.elevation]) });
-  const perKm = chunkTriangles(scene) / (route.length / 1000);
+  const perKm = roadTriangles(scene) / (route.length / 1000);
   assert.ok(perKm < 12_000, `${Math.round(perKm)} triangles per km`);
 });
 
 test("a long route stays inside the triangle budget in every biome", () => {
   const route = bigLoop(30000, 20000);
   const file = { id: "big", name: "Big", lanes: 4, seed: 9, points: route.nodes.map((n) => [n.x, n.y, n.elevation]) };
-  const temperate = chunkTriangles(buildSceneNow(file));
+  const temperate = roadTriangles(buildSceneNow(file));
   for (const id of BIOME_IDS) {
-    const triangles = chunkTriangles(buildSceneNow(file, [], null, id));
+    const triangles = roadTriangles(buildSceneNow(file, [], null, id));
     const perKm = triangles / (route.length / 1000);
     assert.ok(perKm < 12_000, `${id}: ${Math.round(perKm)} triangles per km`);
     assert.ok(triangles <= temperate * 1.3, `${id}: ${triangles} triangles vs temperate ${temperate}`);
