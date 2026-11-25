@@ -193,6 +193,26 @@ test("field extras are grouped by area so the camera culls them", () => {
   layer.dispose();
 });
 
+test("bales and pumpkins are drawn only within the quality's reach of the camera", () => {
+  const field = (x, crop) => ({ width: 120, depth: 80, x, z: 0, yaw: 0, crop });
+  const layer = createCropLayer({ fields: [field(0, "pumpkin"), field(1000, "pumpkin"), field(0, "stubble"), field(1000, "stubble")] }, { ...options(low), ground });
+  const extras = [];
+  layer.object.traverse((o) => o.isInstancedMesh && ["pumpkins", "bales"].includes(o.name) && extras.push(o));
+  assert.ok(extras.length >= 4, "cells of both kinds");
+  assert.equal(low.cropExtras.reach, 300);
+  layer.update(frameAt(100, 0));
+  for (const mesh of extras) {
+    const { center, radius } = mesh.boundingSphere;
+    const gap = Math.hypot(center.x - 100, center.z) - radius;
+    if (gap < 300 - 1) assert.equal(mesh.visible, true, `${mesh.name} at ${Math.round(center.x)} is near`);
+    if (gap > 300 + 1) assert.equal(mesh.visible, false, `${mesh.name} at ${Math.round(center.x)} is far`);
+  }
+  assert.ok(extras.some((m) => m.visible) && extras.some((m) => !m.visible), "near ones drawn, far ones not");
+  layer.update(frameAt(1000, 0));
+  assert.ok(extras.some((m) => m.visible && m.boundingSphere.center.x > 500), "the far cells come back near");
+  layer.dispose();
+});
+
 test("every plant layer frees what it made", () => {
   const tracker = createTracker();
   const layers = [

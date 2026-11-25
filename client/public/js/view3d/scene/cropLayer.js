@@ -91,14 +91,21 @@ export function createCropLayer(plan, { ground, uniforms, track, settings }) {
     for (const mesh of meshes) mesh.name = "bales";
     object.add(...meshes);
   }
+  const extras = object.children.filter((child) => child.isInstancedMesh);
+  const extrasReach = settings?.cropExtras?.reach ?? Infinity;
   const stalks = settings?.cropStalks && createStalkLayer(plan.fields, { settings: settings.cropStalks, heightAt, uniforms, own });
   if (stalks) object.add(stalks.object);
   return {
     object,
     fields,
     stalks,
-    /** Plants the fields near the camera. */
+    /** Plants the fields near the camera, and draws the bales and pumpkins of the areas within reach. */
     update(frame) {
+      const { position } = frame.camera;
+      for (const mesh of extras) {
+        const { center, radius } = mesh.boundingSphere;
+        mesh.visible = Math.hypot(center.x - position.x, center.y - position.y, center.z - position.z) - radius <= extrasReach;
+      }
       stalks?.update(frame.camera.position);
     },
     setEnvironment() {},
