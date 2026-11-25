@@ -32,13 +32,21 @@ const penguinMeshes = (rig) => {
 
 test("a penguin hides the rider and rides the bones", () => {
   const { rig } = dressed();
-  assert.equal(rig.mesh.visible, false);
+  assert.equal(rig.mesh.material.visible, false, "the skin is not drawn");
   assert.equal(rig.object.scale.x, PENGUIN_SCALE);
   const meshes = penguinMeshes(rig);
   assert.ok(meshes.length >= 8);
   for (const mesh of meshes) assert.ok(mesh.parent instanceof THREE.Bone, mesh.name);
   const parents = new Set(meshes.map((mesh) => mesh.parent.name));
   for (const bone of ["hips", "chest", "head", "upperArm_L", "forearm_R", "foot_L"]) assert.ok(parents.has(bone), bone);
+});
+
+test("the penguin's parts are drawn: nothing above them in the tree is hidden", () => {
+  const { rig } = dressed();
+  const drawn = new Set();
+  rig.object.traverseVisible((node) => drawn.add(node));
+  const meshes = penguinMeshes(rig);
+  for (const mesh of meshes) assert.ok(drawn.has(mesh), mesh.name);
 });
 
 test("helmet and glasses are hidden with the rider", () => {

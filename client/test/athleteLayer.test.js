@@ -110,7 +110,7 @@ test("athletes past the reach are not drawn and leave no leak", () => {
 test("a penguin athlete is dressed and rests on its spot", () => {
   const { layer } = make();
   layer.update(frame([entry(1, [0, 3, -10], { figure: "penguin", pose: poseAt(clipFor(null), 0) })]));
-  assert.equal(layer.rigOf(1).mesh.visible, false);
+  assert.equal(layer.rigOf(1).mesh.material.visible, false);
   near(lowestWorld(layer, 1), 3, 0.01, "lowest");
   near(layer.rigOf(1).object.scale.y, PENGUIN_SCALE, 1e-6, "scale");
 });

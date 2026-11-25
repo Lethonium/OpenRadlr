@@ -56,8 +56,11 @@ export function dressAsPenguin(rig, { own = (resource) => resource, uniforms = c
   rig.object.traverse((node) => {
     if (node.isBone) bones[node.name] = node;
   });
+  // The skin is not drawn through its own material: the bones (and the penguin on them) hang under its mesh, so hiding
+  // the mesh would hide the penguin too. The helmet, straps and glasses are plain meshes and are hidden.
+  rig.mesh.material.visible = false;
   rig.object.traverse((node) => {
-    if (node.isMesh) node.visible = false; // the skin, helmet, straps and glasses
+    if (node.isMesh && node !== rig.mesh) node.visible = false;
   });
 
   // the bind pose is the pose with no joints turned
