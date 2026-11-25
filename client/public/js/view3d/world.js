@@ -17,6 +17,7 @@ import {
   Occupancy,
   buildBikeCafe,
   buildOutdoorGym,
+  cafeClearing,
   gymClearing,
   studioSite,
   roadsideFurniture,
@@ -192,6 +193,8 @@ const onStretches = (stretches, d) => stretches.some((s) => d >= s.from - 1e-6 &
  */
 export const LONG_ROUTE_M = 60_000;
 const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
+/** The look of each café of the valley map; any other café is a valley café. */
+const CAFE_STYLE = Object.freeze({ "valley-cafe": "valley", "forge-hut": "hut", "hill-cafe": "hilltop", "beach-cafe": "beach" });
 const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep: 6, railGrade: 6, railStep: 8 });
 
 /**
@@ -205,7 +208,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * share is decorated once, and every café of the map gets its café.
  *
  * Returns chunked groups (drawn and shadowed only near the camera/rider),
- * placement data for the new world (arches), blended meshes (sea,
+ * placement data for the new world (arches, furniture, crowd, cafés and gyms), blended meshes (sea,
  * rivers) and dynamic objects the view animates (spectators).
  */
 export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
@@ -237,7 +240,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   // Where woods, fields and verges go (and which ground is farmed): the plan, then the ground that tints and ploughs by it.
   const regions = network?.regions ?? [];
-  // Where the cafés (and so the outdoor gyms) stand: the plan keeps plants off the gyms' mats.
+  // Where the cafés (and so the outdoor gyms) stand: the plan keeps plants and the towns' houses off them.
   const cafeRoads = network
     ? network.cafes().flatMap((cafe) => {
         const start = route.positionAt(0);
@@ -246,7 +249,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
         return road ? [{ road, cafeId: cafe.id }] : [];
       })
     : ordered.map((road) => ({ road, cafeId: null }));
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.map(({ road }) => gymClearing(road)), routes, seed, season, detail, bounds: ground.bounds });
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.flatMap(({ road }) => [cafeClearing(road), gymClearing(road)]), routes, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow
@@ -297,17 +300,20 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // (one for all routes that start at the same place); each cafe road gets one.
   const cafes = [];
   const cafeSpots = [];
+  const cafeSites = [];
+  const cafeNames = new Map((network?.cafes() ?? []).map((node) => [node.id, node.name]));
   const gyms = [];
   let studio = null;
   for (const { road: r, cafeId } of cafeRoads) {
     const start = r.positionAt(0);
     if (cafes.some((c) => Math.hypot(c.x - start.x, c.y - start.y) < 30)) continue;
     cafes.push(start);
-    const cafe = buildBikeCafe(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome });
+    const cafe = buildBikeCafe(r, terrain, { occupancy, avoid });
     if (!cafe) continue;
     cafeSpots.push(cafe.position);
+    cafeSites.push({ id: cafeId, name: cafeNames.get(cafeId) ?? "Bike café" /* i18n-ok */, style: CAFE_STYLE[cafeId] ?? "valley", position: cafe.position, yaw: cafe.yaw, forecourt: cafe.forecourt });
     // The outdoor gym next to it, where workout riders train (#77).
-    const gym = buildOutdoorGym(r, terrain, { structures: chunks.structures, bright: chunks.bright, occupancy, avoid, biome, cafeId });
+    const gym = buildOutdoorGym(r, terrain, { occupancy, avoid, cafeId });
     if (gym) gyms.push(gym);
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
@@ -345,6 +351,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,
+    cafeSites,
     gyms,
     studio,
     waterLevel: ground.water,

@@ -17,6 +17,7 @@ import { createCrowdLayer } from "./crowdLayer.js";
 import { createFurnitureLayer } from "./furnitureLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
 import { createLemonLayer } from "./lemonLayer.js";
+import { createVenueLayer } from "./venueLayer.js";
 import { createHighlightLayer } from "./highlightLayer.js";
 import { createStatueLayer } from "./statueLayer.js";
 import { createRiderLayer } from "./riderLayer.js";
@@ -99,6 +100,7 @@ export function createWorldScene(world, { settings, track }) {
     fauna: () => createFaunaLayer(plan, { ...plants(), ground: world.ground }),
     arches: () => createArchLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     furniture: () => createFurnitureLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
+    venues: () => createVenueLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     riders: () => createRiderLayer(plants()),
     athletes: () => createAthleteLayer(plants()),
     statues: () => createStatueLayer(plants()),
@@ -116,7 +118,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.arches(), makers.furniture(), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
+  layers.push(makers.arches(), makers.furniture(), makers.venues(), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -167,7 +169,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "weather", "nightLights");
   };
   setQuality(settings);
 
@@ -221,7 +223,7 @@ export function createWorldScene(world, { settings, track }) {
     setSeason(next, nextPlan = plan) {
       season = next;
       plan = nextPlan;
-      if (plan) rebuild("islands", "forest", "crops", "roadside", "settlements", "farms", "landmarks", "fauna");
+      if (plan) rebuild("islands", "forest", "crops", "roadside", "settlements", "farms", "landmarks", "fauna", "venues");
     },
     /** Replaces the gyms' statue rows (`{gym, figures, material, figure}`). */
     setStatues(rows) {

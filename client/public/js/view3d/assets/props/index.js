@@ -3,6 +3,7 @@
  * {near, far}, create(opts)}`) with one near part and no far twin, so the roadside layer instances them
  * beside the clumps. The landmark props (balloon, boat) live in `BUILDINGS`.
  */
+import * as bikeCafe from "../buildings/bikeCafe.js";
 import { bench } from "./bench.js";
 import { boardwalk } from "./boardwalk.js";
 import { beehive } from "./beehive.js";
@@ -11,6 +12,7 @@ import { cart } from "./cart.js";
 import * as lemon from "./lemon.js";
 import { logPile } from "./logPile.js";
 import { mailbox } from "./mailbox.js";
+import * as outdoorGym from "./outdoorGym.js";
 import * as routeArch from "./routeArch.js";
 import { villageSign, warningSign } from "./roadSigns.js";
 import { picketFence } from "./picketFence.js";
@@ -21,7 +23,9 @@ export const PROPS = Object.freeze({ beehive, bench, boardwalk, cairn, cart, log
 
 /** Workbench-only props: not on the verge, drawn by their own layers (`{meta, create}`). */
 export const FLOATERS = Object.freeze({
+  "bike-cafe": Object.freeze({ meta: bikeCafe.meta, create: bikeCafe.create }),
   lemon: Object.freeze({ meta: lemon.meta, create: lemon.create }),
+  "outdoor-gym": Object.freeze({ meta: outdoorGym.meta, create: outdoorGym.create }),
   "route-arch": Object.freeze({ meta: routeArch.meta, create: routeArch.create }),
   "warning-sign": warningSign,
   "village-sign": villageSign,

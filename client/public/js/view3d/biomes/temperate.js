@@ -8,14 +8,7 @@
  *
  * Pure data and pure functions: this runs in the world worker and in tests.
  */
-import {
-  GYM_SIGN,
-  PALETTE,
-  buildCafe,
-  buildOutdoorGymModel,
-  buildVillageSign,
-  buildWarningSign,
-} from "../structures.js";
+import { PALETTE, buildVillageSign, buildWarningSign } from "../structures.js";
 import { fbm, valueNoise } from "../../world/noise.js";
 
 export const COLORS = Object.freeze({
@@ -90,9 +83,6 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
 const models = Object.freeze({
   warning: buildWarningSign,
   villageSign: buildVillageSign,
-  cafe: buildCafe,
-  gym: buildOutdoorGymModel,
-  gymSign: GYM_SIGN,
 });
 
 export const temperate = Object.freeze({

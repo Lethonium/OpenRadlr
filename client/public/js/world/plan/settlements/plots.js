@@ -42,7 +42,7 @@ function onRoad(surface, x, z, facing, width, depth) {
  * @returns {object[]} `{x, z, yaw, facing, width, depth, front, street, side}`
  */
 export function layoutPlots(ctx, { streets, square, surface }, random) {
-  const { style, terrain, toLocal } = ctx;
+  const { style, terrain, toLocal, clearings = [] } = ctx;
   const plots = [];
   const occupied = new Set();
   const nearStreet = (x, z, margin) => streets.some((street) => distanceToLine(x, z, street.points) < street.width / 2 + margin);
@@ -58,6 +58,8 @@ export function layoutPlots(ctx, { streets, square, surface }, random) {
     for (let a = box.a0; a <= box.a1; a += 1) for (let b = box.b0; b <= box.b1; b += 1) if (visit(`${a},${b}`) === false) return false;
     return true;
   };
+  // A plot's corners reach hypot(width, depth) / 2 from its centre: none may come within a clearing's radius.
+  const clear = (x, z, width, depth) => !clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.radius + Math.hypot(width, depth) / 2);
   const sea = terrain?.seaLevel ?? -Infinity;
   const dry = (x, z, width, depth, ground) => {
     if (terrain && ground.low < sea + 2) return false;
@@ -88,7 +90,7 @@ export function layoutPlots(ctx, { streets, square, surface }, random) {
         const facing = scale2(normal, -side);
         const ground = groundRange(terrain, x, z, Math.max(width, depth));
         const box = footprint(x, z, facing, width, depth);
-        const fits = dry(x, z, width, depth, ground) && !nearStreet(x, z, 1.4) && !inSquare(ctx, square, x, z)
+        const fits = dry(x, z, width, depth, ground) && clear(x, z, width, depth) && !nearStreet(x, z, 1.4) && !inSquare(ctx, square, x, z)
           && !onRoad(surface, x, z, facing, width, depth) && eachCell(box, (key) => !occupied.has(key))
           && (ground.slope < (style.maxSlope ?? 0.35) || !terrain);
         if (fits) {

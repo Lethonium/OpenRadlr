@@ -62,7 +62,7 @@ test("a biome brings everything the world draws with", () => {
     const color = biome.terrainColor(spot);
     assert.equal(color.length, 3, `${id} returns an RGB colour`);
     assert.deepEqual(color, biome.terrainColor({ ...spot }), `${id} is deterministic`);
-    for (const key of ["warning", "villageSign", "cafe", "gym"]) {
+    for (const key of ["warning", "villageSign"]) {
       assert.equal(typeof biome.models[key], "function", `${id} is missing model ${key}`);
     }
   }

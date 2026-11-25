@@ -62,9 +62,9 @@ const chunkTriangles = (scene) =>
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
-  // 44209: the adapter's chunks (café, gym), the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
+  // 41390: the adapter's chunks (none now: the café and the gym are the new world's), the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
   // flowers went (the scene draws plants from the plan); the ground is not a chunk (the main thread tiles `scene.ground`).
-  assert.equal(chunkTriangles(scene), 44209);
+  assert.equal(chunkTriangles(scene), 41390);
 });
 
 test("a long route's world is thinned to a size a browser can build", () => {

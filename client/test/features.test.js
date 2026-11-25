@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { readFileSync } from "node:fs";
-import { buildSpectators, roadsideFurniture } from "../public/js/view3d/features.js";
+import { GYM_TOP, Occupancy, buildBikeCafe, buildOutdoorGym, buildSpectators, cafeClearing, roadsideFurniture } from "../public/js/view3d/features.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../public/js/world/roads.js";
 
 const flat = { height: () => 0 };
@@ -76,4 +76,26 @@ test("barriers line both sides of each crowd spot", () => {
     assert.equal(color.length, 3);
   }
   assert.equal(new Set(barriers.map(({ color }) => color.join())).size, 2, "two stripe colours");
+});
+
+test("the gym's spots sit on the mat", () => {
+  const route = straight([[0, 0, 100], [400, 0, 100]]);
+  const gym = buildOutdoorGym(route, null, { occupancy: new Occupancy() });
+  assert.ok(gym && Number.isFinite(gym.base) && gym.spots.length === 8);
+  for (const spot of gym.spots) assert.ok(Math.abs(spot.position[1] - (gym.base + GYM_TOP)) < 1e-6, `spot at ${spot.position[1]}`);
+  assert.ok(gym.drop > 0 && Number.isFinite(gym.signLift) && gym.position.length === 3);
+});
+
+test("a café is data: its spot, yaw and the paved forecourt along the road", () => {
+  const route = straight([[0, 0, 100], [400, 0, 100]]);
+  const cafe = buildBikeCafe(route, null, { occupancy: new Occupancy() });
+  assert.ok(cafe && Number.isFinite(cafe.yaw));
+  const { inner, outer } = cafe.forecourt;
+  assert.equal(inner.length, outer.length);
+  assert.ok(inner.length >= 11, "an edge point every 2 m over 22 m");
+  const half = roadHalfWidth(route.lanes);
+  assert.ok(Math.abs(Math.abs(inner[0][2]) - (half + 0.02)) < 1e-6 && Math.abs(Math.abs(outer[0][2]) - (half + 10)) < 1e-6);
+  const clearing = cafeClearing(route);
+  assert.equal(clearing.radius, 14);
+  assert.ok(Math.hypot(clearing.x - cafe.position[0], clearing.z - cafe.position[2]) < 1e-6, "centred on the café");
 });

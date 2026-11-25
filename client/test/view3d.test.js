@@ -321,7 +321,7 @@ function testGym() {
   const center = [100, 100.4, 30];
   const spots = [];
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
-  return { center, yaw: 0, spots };
+  return { center, yaw: 0, spots, position: [center[0], center[1] - 0.08, center[2]], base: center[1] - 0.08, drop: 0.4, signLift: 0 };
 }
 function gymView(gyms, biome = "temperate", renderer = new StubRenderer(), studio = undefined, engine = fakeEngine()) {
   const route = squareRoute();

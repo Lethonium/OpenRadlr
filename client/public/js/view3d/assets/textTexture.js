@@ -8,6 +8,13 @@ import { COLS, GLYPHS, ROWS } from "./pixelFont.js";
 /** How much of the width, and of the height, the text may fill. */
 const FILL = 0.9;
 
+/** A linear RGB colour as sRGB 0-1, the space `textTexture` is written in. */
+export function toSrgb([r, g, b]) {
+  const out = { r: 0, g: 0, b: 0 };
+  new THREE.Color().setRGB(r, g, b).getRGB(out, THREE.SRGBColorSpace);
+  return [out.r, out.g, out.b];
+}
+
 const bytes = (rgb) => rgb.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255));
 
 /**

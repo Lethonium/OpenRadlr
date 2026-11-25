@@ -63,14 +63,14 @@ function stampSettlement(masks, layout) {
 
 /**
  * Plans the settlements and marks them on `masks` (the plan's one mutation).
- * @param {{settlements: SettlementSpec[], routes: object[], terrain: object, roads: import("../../roads.js").RoadIndex, regions: object[], seed: number, masks: import("../masks.js").Masks, water: number}} input
+ * @param {{settlements: SettlementSpec[], routes: object[], terrain: object, roads: import("../../roads.js").RoadIndex, regions: object[], seed: number, masks: import("../masks.js").Masks, water: number, clearings?: {x: number, z: number, radius: number}[]}} input
  * @returns {Array<ReturnType<typeof layoutSettlement> & {houses: string, ground: Float32Array}>}
  */
-export function planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water }) {
+export function planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water, clearings = [] }) {
   const ground = { height: (x, z) => terrain.height(x, z), seaLevel: water, riverDistance: terrain.riverDistance && ((x, z) => terrain.riverDistance(x, z)) };
   const network = [...new Set(roads.samples.map((s) => s.route))];
   return [...settlements, ...zoneVillages(routes, settlements, seed)].map((spec) => {
-    const layout = layoutSettlement({ ...spec, terrain: ground, roads: network });
+    const layout = layoutSettlement({ ...spec, terrain: ground, roads: network, clearings });
     const kind = regionMix(spec.center[0], spec.center[1], regions, seed)[0].kind;
     stampSettlement(masks, layout);
     return { ...layout, houses: REGION_STYLE[kind].houses, ground: Float32Array.from(layout.plots, (p) => lowestGround(terrain, p)) };

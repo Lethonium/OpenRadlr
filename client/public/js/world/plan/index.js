@@ -48,7 +48,7 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   const water = waterLevel(roads);
   const masks = buildMasks({ roads, rivers, bounds });
   for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built);
-  const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water });
+  const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water, clearings });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
   const fields = planFields({ terrain, roads, regions, seed, season, masks, water });
   const farms = planFarms({ fields, terrain, roads, regions, seed, masks, water, settlements: villages });

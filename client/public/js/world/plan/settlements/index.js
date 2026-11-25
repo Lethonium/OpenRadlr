@@ -52,9 +52,10 @@ function layoutLamps({ style }, streets, junctions, toLocal, local) {
  * @param {number} [options.seed] settlement seed
  * @param {{height: (x: number, z: number) => number, seaLevel?: number, riverDistance?: (x: number, z: number) => number}|null} [options.terrain]
  * @param {object[]} [options.roads] `RouteGeometry` roads near the settlement
+ * @param {{x: number, z: number, radius: number}[]} [options.clearings] ground (a café's, a gym's) no house plot may reach into; streets and squares stay
  * @returns {{id: string, kind: string, center: number[], frame: {u: number[], v: number[]}, radius: number, pavement: number, streetWidth: number, garden: number, streets: object[], junctions: object[], blocks: object[], plots: object[], square: object|null, lamps: object[], props: object[], quay: object|null, boats: object[]}}
  */
-export function layoutSettlement({ id = "settlement", kind = SETTLEMENT_KIND.village, center, radius = 220, seed = 0, terrain = null, roads = [] }) {
+export function layoutSettlement({ id = "settlement", kind = SETTLEMENT_KIND.village, center, radius = 220, seed = 0, terrain = null, roads = [], clearings = [] }) {
   const style = SETTLEMENT_STYLE[kind] ?? SETTLEMENT_STYLE.village;
   const random = seededRandom((hash(id) ^ (seed >>> 0)) >>> 0);
   const nearest = nearestRoad(roads, center[0], center[1]);
@@ -67,7 +68,7 @@ export function layoutSettlement({ id = "settlement", kind = SETTLEMENT_KIND.vil
   };
   const sea = terrain?.seaLevel;
   const onLand = (x, z) => !Number.isFinite(sea) || terrain.height(x, z) >= sea + 1.2;
-  const ctx = { id, kind, style, center, radius, terrain, nearest, u, v, local, toLocal, onLand };
+  const ctx = { id, kind, style, center, radius, terrain, nearest, u, v, local, toLocal, onLand, clearings };
 
   const { streets, junctions, blocks, uMax } = layoutStreets(ctx);
   const { square, props } = layoutSquare(ctx, random);

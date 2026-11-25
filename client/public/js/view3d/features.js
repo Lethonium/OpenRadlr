@@ -2,12 +2,12 @@
  * World features placed along a route: spectators, guard rails, signs, village name boards, the café, the
  * outdoor gym and the studio's site. (Towns, farms, turbines, landmarks and far islands are scene layers.)
  *
- * All placement is deterministic (route geometry + seed). Builders write into
- * mesh targets passed in (usually chunked), and return lists of dynamic
- * objects (spectators) that the view animates per frame.
+ * All placement is deterministic (route geometry + seed). Builders return plain placement data that the
+ * scene's layers draw (rails, signs, the crowd, the café and the gym).
  */
 import { CROWD } from "./crowd.js";
-import { add, cellKey, normalize, placement, scale, yawFor } from "./math.js";
+import { GYM_SIGN, GYM_TOP } from "../world/venues.js";
+import { add, cellKey, normalize, scale, yawFor } from "./math.js";
 import { seededRandom } from "../world/noise.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
@@ -221,50 +221,61 @@ export function roadsideFurniture(route, terrain, { skip = () => false, markers 
 
 /** Metres after the start/finish line where the café stands, on the right. */
 export const CAFE_DISTANCE = 45;
+/** Metres of paving between the road and the terrace, and the terrace's depth, and the café's setback from them. */
+const FORECOURT = 3;
+const TERRACE = 7;
+const CAFE_SETBACK = 4;
+/** Metres from the café's middle that the town's houses and the plants keep out of. */
+const CAFE_CLEARING = 14;
 
-/**
- * The bike café at the start: a paved forecourt along the road, then the
- * terrace and the café itself facing the road.
- */
-export function buildBikeCafe(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate }) {
+/** Where the café on `route` stands: its frame at `CAFE_DISTANCE`, its spot (on the right) and the yaw that turns its front to the road. */
+function cafeSite(route) {
   const half = roadHalfWidth(route.lanes);
-  const terraceDepth = 7;
-  const forecourt = 3;
-  const side = 1;
   const center = route.wrap(CAFE_DISTANCE);
   const f = roadFrame(route, center);
-  const setback = half + forecourt + terraceDepth + 4;
-  const pos = add(f.center, scale(f.right, side * setback));
+  const pos = add(f.center, scale(f.right, half + FORECOURT + TERRACE + CAFE_SETBACK));
+  return { half, center, f, pos, yaw: yawFor(scale(f.right, -1)) };
+}
+
+/**
+ * The ground the café on `route` takes, whether or not it ends up built: `{x, z, radius}` around its spot. The
+ * world plan keeps the towns' houses and the plants off it.
+ */
+export function cafeClearing(route) {
+  const { pos } = cafeSite(route);
+  return { x: pos[0], z: pos[2], radius: CAFE_CLEARING };
+}
+
+/**
+ * The bike café at the start, as placement data: where it stands and which way it faces (`yaw`: its front is the
+ * model's -z), plus the paved forecourt along the road, as two edges of points every 2 m from 11 m before the café's
+ * middle to 11 m after it, the inner one at the road's edge and the outer one 10 m out, 0.1 m over the road.
+ * Null where `avoid` says so.
+ *
+ * @returns {{position: number[], distance: number, yaw: number, forecourt: {inner: number[][], outer: number[][]}} | null}
+ */
+export function buildBikeCafe(route, terrain, { occupancy, avoid = () => false }) {
+  const { half, center, f, pos, yaw } = cafeSite(route);
   if (avoid(pos[0], pos[2], 12)) return null;
 
-  // Paved forecourt between the road and the terrace.
+  const inner = [];
+  const outer = [];
   const from = center - 11;
   const to = center + 11;
-  for (let d = from; d < to; d += 2) {
-    const f0 = roadFrame(route, d);
-    const f1 = roadFrame(route, Math.min(to, d + 2));
-    const at = (fr, o, y) => add(add(fr.center, scale(fr.right, side * o)), [0, y, 0]);
-    const inner = half + 0.02;
-    const outer = half + forecourt + terraceDepth;
-    const stone = biome.palette.forecourt;
-    structures.triangleFacing(at(f0, inner, 0.1), at(f0, outer, 0.1), at(f1, outer, 0.1), stone, [0, 1, 0]);
-    structures.triangleFacing(at(f0, inner, 0.1), at(f1, outer, 0.1), at(f1, inner, 0.1), stone, [0, 1, 0]);
-    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, 0.1), at(f1, inner, -0.3), biome.palette.forecourtEdge, scale(f0.right, -side));
-    structures.triangleFacing(at(f0, inner, 0.1), at(f1, inner, -0.3), at(f0, inner, -0.3), biome.palette.forecourtEdge, scale(f0.right, -side));
+  for (let d = from; d < to + 1e-9; d += 2) {
+    const fr = roadFrame(route, Math.min(to, d));
+    inner.push(add(add(fr.center, scale(fr.right, half + 0.02)), [0, 0.1, 0]));
+    outer.push(add(add(fr.center, scale(fr.right, half + FORECOURT + TERRACE)), [0, 0.1, 0]));
   }
-
-  const cafe = cafeModel(biome);
-  const yaw = yawFor(scale(f.right, -side));
-  const model = placement([pos[0], f.center[1] + 0.1, pos[2]], yaw);
-  structures.append(cafe.mesh, model);
-  bright.append(cafe.bright, model);
   occupancy.add(pos[0], pos[2], 14);
-  const forecourtMid = add(f.center, scale(f.right, side * (half + (forecourt + terraceDepth) / 2)));
+  const forecourtMid = add(f.center, scale(f.right, half + (FORECOURT + TERRACE) / 2));
   occupancy.add(forecourtMid[0], forecourtMid[2], 10);
-  return { position: pos, distance: center };
+  return { position: [pos[0], f.center[1] + 0.1, pos[2]], distance: center, yaw, forecourt: { inner, outer } };
 }
 
 // ------------------------------------------------------------- outdoor gym ---
+
+export { GYM_TOP };
 
 /** Metres after the start line where the outdoor gym's mat is centred: just past the café. */
 export const GYM_DISTANCE = CAFE_DISTANCE + 24;
@@ -298,9 +309,9 @@ export function gymClearing(route) {
  * The statue row (workout figures on plinths) stands behind the pad at local
  * z 8; its strip is reserved so scenery keeps off it.
  *
- * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[], cafeId: string | null, statueRow: {position: number[], yaw: number}} | null}
+ * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[], cafeId: string | null, statueRow: {position: number[], yaw: number}, position: number[], base: number, drop: number, signLift: number} | null}
  */
-export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate, cafeId = null }) {
+export function buildOutdoorGym(route, terrain, { occupancy, avoid = () => false, cafeId = null }) {
   const { f, pos, yaw } = gymSite(route);
   // The pad reaches from the mat towards the road and back to the bench (local z −3.6…6.6).
   const local = (x, z) => [pos[0] + x * Math.cos(yaw) + z * Math.sin(yaw), pos[2] - x * Math.sin(yaw) + z * Math.cos(yaw)];
@@ -322,11 +333,7 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
     lowest = Math.min(...heights);
   }
   const base = highest + 0.05;
-  const signGround = terrain ? terrain.height(...local(biome.models.gymSign.x, biome.models.gymSign.z)) : f.center[1];
-  const gym = biome.models.gym({ drop: base - lowest + 0.4, signLift: signGround - base });
-  const model = placement([pos[0], base, pos[2]], yaw);
-  structures.append(gym.mesh, model);
-  bright.append(gym.bright, model);
+  const signGround = terrain ? terrain.height(...local(GYM_SIGN.x, GYM_SIGN.z)) : f.center[1];
   occupancy.add(padX, padZ, 11);
   for (const x of [-5, 0, 5]) occupancy.add(...local(x, 8), 4);
 
@@ -334,11 +341,22 @@ export function buildOutdoorGym(route, terrain, { structures, bright, occupancy,
   for (const z of [-SPOT_GAP / 2, SPOT_GAP / 2]) {
     for (let k = 0; k < 4; k += 1) {
       const [x, wz] = local((k - 1.5) * SPOT_GAP, z);
-      spots.push({ position: [x, base + gym.top, wz], yaw });
+      spots.push({ position: [x, base + GYM_TOP, wz], yaw });
     }
   }
   const [rowX, rowZ] = local(0, 8);
-  return { center: [pos[0], base + gym.top, pos[2]], yaw, spots, cafeId, statueRow: { position: [rowX, base, rowZ], yaw } };
+  return {
+    center: [pos[0], base + GYM_TOP, pos[2]],
+    yaw,
+    spots,
+    cafeId,
+    statueRow: { position: [rowX, base, rowZ], yaw },
+    position: [pos[0], base, pos[2]],
+    base,
+    // The pad reaches down to the lowest ground under it, and the sign's posts stand on the ground at the roadside.
+    drop: base - lowest + 0.4,
+    signLift: signGround - base,
+  };
 }
 
 // ------------------------------------------------------------ spin studio ---
@@ -370,14 +388,4 @@ export function studioSite(route, terrain, { occupancy, avoid = () => false }) {
   const y = terrain ? Math.max(...[-halfWidth, halfWidth].flatMap((x) => [front, back].map((z) => terrain.height(...local(x, z))))) : f.center[1];
   occupancy.add(midX, midZ, reach);
   return { position: [origin[0], y, origin[2]], yaw };
-}
-
-const cafeCache = new Map();
-function cafeModel(biome) {
-  let cafe = cafeCache.get(biome.id);
-  if (!cafe) {
-    cafe = biome.models.cafe();
-    cafeCache.set(biome.id, cafe);
-  }
-  return cafe;
 }
