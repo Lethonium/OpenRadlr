@@ -14,6 +14,7 @@ import { addHook, cloudShadows, createSharedUniforms, heightFog } from "../mater
 import { createOwner } from "../owner.js";
 import { bikeGeometry } from "./bicycle.js";
 import { KIT_ATLAS, kitTexture } from "./kitPainter.js";
+import { dressAsPenguin } from "./penguinOutfit.js";
 
 /** The 19 bones, parents before children. */
 export const RIG_BONES = Object.freeze([
@@ -777,6 +778,7 @@ export const meta = Object.freeze({
   description: "Skinned, fully rigged cyclist: height, weight, kit and pattern; poses for standing, waving and riding (IK).", // i18n-ok
   options: Object.freeze({
     pose: Object.freeze({ type: "select", values: BENCH_POSES, default: "ride" }),
+    figure: Object.freeze({ type: "select", values: Object.freeze(["rider", "penguin"]), default: "rider" }),
     height: Object.freeze({ type: "range", min: 1.5, max: 2.05, step: 0.01, default: 1.78 }),
     weight: Object.freeze({ type: "range", min: 45, max: 120, step: 1, default: 70 }),
     kit: Object.freeze({ type: "select", values: Object.freeze(["road", "long", "skinsuit", "casual"]), default: "road" }),
@@ -793,11 +795,13 @@ export const meta = Object.freeze({
 
 /**
  * The workbench's rider: one rigged rider posed and animated in place.
- * @param {{track?: (resource: any) => any, pose?: string} & Partial<import("./look.js").RiderLook>} [options]
+ * @param {{track?: (resource: any) => any, pose?: string, figure?: "rider" | "penguin"} & Partial<import("./look.js").RiderLook>} [options]
  */
-export function create({ track, pose = "ride", uniforms, ...options } = {}) {
+export function create({ track, pose = "ride", figure = "rider", uniforms, ...options } = {}) {
   const owner = createOwner(track);
-  const rig = createRider({ ...BENCH_LOOK, ...options }, { own: owner.own, uniforms });
+  const look = { ...BENCH_LOOK, ...options };
+  const rig = createRider(look, { own: owner.own, uniforms });
+  if (figure === "penguin") dressAsPenguin(rig, { own: owner.own, uniforms, scarf: look.primary });
   const fit = bikeGeometry("road", { saddleHeight: rig.saddleFor(bikeGeometry("road")) });
   let crank = 0.6;
   const update = (dt, t) => {
