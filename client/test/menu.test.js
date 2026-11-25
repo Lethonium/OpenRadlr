@@ -314,9 +314,9 @@ test("the highlight shows climbs and sprints from the markers", () => {
 });
 
 test("where routes share a road, the picked band lies clearly over the others' bands: no flicker from the drone", () => {
-  const lowest = (mesh) => {
+  const lowest = (band) => {
     let low = Infinity;
-    for (let v = 0; v < mesh.vertexCount; v += 1) low = Math.min(low, mesh.positions[v * 3 + 1]);
+    for (let v = 0; v < band.positions.length / 3; v += 1) low = Math.min(low, band.positions[v * 3 + 1]);
     return low;
   };
   const start = roadFrame(hills, 0).center[1];
@@ -332,15 +332,18 @@ test("where routes share a road, the picked band lies clearly over the others' b
 
 test("the highlight band lies just above the road and faces up, with a beacon at the start", () => {
   const band = buildHighlight(hills, { lift: 0.35, beacon: 0 });
-  for (let v = 0; v < band.vertexCount; v += 97) {
-    assert.ok(band.normals[v * 3 + 1] > 0.5, "faces up");
+  const point = (v) => [band.positions[v * 3], band.positions[v * 3 + 1], band.positions[v * 3 + 2]];
+  for (let v = 0; v < band.positions.length / 3; v += 3 * 97) {
+    const [a, b, c] = [point(v), point(v + 1), point(v + 2)];
+    const [u, w] = [b.map((x, i) => x - a[i]), c.map((x, i) => x - a[i])];
+    assert.ok(u[2] * w[0] - u[0] * w[2] > 0, "faces up");
   }
   const withBeacon = buildHighlight(hills);
   let top = -Infinity;
-  for (let v = 0; v < withBeacon.vertexCount; v += 1) top = Math.max(top, withBeacon.positions[v * 3 + 1]);
+  for (let v = 0; v < withBeacon.positions.length / 3; v += 1) top = Math.max(top, withBeacon.positions[v * 3 + 1]);
   assert.ok(top > roadFrame(hills, 0).center[1] + 50, "beacon stands high over the start");
   const plain = buildHighlight(hills, { color: HIGHLIGHT.other, beacon: 0 });
-  assert.equal(plain.vertexCount, band.vertexCount);
+  assert.equal(plain.positions.length, band.positions.length);
 });
 
 // --- map preview -------------------------------------------------------------------

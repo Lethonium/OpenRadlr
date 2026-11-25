@@ -82,7 +82,7 @@ export class MenuStage {
    * @param {(route: RouteGeometry, scene: object) => object} [deps.createView] a View3D on the menu canvas
    * @param {(viewKind: "island" | "route" | "gym" | "studio", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
    * @param {(overview: object) => object} [deps.createCamera] a MenuCamera
-   * @param {(route: RouteGeometry, others: RouteGeometry[]) => object[]} [deps.highlights] bands for `setHighlights`
+   * @param {(route: RouteGeometry, others: RouteGeometry[]) => object[]} [deps.highlights] `{band, glow}` bands for `setHighlights`
    * @param {(stage: {route: RouteGeometry | null, routes: RouteGeometry[], network?: object | null}) => void} deps.onRoute map and profile of the pick
    * @param {() => void} [deps.onCafes] café names became known
    * @param {(ready: boolean) => void} [deps.onWorld] the island is (no longer) on screen

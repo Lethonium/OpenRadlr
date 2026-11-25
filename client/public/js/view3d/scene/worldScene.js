@@ -13,6 +13,7 @@ import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
 import { createLemonLayer } from "./lemonLayer.js";
+import { createHighlightLayer } from "./highlightLayer.js";
 import { createStatueLayer } from "./statueLayer.js";
 import { createRiderLayer } from "./riderLayer.js";
 import { createFarmLayer } from "./farmLayer.js";
@@ -76,6 +77,8 @@ export function createWorldScene(world, { settings, track }) {
   let flash = 0;
   /** The last statue rows, sent again to a rebuilt layer. */
   let statueRows = [];
+  /** The last highlight bands, sent again to a rebuilt layer. */
+  let highlightBands = [];
   const plants = () => ({ settings: current, season, uniforms, track });
   /** How each rebuildable layer is made, by the name of its object. */
   const makers = {
@@ -93,6 +96,7 @@ export function createWorldScene(world, { settings, track }) {
     athletes: () => createAthleteLayer(plants()),
     statues: () => createStatueLayer(plants()),
     lemons: () => createLemonLayer(plants()),
+    highlight: () => createHighlightLayer(plants()),
     weather: () => createWeatherLayer(plants()),
     nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
@@ -104,7 +108,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.lemons(), makers.weather(), makers.nightLights());
+  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -116,6 +120,7 @@ export function createWorldScene(world, { settings, track }) {
       layers[at].dispose();
       layers[at] = makers[name]();
       if (name === "statues" && statueRows.length) layers[at].setRows(statueRows);
+      if (name === "highlight" && highlightBands.length) layers[at].setBands(highlightBands);
       scene.add(layers[at].object);
       if (environment) layers[at].setEnvironment(environment);
     }
@@ -154,7 +159,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "lemons", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "lemons", "highlight", "weather", "nightLights");
   };
   setQuality(settings);
 
@@ -214,6 +219,11 @@ export function createWorldScene(world, { settings, track }) {
     setStatues(rows) {
       statueRows = rows;
       layers.find((layer) => layer.object.name === "statues").setRows(rows);
+    },
+    /** Replaces the menu's glowing route bands (`{band, glow}`, band from `buildHighlight`). */
+    setHighlights(bands) {
+      highlightBands = bands;
+      layers.find((layer) => layer.object.name === "highlight").setBands(bands);
     },
     /** World points above each seated rider's head after the last update, for the view's name labels. */
     seatHeads: () => named("riders").seatHeads(),

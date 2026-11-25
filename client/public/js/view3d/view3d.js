@@ -339,7 +339,6 @@ export class View3D {
   #sideAhead = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
-  #highlights = [];
   /** Statue rows by gym: `{ tops, xs, model, row }` (the layer draws them; this answers `statueTargets`). */
   #statues = new Map();
   #glow = { gym: null, index: null };
@@ -484,11 +483,10 @@ export class View3D {
 
   /**
    * Glowing bands drawn on top of the world (the menu's picked route).
-   * @param {{mesh: object, glow?: number}[]} bands meshes from `buildHighlight`
+   * @param {{band: {positions: Float32Array, colors: Float32Array}, glow?: number}[]} bands from `buildHighlight`
    */
   setHighlights(bands) {
-    for (const band of this.#highlights) this.renderer.dispose(band.handle);
-    this.#highlights = bands.map(({ mesh, glow = 1 }) => ({ handle: this.renderer.upload(mesh), glow }));
+    this.worldScene.setHighlights(bands.map(({ band, glow = 1 }) => ({ band, glow })));
   }
 
   /**
@@ -930,7 +928,6 @@ export class View3D {
       }
     }
     this.renderer.drawBright(this.meshes.arches, this.identity);
-    for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
     for (const p of crowd) {
       this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
       if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
@@ -1025,8 +1022,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.flagMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
-    this.#highlights = [];
+    const handles = [...Object.values(this.meshes), ...chunkHandles, this.flagMesh, ...this.spectatorMeshes];
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
       this.renderer.dispose(handle);
     }

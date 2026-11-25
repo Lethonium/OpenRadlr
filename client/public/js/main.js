@@ -1014,8 +1014,8 @@ function initMenuStage() {
     // The first world opens with a descent from high over the island.
     createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
-      ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
-      { mesh: buildHighlight(route), glow: 1 },
+      ...others.map((other) => ({ band: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
+      { band: buildHighlight(route), glow: 1 },
     ],
     onCafes: () => renderWorkoutPick(),
     onRoute: (stage) => {
