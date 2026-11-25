@@ -45,6 +45,9 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {boolean} ghost
  */
 
+/** A rider's own pedal phase, so a cheap group does not pedal in lockstep. */
+const crankPhase = (id) => ((Math.imul(id | 0, 2654435761) >>> 0) / 4294967296) * Math.PI * 2;
+
 /**
  * @param {{settings: import("../quality.js").QualitySettings, uniforms?: object, track: import("./tracker.js").Tracker["track"]}} options
  */
@@ -203,7 +206,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
           position.fromArray(rider.position);
           orient(quaternion, rider.forward);
           addBlob(rider);
-          return { matrix: new THREE.Matrix4().compose(position, quaternion, scale), crank: rider.cadence > 0 ? frame.t * (rider.cadence / 60) * Math.PI * 2 : 0, tint: rider.tint };
+          return { matrix: new THREE.Matrix4().compose(position, quaternion, scale), crank: rider.cadence > 0 ? frame.t * (rider.cadence / 60) * Math.PI * 2 + crankPhase(rider.id) : 0, tint: rider.tint };
         }),
       );
       blobs.count = blobCount;

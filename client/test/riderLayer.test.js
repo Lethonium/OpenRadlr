@@ -47,6 +47,16 @@ test("the nearest riders are full, the rest cheap", () => {
   assert.equal(layer.cyclistOf(20), null);
 });
 
+test("cheap riders at the same cadence pedal out of step", () => {
+  const { layer } = make("high");
+  layer.update(frame(Array.from({ length: 40 }, (_, i) => entry(i + 1, 10 + i * 5))));
+  const poses = [];
+  layer.object.traverse((child) => {
+    if (child.isInstancedMesh && child.name.includes("jersey") && child.count > 0) poses.push(child.name);
+  });
+  assert.ok(poses.length >= 3, `cheap riders use ${poses.length} crank poses`);
+});
+
 test("riders past the reach are not drawn", () => {
   const { layer } = make("low");
   layer.update(frame([entry(1, 200), entry(2, 400)]));
