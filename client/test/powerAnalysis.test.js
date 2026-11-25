@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CURVE_DURATIONS, POWER_CAP_W, STREAM_CURVE_DURATIONS, powerSeries, bestEfforts, weightedPower, rideLoad } from "../public/js/ride/powerAnalysis.js";
+import { CURVE_DURATIONS, POWER_CAP_W, powerSeries, bestEfforts, weightedPower, rideLoad } from "../public/js/ride/powerAnalysis.js";
 
 const T0 = Date.UTC(2026, 9, 14, 13, 30, 0);
 
@@ -78,9 +78,4 @@ test("rideLoad", () => {
 test("best efforts at durations of one's choosing", () => {
   const best = bestEfforts(ride([...steady(150, 600), ...steady(300, 120), ...steady(150, 600)]), [], [30, 120, 7200]);
   assert.deepEqual(best, { 30: 300, 120: 300, 7200: null });
-});
-
-test("a stream's curve keeps the key points a record shows and adds those between", () => {
-  for (const seconds of [5, 60, 300, 1200, 30, 120, 600, 7200]) assert.ok(STREAM_CURVE_DURATIONS.includes(seconds), `${seconds}`);
-  assert.deepEqual([...STREAM_CURVE_DURATIONS].sort((a, b) => a - b), STREAM_CURVE_DURATIONS);
 });

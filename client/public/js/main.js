@@ -16,10 +16,11 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
-import { STREAM_CURVE_DURATIONS, bestEfforts } from "./ride/powerAnalysis.js";
+import { bestEfforts } from "./ride/powerAnalysis.js";
+import { CHART_DURATIONS, curveKeyPoints, curveModel, drawCurve, drawTimeline, timelineModel } from "./view/rideCharts.js";
 import { rideFile, rideFileFormats } from "./view/rideFiles.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
@@ -3654,23 +3655,40 @@ function profileRideDetail(record) {
     detail.append(tiles);
   }
   const hasStream = app.profileStreamIds?.has(String(record.id)) ?? false;
-  const bars = curveBars(record.curve);
-  if (bars.length) {
-    const section = document.createElement("section");
-    section.className = "profile-ride-section";
-    const list = document.createElement("ul");
-    list.className = "profile-ride-curve";
-    fillCurve(list, bars);
-    section.append(textElement("h3", t("profilePage.rides.curve")), list);
-    detail.append(section);
-    // With its stream the curve gets every duration the ride was long enough for.
-    if (hasStream) {
-      rideRecording(record.id).then((recording) => {
-        if (!recording || !list.isConnected) return;
-        const finer = curveBars(bestEfforts(recording.samples, recording.pauses, STREAM_CURVE_DURATIONS), { every: true });
-        if (finer.length) fillCurve(list, finer);
-      });
-    }
+  // With its stream: the ride over time, and the power curve at every duration from 1 s.
+  const timeline = hasStream ? chartSection("profilePage.rides.timeline", "profilePage.rides.timelineLabel") : null;
+  if (timeline) {
+    timeline.section.hidden = true;
+    detail.append(timeline.section);
+  }
+  const curve = chartSection("profilePage.rides.curve", "profilePage.rides.curveLabel");
+  const keys = document.createElement("p");
+  keys.className = "profile-ride-keys";
+  curve.section.append(keys);
+  const showCurve = (points) => {
+    const drawn = drawWhenSized(curve.svg, (size) => curveModel(points, size), drawCurve);
+    curve.section.hidden = !drawn;
+    keys.replaceChildren(...curveKeyPoints(points).map(({ label, watts }) => {
+      const key = textElement("span", `${label} `);
+      key.append(textElement("strong", watts));
+      return key;
+    }));
+  };
+  if (curveModel(record.curve, { width: 600, height: 200 })) {
+    detail.append(curve.section);
+    showCurve(record.curve);
+  }
+  if (hasStream) {
+    rideRecording(record.id).then((recording) => {
+      if (!recording || !detail.isConnected) return;
+      const legend = timelineLegend(recording);
+      timeline.section.append(legend);
+      timeline.section.hidden = !drawWhenSized(timeline.svg, (size) => timelineModel(recording, size), (svg, model, size) =>
+        drawTimeline(svg, model, size, { elevationText: formatElevation, averageText: (watts) => t("profilePage.rides.average", { watts }) }),
+      );
+      if (!curve.section.isConnected) timeline.section.after(curve.section);
+      showCurve(bestEfforts(recording.samples, recording.pauses, CHART_DURATIONS));
+    });
   }
   // One split is the whole ride again: the table needs two (splitsView.js).
   if (record.splits?.length > 1) {
@@ -3717,16 +3735,59 @@ function profileRideDetail(record) {
   return detail;
 }
 
-/** Fills a best power list with its bars. */
-function fillCurve(list, bars) {
-  list.replaceChildren(...bars.map(({ label, watts, share }) => {
-    const bar = document.createElement("li");
-    const fill = document.createElement("span");
-    fill.className = "profile-ride-bar";
-    fill.style.setProperty("--share", String(share));
-    bar.append(textElement("span", label), fill, textElement("strong", watts));
-    return bar;
+/** A ride chart's section: its heading and an SVG described for screen readers. */
+function chartSection(headingKey, labelKey) {
+  const section = document.createElement("section");
+  section.className = "profile-ride-section";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "ride-chart");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", t(labelKey));
+  section.append(textElement("h3", t(headingKey)), svg);
+  return { section, svg };
+}
+
+/** Each chart's latest way of drawing itself, for its one size watcher. */
+const chartPainters = new WeakMap();
+
+/**
+ * Draws a chart once it is on the page, at the width it has there (a phone's or a desktop's),
+ * and again when that width changes; a later call (finer data) replaces what it draws.
+ * False when there is nothing to draw.
+ */
+function drawWhenSized(svg, modelOf, draw) {
+  if (!modelOf({ width: 600, height: 200 })) return false;
+  const paint = (width = Math.round(svg.getBoundingClientRect().width) || 600) => {
+    const size = { width, height: width < 480 ? 180 : 210 };
+    const model = modelOf(size);
+    if (model) draw(svg, model, size);
+  };
+  const watched = chartPainters.has(svg);
+  chartPainters.set(svg, paint);
+  requestAnimationFrame(() => chartPainters.get(svg)());
+  if (!watched && typeof ResizeObserver === "function") {
+    let lastWidth = 0;
+    new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width);
+      if (width && lastWidth && width !== lastWidth) chartPainters.get(svg)(width);
+      lastWidth = width || lastWidth;
+    }).observe(svg);
+  }
+  return true;
+}
+
+/** What the ride chart shows, as a legend: power always, heart rate and elevation when recorded. */
+function timelineLegend(recording) {
+  const legend = document.createElement("p");
+  legend.className = "ride-chart-legend";
+  const has = (field) => recording.samples.some((sample) => sample[field] !== null && sample[field] !== undefined);
+  const items = [["power", "profilePage.rides.legend.power"], ["heart", "profilePage.rides.legend.heartRate", "heartRate"], ["elevation", "profilePage.rides.legend.elevation", "elevation"]];
+  legend.append(...items.filter(([, , field]) => !field || has(field)).map(([kind, key]) => {
+    const item = textElement("span", t(key));
+    item.className = `legend-${kind}`;
+    return item;
   }));
+  return legend;
 }
 
 /** The decoded stream of ride `id`, or null; the last one is kept, as an opened ride asks twice. */

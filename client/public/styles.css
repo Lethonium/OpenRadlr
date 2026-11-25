@@ -3709,39 +3709,6 @@ body.riding {
   text-transform: uppercase;
 }
 
-/* Best power: one bar per effort, as long as its share of the best. */
-.profile-ride-curve {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.profile-ride-curve li {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 64px;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-}
-
-.profile-ride-curve li > span:first-child {
-  color: var(--muted);
-}
-
-.profile-ride-curve strong {
-  font-family: var(--num);
-  font-size: 15px;
-  text-align: right;
-}
-
-.profile-ride-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--accent) calc(var(--share) * 100%), var(--bg) 0);
-}
-
 .profile-ride-remove {
   justify-self: end;
   padding: 2px 0;
@@ -8218,10 +8185,6 @@ body.working-out #paddles {
     mask-image: linear-gradient(to right, #000 85%, transparent);
   }
 
-  .profile-ride-curve li {
-    grid-template-columns: 44px minmax(0, 1fr) 56px;
-    gap: 8px;
-  }
 }
 
 /* The files of a past ride (from its stream): small buttons in a row. */
@@ -8234,4 +8197,138 @@ body.working-out #paddles {
 .profile-ride-file-buttons button {
   min-width: 64px;
   font-family: var(--num);
+}
+
+/* ------------------------------------------------------------ ride charts --- */
+/* view/rideCharts.js: the power curve, and a ride over time from its stream. */
+
+.ride-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  /* Scrolling the page still works; a tap or a drag across shows the readout. */
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.chart-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.chart-axis {
+  fill: var(--muted);
+  font-family: var(--num);
+  font-size: 11px;
+}
+
+.chart-axis-heart {
+  fill: #ff5d7a;
+}
+
+.chart-line-power {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-area-power {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.chart-line-heart {
+  fill: none;
+  stroke: #ff5d7a;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.chart-area-elevation {
+  fill: color-mix(in srgb, var(--muted) 20%, transparent);
+}
+
+.chart-average {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+.chart-average-label {
+  fill: var(--accent);
+  font-family: var(--num);
+  font-size: 11px;
+}
+
+.chart-guide {
+  stroke: var(--text);
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.chart-dot {
+  fill: var(--accent);
+  stroke: var(--surface-2);
+  stroke-width: 2;
+}
+
+.chart-readout {
+  fill: var(--text);
+  font-family: var(--num);
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--surface-2);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.ride-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ride-chart-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--accent);
+}
+
+.ride-chart-legend .legend-heart::before {
+  background: #ff5d7a;
+}
+
+.ride-chart-legend .legend-elevation::before {
+  height: 8px;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+/* The curve's key figures under it: 5 s, 1, 5 and 20 min and the longest. */
+.profile-ride-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.profile-ride-keys strong {
+  color: var(--text);
+  font-family: var(--num);
+  font-size: 15px;
 }

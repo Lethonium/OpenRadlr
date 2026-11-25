@@ -1341,4 +1341,11 @@ export default {
   "profilePage.rides.files": "Fahrtdatei",
   "profilePage.rides.fileLabel": "Fahrt als {format} herunterladen",
   "profilePage.rides.fileMissing": "Die Daten dieser Fahrt lassen sich in diesem Browser nicht mehr lesen.",
+  "profilePage.rides.timeline": "Verlauf",
+  "profilePage.rides.timelineLabel": "Leistung, Puls und Höhe über die Fahrt",
+  "profilePage.rides.curveLabel": "Beste Leistung nach Dauer",
+  "profilePage.rides.average": "Ø {watts} W",
+  "profilePage.rides.legend.power": "Leistung",
+  "profilePage.rides.legend.heartRate": "Puls",
+  "profilePage.rides.legend.elevation": "Höhe",
 };

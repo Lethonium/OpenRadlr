@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideExtras, rideRows, routeName } from "../public/js/view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideExtras, rideRows, routeName } from "../public/js/view/profilePage.js";
 
 const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
@@ -237,20 +237,4 @@ test("rideExtras: the figures a ride knows, and none it doesn't", () => {
   ]);
   assert.deepEqual(rideExtras({ id: "old" }), []);
   assert.deepEqual(rideExtras(rec({ avgHeartRate: null, maxPower: 0 })).map((e) => e.label), []);
-});
-
-test("curveBars: each best effort as a share of the highest", () => {
-  const bars = curveBars({ 5: 600, 60: 300 });
-  assert.deepEqual(bars.map((bar) => [bar.label, bar.watts, bar.share]), [["5 s", "600 W", 1], ["1 min", "300 W", 0.5]]);
-  assert.deepEqual(curveBars(null), []);
-});
-
-test("curveBars: from a stream, every duration the ride is long enough for", () => {
-  const bars = curveBars({ 5: 600, 30: 450, 60: 400, 120: 350, 7200: null }, { every: true });
-  assert.deepEqual(bars.map((bar) => bar.label), ["5 s", "30 s", "1 min", "2 min"]);
-});
-
-test("curveBars: from a record, its key points and longest as before", () => {
-  const bars = curveBars({ 5: 600, 15: 500, 60: 400, 180: 380, 300: 300, 480: 280 });
-  assert.deepEqual(bars.map((bar) => bar.label), ["5 s", "1 min", "5 min", "8 min"]);
 });
