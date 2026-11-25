@@ -228,6 +228,21 @@ test("bales and pumpkins are drawn only within the quality's reach of the camera
   layer.dispose();
 });
 
+test("field meshes are drawn only within the quality's field reach of the camera", () => {
+  const field = (x) => ({ width: 120, depth: 80, x, z: 0, yaw: 0, crop: "stubble" });
+  const layer = createCropLayer({ fields: [field(0), field(2000)] }, { ...options(low), ground });
+  assert.equal(low.cropExtras.fields, 800);
+  assert.equal(layer.fields.length, 2);
+  const [near, far] = layer.fields;
+  layer.update(frameAt(100, 0));
+  assert.equal(near.visible, true, "the field at 100 m is drawn");
+  assert.equal(far.visible, false, "the field 2 km away is left to the ground paint");
+  layer.update(frameAt(2000, 0));
+  assert.equal(far.visible, true, "it comes back when the camera moves near");
+  assert.equal(near.visible, false);
+  layer.dispose();
+});
+
 test("every plant layer frees what it made", () => {
   const tracker = createTracker();
   const layers = [
