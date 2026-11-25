@@ -143,6 +143,19 @@ test("deleteItem: rides clears the ride history only", async () => {
   assert.equal((await st.ghosts.keys()).length, 1);
 });
 
+test("deleteItem: rides takes their streams along", async () => {
+  const st = { ...stores(), streams: mapStore({ "stream:1": new Uint8Array([1]), "stream:2": new Uint8Array([2]) }) };
+  assert.equal(await deleteItem("rides", { storage: storage(), stores: st }), true);
+  assert.equal(st.history.map.size, 0);
+  assert.equal(st.streams.map.size, 0);
+});
+
+test("deleteItem: rides on a rider without a stream store still works", async () => {
+  const st = stores();
+  assert.equal(await deleteItem("rides", { storage: storage(), stores: st }), true);
+  assert.equal(st.history.map.size, 0);
+});
+
 test("deleteItem: settings keeps profile, progress and other apps' keys", async () => {
   const s = storage();
   await deleteItem("settings", { storage: s, stores: stores() });

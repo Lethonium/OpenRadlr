@@ -438,6 +438,8 @@ const app = {
   history: stores.history,
   /** My best lap per route, ridden again by a ghost. */
   ghosts: stores.ghosts,
+  /** Every second of each finished ride, kept to make its files and curves again. */
+  streams: stores.streams,
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -1158,6 +1160,7 @@ function applyRoster(roster) {
   app.autosave = own.autosave;
   app.history = own.history;
   app.ghosts = own.ghosts;
+  app.streams = own.streams;
   // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
   app.riderGeneration += 1;
   app.profile = profiles.load();
@@ -1234,7 +1237,7 @@ function askForPin(id, { canForget = true } = {}) {
   });
 }
 
-const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys"].map((base) => riderDbName(base, id));
+const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys", "openradlr-streams"].map((base) => riderDbName(base, id));
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
@@ -3689,9 +3692,12 @@ async function deleteRide(record) {
   let tried = false;
   await app.deleteConfirm.ask({
     texts: deleteTexts("ride", { date }),
-    onConfirm: () => {
+    onConfirm: async () => {
       tried = true;
-      return app.history.delete(record.id);
+      const deleted = await app.history.delete(record.id);
+      // Its stream goes with it; one left over would only take room.
+      if (deleted) await app.streams.delete(record.id);
+      return deleted;
     },
   });
   if (tried) await loadProfile("rides");
@@ -3994,7 +4000,7 @@ function submitGoalForm() {
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
-  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store, streams: app.streams.store } };
 }
 
 /** The "Your data" page: each item with its count, export and delete. */
@@ -4355,9 +4361,13 @@ function saveFinishedRide() {
   // The rider who finished: the follow-ups read and write their data even once they have
   // returned to the menu and another rider is active (#115).
   const history = app.history;
+  const streams = app.streams;
+  const recording = app.recorder.toJSON();
   const rider = riders.active;
   const generation = app.riderGeneration;
   app.historySave = history.save(record);
+  // Every second of the ride, kept after its record; the summary doesn't wait for it.
+  app.historySave.then(() => streams.save(record.id, recording)).catch(() => {});
   app.historySave
     .then(() => history.list())
     .then((records) => reconcileAchievements(records, rider))
