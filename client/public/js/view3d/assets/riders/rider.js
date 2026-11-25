@@ -24,6 +24,18 @@ export const RIG_BONES = Object.freeze([
   "thigh_R", "shin_R", "foot_R",
 ]); // i18n-ok
 
+/**
+ * Which bones each joint of our clips (`riderPose.js` `JOINTS`) turns; a joint on several bones shares its angle equally.
+ * Plain joints rotate about the rig's side axis (z), the `…z` joints about its forward axis (x).
+ */
+export const JOINT_BONES = Object.freeze({
+  spine: ["spine", "chest"], neck: ["neck"],
+  shoulderL: ["upperArm_L"], shoulderLz: ["upperArm_L"], elbowL: ["forearm_L"],
+  shoulderR: ["upperArm_R"], shoulderRz: ["upperArm_R"], elbowR: ["forearm_R"],
+  hipL: ["thigh_L"], hipLz: ["thigh_L"], kneeL: ["shin_L"], ankleL: ["foot_L"], ankleLz: ["foot_L"],
+  hipR: ["thigh_R"], hipRz: ["thigh_R"], kneeR: ["shin_R"], ankleR: ["foot_R"], ankleRz: ["foot_R"],
+}); // i18n-ok
+
 const BONE_PARENT = Object.freeze({
   spine: "hips", chest: "spine", neck: "chest", head: "neck",
   clavicle_L: "chest", upperArm_L: "clavicle_L", forearm_L: "upperArm_L", hand_L: "forearm_L",
@@ -66,6 +78,10 @@ const BONE_INDEX = Object.freeze(Object.fromEntries(RIG_BONES.map((name, index) 
  * @property {number} eyeHeight
  * @property {(fit: RiderFit, state?: RideState) => {pitchL: number, pitchR: number}} poseRide pedal pitch is for the shoes' cleats
  * @property {(t?: number, options?: {wave?: boolean}) => void} poseStand
+ * @property {(pose: {root: {y?: number, z?: number, pitch?: number}, joints: Record<string, number>}) => void} poseJoints
+ *   poses the whole body from one of our clip poses (`riderPose.js` shape; missing joints count as 0)
+ * @property {{bone: string, local: import("../../../three.js").Vector3}[]} contactPoints skin extremes per bone, in the bone's bind frame
+ * @property {() => number} lowestPoint lowest contact point's height in the model's frame, in the current pose
  * @property {(fit: RiderFit) => number} saddleFor metres along the seat tube that give about a 30 degree knee bend at the stroke's bottom
  * @property {(out?: import("../../../three.js").Vector3) => import("../../../three.js").Vector3} headPos head joint in the model's frame
  * @property {(name: string, out?: import("../../../three.js").Vector3) => import("../../../three.js").Vector3} boneWorld
@@ -406,6 +422,39 @@ const SADDLE_ITERATIONS = 30;
 const LEAN_ITERATIONS = 22;
 
 /**
+ * A few points on the skin per bone, taken once from the bind pose: of the vertices a bone owns (weight 0.6 or more),
+ * the extremes along the bone's three axes, in the bone's own frame.
+ */
+function skinExtremes(geometry, bind) {
+  const position = geometry.getAttribute("position");
+  const index = geometry.getAttribute("skinIndex");
+  const weight = geometry.getAttribute("skinWeight");
+  const owned = RIG_BONES.map(() => []);
+  for (let i = 0; i < position.count; i += 1) {
+    for (let k = 0; k < 4; k += 1) if (weight.getComponent(i, k) >= 0.6) owned[index.getComponent(i, k)].push(i);
+  }
+  const points = [];
+  const inverse = new THREE.Matrix4();
+  const at = vec();
+  RIG_BONES.forEach((bone, boneIndex) => {
+    inverse.copy(bind[bone]).invert();
+    const best = [];
+    for (const vertex of owned[boneIndex]) {
+      at.fromBufferAttribute(position, vertex).applyMatrix4(inverse);
+      const values = [at.x, at.y, at.z];
+      for (let axis = 0; axis < 3; axis += 1) {
+        if (!best[axis * 2] || values[axis] < best[axis * 2].value) best[axis * 2] = { value: values[axis], vertex, at: at.clone() };
+        if (!best[axis * 2 + 1] || values[axis] > best[axis * 2 + 1].value) best[axis * 2 + 1] = { value: values[axis], vertex, at: at.clone() };
+      }
+    }
+    const chosen = new Map();
+    for (const entry of best) if (entry && !chosen.has(entry.vertex)) chosen.set(entry.vertex, entry.at);
+    for (const local of chosen.values()) points.push({ bone, local });
+  });
+  return points;
+}
+
+/**
  * Builds a rider.
  * @param {import("./look.js").RiderLook} look
  * @param {{own?: <T>(resource: T) => T, uniforms?: ReturnType<typeof createSharedUniforms>, texture?: import("../../../three.js").Texture}} [options]
@@ -463,6 +512,7 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
     }
   }
   bindPose();
+  const bind = Object.fromEntries(RIG_BONES.map((name) => [name, model[name].clone()]));
   mesh.updateMatrixWorld(true);
   const skeleton = own(new THREE.Skeleton(RIG_BONES.map((name) => bones[name])));
   mesh.bind(skeleton);
@@ -638,6 +688,55 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
   }
   poseStand(0);
 
+  // ---------- our clip poses and the skin's contact points
+
+  const contactPoints = skinExtremes(mesh.geometry, bind);
+  const deltas = {};
+  const pivot = vec();
+  const toPivot = new THREE.Matrix4();
+  const fromPivot = new THREE.Matrix4();
+  const turn = new THREE.Matrix4();
+  const turnSide = new THREE.Matrix4();
+
+  /** Each bone turns about its bind joint in its parent's moved frame: `delta = parent delta * T(joint) * R * T(-joint)`. */
+  function poseJoints(pose) {
+    const angles = pose.joints ?? {};
+    const sideways = {};
+    const forward = {};
+    for (const [joint, bonesOf] of Object.entries(JOINT_BONES)) {
+      const angle = angles[joint] ?? 0;
+      if (!angle) continue;
+      const target = joint.endsWith("z") ? sideways : forward;
+      for (const bone of bonesOf) target[bone] = (target[bone] ?? 0) + angle / bonesOf.length;
+    }
+    for (const name of RIG_BONES) {
+      const delta = (deltas[name] ||= new THREE.Matrix4());
+      const parent = BONE_PARENT[name];
+      if (!parent) {
+        // the hips: up, back (rig -x) and the whole body tipped about the ground point between the feet
+        delta.makeTranslation(-(pose.root?.z ?? 0), pose.root?.y ?? 0, 0).multiply(turn.makeRotationZ(pose.root?.pitch ?? 0));
+      } else {
+        const sign = name.endsWith("_R") ? 1 : -1;
+        turn.makeRotationZ(forward[name] ?? 0);
+        turnSide.makeRotationX(-sign * (sideways[name] ?? 0));
+        pivot.setFromMatrixPosition(bind[name]);
+        toPivot.makeTranslation(pivot.x, pivot.y, pivot.z);
+        fromPivot.makeTranslation(-pivot.x, -pivot.y, -pivot.z);
+        delta.copy(deltas[parent]).multiply(toPivot).multiply(turn).multiply(turnSide).multiply(fromPivot);
+      }
+      (model[name] ||= new THREE.Matrix4()).multiplyMatrices(delta, bind[name]);
+      const local = parent ? scratchInverse.copy(model[parent]).invert().multiply(model[name]) : scratch.copy(model[name]);
+      local.decompose(bones[name].position, bones[name].quaternion, scratchScale);
+    }
+  }
+
+  const contactScratch = vec();
+  function lowestPoint() {
+    let lowest = Infinity;
+    for (const { bone, local } of contactPoints) lowest = Math.min(lowest, contactScratch.copy(local).applyMatrix4(model[bone]).y);
+    return lowest;
+  }
+
   return {
     object: group,
     mesh,
@@ -645,6 +744,9 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
     eyeHeight: 0.93 * h,
     poseRide,
     poseStand,
+    poseJoints,
+    contactPoints,
+    lowestPoint,
     saddleFor,
     headPos: (out = vec()) => out.setFromMatrixPosition(model.head),
     boneWorld: (name, out = vec()) => out.setFromMatrixPosition(model[name]),
