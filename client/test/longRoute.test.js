@@ -61,9 +61,9 @@ const roadTriangles = (scene) =>
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
-  // 40626: the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
+  // 40686: the road's quads (towns' streets and pavements included) and its posts. Was 252122 before the old trees, tufts and
   // flowers went (the scene draws plants from the plan); the ground is tiled by the main thread from `scene.ground`.
-  assert.equal(roadTriangles(scene), 40626);
+  assert.equal(roadTriangles(scene), 40686);
 });
 
 test("a long route's world is thinned to a size a browser can build", () => {

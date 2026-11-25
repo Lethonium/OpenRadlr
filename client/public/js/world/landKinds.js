@@ -25,22 +25,22 @@ const paint = (spring, summer, autumn, winter) => Object.freeze({ spring, summer
  * edge: what borders a parcel; size: parcel side range in metres.
  */
 export const LAND_STYLE = Object.freeze({
-  arable: Object.freeze({ paint: paint(rgb(0.62, 0.66, 0.3), rgb(0.74, 0.65, 0.34), rgb(0.7, 0.6, 0.38), rgb(0.35, 0.27, 0.2)), edge: "hedge", size: Object.freeze([120, 420]) }),
+  arable: Object.freeze({ paint: paint(rgb(0.62, 0.66, 0.3), rgb(0.67, 0.59, 0.31), rgb(0.7, 0.6, 0.38), rgb(0.35, 0.27, 0.2)), edge: "hedge", size: Object.freeze([120, 420]) }),
   pasture: Object.freeze({ paint: paint(rgb(0.42, 0.62, 0.26), rgb(0.5, 0.62, 0.27), rgb(0.55, 0.55, 0.3), rgb(0.55, 0.6, 0.5)), edge: "hedge", size: Object.freeze([100, 320]) }),
   orchard: Object.freeze({ paint: paint(rgb(0.4, 0.55, 0.25), rgb(0.45, 0.55, 0.26), rgb(0.55, 0.5, 0.28), rgb(0.5, 0.45, 0.35)), edge: "wall", size: Object.freeze([70, 200]) }),
   vineyard: Object.freeze({ paint: paint(rgb(0.45, 0.5, 0.25), rgb(0.4, 0.5, 0.22), rgb(0.62, 0.42, 0.2), rgb(0.42, 0.34, 0.26)), edge: "none", size: Object.freeze([70, 220]) }),
   scrub: Object.freeze({ paint: paint(rgb(0.45, 0.5, 0.3), rgb(0.5, 0.48, 0.3), rgb(0.5, 0.44, 0.3), rgb(0.45, 0.42, 0.35)), edge: "none", size: Object.freeze([80, 300]) }),
-  dune: Object.freeze({ paint: paint(rgb(0.8, 0.75, 0.55), rgb(0.85, 0.78, 0.55), rgb(0.82, 0.74, 0.54), rgb(0.78, 0.74, 0.62)), edge: "none", size: Object.freeze([60, 200]) }),
-  fallow: Object.freeze({ paint: paint(rgb(0.5, 0.58, 0.28), rgb(0.62, 0.58, 0.32), rgb(0.6, 0.5, 0.32), rgb(0.5, 0.45, 0.36)), edge: "hedge", size: Object.freeze([100, 300]) }),
+  dune: Object.freeze({ paint: paint(rgb(0.8, 0.75, 0.55), rgb(0.77, 0.7, 0.5), rgb(0.82, 0.74, 0.54), rgb(0.78, 0.74, 0.62)), edge: "none", size: Object.freeze([60, 200]) }),
+  fallow: Object.freeze({ paint: paint(rgb(0.5, 0.58, 0.28), rgb(0.56, 0.52, 0.29), rgb(0.6, 0.5, 0.32), rgb(0.5, 0.45, 0.36)), edge: "hedge", size: Object.freeze([100, 300]) }),
 });
 
 /** Ground colour of each crop, matched by eye to what `assets/nature/crops.js` draws. */
 export const CROP_PAINT = Object.freeze({
   rapeseed: rgb(0.8, 0.72, 0.2),
-  wheat: rgb(0.78, 0.65, 0.33),
+  wheat: rgb(0.7, 0.585, 0.3),
   sunflower: rgb(0.7, 0.62, 0.18),
   corn: rgb(0.45, 0.6, 0.22),
-  stubble: rgb(0.78, 0.7, 0.46),
+  stubble: rgb(0.7, 0.63, 0.41),
   ploughed: rgb(0.32, 0.22, 0.15),
   pumpkin: rgb(0.38, 0.33, 0.2),
   lavender: rgb(0.52, 0.4, 0.66),

@@ -156,7 +156,7 @@ export function isWebGl2Available(doc = globalThis.document) {
  * rider, the drone at least 70 m above the ground.
  */
 export const RIDE_LENS = Object.freeze({ near: 1, far: 9000, haze: 1, shadows: true });
-export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 1.5, shadows: false });
+export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 1.3, shadows: false });
 /** The drone's haze before it thickened: its draw reach (`reach`) is still what this clearer air gave. */
 const CLEAR_HAZE = 2.6;
 
@@ -175,7 +175,7 @@ export const GYM_LENS = Object.freeze({ ...DRONE_LENS, near: 2 });
  */
 export function droneLens(overview) {
   const radius = overview?.radius ?? 0;
-  const haze = Math.max(DRONE_LENS.haze, radius / 3000);
+  const haze = Math.max(DRONE_LENS.haze, radius / 4500);
   // Small things reach as far as the clearer air let them (`reach`): the thicker haze must not cost the view its depth.
   return Object.freeze({ ...DRONE_LENS, haze, reach: Math.sqrt(CLEAR_HAZE), far: Math.max(DRONE_LENS.far, radius * 3.4) });
 }

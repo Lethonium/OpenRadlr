@@ -33,7 +33,8 @@ const ROCK_FULL = 1;
 export const BEACH_HEIGHT = 3;
 /** Metres from a river's centre that are its bed. */
 const RIVER_BED = 12;
-const SNOW = Object.freeze([0.93, 0.95, 0.98]);
+/** The snow's colour, linear RGB. */
+export const SNOW = Object.freeze([0.93, 0.95, 0.98]);
 
 const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const linear = (rgb) => rgb.map(toLinear);

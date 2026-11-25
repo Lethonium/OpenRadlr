@@ -2,7 +2,9 @@
  * The land use as one picture of the ground: an RGBA texture over the island's box, a texel per few metres, that
  * the terrain shader blends over the vertex colour. Pure; the bytes are sRGB, alpha says where a parcel is.
  */
+import { SNOW } from "./groundGrid.js";
 import { CROP_PAINT, LAND_STYLE } from "./landKinds.js";
+import { SEASON_LOOK } from "./seasons.js";
 
 /** Most texels per side. */
 export const MAX_PAINT_TEXELS = 2048;
@@ -21,6 +23,13 @@ const TINT = 0.08;
  * @property {Uint8Array} rgba row by row, sRGB colour and coverage (0 where no parcel is)
  */
 
+/** Most coverage a parcel's paint reaches: the ground's own shading and mottling show through the rest. */
+const MAX_COVER = 0.85;
+/** How far snow whitens a parcel's paint (times the season's snow cover). */
+const SNOW_BLEND = 0.85;
+const toSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+const SNOW_SRGB = SNOW.map(toSrgb);
+
 const byte = (c) => Math.min(255, Math.max(0, Math.round(c * 255)));
 
 /**
@@ -36,12 +45,13 @@ export function paintLandUse(parcels, { bounds, season }) {
   const rows = Math.max(1, Math.ceil((bounds.z1 - bounds.z0) / cell));
   const rgba = new Uint8Array(columns * rows * 4);
   const [x0, z0] = [bounds.x0, bounds.z0];
+  const snow = (SEASON_LOOK[season] ?? SEASON_LOOK.summer).snowCover * SNOW_BLEND;
   for (const parcel of parcels) {
     const style = LAND_STYLE[parcel.kind];
     const base = parcel.kind === "arable" ? CROP_PAINT[parcel.crop] : (style?.paint[season] ?? style?.paint.summer);
     if (!base) continue;
     const shade = 1 + TINT * parcel.tint;
-    const colour = base.map((c) => byte(c * shade));
+    const colour = base.map((c, ch) => byte((c * shade) * (1 - snow) + SNOW_SRGB[ch] * snow));
     const [c, s] = [Math.cos(parcel.yaw), Math.sin(parcel.yaw)];
     const reach = Math.hypot(parcel.width, parcel.depth) / 2 + cell;
     const i0 = Math.max(0, Math.floor((parcel.x - reach - x0) / cell));
@@ -59,7 +69,7 @@ export function paintLandUse(parcels, { bounds, season }) {
         const old = rgba[k + 3] / 255;
         const into = old > 0 ? cover : 1;
         for (let ch = 0; ch < 3; ch += 1) rgba[k + ch] = old > 0 ? Math.round(rgba[k + ch] + (colour[ch] - rgba[k + ch]) * into) : colour[ch];
-        rgba[k + 3] = Math.max(rgba[k + 3], Math.round(cover * 255));
+        rgba[k + 3] = Math.max(rgba[k + 3], Math.round(cover * MAX_COVER * 255));
       }
     }
   }

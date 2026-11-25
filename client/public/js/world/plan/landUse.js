@@ -26,6 +26,10 @@ export const LAND_USE = Object.freeze({
   maxShoreCells: 400_000,
   roadArable: 2.6, // arable is this many times likelier within `roadReach` of a road: the draped fields live there
   roadReach: 260,
+  farmedBoost: 1, // a block is farmed with this times its non-wild share (patches fill more than the sprinkled parcels did)
+  overlap: 0.2, // a block also takes parcels this share of its side beyond its edge, so the blocks' grains meet without a gap
+  stripTurn: 0.14, // radians: each strip's angle strays this much from its block's grain (about 8°)
+  widthVary: Object.freeze([0.5, 1.5]), // a parcel's width, as a multiple of the size drawn
   neutralVillage: 800, // metres to a village on a map that has none
 });
 
@@ -161,6 +165,7 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
   const area = (bounds.x1 - bounds.x0) * (bounds.z1 - bounds.z0);
   const block = Math.max(LAND_USE.block, Math.sqrt(area / LAND_USE.maxBlocks));
   const reach = block * 0.72;
+  const overlap = block * LAND_USE.overlap;
 
   const villageDistance = (x, z) => {
     if (!settlements.length) return LAND_USE.neutralVillage;
@@ -169,27 +174,41 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
     return Math.max(0, best);
   };
 
+  const slopeAt = (x, z) => {
+    const run = 12;
+    return Math.hypot(terrain.height(x + run, z) - terrain.height(x - run, z), terrain.height(x, z + run) - terrain.height(x, z - run)) / (2 * run);
+  };
+  const weightsAt = (x, z, mix) => landKindWeights({ mix, shore: shore(x, z), slope: slopeAt(x, z), height: terrain.height(x, z) - water, village: villageDistance(x, z) });
+
   for (let bz = bounds.z0; bz < bounds.z1 && parcels.length < LAND_USE.maxParcels; bz += block) {
     for (let bx = bounds.x0; bx < bounds.x1 && parcels.length < LAND_USE.maxParcels; bx += block) {
       const [cx, cz] = [bx + block / 2, bz + block / 2];
       const angle = roadGrain(roads, cx, cz) ?? fbm(cx / 2500, cz / 2500, seed + 0x6a1) * Math.PI;
-      const [c, s] = [Math.cos(angle), Math.sin(angle)];
+      // Land is farmed or wild a block at a time, so the parcels of a farmed block touch and make a patchwork.
+      const farmed = random() < LAND_USE.farmedBoost * (1 - weightsAt(cx, cz, regionMix(cx, cz, regions, seed)).wild);
       for (let v = -reach; v < reach; ) {
         const stripDepth = lerp(LAND_USE.strip, random());
+        const stripAngle = angle + (random() * 2 - 1) * LAND_USE.stripTurn;
+        const [c, s] = [Math.cos(stripAngle), Math.sin(stripAngle)];
+        if (!farmed) {
+          v += stripDepth;
+          continue;
+        }
         const vMid = v + stripDepth / 2;
         v += stripDepth;
         for (let u = -reach; u < reach; ) {
-          const [rKind, rWidth, rJu, rJv, rCrop, rTint] = [random(), random(), random(), random(), random(), random()];
+          const [rKind, rWidth, rJu, rJv, rCrop, rTint, rVary] = [random(), random(), random(), random(), random(), random(), random()];
           const guess = { x: cx + (u + 80) * c - vMid * s, z: cz + (u + 80) * s + vMid * c };
-          const inGuess = guess.x >= bx && guess.x < bx + block && guess.z >= bz && guess.z < bz + block;
+          const inGuess = guess.x >= bx - overlap && guess.x < bx + block + overlap && guess.z >= bz - overlap && guess.z < bz + block + overlap;
           let kind = "wild";
           let mix = null;
           if (inGuess) {
             mix = regionMix(guess.x, guess.z, regions, seed);
-            const h = terrain.height(guess.x, guess.z);
-            const run = 12;
-            const slope = Math.hypot(terrain.height(guess.x + run, guess.z) - terrain.height(guess.x - run, guess.z), terrain.height(guess.x, guess.z + run) - terrain.height(guess.x, guess.z - run)) / (2 * run);
-            const weights = landKindWeights({ mix, shore: shore(guess.x, guess.z), slope, height: h - water, village: villageDistance(guess.x, guess.z) });
+            const weights = weightsAt(guess.x, guess.z, mix);
+            // the block is farmed: the wild share is dropped and the rest renormalised
+            const farm = 1 - weights.wild;
+            weights.wild = 0;
+            for (const k of Object.keys(weights)) weights[k] = farm > 0 ? weights[k] / farm : 0;
             const near = roads.nearest(guess.x, guess.z, Math.ceil(LAND_USE.roadReach / (roads.cell ?? 60)));
             if (weights.arable > 0 && near && near.distance <= LAND_USE.roadReach) {
               const arable = Math.min(weights.arable * LAND_USE.roadArable, 1);
@@ -200,17 +219,17 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
             kind = pickKind(weights, rKind);
           }
           const style = LAND_STYLE[kind];
-          const sizeW = style ? lerp(style.size, rWidth) : 160;
+          const sizeW = style ? lerp(style.size, rWidth) * lerp(LAND_USE.widthVary, rVary) : 160;
           const x = cx + (u + sizeW / 2) * c - vMid * s + (rJu - 0.5) * 2 * LAND_USE.jitter * sizeW * c - (rJv - 0.5) * 2 * LAND_USE.jitter * stripDepth * s;
           const z = cz + (u + sizeW / 2) * s + vMid * c + (rJu - 0.5) * 2 * LAND_USE.jitter * sizeW * s + (rJv - 0.5) * 2 * LAND_USE.jitter * stripDepth * c;
           u += sizeW;
           if (!style) continue;
           const width = sizeW - gap;
           const depth = stripDepth - gap;
-          const [minWidth, minDepth] = [style.size[0] * 0.6, style.size[0] * 0.6];
+          const [minWidth, minDepth] = [style.size[0] * 0.4, style.size[0] * 0.6];
           let parcel = null;
           let corners = null;
-          for (const shape of fits({ x, z, width, depth, yaw: angle })) {
+          for (const shape of fits({ x, z, width, depth, yaw: stripAngle })) {
             if (shape.width < minWidth || shape.depth < minDepth) continue;
             const shapeCorners = cornersOf(shape, terrain);
             if (clear(shape, shapeCorners, { masks, taken, water })) {

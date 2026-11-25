@@ -17,7 +17,7 @@ test("a parcel paints its kind's season colour", () => {
   const paint = paintLandUse([pasture], { bounds, season: "summer", seed: 3 });
   const [r, g, b, a] = texel(paint, 0, 0);
   const expected = LAND_STYLE.pasture.paint.summer.map((c) => 255 * c * (1 + 0.08 * pasture.tint));
-  assert.equal(a, 255);
+  assert.equal(a, Math.round(0.85 * 255));
   for (const [got, want] of [[r, expected[0]], [g, expected[1]], [b, expected[2]]]) assert.ok(Math.abs(got - want) <= 2, `${got} vs ${want}`);
   assert.equal(texel(paint, 110, 0)[3], 0, "50 m outside the parcel nothing is painted");
 });
@@ -38,5 +38,15 @@ test("winter paints winter", () => {
 test("an arable parcel paints its crop", () => {
   const field = { ...pasture, kind: "arable", crop: "wheat", tint: 0 };
   const [r] = texel(paintLandUse([field], { bounds, season: "summer", seed: 3 }), 0, 0);
-  assert.ok(Math.abs(r - 0.78 * 255) <= 2);
+  assert.ok(Math.abs(r - 0.7 * 255) <= 2);
+});
+
+test("in winter the parcels show only faintly through the snow", () => {
+  const field = { ...pasture, kind: "arable", crop: "ploughed", tint: 0, x: 300 };
+  const paint = paintLandUse([pasture, field], { bounds, season: "winter", seed: 3 });
+  const snow = [0.93, 0.95, 0.98].map((c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055));
+  for (const x of [0, 300]) {
+    const [r, g, b] = texel(paint, x, 0);
+    [r, g, b].forEach((got, ch) => assert.ok(Math.abs(got / 255 - snow[ch]) <= 0.15, `x ${x} channel ${ch}: ${got / 255} vs ${snow[ch]}`));
+  }
 });

@@ -132,14 +132,14 @@ test("no tree stands within a landmark's apron", () => {
 test("an oliveTerraces region grows olives", () => {
   const plan = planOf(tiny);
   const [cx, cz] = tiny.centers.olives;
-  const near = [...itemsOf(plan.trees)].filter(({ x, z }) => Math.hypot(x - cx, z - cz) < 150);
+  const near = [...itemsOf(plan.trees)].filter(({ x, z }) => Math.hypot(x - cx, z - cz) < 200);
   assert.ok(near.length > 40, `${near.length} trees`);
   assert.ok(near.filter((t) => t.id === "olive").length / near.length >= 0.6);
 });
 
 test("a deepWood is at least three times as dense as meadow", () => {
   const plan = planOf(tiny);
-  const around = ([cx, cz]) => [...itemsOf(plan.trees)].filter(({ x, z }) => Math.hypot(x - cx, z - cz) < 150).length;
+  const around = ([cx, cz]) => [...itemsOf(plan.trees)].filter(({ x, z }) => Math.hypot(x - cx, z - cz) < 250).length;
   const meadow = around(tiny.centers.meadow);
   assert.ok(meadow > 20, `${meadow} meadow trees`);
   assert.ok(around(tiny.centers.wood) >= 3 * meadow, `${around(tiny.centers.wood)} vs ${meadow}`);

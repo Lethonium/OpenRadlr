@@ -597,8 +597,8 @@ test("the drone's haze grows with the island, its draw reach does not", async ()
 
 test("the drone's haze is thicker than before", async () => {
   const { droneLens } = await import("../public/js/view3d/view3d.js");
-  assert.equal(droneLens({ radius: 3000 }).haze, 1.5);
-  assert.equal(droneLens({ radius: 9000 }).haze, 3);
+  assert.equal(droneLens({ radius: 3000 }).haze, 1.3);
+  assert.equal(droneLens({ radius: 9000 }).haze, 2);
 });
 
 test("the gym's lens keeps the low orbit's foreground out of the near plane", async () => {
