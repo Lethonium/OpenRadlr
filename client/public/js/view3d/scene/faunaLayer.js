@@ -20,6 +20,8 @@ const WILD_RADIUS = 3;
 /** Share of night above which the walkers sleep; strength of precipitation above which birds and butterflies shelter. */
 const DARK = 0.5;
 const SHELTER = 0.3;
+/** Metres added to the sphere round a group's animals for their own size and the limbs' swing. */
+const PAD = 6;
 
 /** Kinds with coat variants, and how many coats each has (the animal's plan seed picks one). */
 const COATS = 3;
@@ -65,6 +67,7 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
   const water = ground?.near.water ?? 0;
   const material = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }));
   const reach2 = settings.animals.animateReach ** 2;
+  const drawReach2 = settings.animals.drawReach ** 2;
 
   const animals = gather(plan?.fauna);
   const byKind = new Map();
@@ -86,7 +89,6 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
       const mesh = own(new THREE.InstancedMesh(geometry, material, list.length));
       mesh.name = name;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.frustumCulled = false;
       mesh.castShadow = settings.shadows;
       object.add(mesh);
       return mesh;
@@ -96,7 +98,8 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
       const [px, py, pz] = limb.pivot;
       return { limb, mesh: make(limb.geometry, `${label}-limb-${k}`), to: new THREE.Matrix4().makeTranslation(px, py, pz), back: new THREE.Matrix4().makeTranslation(-px, -py, -pz) };
     });
-    kinds.set(key, { id, parts, body, limbs, animals: list });
+    const spots = new Float32Array(list.length * 3);
+    kinds.set(key, { id, parts, body, limbs, animals: list, spots, sphere: new THREE.Sphere(), allowed: true });
   }
 
   const dummy = new THREE.Object3D();
@@ -153,6 +156,7 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
     dummy.updateMatrix();
     base.copy(dummy.matrix);
     kind.body.setMatrixAt(i, base);
+    kind.spots.set([pose.x, y, pose.z], i * 3);
     for (const { limb, mesh, to, back } of kind.limbs) {
       const angle = limbAngle(limb, pose);
       if (limb.swing === "wing") turn.makeRotationZ(angle);
@@ -161,6 +165,25 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
       mesh.setMatrixAt(i, limbMatrix);
     }
   }
+  const meshesOf = (kind) => [kind.body, ...kind.limbs.map(({ mesh }) => mesh)];
+  /** Centre and reach of the group's animals, set on each of its meshes so three culls them with it. */
+  const fitSphere = (kind) => {
+    const { spots, sphere } = kind;
+    const n = spots.length / 3;
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (let i = 0; i < spots.length; i += 3) {
+      cx += spots[i];
+      cy += spots[i + 1];
+      cz += spots[i + 2];
+    }
+    sphere.center.set(cx / n, cy / n, cz / n);
+    let far2 = 0;
+    for (let i = 0; i < spots.length; i += 3) far2 = Math.max(far2, (spots[i] - sphere.center.x) ** 2 + (spots[i + 1] - sphere.center.y) ** 2 + (spots[i + 2] - sphere.center.z) ** 2);
+    sphere.radius = Math.sqrt(far2) + PAD;
+    for (const mesh of meshesOf(kind)) mesh.boundingSphere = sphere.clone();
+  };
   const flush = (kind) => {
     kind.body.instanceMatrix.needsUpdate = true;
     for (const { mesh } of kind.limbs) mesh.instanceMatrix.needsUpdate = true;
@@ -170,16 +193,21 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
   for (const kind of kinds.values()) {
     kind.animals.forEach((animal, i) => place(kind, animal, i, 0, 0, nowhere));
     flush(kind);
+    fitSphere(kind);
   }
 
   const writes = { posed: 0 };
   let night = 0;
   let falling = 0;
+  /** A group is drawn when the weather and daylight allow it and one of its animals is within `drawReach` of the camera. */
+  const show = (kind) => {
+    const visible = kind.allowed && kind.near !== false;
+    for (const mesh of meshesOf(kind)) mesh.visible = visible;
+  };
   const applyVisibility = () => {
     for (const kind of kinds.values()) {
-      const visible = !(night > DARK && hiddenAtNight(kind.id)) && !(falling > SHELTER && shelters(kind.id));
-      kind.body.visible = visible;
-      for (const { mesh } of kind.limbs) mesh.visible = visible;
+      kind.allowed = !(night > DARK && hiddenAtNight(kind.id)) && !(falling > SHELTER && shelters(kind.id));
+      show(kind);
     }
   };
 
@@ -196,7 +224,7 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
       writes.posed = 0;
       const camera = frame.camera.position;
       for (const kind of kinds.values()) {
-        if (!kind.body.visible) continue;
+        if (!kind.allowed) continue;
         let touched = false;
         kind.animals.forEach((animal, i) => {
           const { x, z } = animal.entry;
@@ -205,7 +233,14 @@ export function createFaunaLayer(plan, { season = "summer", settings, track, gro
           writes.posed += 1;
           place(kind, animal, i, frame.t, frame.dt, camera);
         });
-        if (touched) flush(kind);
+        if (touched) {
+          flush(kind);
+          fitSphere(kind);
+        }
+        const { spots } = kind;
+        kind.near = false;
+        for (let i = 0; i < spots.length && !kind.near; i += 3) kind.near = (spots[i] - camera.x) ** 2 + (spots[i + 2] - camera.z) ** 2 <= drawReach2;
+        show(kind);
       }
     },
     setEnvironment(env) {

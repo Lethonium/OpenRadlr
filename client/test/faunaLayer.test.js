@@ -76,11 +76,44 @@ test("a dolphin swims along the surface: most of the time its back is above the 
   }
 });
 
-test("every animal mesh is drawn wherever the camera looks (instances spread over the world cannot be culled)", () => {
+test("a group of animals all far from the camera has its meshes hidden, one near is drawn and culled by a sphere round its animals", () => {
+  const layer = make("low");
+  layer.setEnvironment(day);
+  const herd = plan.fauna.herds[0];
+  layer.update(frameAt(1e5, 1e5));
+  for (const mesh of meshes(layer)) assert.equal(mesh.visible, false, `${mesh.name} far away`);
+  layer.update(frameAt(herd.x, herd.z));
+  const bodies = bodiesOf(layer, herd.kind).filter((mesh) => mesh.visible);
+  assert.ok(bodies.length > 0, "the herd's kind is drawn near");
+  for (const body of bodies) {
+    assert.equal(body.frustumCulled, true, body.name);
+    const sphere = body.boundingSphere;
+    assert.ok(sphere, `${body.name} has a sphere`);
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < body.count; i += 1) {
+      body.getMatrixAt(i, m);
+      const at = new THREE.Vector3().setFromMatrixPosition(m);
+      assert.ok(sphere.center.distanceTo(at) <= sphere.radius + 1e-6, `${body.name} animal ${i} inside`);
+    }
+  }
+  assert.ok(meshes(layer).some((mesh) => !mesh.visible), "groups far from this herd stay hidden");
+  layer.dispose();
+});
+
+test("above Low the animals are drawn from any distance", () => {
   const layer = make("high");
-  const all = meshes(layer);
-  assert.ok(all.length > 0);
-  for (const mesh of all) assert.equal(mesh.frustumCulled, false, mesh.name);
+  layer.setEnvironment(day);
+  layer.update(frameAt(1e6, 1e6));
+  assert.ok(meshes(layer).every((mesh) => mesh.visible));
+  layer.dispose();
+});
+
+test("night still hides a group that is near", () => {
+  const layer = make("low");
+  const herd = plan.fauna.herds[0];
+  layer.setEnvironment(night);
+  layer.update(frameAt(herd.x, herd.z));
+  for (const mesh of bodiesOf(layer, herd.kind)) assert.equal(mesh.visible, false);
   layer.dispose();
 });
 
@@ -157,6 +190,7 @@ test("butterflies and birds rest at night, walkers sleep, dolphins swim on", () 
 
 test("each level re-poses a wider ring and low keeps the fewest animals", () => {
   assert.deepEqual(QUALITY_LEVELS.map((l) => qualitySettings(l).animals.animateReach), [60, 120, 200, 300]);
+  assert.deepEqual(QUALITY_LEVELS.map((l) => qualitySettings(l).animals.drawReach), [250, Infinity, Infinity, Infinity]);
   const totals = ["low", "medium"].map((detail) => createFaunaLayer(planOf(world, { detail }), { season: "summer", settings: qualitySettings(detail), track: createTracker().track, ground }).total);
   assert.ok(totals[0] < totals[1], `low ${totals[0]} < medium ${totals[1]}`);
 });
