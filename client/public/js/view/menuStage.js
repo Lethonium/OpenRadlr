@@ -109,6 +109,11 @@ export class MenuStage {
   }
 
   /** The route the 3D view on screen was built for (null while building). */
+  /** The menu view's last frame stats (`?stats` readout), or null. */
+  get frameStats() {
+    return this.#view?.frameStats ?? null;
+  }
+
   get viewRouteId() {
     return this.#viewRouteId;
   }

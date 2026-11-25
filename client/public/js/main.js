@@ -858,7 +858,7 @@ function initStartMenu() {
   // Dev readout for draw-call budgets: `?stats` puts the last frame's draw calls and triangles on <body>.
   if (new URLSearchParams(location.search).has("stats")) {
     setInterval(() => {
-      const stats = app.view3d?.frameStats;
+      const stats = app.view3d?.frameStats ?? app.menu?.frameStats;
       if (!stats) return;
       document.body.dataset.drawCalls = String(stats.calls);
       document.body.dataset.triangles = String(stats.triangles);
