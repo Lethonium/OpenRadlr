@@ -31,3 +31,18 @@ test("lowercase reads as uppercase", () => {
   const b = textTexture("KOM", colours, (r) => r).image.data;
   assert.deepEqual(Array.from(a), Array.from(b));
 });
+
+test("accented letters paint as their base letter", () => {
+  const a = textTexture("Café", colours, (r) => r).image.data;
+  const b = textTexture("CAFE", colours, (r) => r).image.data;
+  assert.deepEqual(Array.from(a), Array.from(b));
+});
+
+test("every letter A to Z has a glyph of the font's size", async () => {
+  const { GLYPHS, COLS, ROWS } = await import("../public/js/view3d/assets/pixelFont.js");
+  for (const char of "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-'!&·") {
+    assert.ok(GLYPHS[char], `glyph for ${char}`);
+    assert.equal(GLYPHS[char].length, ROWS, char);
+    for (const row of GLYPHS[char]) assert.equal(row.length, COLS, char);
+  }
+});

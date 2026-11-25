@@ -19,14 +19,14 @@ const bytes = (rgb) => rgb.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 2
 
 /**
  * `text` centred on a `background` field in `ink` (sRGB 0–1 colours), scaled to fit 90 % of the width (and height).
- * Lowercase reads as uppercase, characters the font lacks as a space.
+ * Lowercase reads as uppercase, accents fold to their base letter, characters the font lacks as a space.
  * @param {string} text
  * @param {{background: number[], ink: number[], width: number, height: number}} look
  * @param {<T>(resource: T) => T} own registers the texture for disposal
  * @returns {import("../../three.js").DataTexture}
  */
 export function textTexture(text, { background, ink, width, height }, own) {
-  const chars = [...text.toUpperCase()].map((char) => GLYPHS[char] ?? GLYPHS[" "]);
+  const chars = [...text.normalize("NFD").replace(/\p{M}/gu, "").toUpperCase()].map((char) => GLYPHS[char] ?? GLYPHS[" "]);
   const columns = Math.max(1, chars.length * (COLS + 1) - 1);
   const cell = Math.min((width * FILL) / columns, (height * FILL) / ROWS);
   const left = (width - columns * cell) / 2;
