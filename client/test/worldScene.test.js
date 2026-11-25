@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import * as THREE from "../public/js/three.js";
 import { environmentAt, resolvePreset } from "../public/js/world/daylight.js";
 import { createWorldScene } from "../public/js/view3d/scene/worldScene.js";
+import { hazeBand, hazeHeight } from "../public/js/view3d/scene/sky.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { groundFixture } from "./support/groundFixture.js";
@@ -152,4 +153,32 @@ test("a quality change keeps the arches, furniture, cafés and gyms", async () =
   world.setQuality(qualitySettings("high"));
   assert.deepEqual(counts(), before);
   world.dispose();
+});
+
+test("the haze band covers the horizon and thins with elevation", () => {
+  for (const thickness of [0.2, 1.4, 3]) {
+    assert.equal(hazeBand(0, thickness), 1, "full at the horizon");
+    assert.equal(hazeBand(-0.3, thickness), 1, "and below it");
+    assert.equal(hazeBand(1, thickness), 0, "none at the zenith");
+    let last = 1;
+    for (let e = 0; e <= 1; e += 0.02) {
+      const band = hazeBand(e, thickness);
+      assert.ok(band <= last + 1e-12, "never thicker higher up");
+      last = band;
+    }
+  }
+  assert.ok(hazeHeight(3) > hazeHeight(1.4) && hazeHeight(1.4) > hazeHeight(0.2), "thicker fog, taller band");
+  assert.ok(hazeBand(0.2, 3) > hazeBand(0.2, 1.4), "so a given elevation is hazier in thick fog");
+});
+
+test("the sky takes the scene's fog colour and density from the environment", () => {
+  const { world } = make();
+  const sky = world.scene.getObjectByName("sky");
+  assert.deepEqual(sky.material.uniforms.uFogColor.value.toArray().map((v) => +v.toFixed(5)), [...day.fogColor].map((v) => +v.toFixed(5)));
+  assert.equal(sky.material.uniforms.uFogDensity.value, day.fogDensity);
+  world.setEnvironment(night);
+  assert.equal(sky.material.uniforms.uFogDensity.value, night.fogDensity);
+  assert.deepEqual(sky.material.uniforms.uFogColor.value.toArray().map((v) => +v.toFixed(5)), [...night.fogColor].map((v) => +v.toFixed(5)));
+  world.update(frame());
+  assert.equal(sky.material.uniforms.uFar.value, 9000, "the band reads the lens's far plane");
 });
