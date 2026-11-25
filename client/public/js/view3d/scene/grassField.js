@@ -53,7 +53,7 @@ export function grassWeights(grid, masks) {
       if (masks) {
         const mask = maskAt(masks, x0 + i * cell, z0 + j * cell);
         const rim = mask === MASK.field && !insideField(masks, x0 + i * cell, z0 + j * cell);
-        if (mask !== MASK.free && mask !== MASK.verge && !rim) continue;
+        if (mask !== MASK.free && mask !== MASK.verge && mask !== MASK.meadow && !rim) continue;
       }
       weights[k] = smooth(BEACH_HEIGHT, BEACH_HEIGHT + 2, heights[k] - water) * smooth(ROCK_NORMAL, ROCK_NORMAL + 0.04, normals[k * 3 + 1]);
     }

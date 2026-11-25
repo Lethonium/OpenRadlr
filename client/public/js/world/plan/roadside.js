@@ -72,7 +72,7 @@ export function planRoadside({ terrain, roads, regions, seed, masks, water, budg
     const x = s.x + tangent[0] * along - tangent[1] * side * off;
     const z = s.z + tangent[1] * along + tangent[0] * side * off;
     const cell = maskAt(masks, x, z);
-    if (cell === MASK.field || cell === MASK.river || cell === MASK.built) return;
+    if (cell === MASK.field || cell === MASK.meadow || cell === MASK.river || cell === MASK.built) return;
     if (clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.radius)) return; // a café's or gym's ground, road cells included
     const near = roads.nearest(x, z, 2);
     if (near && near.distance < roadHalfWidth(near.sample.route.lanes) + VERGE + 1.5) return;

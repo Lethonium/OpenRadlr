@@ -98,22 +98,17 @@ test("a region tint multiplies the grass", () => {
   assert.equal(tinted[1], plain[1]);
 });
 
-test("a field is earth under its crop", () => {
-  const [r, g] = groundColor({ ...base, field: true }, SEASON_LOOK.summer, 0);
-  assert.ok(r > g, "brown: red above green");
-});
-
-test("the grid takes its tint from the regions and its earth from the field mask", () => {
+test("the grid takes its tint from the regions", () => {
   const regions = [{ id: "a", kind: "oliveTerraces", center: [0, 0], radius: 5000 }];
-  const masks = { cell: 16, x0: -64, z0: -32, columns: 8, rows: 4, data: new Uint8Array(32) };
-  for (let j = 0; j < 3; j += 1) for (let i = 3; i < 6; i += 1) masks.data[j * 8 + i] = 3; // a 3 by 3 block: its middle is the inside
   const options = { bounds, cell: 16, water: 0, season: "summer", seed: 7 };
   const plain = groundGrid(stub(() => 20), options);
-  const g = groundGrid(stub(() => 20), { ...options, regions, masks });
+  const g = groundGrid(stub(() => 20), { ...options, regions });
   const at = (grid, i, j) => [...grid.colors.slice(3 * (j * grid.columns + i), 3 * (j * grid.columns + i) + 3)];
   assert.notDeepEqual(at(g, 1, 1), at(plain, 1, 1));
-  const [r, gr] = at(g, 4, 1);
-  assert.ok(r > gr, "the inside of the field is brown");
-  const [rimR, rimG] = at(g, 3, 0);
-  assert.ok(rimG > rimR, "its rim keeps the meadow's green");
+});
+
+test("the fine mottling shades the grass by 6 % at most", () => {
+  const [dark, light] = [0, 1].map((fine) => groundColor({ ...base, fine }, SEASON_LOOK.summer, 0)[1]);
+  assert.ok(light > dark);
+  assert.ok(Math.abs(light / dark - 1.06 / 0.94) < 1e-9);
 });

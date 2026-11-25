@@ -5,7 +5,7 @@
  * `createSharedUniforms()` and `createGrainTexture()`, owned by the scene.
  */
 import * as THREE from "../../three.js";
-import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX, TRANSLUCENT_FRAGMENT, WIND_VERTEX } from "./hookChunks.js";
+import { CLOUD_GLSL, CLOUD_VERTEX, GRAIN_BUMP_GLSL, GRAIN_VERTEX, HEIGHT_FOG_FRAGMENT, HEIGHT_FOG_VERTEX, LAND_PAINT_FRAGMENT, LAND_PAINT_VERTEX, TRANSLUCENT_FRAGMENT, WIND_VERTEX } from "./hookChunks.js";
 
 /**
  * A shader patch. `key` tells Three's program cache that patched and plain
@@ -139,6 +139,22 @@ export function cloudShadows(uniforms) {
     shader.fragmentShader = `uniform float uCST, uCSK; varying vec2 vCSW;\n${CLOUD_GLSL}${shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n diffuseColor.rgb *= cloudShade(vCSW, uCST, uCSK);")}`; // i18n-ok
   };
   return Object.assign(hook, { key: "cloud" });
+}
+
+/**
+ * The land-use paint: an sRGB texture over a box of the ground that replaces the vertex colour where its alpha says
+ * a parcel is. Runs before the grain and the grass floor, so both shade the painted colour.
+ * @param {{texture: import("../../three.js").Texture, x0: number, z0: number, width: number, depth: number}} options box in world metres
+ * @returns {Hook}
+ */
+export function landPaint({ texture, x0, z0, width, depth }) {
+  const hook = (shader) => {
+    shader.uniforms.uLP = { value: texture };
+    shader.uniforms.uLPBox = { value: new THREE.Vector4(x0, z0, width, depth) };
+    shader.vertexShader = `varying vec2 vLPW;\n${shader.vertexShader.replace("#include <project_vertex>", LAND_PAINT_VERTEX)}`; // i18n-ok
+    shader.fragmentShader = `uniform sampler2D uLP; uniform vec4 uLPBox; varying vec2 vLPW;\n${shader.fragmentShader.replace("#include <color_fragment>", LAND_PAINT_FRAGMENT)}`; // i18n-ok
+  };
+  return Object.assign(hook, { key: "landPaint" });
 }
 
 /**

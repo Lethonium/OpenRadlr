@@ -33,6 +33,21 @@ export const CLOUD_VERTEX = `#include <project_vertex>
   #endif
   vCSW = (modelMatrix * cw).xz; }`;
 
+/** Vertex: world xz for the land-use paint. */
+export const LAND_PAINT_VERTEX = `#include <project_vertex>
+  { vec4 pw = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+    pw = instanceMatrix * pw;
+  #endif
+  vLPW = (modelMatrix * pw).xz; }`;
+
+/** Fragment: the land-use paint replaces the vertex colour where a parcel is, inside its box. */
+export const LAND_PAINT_FRAGMENT = `#include <color_fragment>
+  { vec2 lq = (vLPW - uLPBox.xy) / uLPBox.zw;
+    vec4 lp = texture2D(uLP, lq);
+    float la = lp.a * step(0.0, min(lq.x, lq.y)) * step(max(lq.x, lq.y), 1.0);
+    diffuseColor.rgb = mix(diffuseColor.rgb, lp.rgb, la); }`;
+
 /** Vertex: world position for the height fog. */
 export const HEIGHT_FOG_VERTEX = `#include <project_vertex>
   { vec4 hw = vec4(transformed, 1.0);

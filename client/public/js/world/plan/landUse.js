@@ -123,7 +123,7 @@ function clear(parcel, corners, { masks, taken, water }) {
   const free = (u, v) => {
     const [x, z] = [parcel.x + u * c - v * s, parcel.z + u * s + v * c];
     const m = maskAt(taken, x, z);
-    return (m === MASK.free || (m === MASK.field && (Math.abs(u) > w - masks.cell || Math.abs(v) > d - masks.cell))) && [MASK.free, MASK.field].includes(maskAt(masks, x, z));
+    return (m === MASK.free || (m === MASK.field && (Math.abs(u) > w - masks.cell || Math.abs(v) > d - masks.cell))) && [MASK.free, MASK.field, MASK.meadow].includes(maskAt(masks, x, z));
   };
   for (let u = -w; u <= w + 0.01; u += LAND_USE.testStep) {
     for (let v = -d; v <= d + 0.01; v += LAND_USE.testStep) if (!free(u, v)) return false;
@@ -235,7 +235,7 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
             tint: rTint * 2 - 1,
           });
           stampField(taken, parcel);
-          if (!OPEN_TO_TREES.has(kind)) stampField(masks, parcel);
+          if (!OPEN_TO_TREES.has(kind)) stampField(masks, parcel, kind === "pasture" || kind === "fallow" ? MASK.meadow : MASK.field);
           if (parcels.length >= LAND_USE.maxParcels) break;
         }
       }

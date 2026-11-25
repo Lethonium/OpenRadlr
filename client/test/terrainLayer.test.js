@@ -90,3 +90,19 @@ test("the layer has the layer shape", () => {
   assert.ok(layer.object instanceof THREE.Object3D);
   for (const name of ["update", "setEnvironment", "dispose"]) assert.equal(typeof layer[name], "function");
 });
+
+test("the ground samples the land-use paint", () => {
+  const paint = { x0: -1024, z0: -1024, cell: 16, columns: 128, rows: 128, rgba: new Uint8Array(128 * 128 * 4) };
+  const { layer, tracker } = make({ ...groundFixture(), paint });
+  const far = layer.object.getObjectByName("terrain-far");
+  for (const mesh of [tiles(layer)[0], far]) {
+    const hook = mesh.material.userData.hooks.find((each) => each.key === "landPaint");
+    assert.ok(hook, "a landPaint hook");
+    const shader = { uniforms: {}, vertexShader: "#include <project_vertex>", fragmentShader: "#include <color_fragment>" };
+    hook(shader);
+    const texture = Object.values(shader.uniforms).map((u) => u.value).find((v) => v?.isDataTexture);
+    assert.deepEqual([texture.image.width, texture.image.height], [128, 128]);
+  }
+  layer.dispose();
+  assert.equal(tracker.live(), 0);
+});

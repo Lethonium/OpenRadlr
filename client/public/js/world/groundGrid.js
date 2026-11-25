@@ -7,7 +7,6 @@ import { fbm } from "./noise.js";
 import { SEASON_LOOK } from "./seasons.js";
 import { REGION_STYLE } from "./regionKinds.js";
 import { regionMix } from "./regions.js";
-import { insideField } from "./plan/masks.js";
 
 /** @typedef {[number, number, number]} Rgb */
 /**
@@ -47,15 +46,15 @@ const smoothstep = (edge0, edge1, x) => {
 
 /**
  * Colour of one spot of ground, linear RGB.
- * @param {{height: number, slope: number, roadDistance: number, riverDistance: number, noise: number, tint?: number[], field?: boolean}} spot noise in 0..1; `tint` multiplies the grass (the region's), `field` is a crop field's earth
+ * @param {{height: number, slope: number, roadDistance: number, riverDistance: number, noise: number, fine?: number, tint?: number[]}} spot noise in 0..1; `fine` is the small-scale mottling (0..1, 0.5 neutral) shading the grass ±6 %; `tint` multiplies the grass (the region's)
  * @param {import("./seasons.js").SeasonLook} look
  * @param {number} water sea level
  * @returns {Rgb}
  */
-export function groundColor({ height, slope, roadDistance, riverDistance, noise, tint, field = false }, look, water) {
+export function groundColor({ height, slope, roadDistance, riverDistance, noise, fine = 0.5, tint }, look, water) {
   let colour = mix(linear(look.grass), linear(look.grassDry), smoothstep(0.62, 0.85, noise));
   if (tint) colour = times(colour, tint);
-  if (field) colour = linear(look.soil).map((c) => c * 0.85);
+  colour = colour.map((c) => c * (1 + (fine - 0.5) * 0.12));
   if (height < water + BEACH_HEIGHT) colour = linear(look.sand);
   if (roadDistance < VERGE_REACH + VERGE_FADE) colour = mix(linear(look.soil), colour, smoothstep(VERGE_REACH, VERGE_REACH + VERGE_FADE, roadDistance));
   if (riverDistance < RIVER_BED) colour = linear(look.soil).map((c) => c * 0.7);
@@ -69,10 +68,10 @@ export function groundColor({ height, slope, roadDistance, riverDistance, noise,
 /**
  * Heights, normals and colours of `terrain` over `bounds`, one vertex per `cell` metres.
  * @param {{height: (x: number, z: number) => number, distanceToRoad: (x: number, z: number) => number, riverDistance?: (x: number, z: number) => number}} terrain
- * @param {{bounds: {x0: number, z0: number, x1: number, z1: number}, cell: number, water: number, season: import("./seasons.js").Season, seed: number, regions?: object[], masks?: import("./plan/masks.js").Masks}} options `regions` tint the grass (none given: untinted); `masks` paint field cells as earth
+ * @param {{bounds: {x0: number, z0: number, x1: number, z1: number}, cell: number, water: number, season: import("./seasons.js").Season, seed: number, regions?: object[]}} options `regions` tint the grass (none given: untinted)
  * @returns {GroundGrid}
  */
-export function groundGrid(terrain, { bounds, cell, water, season, seed, regions, masks }) {
+export function groundGrid(terrain, { bounds, cell, water, season, seed, regions }) {
   const look = SEASON_LOOK[season] ?? SEASON_LOOK.summer;
   const columns = Math.round((bounds.x1 - bounds.x0) / cell) + 1;
   const rows = Math.round((bounds.z1 - bounds.z0) / cell) + 1;
@@ -94,8 +93,8 @@ export function groundGrid(terrain, { bounds, cell, water, season, seed, regions
       const z = bounds.z0 + j * cell;
       const noise = fbm(x / 60, z / 60, seed);
       const tint = regions ? regionTint(x, z, regions, seed, season) : undefined;
-      const field = masks ? insideField(masks, x, z) : false;
-      colors.set(groundColor({ height: heights[k], slope: Math.hypot(dx, dz), roadDistance: terrain.distanceToRoad(x, z), riverDistance: terrain.riverDistance?.(x, z) ?? Infinity, noise, tint, field }, look, water), k * 3);
+      const fine = fbm(x / 25, z / 25, seed ^ 0x6d0771e);
+      colors.set(groundColor({ height: heights[k], slope: Math.hypot(dx, dz), roadDistance: terrain.distanceToRoad(x, z), riverDistance: terrain.riverDistance?.(x, z) ?? Infinity, noise, fine, tint }, look, water), k * 3);
     }
   }
   return { x0: bounds.x0, z0: bounds.z0, cell, columns, rows, heights, normals, colors, water };

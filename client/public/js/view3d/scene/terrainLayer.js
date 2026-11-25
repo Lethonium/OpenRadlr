@@ -5,7 +5,7 @@
  * come from the world worker (`world/groundGrid.js`).
  */
 import * as THREE from "../../three.js";
-import { addHook, cloudShadows, createGrainTexture, grain, heightFog } from "../assets/materials.js";
+import { addHook, cloudShadows, createGrainTexture, grain, heightFog, landPaint } from "../assets/materials.js";
 import { grassFloor } from "./grassFloor.js";
 import { grassWeights } from "./grassField.js";
 import { createOwner } from "./tracker.js";
@@ -99,6 +99,17 @@ function farGeometry(far, grass, near) {
   return geometry;
 }
 
+/** The land-use paint as a texture: sRGB, smoothly filtered, row 0 at the box's first z. */
+function paintTextureOf({ rgba, columns, rows }) {
+  const texture = new THREE.DataTexture(rgba, columns, rows, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 /**
  * The terrain layer.
  * @param {{near: import("../../world/groundGrid.js").GroundGrid, far: import("../../world/groundGrid.js").GroundGrid}} ground
@@ -124,11 +135,14 @@ export function createTerrainLayer(ground, { uniforms, settings, track, grain: g
   };
   setQuality(settings);
 
+  const paint = ground.paint;
+  const paintTexture = paint ? own(paintTextureOf(paint)) : null;
   const material = (offset) => {
     const made = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, ...(offset ? { polygonOffset: true, polygonOffsetFactor: offset.factor, polygonOffsetUnits: offset.units } : {}) }));
     addHook(made, grain({ texture, ...GRAIN }));
     addHook(made, cloudShadows(uniforms));
     addHook(made, grassFloor(uniforms, outer));
+    if (paintTexture) addHook(made, landPaint({ texture: paintTexture, x0: paint.x0, z0: paint.z0, width: paint.columns * paint.cell, depth: paint.rows * paint.cell }));
     addHook(made, heightFog(uniforms));
     return made;
   };

@@ -12,7 +12,7 @@ import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { createWorldScene } from "../public/js/view3d/scene/worldScene.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
-import { MASK, insideField, maskAt } from "../public/js/world/plan/masks.js";
+import { MASK, insideField, maskAt, stampField } from "../public/js/world/plan/masks.js";
 import { environmentAt, resolvePreset } from "../public/js/world/daylight.js";
 import { planOf, tinyWorld } from "./support/planFixture.js";
 
@@ -117,7 +117,7 @@ test("grass grows on meadow and the rim of fields, not on roads, field insides, 
     const z = near.z0 + Math.floor(k / near.columns) * near.cell;
     const mask = maskAt(plan.masks, x, z);
     const rim = mask === MASK.field && !insideField(plan.masks, x, z);
-    if (mask !== MASK.free && mask !== MASK.verge && !rim) assert.equal(weights[k], 0, `mask at ${x},${z}`);
+    if (mask !== MASK.free && mask !== MASK.verge && mask !== MASK.meadow && !rim) assert.equal(weights[k], 0, `mask at ${x},${z}`);
     if (mask === MASK.verge && weights[k] > 0) besideRoad += 1;
     if (near.heights[k] < near.water + 3) assert.equal(weights[k], 0, "beach");
     if (near.normals[k * 3 + 1] < 0.8) assert.equal(weights[k], 0, "cliff");
@@ -221,4 +221,16 @@ test("a world without a plan still builds", () => {
   assert.equal(scene.scene.getObjectByName("forest"), undefined);
   scene.setSeason("autumn", undefined);
   scene.dispose();
+});
+
+test("grass grows on a pasture parcel's cells and not on an arable parcel's", () => {
+  const cell = 4;
+  const masks = { cell, x0: -200, z0: -200, columns: 100, rows: 100, data: new Uint8Array(100 * 100) };
+  stampField(masks, { x: -100, z: 0, width: 120, depth: 120, yaw: 0 }, MASK.meadow);
+  stampField(masks, { x: 100, z: 0, width: 120, depth: 120, yaw: 0 });
+  const grid = { x0: -200, z0: -200, cell, columns: 100, rows: 100, heights: new Float32Array(10000).fill(20), normals: Float32Array.from({ length: 30000 }, (_, k) => (k % 3 === 1 ? 1 : 0)), water: 0 };
+  const weights = grassWeights(grid, masks);
+  const at = (x, z) => weights[Math.round((z + 200) / cell) * 100 + Math.round((x + 200) / cell)];
+  assert.equal(at(-100, 0), 1, "pasture");
+  assert.equal(at(100, 0), 0, "arable");
 });

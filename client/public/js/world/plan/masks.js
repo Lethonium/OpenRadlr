@@ -10,9 +10,10 @@ import { VERGE, roadHalfWidth } from "../roads.js";
 /**
  * Values in `masks.data`. A road or river outranks a field. `verge` is the strip beside a road
  * (past its asphalt and verge, within `ROAD_MARGIN`): clear of trees and fields, but grass grows there. `built` is a
- * house, farm yard or landmark apron: nothing grows there.
+ * house, farm yard or landmark apron: nothing grows there. `meadow` is grassy open land (pasture, fallow): woods and
+ * roadside plants keep off it as off a field, but grass grows on it.
  */
-export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3, verge: 4, built: 5 });
+export const MASK = Object.freeze({ free: 0, road: 1, river: 2, field: 3, verge: 4, built: 5, meadow: 6 });
 /** Metres past the verge that stay clear of trees: canopy and the gap between road samples. */
 export const ROAD_MARGIN = 4.5;
 /** Metres past a river's water that stay clear: its bank. */
@@ -99,8 +100,8 @@ export function insideField(masks, x, z) {
   return true;
 }
 
-/** Marks the rectangle (centre, size, `yaw` of its width axis) as field wherever the cells are free. */
-export function stampField(masks, { x, z, width, depth, yaw }) {
+/** Marks the rectangle (centre, size, `yaw` of its width axis) as `value` (field, or meadow) wherever the cells are free. */
+export function stampField(masks, { x, z, width, depth, yaw }, value = MASK.field) {
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
   const reach = Math.hypot(width, depth) / 2 + masks.cell;
   const i0 = Math.max(0, Math.floor((x - reach - masks.x0) / masks.cell));
@@ -114,7 +115,7 @@ export function stampField(masks, { x, z, width, depth, yaw }) {
       const along = dx * c + dz * s;
       const across = -dx * s + dz * c;
       const index = j * masks.columns + i;
-      if (Math.abs(along) <= width / 2 + masks.cell / 2 && Math.abs(across) <= depth / 2 + masks.cell / 2 && masks.data[index] === MASK.free) masks.data[index] = MASK.field;
+      if (Math.abs(along) <= width / 2 + masks.cell / 2 && Math.abs(across) <= depth / 2 + masks.cell / 2 && masks.data[index] === MASK.free) masks.data[index] = value;
     }
   }
 }
@@ -138,7 +139,7 @@ export function stampBuilt(masks, { x, z, width, depth, yaw }) {
       const across = -dx * s + dz * c;
       const index = j * masks.columns + i;
       const value = masks.data[index];
-      const builtable = value === MASK.free || value === MASK.verge || value === MASK.field;
+      const builtable = value === MASK.free || value === MASK.verge || value === MASK.field || value === MASK.meadow;
       if (builtable && Math.abs(along) <= width / 2 + masks.cell / 2 && Math.abs(across) <= depth / 2 + masks.cell / 2) masks.data[index] = MASK.built;
     }
   }

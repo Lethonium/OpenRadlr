@@ -41,6 +41,7 @@ import { inStretch, resolveZones } from "../world/zones.js";
 import { normalize, yawFor } from "./math.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
+import { paintLandUse } from "../world/landPaint.js";
 import { planWorld } from "../world/plan/index.js";
 import { junctionPads, roadStrips } from "../world/plan/roadStrips.js";
 import { riverStrips } from "../world/plan/riverStrips.js";
@@ -92,14 +93,15 @@ export function groundExtent(terrain, { margin = 450, cell = 16, horizon = 4200 
  * The ground as grids for the worker's typed-array hand-over: a fine one over
  * `groundExtent`'s box, plus a coarse one out to the horizon.
  */
-export function buildGroundGrids(terrain, ground, { season, long, regions, masks }) {
+export function buildGroundGrids(terrain, ground, { season, long, regions, landUse }) {
   const [cx, cz] = ground.center;
-  const options = { water: ground.water, season, seed: terrain.seed, regions, masks };
+  const options = { water: ground.water, season, seed: terrain.seed, regions };
   const farCell = long ? 400 : 140;
   const reach = Math.ceil(ground.horizon / farCell) * farCell;
   return {
     near: groundGrid(terrain, { ...options, bounds: ground.bounds, cell: ground.huge ? 144 : 16 }),
     far: groundGrid(terrain, { ...options, bounds: { x0: cx - reach, z0: cz - reach, x1: cx + reach, z1: cz + reach }, cell: farCell }),
+    ...(landUse ? { paint: paintLandUse(landUse.parcels, { bounds: ground.bounds, season }) } : {}),
   };
 }
 
@@ -243,7 +245,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
       })
     : ordered.map((road) => ({ road, cafeId: null }));
   const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.flatMap(({ road }) => [cafeClearing(road), gymClearing(road)]), routes, seed, season, detail, bounds: ground.bounds });
-  const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
+  const grids = buildGroundGrids(terrain, ground, { season, long, regions, landUse: plan.landUse });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow
   // shoulder runs across another road's asphalt.

@@ -47,7 +47,7 @@ export const FARM = Object.freeze({
 const toWorld = (yard, u, v) => [yard.x + Math.cos(yard.yaw) * u - Math.sin(yard.yaw) * v, yard.z + Math.sin(yard.yaw) * u + Math.cos(yard.yaw) * v];
 
 /** True if the ground at (x, z) is dry and untouched: free of road, verge, river and building; land use may give way (the plan then drops what the yard covers). */
-const open = (masks, terrain, water, x, z, onField = false) => (maskAt(masks, x, z) === MASK.free || (onField && maskAt(masks, x, z) === MASK.field)) && terrain.height(x, z) >= water + FARM.aboveWater;
+const open = (masks, terrain, water, x, z, onField = false) => (maskAt(masks, x, z) === MASK.free || (onField && [MASK.field, MASK.meadow].includes(maskAt(masks, x, z)))) && terrain.height(x, z) >= water + FARM.aboveWater;
 
 /** The yard's ground height if its rings are open and its ground gentle; else null. */
 function yardGround({ terrain, masks, water }, x, z) {
@@ -131,9 +131,9 @@ export function planFarms({ fields, terrain, roads, regions = [], seed, masks, w
     const paddock = planPaddock(yard, ground, FARM.paddock.spots[Math.floor(pick * FARM.paddock.spots.length)], roads, fields);
     const pumpAt = toWorld(yard, ...FARM.pump.at);
     const pump = gone < FARM.pump.chance && open(masks, terrain, water, pumpAt[0], pumpAt[1]) ? { x: pumpAt[0], z: pumpAt[1] } : null;
-    stampDisc(masks, x, z, FARM.yard, MASK.built, [MASK.field]);
+    stampDisc(masks, x, z, FARM.yard, MASK.built, [MASK.field, MASK.meadow]);
     if (paddock) stampBuilt(masks, paddock);
-    if (pump) stampDisc(masks, pump.x, pump.z, FARM.pump.radius, MASK.built, [MASK.field]);
+    if (pump) stampDisc(masks, pump.x, pump.z, FARM.pump.radius, MASK.built, [MASK.field, MASK.meadow]);
     farms.push({
       x, y, z, yaw, style: REGION_STYLE[regionMix(x, z, regions, seed)[0].kind].houses, houses: random() < FARM.secondHouseChance ? 2 : 1, silos: silos < FARM.silosChance ? 2 : 1,
       paddock, drive: driveTo(yard, neighbour.sample), pump,
