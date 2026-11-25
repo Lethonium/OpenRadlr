@@ -126,24 +126,26 @@ const tubeTo = (parts, kind, points, radius, value, steps = 24, segments = 8) =>
   parts[kind].push(painted(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), steps, radius, segments, false), value));
 
 /** Reads roughness, metalness and glow from the per-vertex `surface` attribute, so one material serves every part. */
-const surfaceHook = Object.assign(
-  (shader) => {
-    shader.vertexShader = `attribute vec3 surface;\nvarying vec3 vSurface;\n${shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSurface = surface;")}`; // i18n-ok
-    shader.fragmentShader = `varying vec3 vSurface;\n${shader.fragmentShader
-      .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n roughnessFactor = vSurface.x;")
-      .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\n metalnessFactor = vSurface.y;")
-      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * vSurface.z;")}`; // i18n-ok
-  },
-  { key: "surface" },
-);
+const surfaceHook = (lights) =>
+  Object.assign(
+    (shader) => {
+      shader.uniforms.uLights = lights;
+      shader.vertexShader = `attribute vec3 surface;\nvarying vec3 vSurface;\n${shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSurface = surface;")}`; // i18n-ok
+      shader.fragmentShader = `varying vec3 vSurface;\nuniform float uLights;\n${shader.fragmentShader
+        .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n roughnessFactor = vSurface.x;")
+        .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\n metalnessFactor = vSurface.y;")
+        .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * vSurface.z * uLights;")}`; // i18n-ok
+    },
+    { key: "surface" },
+  );
 
 /**
  * The one bike material, on the scene's shared hooks (the surface hook gives each vertex its own finish).
  * @param {(resource: any) => any} own
  * @param {ReturnType<typeof createSharedUniforms>} uniforms
  */
-function bikeMaterial(own, uniforms) {
-  return own(addHook(addHook(addHook(new THREE.MeshStandardMaterial({ vertexColors: true }), surfaceHook), cloudShadows(uniforms)), heightFog(uniforms)));
+function bikeMaterial(own, uniforms, lights) {
+  return own(addHook(addHook(addHook(new THREE.MeshStandardMaterial({ vertexColors: true }), surfaceHook(lights)), cloudShadows(uniforms)), heightFog(uniforms)));
 }
 
 /**
@@ -312,6 +314,8 @@ function saddleGeometries(kind, value) {
  * @property {(distanceM: number) => void} setWheels roll both wheels to `distanceM` travelled
  * @property {(angle: number, pitchL?: number, pitchR?: number) => void} setCrank
  * @property {(angle: number) => void} setSteer
+ * @property {number} lights how strongly the head lamp lens and the tail light glow, 0..1 (1 until `setLights` says otherwise)
+ * @property {(level: number) => void} setLights
  * @property {(side: number, angle: number, out?: import("../../../three.js").Vector3) => import("../../../three.js").Vector3} pedalPos
  *   where the pedal of `side` (-1 left, 1 right) is for crank angle `angle`, in the bike's frame
  */
@@ -341,7 +345,8 @@ export function createBike({
 } = {}) {
   const fit = bikeGeometry(type, { scale, saddleHeight });
   const T = fit.T;
-  const kit = { own, material: bikeMaterial(own, uniforms) };
+  const lights = { value: 1 };
+  const kit = { own, material: bikeMaterial(own, uniforms, lights) };
   const root = new THREE.Group();
   const parts = bucket();
   const frameColour = colour(frame);
@@ -558,6 +563,12 @@ export function createBike({
   const steerAxis = up.clone().normalize();
   const bike = {
     object: root, fit, rearWheel, frontWheel, steer, crank, pedals,
+    get lights() {
+      return lights.value;
+    },
+    setLights(level) {
+      lights.value = clamp(level, 0, 1);
+    },
     setWheels(distance) {
       rearWheel.rotation.z = -distance / T.R;
       frontWheel.rotation.z = -distance / T.R;

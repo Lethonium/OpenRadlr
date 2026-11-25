@@ -107,3 +107,11 @@ test("the quality tables are frozen", () => {
   const { grassRings, treeLod } = qualitySettings("high");
   assert.ok(Object.isFrozen(grassRings) && Object.isFrozen(grassRings[0]) && Object.isFrozen(treeLod));
 });
+
+test("every level has riders full and reach", () => {
+  const expected = { low: [1, 300], medium: [4, 450], high: [8, 600], ultra: [16, 600] };
+  for (const level of QUALITY_LEVELS) assert.deepEqual({ ...qualitySettings(level).riders }, { full: expected[level][0], reach: expected[level][1] }, level);
+  const fulls = QUALITY_LEVELS.map((level) => qualitySettings(level).riders.full);
+  assert.deepEqual(fulls, [...fulls].sort((a, b) => a - b));
+  assert.ok(fulls[0] >= 1);
+});

@@ -11,6 +11,7 @@ import { NATURE } from "../assets/nature/index.js";
 import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
+import { createRiderLayer } from "./riderLayer.js";
 import { createFarmLayer } from "./farmLayer.js";
 import { createGrassLayer } from "./grassLayer.js";
 import { createIslandLayer } from "./islandLayer.js";
@@ -44,6 +45,7 @@ const LIGHTNING = 3;
  * @property {number[]} [heading] the rider's unit forward on the ground, [x, z] (the headlight aims along it)
  * @property {number} [shadowHalf] half the shadow box's edge, metres
  * @property {boolean} [shadows] false switches the sun's shadow off for this frame (the drone)
+ * @property {import("./riderLayer.js").RiderEntry[]} [riders] the road riders to draw (none when missing)
  */
 
 /**
@@ -76,6 +78,7 @@ export function createWorldScene(world, { settings, track }) {
     landmarks: () => createLandmarkLayer(plan, { ...plants(), grain }),
     islands: () => createIslandLayer(plan, plants()),
     fauna: () => createFaunaLayer(plan, { ...plants(), ground: world.ground }),
+    riders: () => createRiderLayer(plants()),
     weather: () => createWeatherLayer(plants()),
     nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
@@ -87,7 +90,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.weather(), makers.nightLights());
+  layers.push(makers.riders(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -133,7 +136,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "weather", "nightLights");
   };
   setQuality(settings);
 

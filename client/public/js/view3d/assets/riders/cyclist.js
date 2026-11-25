@@ -38,6 +38,8 @@ const ROCK = 0.12;
  * @property {number} standing 0 seated .. 1 out of the saddle
  * @property {(dt: number, state?: RideInput) => void} ride
  * @property {(texture: import("../../../three.js").Texture) => void} setKit swaps the rider's painted kit
+ * @property {number} lights how strongly the bike's lamp and tail light glow, 0..1 (1 by default)
+ * @property {(level: number) => void} setLights
  */
 
 /**
@@ -120,6 +122,12 @@ export function createCyclist(look, { own = (resource) => resource, uniforms = c
       }
       state.look = lerp(state.look, state.lookWant, Math.min(1, dt * 2));
       pose(near, t);
+    },
+    get lights() {
+      return bike.lights;
+    },
+    setLights(level) {
+      bike.setLights(level);
     },
     setKit(next) {
       rider.setTexture(next);

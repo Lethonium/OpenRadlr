@@ -143,3 +143,12 @@ test("the workbench lists the rider and the cyclist", () => {
     assert.equal(WORKBENCH_ASSETS[id].meta.id, id);
   }
 });
+
+test("the lights glow fully until told otherwise, and setLights dims them", () => {
+  const { cyclist } = build(3);
+  assert.equal(cyclist.lights, 1);
+  cyclist.setLights(0.25);
+  assert.equal(cyclist.lights, 0.25);
+  cyclist.setLights(5);
+  assert.equal(cyclist.lights, 1);
+});
