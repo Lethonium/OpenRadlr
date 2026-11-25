@@ -105,8 +105,14 @@ export class Engine {
    * @param {{x: number, y: number, width: number, height: number}} [rect]
    */
   renderScene(scene, camera, rect) {
-    const { renderer } = this;
-    renderer.setRenderTarget(this.target);
+    const { renderer, target, size } = this;
+    // The target's own viewport and scissor, not the renderer's: a shadow pass inside `render` hands the target back
+    // with `setRenderTarget(target)`, which restores these and would draw a rectangle over the whole frame.
+    const area = rect ?? { x: 0, y: 0, width: size.width, height: size.height };
+    target.viewport.set(area.x, area.y, area.width, area.height);
+    target.scissor.set(area.x, area.y, area.width, area.height);
+    target.scissorTest = Boolean(rect);
+    renderer.setRenderTarget(target);
     if (rect) {
       renderer.setScissorTest(true);
       renderer.setScissor(rect.x, rect.y, rect.width, rect.height);
@@ -115,10 +121,13 @@ export class Engine {
       renderer.clear(true, true, true);
     } else {
       renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, this.size.width, this.size.height);
+      renderer.setViewport(0, 0, size.width, size.height);
     }
     renderer.render(scene, camera);
     renderer.setScissorTest(false);
+    target.viewport.set(0, 0, size.width, size.height);
+    target.scissor.set(0, 0, size.width, size.height);
+    target.scissorTest = false;
   }
 
   /**

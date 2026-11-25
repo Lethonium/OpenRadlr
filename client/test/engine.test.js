@@ -136,6 +136,23 @@ test("a rectangle is cleared before its scene is drawn into it", () => {
   assert.equal(fake.calls.clears.at(-1).scissorTest, true);
 });
 
+test("a rectangle survives what Three does when a shadow pass hands the target back", () => {
+  // `setRenderTarget(target)` (the shadow map's way back to the scene target) takes the target's own viewport and scissor.
+  const { engine, fake } = make();
+  engine.resize(100, 50, 1);
+  engine.beginFrame();
+  let handedBack = null;
+  fake.render = () => {
+    const { viewport, scissor, scissorTest } = engine.target;
+    handedBack = { viewport: viewport.toArray(), scissor: scissor.toArray(), scissorTest };
+  };
+  engine.renderScene(new THREE.Scene(), new THREE.PerspectiveCamera(), { x: 10, y: 20, width: 30, height: 40 });
+  assert.deepEqual(handedBack, { viewport: [10, 20, 30, 40], scissor: [10, 20, 30, 40], scissorTest: true });
+  // The next whole-frame pass has the whole target again.
+  engine.renderScene(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.deepEqual(handedBack, { viewport: [0, 0, 100, 50], scissor: [0, 0, 100, 50], scissorTest: false });
+});
+
 test("a whole-frame scene is not cleared again after beginFrame", () => {
   const { engine, fake } = make();
   engine.beginFrame();
