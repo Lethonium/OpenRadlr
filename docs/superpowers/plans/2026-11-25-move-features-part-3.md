@@ -43,7 +43,7 @@
 - Produces:
   - `lemon.js`: `LEMON_COLORS` (moved from `lemonModel.js`: peel `[1.0, 0.8, 0.08]`, nub `[0.92, 0.68, 0.06]`, leaf `[0.24, 0.62, 0.22]`), `lemonGeometry() -> THREE.BufferGeometry` (about 1 m long along x, centred on the origin, vertex colours: the ellipsoid 0.44 × 0.3 × 0.3, a nub at each end, a leaf), and workbench `meta`/`create` as the other props.
   - `createLemonLayer({settings, uniforms, track})`: one `InstancedMesh` (capacity 64, name `"lemons"`), vertex-coloured standard material with an emissive glow of 0.5 × the peel colour; casts shadows when `settings.shadows`. Reads `frame.lemons: {position: number[], yaw: number}[]` (position is the lemon's centre). `stats() -> {drawn}`.
-  - View: `frame.lemons` from today's `#lemonModels` logic (same reach `SCENE.lemonReach`, same bob `sin(t·2.2 + distance)·0.1`, height 1.25, spin `t·1.6 + distance`); the layer applies today's scale 0.35 in each instance matrix.
+  - View: `frame.lemons` from today's `#lemonModels` logic (same reach `SCENE.lemonReach`, same bob `sin(t·2.2 + distance)·0.1`, height 1.25, spin `t·1.6 + distance`); the layer applies today's nose-up tilt of 0.35 rad (Euler YXZ) at full size.
 - [ ] **Step 1: failing tests**
   - `lemonLayer.test.js` › `each lemon is an instance at its position and turn` — two entries → `count` 2, instance 1's matrix translation equals entry 1's position ± 1e-6 and its rotation about y equals the yaw.
   - › `more lemons than the capacity are cut, not thrown` — 70 entries → `count` 64.

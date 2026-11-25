@@ -10,8 +10,8 @@ import { createOwner } from "./tracker.js";
 
 /** Most lemons drawn at once; any more are cut. */
 const CAPACITY = 64;
-/** The lemon model is about 1 m long; a lemon floating over the road is this much of it. */
-const SCALE = 0.35;
+/** The lemon floats nose up by this much (radians) as it spins. */
+const TILT = 0.35;
 /** How much of the peel colour the lemon gives off on its own. */
 const GLOW = 0.5;
 
@@ -30,9 +30,9 @@ export function createLemonLayer({ settings, uniforms, track }) {
   object.frustumCulled = false;
   const matrix = new THREE.Matrix4();
   const turn = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
+  const angles = new THREE.Euler(TILT, 0, 0, "YXZ");
   const at = new THREE.Vector3();
-  const size = new THREE.Vector3(SCALE, SCALE, SCALE);
+  const size = new THREE.Vector3(1, 1, 1);
 
   return {
     object,
@@ -43,7 +43,8 @@ export function createLemonLayer({ settings, uniforms, track }) {
       const count = Math.min(lemons.length, CAPACITY);
       for (let i = 0; i < count; i += 1) {
         at.fromArray(lemons[i].position);
-        turn.setFromAxisAngle(up, lemons[i].yaw);
+        angles.y = lemons[i].yaw;
+        turn.setFromEuler(angles);
         object.setMatrixAt(i, matrix.compose(at, turn, size));
       }
       object.count = count;
