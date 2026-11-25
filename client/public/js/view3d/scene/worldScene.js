@@ -8,6 +8,7 @@ import * as THREE from "../../three.js";
 import { createGrainTexture, createSharedUniforms } from "../assets/materials.js";
 import { createSea } from "./sea.js";
 import { NATURE } from "../assets/nature/index.js";
+import { createCloudLayer } from "./cloudLayer.js";
 import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
@@ -107,6 +108,7 @@ export function createWorldScene(world, { settings, track }) {
     crowd: () => createCrowdLayer(world, plants()),
     lemons: () => createLemonLayer(plants()),
     highlight: () => createHighlightLayer(plants()),
+    clouds: () => createCloudLayer(world.clouds, plants()),
     weather: () => createWeatherLayer(plants()),
     nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
@@ -118,7 +120,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.arches(), makers.furniture(), makers.venues(), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
+  layers.push(makers.arches(), makers.furniture(), makers.venues(), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -169,7 +171,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
   };
   setQuality(settings);
 

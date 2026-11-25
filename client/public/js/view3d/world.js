@@ -42,6 +42,7 @@ import { normalize, yawFor } from "./math.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
 import { paintLandUse } from "../world/landPaint.js";
+import { planClouds } from "../world/clouds.js";
 import { planWorld } from "../world/plan/index.js";
 import { junctionPads, roadStrips } from "../world/plan/roadStrips.js";
 import { riverStrips } from "../world/plan/riverStrips.js";
@@ -352,6 +353,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     waterLevel: ground.water,
     ground: grids,
     plan,
+    clouds: planClouds({ seed, center: terrain.index.center, meanElevation: terrain.index.meanElevation, style: biome.sky?.clouds ?? temperate.sky.clouds }),
     overview: worldOverview(terrain, ground.water),
     arches: archPlacements(route),
     furniture,
