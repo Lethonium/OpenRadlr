@@ -3579,8 +3579,11 @@ function profileRideItem(row, record, backedUp = false) {
 
   const heading = document.createElement("span");
   heading.className = "profile-ride-heading";
-  const title = textElement("span", row.route);
+  const title = document.createElement("span");
   title.className = "profile-ride-title";
+  const name = textElement("span", row.route);
+  name.className = "profile-ride-name";
+  title.append(name);
   if (row.device) {
     const icon = document.querySelector(`.mode-card[data-mode="${row.device === "paddle" ? "paddles" : "sim"}"] svg`)?.cloneNode(true);
     if (icon) {

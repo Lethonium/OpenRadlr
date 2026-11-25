@@ -3567,10 +3567,16 @@ body.riding {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  overflow: hidden;
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* A long route name ends in an ellipsis; the device and cloud marks after it stay. */
+.profile-ride-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .profile-ride-title svg {
@@ -3659,13 +3665,19 @@ body.riding {
 
 .profile-ride-detail {
   display: grid;
+  /* One column no wider than the card: a wide splits table scrolls instead of widening it. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   padding: 4px 14px 14px;
 }
 
+.profile-ride-section {
+  min-width: 0;
+}
+
 .profile-ride-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(130px, 100%), 1fr));
   gap: 8px;
 }
 
@@ -8163,4 +8175,51 @@ body.working-out #paddles {
 
 .account-danger .account-confirm {
   border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+}
+
+/* The splits of an opened ride: a box of their own that scrolls sideways on a phone. */
+.profile-ride-section .profile-splits {
+  border-radius: 10px;
+  background: var(--bg);
+  -webkit-overflow-scrolling: touch;
+}
+
+.profile-ride-section .profile-splits table {
+  min-width: 100%;
+  margin: 0;
+}
+
+@container (max-width: 420px) {
+  .profile-ride-summary {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .profile-ride-date {
+    width: 42px;
+    height: 46px;
+  }
+
+  .profile-ride-stats {
+    gap: 4px;
+  }
+
+  .profile-ride-stat strong {
+    font-size: 16px;
+  }
+
+  .profile-ride-detail {
+    padding: 0 12px 12px;
+  }
+
+  /* More columns to the right: the edge fades, so the table reads as scrollable. */
+  .profile-ride-section .profile-splits {
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+
+  .profile-ride-curve li {
+    grid-template-columns: 44px minmax(0, 1fr) 56px;
+    gap: 8px;
+  }
 }
