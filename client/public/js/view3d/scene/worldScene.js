@@ -12,6 +12,7 @@ import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
+import { createStatueLayer } from "./statueLayer.js";
 import { createRiderLayer } from "./riderLayer.js";
 import { createFarmLayer } from "./farmLayer.js";
 import { createGrassLayer } from "./grassLayer.js";
@@ -48,6 +49,7 @@ const LIGHTNING = 3;
  * @property {boolean} [shadows] false switches the sun's shadow off for this frame (the drone)
  * @property {import("./riderLayer.js").RiderEntry[]} [riders] the road riders to draw (none when missing)
  * @property {import("./athleteLayer.js").AthleteEntry[]} [athletes] the gym athletes to draw (none when missing)
+ * @property {{gym: object, index: number} | null} [statueGlow] the statue plinth to light (none when missing)
  */
 
 /**
@@ -67,6 +69,8 @@ export function createWorldScene(world, { settings, track }) {
   let plan = world.plan;
   let environment = null;
   let flash = 0;
+  /** The last statue rows, sent again to a rebuilt layer. */
+  let statueRows = [];
   const plants = () => ({ settings: current, season, uniforms, track });
   /** How each rebuildable layer is made, by the name of its object. */
   const makers = {
@@ -82,6 +86,7 @@ export function createWorldScene(world, { settings, track }) {
     fauna: () => createFaunaLayer(plan, { ...plants(), ground: world.ground }),
     riders: () => createRiderLayer(plants()),
     athletes: () => createAthleteLayer(plants()),
+    statues: () => createStatueLayer(plants()),
     weather: () => createWeatherLayer(plants()),
     nightLights: () => createNightLights(plan, { ...plants(), ground: world.ground }),
   };
@@ -93,7 +98,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.riders(), makers.athletes(), makers.weather(), makers.nightLights());
+  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -104,6 +109,7 @@ export function createWorldScene(world, { settings, track }) {
       scene.remove(layers[at].object);
       layers[at].dispose();
       layers[at] = makers[name]();
+      if (name === "statues" && statueRows.length) layers[at].setRows(statueRows);
       scene.add(layers[at].object);
       if (environment) layers[at].setEnvironment(environment);
     }
@@ -139,7 +145,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "weather", "nightLights");
   };
   setQuality(settings);
 
@@ -194,6 +200,11 @@ export function createWorldScene(world, { settings, track }) {
       season = next;
       plan = nextPlan;
       if (plan) rebuild("islands", "forest", "crops", "roadside", "settlements", "farms", "landmarks", "fauna");
+    },
+    /** Replaces the gyms' statue rows (`{gym, figures, material, figure}`). */
+    setStatues(rows) {
+      statueRows = rows;
+      layers.find((layer) => layer.object.name === "statues").setRows(rows);
     },
     setEnvironment(env) {
       environment = env;
