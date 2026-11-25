@@ -5,7 +5,7 @@
  */
 
 import { t, tn } from "../i18n/i18n.js";
-import { formatDistanceWithUnit, formatDuration, formatElevation } from "../util/format.js";
+import { formatDistanceWithUnit, formatDuration, formatElevation, formatSpeed, speedUnit } from "../util/format.js";
 import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
@@ -61,13 +61,55 @@ function rideDate(ms, locale) {
   }
 }
 
+/** The date tile (day and month) and the line under the title (weekday and start time). */
+function dateParts(ms, locale) {
+  const when = new Date(ms);
+  const format = (options) => {
+    try {
+      return new Intl.DateTimeFormat(locale, options).format(when);
+    } catch {
+      return new Intl.DateTimeFormat(undefined, options).format(when);
+    }
+  };
+  return {
+    day: format({ day: "numeric" }),
+    month: format({ month: "short" }),
+    when: `${format({ weekday: "long" })} · ${format({ hour: "2-digit", minute: "2-digit" })}`,
+  };
+}
+
+const STAT_LABELS = {
+  distance: "profilePage.rides.stat.distance",
+  time: "profilePage.rides.stat.time",
+  power: "profilePage.rides.stat.power",
+  climbing: "profilePage.rides.stat.climbing",
+  maxPower: "profilePage.rides.stat.maxPower",
+  weightedPower: "profilePage.rides.stat.weightedPower",
+  energy: "profilePage.rides.stat.energy",
+  heartRate: "profilePage.rides.stat.heartRate",
+  speed: "profilePage.rides.stat.speed",
+  load: "profilePage.rides.stat.load",
+};
+
+const stat = (key, value) => ({ label: t(STAT_LABELS[key]), value });
+
 /**
  * One row per ride (records come newest first); `device` only marks phone
  * paddles and the simulator. Workouts (yoga, bodyweight) share the history:
  * they show their plan and time, no ride figures (those are null).
  */
 export function rideRows(records, routes, { locale } = {}) {
-  return records.map((record) => (record.kind === "workout" ? workoutRow(record, locale) : {
+  return records.map((record) => {
+    const row = record.kind === "workout" ? workoutRow(record, locale) : rideRow(record, routes, locale);
+    const stats = [["distance", row.distance], ["time", row.time], ["power", row.power], ["climbing", row.climbing]]
+      .filter(([, value]) => value !== null)
+      .map(([key, value]) => stat(key, value));
+    return { ...row, ...dateParts(record.startedAt, locale), stats };
+  });
+}
+
+function rideRow(record, routes, locale) {
+  return {
     id: record.id,
     workout: false,
     date: rideDate(record.startedAt, locale),
@@ -77,7 +119,21 @@ export function rideRows(records, routes, { locale } = {}) {
     power: Number.isFinite(record.avgPower) ? `${Math.round(record.avgPower)} W` : "–",
     climbing: formatElevation(Number.isFinite(record.elevationGainM) ? record.elevationGainM : 0),
     device: record.device === "paddle" || record.device === "sim" ? record.device : null,
-  }));
+  };
+}
+
+const known = (value) => Number.isFinite(value) && value > 0;
+
+/** The figures of an opened ride beyond its row: only those the record knows. */
+export function rideExtras(record) {
+  return [
+    known(record.maxPower) && stat("maxPower", `${Math.round(record.maxPower)} W`),
+    known(record.weightedPower) && stat("weightedPower", `${Math.round(record.weightedPower)} W`),
+    known(record.kilojoules) && stat("energy", `${Math.round(record.kilojoules)} kJ`),
+    known(record.avgHeartRate) && stat("heartRate", `${Math.round(record.avgHeartRate)} bpm`),
+    known(record.avgSpeed) && stat("speed", `${formatSpeed(record.avgSpeed)} ${speedUnit()}`),
+    known(record.load) && stat("load", String(Math.round(record.load))),
+  ].filter(Boolean);
 }
 
 function workoutRow(record, locale) {
@@ -96,6 +152,14 @@ function workoutRow(record, locale) {
 
 function curveLabel(seconds) {
   return seconds < 60 ? `${seconds} s` : `${seconds / 60} min`;
+}
+
+/** The best efforts as bars: each one's share of the highest. */
+export function curveBars(curve) {
+  if (!curve) return [];
+  const rows = curveRows(curve).map((row) => ({ ...row, raw: Number.parseInt(row.watts, 10) }));
+  const top = Math.max(...rows.map((row) => row.raw), 1);
+  return rows.map(({ label, watts, raw }) => ({ label, watts, share: Math.round((raw / top) * 100) / 100 }));
 }
 
 /** The power curve's key points (5 s, 1, 5 and 20 min) and the longest effort the ride has. */

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideRows, routeName } from "../public/js/view/profilePage.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, rideExtras, rideRows, routeName } from "../public/js/view/profilePage.js";
 
 const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftpDate: null, levelW: 252, units: "metric" };
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
@@ -213,4 +213,34 @@ test("dataRows: the device row is named and can be deleted when it has entries",
   assert.equal(row.count, "4 entries");
   assert.equal(row.canDelete, true);
   assert.ok(row.detail.length > 0);
+});
+
+test("rideRows: the date tile and the start time come apart", () => {
+  const [row] = rideRows([rec()], [], { locale: "en" });
+  assert.equal(row.day, "10");
+  assert.match(row.month, /Nov/);
+  assert.match(row.when, /Tue/);
+  assert.match(row.when, /18:00|6:00/);
+});
+
+test("rideRows: a ride's figures come with their labels; a workout has its time only", () => {
+  const [ride] = rideRows([rec()], [], { locale: "en" });
+  assert.deepEqual(ride.stats.map((stat) => [stat.label, stat.value]), [["Distance", "21.4 km"], ["Time", "45:00"], ["Avg power", "198 W"], ["Climbing", "210 m"]]);
+  const [workout] = rideRows([{ id: "w", kind: "workout", startedAt: 1, durationS: 600, planName: "Core" }], [], { locale: "en" });
+  assert.deepEqual(workout.stats.map((stat) => stat.label), ["Time"]);
+});
+
+test("rideExtras: the figures a ride knows, and none it doesn't", () => {
+  const extras = rideExtras(rec({ maxPower: 712, weightedPower: 205.6, kilojoules: 534, avgHeartRate: 141, avgSpeed: 7.9, load: 48.2 }));
+  assert.deepEqual(extras.map((extra) => [extra.label, extra.value]), [
+    ["Max power", "712 W"], ["Weighted power", "206 W"], ["Energy", "534 kJ"], ["Avg heart rate", "141 bpm"], ["Avg speed", "28.4 km/h"], ["Load", "48"],
+  ]);
+  assert.deepEqual(rideExtras({ id: "old" }), []);
+  assert.deepEqual(rideExtras(rec({ avgHeartRate: null, maxPower: 0 })).map((e) => e.label), []);
+});
+
+test("curveBars: each best effort as a share of the highest", () => {
+  const bars = curveBars({ 5: 600, 60: 300 });
+  assert.deepEqual(bars.map((bar) => [bar.label, bar.watts, bar.share]), [["5 s", "600 W", 1], ["1 min", "300 W", 0.5]]);
+  assert.deepEqual(curveBars(null), []);
 });

@@ -3351,56 +3351,247 @@ body.riding {
 }
 
 .profile-rides {
+  container-type: inline-size;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* A ride: date tile, route and start, its figures, a chevron; the detail opens under it. */
 .profile-ride {
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
+  background: var(--surface-2);
+  transition: border-color 0.15s;
+}
+
+.profile-ride:hover,
+.profile-ride.open {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 .profile-ride-summary {
   display: grid;
-  gap: 2px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 0;
+  border-radius: 12px;
   background: transparent;
   color: var(--text);
   text-align: left;
 }
 
-.profile-ride-when {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
+.profile-ride-date {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 52px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  line-height: 1;
 }
 
-.profile-ride-when svg {
+.profile-ride-date strong {
+  font-family: var(--num);
+  font-size: 22px;
+}
+
+.profile-ride-date span {
+  margin-top: -6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profile-ride-heading {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.profile-ride-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.profile-ride-title svg {
+  flex: none;
   width: 16px;
   height: 16px;
   fill: none;
-  stroke: currentColor;
+  stroke: var(--muted);
   stroke-width: 1.8;
-  opacity: 0.7;
 }
 
-.profile-ride-figures {
+.profile-ride-when {
+  overflow: hidden;
   color: var(--muted);
-  font-family: var(--num);
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-ride-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(64px, auto);
+  gap: 16px;
+}
+
+.profile-ride-stat {
+  display: grid;
+  gap: 1px;
+  text-align: right;
+}
+
+.profile-ride-stat strong {
+  font-family: var(--num);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-ride-stat span {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.profile-ride-chevron {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.profile-ride.open .profile-ride-chevron {
+  margin: 4px 4px 0;
+  transform: rotate(-135deg);
+}
+
+/* Narrow: the figures move under the title, spread over the card's width. */
+@container (max-width: 620px) {
+  .profile-ride-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px 12px;
+  }
+
+  .profile-ride-stats {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-auto-columns: 1fr;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .profile-ride-stat {
+    text-align: left;
+  }
 }
 
 .profile-ride-detail {
   display: grid;
+  gap: 18px;
+  padding: 4px 14px 14px;
+}
+
+.profile-ride-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.profile-ride-tile {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.profile-ride-tile span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-ride-tile strong {
+  font-family: var(--num);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-ride-section h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Best power: one bar per effort, as long as its share of the best. */
+.profile-ride-curve {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-ride-curve li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 64px;
+  align-items: center;
   gap: 10px;
-  padding: 0 12px 12px;
+  font-size: 13px;
+}
+
+.profile-ride-curve li > span:first-child {
+  color: var(--muted);
+}
+
+.profile-ride-curve strong {
+  font-family: var(--num);
+  font-size: 15px;
+  text-align: right;
+}
+
+.profile-ride-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent) calc(var(--share) * 100%), var(--bg) 0);
+}
+
+.profile-ride-remove {
+  justify-self: end;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.profile-ride-remove:hover {
+  color: var(--danger);
 }
 
 /* A phone scrolls the splits sideways instead of widening the page. */
