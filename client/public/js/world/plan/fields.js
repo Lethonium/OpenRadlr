@@ -74,7 +74,7 @@ export function planFields({ terrain, roads, regions, seed, season, masks, water
   return fields;
 }
 
-function cornersOf({ x, z, width, depth, yaw }, terrain) {
+export function cornersOf({ x, z, width, depth, yaw }, terrain) {
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
   const corners = new Float32Array(12);
   [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([u, v], k) => {
