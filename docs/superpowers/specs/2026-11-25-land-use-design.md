@@ -139,12 +139,12 @@ by distance, measured against the draw-call budget.
   quality's reach each time their chunks rebuild, so the follow drone and the menu drone get planted parcels away
   from roads too. Farms keep their logic but take arable parcels near a road (they need a drive); fauna takes the
   arable and pasture parcels as its fields and meadows.
-- **Woods:** `planWoods` runs first and keeps its placement; the land use treats wood cells as taken (an input
-  mask), so woods and parcels never overlap. "Wood" is not a parcel kind.
+- **Woods:** `planWoods` keeps its placement and runs after the parcels, as it runs after the fields today: it
+  fills the land no parcel took ("wild" land), so woods and parcels never overlap. "Wood" is not a parcel kind.
 - **Terrain material:** the terrain layer's near tiles and far mesh may change their material (both sample the
   land-use texture), including the night, weather and season paths.
-- **Frame budget:** the menu's frame time is measured before and after with the same headless probe (`?stats`) and
-  may grow at most 10 %. Ride draw calls: Low and Medium at most +10 %, High and Ultra at most +15 % over
+- **Frame budget:** the menu's draw calls and triangles are measured before and after with the same headless probe
+  (`?stats`) and may grow at most 10 % (software GL frame times are too noisy to budget). Ride draw calls: Low and Medium at most +10 %, High and Ultra at most +15 % over
   `move3/after.txt`.
 
 ## Left to the builder
