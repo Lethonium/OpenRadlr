@@ -10,7 +10,7 @@ import { planFields } from "./fields.js";
 import { planFauna } from "./fauna.js";
 import { planFarIslands } from "./islands.js";
 import { planLandmarks } from "./landmarks.js";
-import { buildMasks } from "./masks.js";
+import { MASK, buildMasks, stampDisc } from "./masks.js";
 import { planRoadside } from "./roadside.js";
 import { planSettlements } from "./settlements/plan.js";
 import { planTurbines } from "./turbines.js";
@@ -39,14 +39,15 @@ export const PLAN_BUDGET = Object.freeze({
  */
 
 /**
- * @param {{terrain: object, roads: import("../roads.js").RoadIndex, rivers: object[], regions?: object[], forests?: {x: number, z: number}[], settlements?: object[], landmarks?: object[], routes?: object[], seed: number, season: string, detail?: "low"|"medium"|"high"|"ultra", bounds: {x0: number, z0: number, x1: number, z1: number}}} input
+ * @param {{terrain: object, roads: import("../roads.js").RoadIndex, rivers: object[], regions?: object[], forests?: {x: number, z: number}[], settlements?: object[], landmarks?: object[], clearings?: {x: number, z: number, radius: number}[], routes?: object[], seed: number, season: string, detail?: "low"|"medium"|"high"|"ultra", bounds: {x0: number, z0: number, x1: number, z1: number}}} input
  * @returns {WorldPlan}
  */
-export function planWorld({ terrain, roads, rivers, regions = [], forests = [], settlements = [], landmarks = [], routes = [], seed, season, detail = "high", bounds }) {
+export function planWorld({ terrain, roads, rivers, regions = [], forests = [], settlements = [], landmarks = [], clearings = [], routes = [], seed, season, detail = "high", bounds }) {
   const budget = PLAN_BUDGET[detail];
   if (!budget) throw new Error(`Unknown detail level "${detail}"`);
   const water = waterLevel(roads);
   const masks = buildMasks({ roads, rivers, bounds });
+  for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built);
   const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
   const fields = planFields({ terrain, roads, regions, seed, season, masks, water });

@@ -725,3 +725,17 @@ test("every gym on the map knows a distinct café of the network", () => {
   for (const id of ids) assert.ok(cafeIds.includes(id), `${id} is a café of the network`);
   assert.equal(new Set(ids).size, ids.length, "distinct");
 });
+
+import { MASK, maskAt } from "../public/js/world/plan/masks.js";
+test("the plan keeps plants off every outdoor gym's pad and statue row", () => {
+  for (const gym of mapWorld.gyms) {
+    const [px, , pz] = gym.center;
+    const [c, s] = [Math.cos(gym.yaw), Math.sin(gym.yaw)];
+    for (const x of [-8, -4, 0, 4, 8]) {
+      for (const z of [-3, 0, 3, 6, 8]) {
+        const at = [px + x * c + z * s, pz - x * s + z * c];
+        assert.notEqual(maskAt(mapWorld.plan.masks, ...at), MASK.free, `gym ${gym.cafeId}: free ground at local (${x}, ${z})`);
+      }
+    }
+  }
+});

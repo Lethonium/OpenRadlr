@@ -17,6 +17,7 @@ import {
   Occupancy,
   buildBikeCafe,
   buildOutdoorGym,
+  gymClearing,
   studioSite,
   buildRoadside,
   buildSpectators,
@@ -262,7 +263,16 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
 
   // Where woods, fields and verges go (and which ground is farmed): the plan, then the ground that tints and ploughs by it.
   const regions = network?.regions ?? [];
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], routes, seed, season, detail, bounds: ground.bounds });
+  // Where the cafés (and so the outdoor gyms) stand: the plan keeps plants off the gyms' mats.
+  const cafeRoads = network
+    ? network.cafes().flatMap((cafe) => {
+        const start = route.positionAt(0);
+        if (Math.hypot(start.x - cafe.x, start.y - cafe.y) < 30) return [{ road: route, cafeId: cafe.id }];
+        const road = network.roadFrom(cafe.id);
+        return road ? [{ road, cafeId: cafe.id }] : [];
+      })
+    : ordered.map((road) => ({ road, cafeId: null }));
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.map(({ road }) => gymClearing(road)), routes, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, masks: plan.masks });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow
@@ -310,16 +320,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
 
   // The bike café where rides start, before anything else claims the spot
-  // (one for all routes that start at the same place). A network has its
-  // cafés as places: each gets one, beside the ridden route where it starts.
-  const cafeRoads = network
-    ? network.cafes().flatMap((cafe) => {
-        const start = route.positionAt(0);
-        if (Math.hypot(start.x - cafe.x, start.y - cafe.y) < 30) return [{ road: route, cafeId: cafe.id }];
-        const road = network.roadFrom(cafe.id);
-        return road ? [{ road, cafeId: cafe.id }] : [];
-      })
-    : ordered.map((road) => ({ road, cafeId: null }));
+  // (one for all routes that start at the same place); each cafe road gets one.
   const cafes = [];
   const cafeSpots = [];
   const gyms = [];

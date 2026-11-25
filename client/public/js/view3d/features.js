@@ -292,6 +292,25 @@ export const GYM_DISTANCE = CAFE_DISTANCE + 24;
 /** Metres between neighbouring spots on the mat (two rows of four). */
 const SPOT_GAP = 1.8;
 
+/** Where the outdoor gym's mat stands on `route`: its centre and yaw, from the road alone. */
+function gymSite(route) {
+  const f = roadFrame(route, route.wrap(GYM_DISTANCE));
+  const side = 1;
+  return { f, side, pos: add(f.center, scale(f.right, side * (roadHalfWidth(route.lanes) + 14))), yaw: yawFor(scale(f.right, -side)) };
+}
+
+/** Metres from the pad's middle (local z 3) that cover the pad and the statue row behind it. */
+const GYM_CLEARING = 12;
+
+/**
+ * The ground the outdoor gym on `route` takes, whether or not it ends up built: `{x, z, radius}`.
+ * The world plan keeps plants off it.
+ */
+export function gymClearing(route) {
+  const { pos, yaw } = gymSite(route);
+  return { x: pos[0] + 3 * Math.sin(yaw), z: pos[2] + 3 * Math.cos(yaw), radius: GYM_CLEARING };
+}
+
 /**
  * The outdoor gym beside the café (#77): on the café's side of the road, set
  * back like it, a little further along. Workout riders stand on its mat.
@@ -303,11 +322,7 @@ const SPOT_GAP = 1.8;
  * @returns {{center: number[], yaw: number, spots: {position: number[], yaw: number}[], cafeId: string | null, statueRow: {position: number[], yaw: number}} | null}
  */
 export function buildOutdoorGym(route, terrain, { structures, bright, occupancy, avoid = () => false, biome = temperate, cafeId = null }) {
-  const half = roadHalfWidth(route.lanes);
-  const side = 1;
-  const f = roadFrame(route, route.wrap(GYM_DISTANCE));
-  const pos = add(f.center, scale(f.right, side * (half + 14)));
-  const yaw = yawFor(scale(f.right, -side));
+  const { f, pos, yaw } = gymSite(route);
   // The pad reaches from the mat towards the road and back to the bench (local z −3.6…6.6).
   const local = (x, z) => [pos[0] + x * Math.cos(yaw) + z * Math.sin(yaw), pos[2] - x * Math.sin(yaw) + z * Math.cos(yaw)];
   const [padX, padZ] = local(0, 1.5);
