@@ -4,10 +4,16 @@
  * route 1, the others fainter).
  */
 import * as THREE from "../../three.js";
+import { MARK_OFFSET } from "./roadLayer.js";
 import { createOwner } from "./tracker.js";
 
 /** Over the road and its markings. */
 const ORDER = 3;
+/**
+ * The road is pulled towards the camera by its polygon offset (more for the markings), which at a grazing angle
+ * outweighs the band's lift of under a metre and buries it. The band is pulled further than the markings.
+ */
+const OFFSET = Object.freeze({ factor: MARK_OFFSET.factor * 2, units: MARK_OFFSET.units * 2 });
 
 /**
  * @param {{track: import("./tracker.js").Tracker["track"]}} options
@@ -35,7 +41,7 @@ export function createHighlightLayer({ track }) {
         geometry.setAttribute("position", new THREE.BufferAttribute(band.positions, 3));
         geometry.setAttribute("color", new THREE.BufferAttribute(band.colors, 3));
         geometry.computeBoundingSphere();
-        const material = owner.own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: false }));
+        const material = owner.own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: false, polygonOffset: true, polygonOffsetFactor: OFFSET.factor, polygonOffsetUnits: OFFSET.units }));
         material.color.setScalar(glow);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.renderOrder = ORDER;

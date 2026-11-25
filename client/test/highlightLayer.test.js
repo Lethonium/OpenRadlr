@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { createHighlightLayer } from "../public/js/view3d/scene/highlightLayer.js";
+import { MARK_OFFSET } from "../public/js/view3d/scene/roadLayer.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { createWorldScene } from "../public/js/view3d/scene/worldScene.js";
 
@@ -26,6 +27,15 @@ test("a band is drawn in its colours, scaled by its glow", () => {
   const colors = mesh.geometry.getAttribute("color");
   const tint = mesh.material.color.toArray();
   [0.35, 0.175, 0].forEach((expected, i) => near(colors.getComponent(0, i) * tint[i], expected, `channel ${i}`));
+});
+
+test("a band is pulled in front of the road markings, or the road's own depth offset hides it", () => {
+  const { layer } = make();
+  layer.setBands([{ band: band(), glow: 1 }]);
+  const { material } = layer.object.children[0];
+  assert.equal(material.polygonOffset, true);
+  assert.ok(material.polygonOffsetFactor < MARK_OFFSET.factor, `factor ${material.polygonOffsetFactor}`);
+  assert.ok(material.polygonOffsetUnits < MARK_OFFSET.units, `units ${material.polygonOffsetUnits}`);
 });
 
 test("setting bands again replaces them and leaks nothing", () => {

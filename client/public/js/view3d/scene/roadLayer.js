@@ -16,7 +16,7 @@ export const CHUNK_QUADS = 300;
 const MARK_KINDS = new Set([ROAD_KIND.marking, ROAD_KIND.edge, ROAD_KIND.rut]);
 /** The surface sits just in front of the ground; marks and ruts in front of that. */
 const SURFACE_OFFSET = Object.freeze({ factor: -2, units: -4 });
-const MARK_OFFSET = Object.freeze({ factor: -4, units: -8 });
+export const MARK_OFFSET = Object.freeze({ factor: -4, units: -8 });
 /** How much of its colour and roughness wet asphalt keeps, at full wetness. */
 const WET = Object.freeze({ shade: 0.6, markShade: 0.8, roughness: 0.45 });
 const DRY_ROUGHNESS = 0.95;
