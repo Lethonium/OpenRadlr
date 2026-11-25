@@ -12,6 +12,7 @@ import * as THREE from "../../../three.js";
 import { colour } from "../geom.js";
 import { addHook, cloudShadows, createSharedUniforms, heightFog } from "../materials.js";
 import { createOwner } from "../owner.js";
+import { bikeGeometry } from "./bicycle.js";
 import { KIT_ATLAS, kitTexture } from "./kitPainter.js";
 
 /** The 19 bones, parents before children. */
@@ -657,29 +658,11 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
 // ---------- the workbench pair
 
 /** The default workbench rider: the plan's 1.78 m, 70 kg rider in a red banded jersey. */
-const BENCH_LOOK = Object.freeze({
+export const BENCH_LOOK = Object.freeze({
   height: 1.78, weight: 70, skin: "fair", hair: "#4a3426", kit: "road", pattern: "band", primary: "#e8473f", secondary: "#f4f1ea", accent: "#1d2a44",
   shorts: "#1d1f24", socks: "#f4f1ea", shoes: "#f4f1ea", helmet: "#f4f1ea", glasses: true, gloves: true, gloveColor: "#1d1f24",
   bike: "road", frame: "#c8382e", frameAccent: "#f2efe8",
 });
-
-/**
- * The road bike's contact points at scale 1, until `bicycle.js` brings the real ones: the previewer's riding pose rides this.
- * @returns {RiderFit}
- */
-function benchFit() {
-  const bb = vec(0, 0.266);
-  const sd = vec(-0.28402, 0.95882);
-  return {
-    T: { grip: "hoods" }, bb, sd, saddle: bb.clone(),
-    grips: {
-      tops: [vec(0.46842, 0.87361, -0.12), vec(0.46842, 0.87361, 0.12)],
-      hoods: [vec(0.54342, 0.89861, -0.21), vec(0.54342, 0.89861, 0.21)],
-      drops: [vec(0.47842, 0.75861, -0.215), vec(0.47842, 0.75861, 0.215)],
-    },
-    crankLen: 0.1725, q: 0.105,
-  };
-}
 
 const BENCH_POSES = Object.freeze(["ride", "stand", "wave"]);
 /** Crank speed of the previewer's riding pose, radians per second (0.725 turns). */
@@ -713,8 +696,7 @@ export const meta = Object.freeze({
 export function create({ track, pose = "ride", uniforms, ...options } = {}) {
   const owner = createOwner(track);
   const rig = createRider({ ...BENCH_LOOK, ...options }, { own: owner.own, uniforms });
-  const fit = benchFit();
-  fit.saddle.addScaledVector(fit.sd, rig.saddleFor(fit));
+  const fit = bikeGeometry("road", { saddleHeight: rig.saddleFor(bikeGeometry("road")) });
   let crank = 0.6;
   const update = (dt, t) => {
     if (pose === "ride") {
