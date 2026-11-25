@@ -109,6 +109,17 @@ test("far riders skip the body", () => {
   assert.notEqual(cyclist.crank, crank);
 });
 
+test("a full cyclist stays within its mesh budget", () => {
+  for (let id = 1; id <= 5; id += 1) {
+    const { cyclist } = build(id);
+    let meshes = 0;
+    cyclist.object.traverse((child) => {
+      if (child.isMesh) meshes += 1;
+    });
+    assert.ok(meshes <= 14, `look ${id} has ${meshes} meshes`);
+  }
+});
+
 test("the bike exposes the wheels, the steering and the pedals", () => {
   const owner = createOwner();
   const bike = createBike({ type: "city", own: owner.own, uniforms });

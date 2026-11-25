@@ -6,6 +6,7 @@
  * crankset and pedals. Ported from the reference's `props/bicycle.js`, one vertex-coloured mesh per material and part.
  */
 import * as THREE from "../../../three.js";
+import { mergeGeometries } from "../../../../vendor/three/addons/utils/BufferGeometryUtils.js";
 import { box, colour, cylinder, merge, paint, rod as rodArrays } from "../geom.js";
 import { addHook, cloudShadows, createSharedUniforms, heightFog } from "../materials.js";
 
@@ -37,7 +38,9 @@ const CRANK_LENGTH = 0.1725;
 const PEDAL_HALF_GAP = 0.105;
 const CHAINRING_TOOTH = 0.00202;
 const SPOKE_COLOUR = "#b9bec4";
-const KINDS = Object.freeze(["paint", "metal", "rubber"]);
+const KINDS = Object.freeze(["paint", "metal", "rubber", "glow"]);
+/** Per kind: roughness, metalness and how strongly the colour glows; read per vertex by the one bike material. */
+const SURFACE = Object.freeze({ paint: [0.32, 0.25, 0], metal: [0.42, 0.55, 0], rubber: [0.88, 0, 0], glow: [0.4, 0, 0.6] });
 
 /**
  * What a bike gives a rider: its contact points and wheel positions in the bike's frame, `createRider`'s `RiderFit`
@@ -115,38 +118,57 @@ export function bikeGeometry(type = "road", { scale = 1, saddleHeight = null } =
 
 // ---------- mesh helpers
 
-const bucket = () => ({ paint: [], metal: [], rubber: [] });
+const bucket = () => ({ paint: [], metal: [], rubber: [], glow: [] });
 /** A rod between two vectors. */
 const rodBetween = (a, b, radius, value, segments = 10) => rodArrays(a.toArray(), b.toArray(), radius, colour(value), segments);
 const rodTo = (parts, kind, a, b, radius, value, segments = 10) => parts[kind].push(rodBetween(a, b, radius, value, segments));
 const tubeTo = (parts, kind, points, radius, value, steps = 24, segments = 8) =>
   parts[kind].push(painted(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), steps, radius, segments, false), value));
 
+/** Reads roughness, metalness and glow from the per-vertex `surface` attribute, so one material serves every part. */
+const surfaceHook = Object.assign(
+  (shader) => {
+    shader.vertexShader = `attribute vec3 surface;\nvarying vec3 vSurface;\n${shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSurface = surface;")}`; // i18n-ok
+    shader.fragmentShader = `varying vec3 vSurface;\n${shader.fragmentShader
+      .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n roughnessFactor = vSurface.x;")
+      .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\n metalnessFactor = vSurface.y;")
+      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * vSurface.z;")}`; // i18n-ok
+  },
+  { key: "surface" },
+);
+
 /**
- * The three bike materials, on the scene's shared hooks.
+ * The one bike material, on the scene's shared hooks (the surface hook gives each vertex its own finish).
  * @param {(resource: any) => any} own
  * @param {ReturnType<typeof createSharedUniforms>} uniforms
  */
-function bikeMaterials(own, uniforms) {
-  const lit = (parameters) => own(addHook(addHook(new THREE.MeshStandardMaterial({ vertexColors: true, ...parameters }), cloudShadows(uniforms)), heightFog(uniforms)));
-  return {
-    paint: lit({ roughness: 0.32, metalness: 0.25 }),
-    metal: lit({ roughness: 0.42, metalness: 0.55 }),
-    rubber: lit({ roughness: 0.88, metalness: 0 }),
-  };
+function bikeMaterial(own, uniforms) {
+  return own(addHook(addHook(addHook(new THREE.MeshStandardMaterial({ vertexColors: true }), surfaceHook), cloudShadows(uniforms)), heightFog(uniforms)));
 }
 
-/** Merges each bucket into one mesh on its material and adds the meshes to `group`; `shift` moves the origin. */
+/**
+ * Merges every bucket of a rigid part into one mesh on the bike material and adds it to `group`; each vertex carries
+ * its kind's finish. `shift` moves the origin.
+ */
 function flush(parts, group, kit, shift = null) {
+  const pieces = [];
   for (const kind of KINDS) {
     if (!parts[kind].length) continue;
     const geometry = merge(parts[kind]);
-    if (shift) geometry.translate(-shift.x, -shift.y, -shift.z);
-    const mesh = new THREE.Mesh(kit.own(geometry), kit.materials[kind]);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    const finish = SURFACE[kind];
+    const count = geometry.attributes.position.count;
+    const surface = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) surface.set(finish, i * 3);
+    geometry.setAttribute("surface", new THREE.BufferAttribute(surface, 3));
+    pieces.push(geometry);
   }
+  if (!pieces.length) return;
+  const geometry = pieces.length > 1 ? mergeGeometries(pieces) : pieces[0];
+  if (shift) geometry.translate(-shift.x, -shift.y, -shift.z);
+  const mesh = new THREE.Mesh(kit.own(geometry), kit.material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
 }
 
 /** A tyre, rim, spokes, hub, brake rotor and (rear) cassette, wheel axis along z, hub at the origin. */
@@ -319,7 +341,7 @@ export function createBike({
 } = {}) {
   const fit = bikeGeometry(type, { scale, saddleHeight });
   const T = fit.T;
-  const kit = { own, materials: bikeMaterials(own, uniforms) };
+  const kit = { own, material: bikeMaterial(own, uniforms) };
   const root = new THREE.Group();
   const parts = bucket();
   const frameColour = colour(frame);
@@ -401,11 +423,8 @@ export function createBike({
   if (T.guard) parts.paint.push(box(0.02, 0.02, 0.02, frameColour, bb.x, bb.y, 0));
 
   // lamps: a tail light on the seatpost or rack, a head lamp under the bar or on the fork crown
-  const glow = (value) => own(new THREE.MeshStandardMaterial({ color: value, emissive: value, emissiveIntensity: 0.6, roughness: 0.4 }));
   const tailPosition = T.rack ? vec(rear.x - 0.19, rear.y + T.R + 0.03) : saddle.clone().addScaledVector(sd, -0.16).add(vec(-0.025, 0));
-  const tail = new THREE.Mesh(own(new THREE.BoxGeometry(0.02, 0.05, 0.03)), glow("#d82a20"));
-  tail.position.copy(tailPosition);
-  root.add(tail);
+  parts.glow.push(box(0.02, 0.05, 0.03, colour("#d82a20"), tailPosition.x, tailPosition.y, tailPosition.z));
   flush(parts, root, kit);
 
   // ---- rear wheel
@@ -498,19 +517,12 @@ export function createBike({
   }
   if (T.lights) steerParts.metal.push(cylinder(0.022, 0.026, 0.05, 12, black).rotateZ(Math.PI / 2).translate(crown.x + 0.05, crown.y + 0.01, 0));
   if (T.fenders) steerParts.paint.push(painted(new THREE.TorusGeometry(T.R + 0.028, 0.012, 5, 30, Math.PI * 0.7), frameColour).scale(1, 1, 2.4).rotateZ(Math.PI * 0.15).translate(front.x, front.y, 0));
-  flush(steerParts, steer, kit, headTop);
   // head lamp: on the fork crown (city) or under the bar, with a glowing lens
   const lamp = T.lights ? vec(crown.x + 0.076, crown.y + 0.01) : cp.clone().add(vec(0.03, -0.035, 0));
   const lampZ = T.lights ? 0 : -0.06;
-  if (!T.lights) {
-    const body = new THREE.Mesh(own(new THREE.CylinderGeometry(0.019, 0.022, 0.05, 12).rotateZ(Math.PI / 2)), kit.materials.metal);
-    body.position.set(lamp.x - 0.03 - headTop.x, lamp.y - headTop.y, lampZ);
-    steer.add(body);
-  }
-  const lens = new THREE.Mesh(own(new THREE.CircleGeometry(0.018, 12)), glow("#fff3c4"));
-  lens.position.set(lamp.x - 0.004 - headTop.x, lamp.y - headTop.y, lampZ);
-  lens.rotation.y = Math.PI / 2;
-  steer.add(lens);
+  if (!T.lights) steerParts.metal.push(painted(new THREE.CylinderGeometry(0.019, 0.022, 0.05, 12).rotateZ(Math.PI / 2), "#2a2c2e").translate(lamp.x - 0.03, lamp.y, lampZ));
+  steerParts.glow.push(painted(new THREE.CircleGeometry(0.018, 12).rotateY(Math.PI / 2), "#fff3c4").translate(lamp.x - 0.004, lamp.y, lampZ));
+  flush(steerParts, steer, kit, headTop);
   const frontWheel = buildWheel(fit, { rear: false, rimColour: rimColor, wall }, kit);
   frontWheel.position.copy(front).sub(headTop);
   steer.add(frontWheel);
