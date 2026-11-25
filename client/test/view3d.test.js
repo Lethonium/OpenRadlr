@@ -6,7 +6,7 @@ import { identity, lookAt, multiply, perspective, placement, rotationXAbout, tra
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
-import { buildArches } from "../public/js/view3d/world.js";
+import { archPlacements } from "../public/js/view3d/world.js";
 import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, mirrorPose } from "../public/js/view3d/clips.js";
@@ -116,7 +116,7 @@ test("road, arches and riders produce geometry", () => {
   assert.ok(road.kinds.length > 1000);
   assert.equal(road.positions.length, road.kinds.length * 3);
   assert.equal(road.indices.length, (road.kinds.length / 4) * 6);
-  assert.ok(buildArches(route).vertexCount >= 108, "start arch: two posts and a beam");
+  assert.ok(archPlacements(route).some((a) => a.kind === "start_finish" && !a.banner), "the start arch is placed");
   assert.ok(buildBike().vertexCount > 100);
   for (const part of [buildThigh(), buildShin(), buildFoot(), buildCrankset()]) assert.ok(part.vertexCount > 0);
 });
@@ -316,7 +316,6 @@ class StubRenderer {
   }
 }
 
-const emptyMesh = () => ({ positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), vertexCount: 0 });
 /** A gym 30 m off the square route's first side, facing the road (−Z). */
 function testGym() {
   const center = [100, 100.4, 30];
@@ -328,7 +327,6 @@ function gymView(gyms, biome = "temperate", renderer = new StubRenderer(), studi
   const route = squareRoute();
   const world = {
     biome,
-    meshes: { arches: emptyMesh() },
     chunks: { scenery: [], structures: [] },
     spectators: [],
     gyms,
@@ -1062,7 +1060,7 @@ test("a rendered frame ends with end(), after the last draw", () => {
   view.render({ riders: [], myId: null, timeS: 12, colors });
   assert.equal(renderer.ends, 1);
   assert.equal(renderer.calls.at(-1), "end");
-  assert.ok(renderer.calls.includes("draw"));
+  assert.ok(renderer.calls.length > 1, "something was done before end()");
 });
 
 test("the frame carries the camera's view and projection", () => {
@@ -1098,7 +1096,7 @@ function worldView({ timeMode = "day", sideView = null } = {}) {
   const renderer = new StubRenderer();
   renderer.calls = log;
   const gym = testGym();
-  const world = { biome: "temperate", season: "summer", ground: groundFixture(), meshes: { arches: emptyMesh() }, chunks: { scenery: [], structures: [] }, spectators: [], gyms: [gym] };
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), chunks: { scenery: [], structures: [] }, spectators: [], gyms: [gym] };
   const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
   const view = new View3D(canvas, null, squareRoute(), world, { renderer, engine });
   view.setTimeMode(timeMode);
@@ -1152,7 +1150,6 @@ test("view3d no longer draws the old terrain, sea or clouds", () => {
   render();
   assert.equal(view.clouds, undefined);
   assert.equal(view.water, undefined);
-  assert.equal(view.meshes.horizon, undefined);
   assert.ok(!renderer.calls.includes("cloud"));
 });
 

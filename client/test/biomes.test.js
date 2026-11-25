@@ -169,7 +169,7 @@ test("winter changes the look, not the layout", () => {
   assert.deepEqual(winter.overview, temperate.overview, "the menu camera opens on the same island");
   assert.deepEqual(winter.zones, temperate.zones, "villages, farms, forests and rivers stay put");
   assert.equal(winter.waterLevel, temperate.waterLevel);
-  assert.deepEqual(winter.meshes.arches.positions, temperate.meshes.arches.positions, "start and finish stay put");
+  assert.deepEqual(winter.arches, temperate.arches, "start and finish stay put");
   for (const [x, z] of [[0, 0], [1200, -400], [-800, 900], [route.points[15][0], route.points[15][1]]]) {
     assert.equal(winter.terrain.height(x, z), temperate.terrain.height(x, z), `terrain height at ${x},${z}`);
   }
@@ -188,8 +188,7 @@ test("winter changes the look, not the layout", () => {
   const total = (scene) =>
     Object.values(triangles(scene)).reduce((a, b) => a + b, 0) +
     scene.rivers.strips.indices.length / 3 +
-    scene.roads.strips.indices.length / 3 +
-    Object.values(scene.meshes).reduce((a, mesh) => a + mesh.positions.length / 9, 0);
+    scene.roads.strips.indices.length / 3;
   const t = total(temperate);
   const w = total(winter);
   assert.notEqual(winter.roads.strips.positions.length, temperate.roads.strips.positions.length, "the road itself is reshaped");
@@ -219,5 +218,5 @@ test("a season changes the look, not the layout", () => {
   assert.deepEqual(triangles(again), triangles(base), "one triangle per place, either way");
   assert.deepEqual(again.gyms, base.gyms, "workout riders stand on the same spots");
   assert.deepEqual(again.overview, base.overview, "the menu camera opens on the same island");
-  assert.deepEqual(again.meshes.arches.positions, base.meshes.arches.positions, "start and finish stay put");
+  assert.deepEqual(again.arches, base.arches, "start and finish stay put");
 });

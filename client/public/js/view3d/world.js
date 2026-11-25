@@ -11,7 +11,7 @@
  *
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
-import { buildBanners, letterArch } from "./banners.js";
+import { ARCH_HEIGHT, BANNERS, archSpots, bannerPlacements } from "./banners.js";
 import { ChunkedMesh } from "./chunks.js";
 import {
   Occupancy,
@@ -38,7 +38,7 @@ import {
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/rivers.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "../world/zones.js";
-import { add, normalize, scale } from "./math.js";
+import { normalize, yawFor } from "./math.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
 import { groundGrid } from "../world/groundGrid.js";
 import { planWorld } from "../world/plan/index.js";
@@ -103,44 +103,18 @@ export function buildGroundGrids(terrain, ground, { season, long, regions, masks
   };
 }
 
-/** Arches at the start/finish line and at climb and sprint segments, with their names; banners counting down climbs and at halfway. */
-export function buildArches(route, { biome = temperate } = {}) {
-  const colors = biome.arch;
-  const mesh = new MeshBuilder();
+/**
+ * Where the arches and banners stand, as plain data for the main thread (scene/archLayer.js): arches at the
+ * start/finish line and at climb and sprint segments, banners counting down climbs and at halfway. `position` is the
+ * road's centre at the spot, `yaw` the level road direction, `height` the beam's centre (arch) or the cloth's top (banner).
+ */
+export function archPlacements(route) {
   const halfWidth = roadHalfWidth(route.lanes) + 0.6;
-  const arch = (distance, color, height = 5.2) => {
-    const frame = roadFrame(route, distance);
-    const along = scale(normalize([frame.forward[0], 0, frame.forward[2]]), -0.4);
-    for (const side of [-1, 1]) {
-      const foot = add(frame.center, scale(frame.right, side * halfWidth));
-      mesh.orientedBox(add(foot, [0, height / 2, 0]), scale(frame.right, 0.4), [0, height, 0], along, colors.post);
-    }
-    const left = add(frame.center, scale(frame.right, -halfWidth));
-    const right = add(frame.center, scale(frame.right, halfWidth));
-    const beamCenter = add(scale(add(left, right), 0.5), [0, height, 0]);
-    mesh.orientedBox(beamCenter, scale(frame.right, 2 * halfWidth + 0.4), [0, 1.0, 0], along, color);
-    // Chequered strip on the start/finish line.
-    if (color === colors.start) {
-      const squares = 12;
-      for (let i = 0; i < squares; i += 1) {
-        const t0 = -halfWidth + 0.6 + (i / squares) * (2 * halfWidth - 1.2);
-        const t1 = t0 + (2 * halfWidth - 1.2) / squares;
-        const shade = colors.chequer[i % 2];
-        const p = (t, o) => add(add(add(frame.center, scale(frame.right, t)), scale(normalize([frame.forward[0], 0, frame.forward[2]]), o)), [0, 0.06, 0]);
-        mesh.quad(p(t0, -0.4), p(t1, -0.4), p(t1, 0.4), p(t0, 0.4), shade);
-      }
-    }
+  const at = (spot, banner) => {
+    const frame = roadFrame(route, spot.distance);
+    return { kind: spot.kind, text: spot.text, position: frame.center, yaw: yawFor(normalize([frame.forward[0], 0, frame.forward[2]])), halfWidth, height: banner ? BANNERS.bottom + BANNERS.height : ARCH_HEIGHT, banner };
   };
-  for (const marker of route.markers) {
-    const height = marker.type === "start_finish" ? 5.6 : 5.2;
-    if (marker.type === "start_finish") arch(marker.distance, colors.start, height);
-    else if (marker.type === "climb") arch(marker.distance, colors.climb, height);
-    else if (marker.type === "sprint") arch(marker.distance, colors.sprint, height);
-    else continue;
-    letterArch(mesh, route, marker, { height, halfWidth, depth: 0.4 });
-  }
-  buildBanners(mesh, route, { biome });
-  return mesh.build();
+  return [...archSpots(route).map((spot) => at(spot, false)), ...bannerPlacements(route).map((spot) => at(spot, true))];
 }
 
 /**
@@ -231,7 +205,7 @@ const LONG = Object.freeze({ trees: 0.12, ground: 0.1, roadStep: 8, markingStep:
  * share is decorated once, and every café of the map gets its café.
  *
  * Returns chunked groups (drawn and shadowed only near the camera/rider),
- * always-drawn meshes (arches), blended meshes (sea,
+ * placement data for the new world (arches), blended meshes (sea,
  * rivers) and dynamic objects the view animates (spectators).
  */
 export function buildWorld(route, { others = [], network = null, biome = temperate, season = "summer", detail = "high" } = {}) {
@@ -377,9 +351,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     plan,
     overview: worldOverview(terrain, ground.water),
     chunks: Object.fromEntries(Object.entries(chunks).map(([name, mesh]) => [name, mesh.build()])),
-    meshes: {
-      arches: buildArches(route, { biome }),
-    },
+    arches: archPlacements(route),
     roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
     spectators,

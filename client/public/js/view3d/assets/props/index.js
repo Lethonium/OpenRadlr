@@ -11,6 +11,7 @@ import { cart } from "./cart.js";
 import * as lemon from "./lemon.js";
 import { logPile } from "./logPile.js";
 import { mailbox } from "./mailbox.js";
+import * as routeArch from "./routeArch.js";
 import { picketFence } from "./picketFence.js";
 import { snowPole } from "./snowPole.js";
 import { stoneWall } from "./stoneWall.js";
@@ -18,4 +19,7 @@ import { stoneWall } from "./stoneWall.js";
 export const PROPS = Object.freeze({ beehive, bench, boardwalk, cairn, cart, logPile, mailbox, picketFence, snowPole, stoneWall });
 
 /** Workbench-only props: not on the verge, drawn by their own layers (`{meta, create}`). */
-export const FLOATERS = Object.freeze({ lemon: Object.freeze({ meta: lemon.meta, create: lemon.create }) });
+export const FLOATERS = Object.freeze({
+  lemon: Object.freeze({ meta: lemon.meta, create: lemon.create }),
+  "route-arch": Object.freeze({ meta: routeArch.meta, create: routeArch.create }),
+});

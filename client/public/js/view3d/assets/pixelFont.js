@@ -35,8 +35,8 @@ export const GLYPHS = Object.freeze({
   "^": [".....", ".....", "..#..", ".###.", "#####", "#####", "....."],
 });
 
-const COLS = 5;
-const ROWS = 7;
+export const COLS = 5;
+export const ROWS = 7;
 
 /** Width of `text` in metres at `pixel` metres per pixel, with one pixel between letters. */
 export function textWidth(text, pixel) {

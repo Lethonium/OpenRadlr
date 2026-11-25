@@ -11,6 +11,8 @@ import { NATURE } from "../assets/nature/index.js";
 import { createCropLayer } from "./cropLayer.js";
 import { createForestLayer } from "./forestLayer.js";
 import { createFaunaLayer } from "./faunaLayer.js";
+import { resolveBiome } from "../biomes/index.js";
+import { createArchLayer } from "./archLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
 import { createLemonLayer } from "./lemonLayer.js";
 import { createHighlightLayer } from "./highlightLayer.js";
@@ -92,6 +94,7 @@ export function createWorldScene(world, { settings, track }) {
     landmarks: () => createLandmarkLayer(plan, { ...plants(), grain }),
     islands: () => createIslandLayer(plan, plants()),
     fauna: () => createFaunaLayer(plan, { ...plants(), ground: world.ground }),
+    arches: () => createArchLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     riders: () => createRiderLayer(plants()),
     athletes: () => createAthleteLayer(plants()),
     statues: () => createStatueLayer(plants()),
@@ -108,7 +111,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.riders(), makers.athletes(), makers.statues(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
+  layers.push(makers.arches(), makers.riders(), makers.athletes(), makers.statues(), makers.lemons(), makers.highlight(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -159,7 +162,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "riders", "athletes", "statues", "lemons", "highlight", "weather", "nightLights");
+    rebuild("islands", "forest", "roadside", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "riders", "athletes", "statues", "lemons", "highlight", "weather", "nightLights");
   };
   setQuality(settings);
 

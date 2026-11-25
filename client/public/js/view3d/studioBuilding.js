@@ -9,7 +9,7 @@
 import { hexToRgb } from "./view3d.js";
 import { MeshBuilder } from "./meshBuilder.js";
 import { STUDIO_FOOTPRINT } from "./features.js";
-import { pixelText } from "./pixelFont.js";
+import { pixelText } from "./assets/pixelFont.js";
 
 /** 4.6 m of room plus a 0.3 m slab. */
 export const FLOOR_HEIGHT = 4.9;

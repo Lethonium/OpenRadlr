@@ -401,7 +401,6 @@ export class View3D {
 
     this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
 
-    this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
     this.chunks = Object.fromEntries(
       Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
     );
@@ -829,7 +828,6 @@ export class View3D {
       for (const chunk of this.chunks.structures) {
         if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
       }
-      this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
       for (const part of visible) {
         if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
         this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
@@ -927,7 +925,6 @@ export class View3D {
         else this.renderer.draw(chunk.handle, this.identity);
       }
     }
-    this.renderer.drawBright(this.meshes.arches, this.identity);
     for (const p of crowd) {
       this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
       if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
@@ -1022,7 +1019,7 @@ export class View3D {
   dispose() {
     this.#studio?.dispose();
     const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.flagMesh, ...this.spectatorMeshes];
+    const handles = [...chunkHandles, this.flagMesh, ...this.spectatorMeshes];
     for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
       this.renderer.dispose(handle);
     }

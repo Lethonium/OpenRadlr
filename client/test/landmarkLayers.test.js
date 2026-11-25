@@ -79,7 +79,7 @@ test("the world no longer carries rotors or island meshes", async () => {
   const tiny = new RouteGeometry({ id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 50], [400, 0, 50], [400, 400, 55], [0, 400, 55]], zones: [] });
   const built = buildWorld(tiny);
   assert.equal("rotors" in built, false);
-  assert.equal("islands" in built.meshes, false);
+  assert.equal("islands" in built, false);
   assert.equal("rotors" in sceneOf(built), false);
 });
 
