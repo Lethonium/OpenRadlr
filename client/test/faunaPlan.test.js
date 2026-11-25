@@ -50,7 +50,7 @@ test("butterflies stay home in winter", () => {
 
 test("every paddock has a herd and every yard chickens; pigs wait out the winter", () => {
   const plan = planFor("summer");
-  assert.equal(plan.farms.length, 30, "the valley's farms");
+  assert.equal(plan.farms.length, 15, "the valley's farms");
   const f = faunaOf(plan, "summer");
   const paddocks = plan.farms.filter((farm) => farm.paddock);
   assert.ok(paddocks.length > 0);

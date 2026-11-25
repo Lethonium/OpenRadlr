@@ -4,7 +4,7 @@
  * the nearest road (or of a noise field away from roads) and drawn per place
  * from `landKindWeights`: the region, the distance to the sea and to a village,
  * the slope and the height. Wild land gets no parcel; the woods take it.
- * Pure and seeded; it stamps every parcel on the masks like a field.
+ * Pure and seeded; it stamps the parcels the woods must keep off (all but scrub, orchards and dunes) on the masks like a field.
  */
 import { LAND_STYLE, landKindWeights, regionEdge } from "../landKinds.js";
 import { fbm, seededRandom } from "../noise.js";
@@ -14,16 +14,18 @@ import { MASK, maskAt, stampField } from "./masks.js";
 import { cornersOf } from "./fields.js";
 
 export const LAND_USE = Object.freeze({
-  block: 400, // metres: the land is walked in squares of about this side
+  block: 800, // metres: the land is walked in squares of about this side
   maxBlocks: 4000, // bigger squares on a huge island keep the walk bounded
   maxParcels: 30000,
   grainReach: 600, // a road's tangent sets the grain this far from it
-  strip: Object.freeze([70, 300]), // strip depth
+  strip: Object.freeze([110, 300]), // strip depth
   jitter: 0.15,
   testStep: 10,
   minAbove: 1,
   shoreCell: 50, // the sea-distance field's cell; coarser on a huge island
   maxShoreCells: 400_000,
+  roadArable: 2.6, // arable is this many times likelier within `roadReach` of a road: the draped fields live there
+  roadReach: 260,
   neutralVillage: 800, // metres to a village on a map that has none
 });
 
@@ -40,6 +42,9 @@ export const LAND_USE = Object.freeze({
  * @property {"wall"|"hedge"|"none"} edge
  * @property {number} tint per-parcel shade, -1 to 1
  */
+
+/** Parcels the woods may plant over: scrub, orchards and dunes are wooded land. */
+const OPEN_TO_TREES = new Set(["scrub", "orchard", "dune"]);
 
 const lerp = ([a, b], t) => a + (b - a) * t;
 const pickKind = (weights, roll) => {
@@ -107,20 +112,39 @@ function roadGrain(roads, x, z) {
   return Math.atan2(-(b.y - a.y), b.x - a.x);
 }
 
-/** Flat enough, dry and free at the corners, the centre and a grid across the parcel. */
-function clear(parcel, corners, { masks, water }) {
+/**
+ * Dry and free at the corners, the centre and a grid across the parcel. Where the mask says "field" within a cell of
+ * the parcel's edge it is only the neighbour's cell stamp, so that is let through.
+ */
+function clear(parcel, corners, { masks, taken, water }) {
   for (let k = 0; k < 4; k += 1) if (corners[k * 3 + 1] < water + LAND_USE.minAbove) return false;
   const [c, s] = [Math.cos(parcel.yaw), Math.sin(parcel.yaw)];
   const [w, d] = [parcel.width / 2, parcel.depth / 2];
+  const free = (u, v) => {
+    const [x, z] = [parcel.x + u * c - v * s, parcel.z + u * s + v * c];
+    const m = maskAt(taken, x, z);
+    return (m === MASK.free || (m === MASK.field && (Math.abs(u) > w - masks.cell || Math.abs(v) > d - masks.cell))) && [MASK.free, MASK.field].includes(maskAt(masks, x, z));
+  };
   for (let u = -w; u <= w + 0.01; u += LAND_USE.testStep) {
-    for (let v = -d; v <= d + 0.01; v += LAND_USE.testStep) {
-      if (maskAt(masks, parcel.x + u * c - v * s, parcel.z + u * s + v * c) !== MASK.free) return false;
-    }
+    for (let v = -d; v <= d + 0.01; v += LAND_USE.testStep) if (!free(u, v)) return false;
   }
-  for (const [u, v] of [[w, d], [-w, d], [w, -d], [-w, -d]]) {
-    if (maskAt(masks, parcel.x + u * c - v * s, parcel.z + u * s + v * c) !== MASK.free) return false;
-  }
+  for (const [u, v] of [[w, d], [-w, d], [w, -d], [-w, -d], [0, 0], [w, 0], [-w, 0], [0, d], [0, -d]]) if (!free(u, v)) return false;
   return true;
+}
+
+/** The parcel, then smaller shapes of it: 0.7 and 0.5 scale, each half along the width, each half along the depth, then trimmed from either end. */
+function* fits(parcel) {
+  yield parcel;
+  const { x, z, width, depth, yaw } = parcel;
+  const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
+  for (const f of [0.7, 0.5]) yield { ...parcel, width: width * f, depth: depth * f };
+  for (const side of [-1, 1]) yield { ...parcel, x: x + (side * width * c) / 4, z: z + (side * width * s) / 4, width: width / 2 };
+  for (const side of [-1, 1]) yield { ...parcel, x: x - (side * depth * s) / 4, z: z + (side * depth * c) / 4, depth: depth / 2 };
+  for (const f of [0.75, 0.55, 0.4]) {
+    const [dw, dd] = [(width * (1 - f)) / 2, (depth * (1 - f)) / 2];
+    for (const side of [-1, 1]) yield { ...parcel, x: x + side * dw * c, z: z + side * dw * s, width: width * f };
+    for (const side of [-1, 1]) yield { ...parcel, x: x - side * dd * s, z: z + side * dd * c, depth: depth * f };
+  }
 }
 
 /**
@@ -131,7 +155,8 @@ function clear(parcel, corners, { masks, water }) {
 export function planLandUse({ terrain, roads, regions = [], settlements = [], seed, season, masks, water, bounds }) {
   const random = seededRandom(seed ^ 0x1a4d05e);
   const shore = shoreField({ terrain, water, bounds });
-  const gap = masks.cell * 2;
+  const gap = masks.cell;
+  const taken = { ...masks, data: new Uint8Array(masks.data.length) }; // every parcel; `masks` only has the ones the woods must keep off
   const parcels = [];
   const area = (bounds.x1 - bounds.x0) * (bounds.z1 - bounds.z0);
   const block = Math.max(LAND_USE.block, Math.sqrt(area / LAND_USE.maxBlocks));
@@ -164,7 +189,15 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
             const h = terrain.height(guess.x, guess.z);
             const run = 12;
             const slope = Math.hypot(terrain.height(guess.x + run, guess.z) - terrain.height(guess.x - run, guess.z), terrain.height(guess.x, guess.z + run) - terrain.height(guess.x, guess.z - run)) / (2 * run);
-            kind = pickKind(landKindWeights({ mix, shore: shore(guess.x, guess.z), slope, height: h - water, village: villageDistance(guess.x, guess.z) }), rKind);
+            const weights = landKindWeights({ mix, shore: shore(guess.x, guess.z), slope, height: h - water, village: villageDistance(guess.x, guess.z) });
+            const near = roads.nearest(guess.x, guess.z, Math.ceil(LAND_USE.roadReach / (roads.cell ?? 60)));
+            if (weights.arable > 0 && near && near.distance <= LAND_USE.roadReach) {
+              const arable = Math.min(weights.arable * LAND_USE.roadArable, 1);
+              const rest = 1 - weights.arable;
+              for (const k of Object.keys(weights)) weights[k] *= rest > 0 ? (1 - arable) / rest : 0;
+              weights.arable = arable;
+            }
+            kind = pickKind(weights, rKind);
           }
           const style = LAND_STYLE[kind];
           const sizeW = style ? lerp(style.size, rWidth) : 160;
@@ -173,15 +206,25 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
           u += sizeW;
           if (!style) continue;
           const width = sizeW - gap;
-          const depth = Math.min(style.size[1], Math.max(style.size[0], stripDepth)) - gap;
-          const parcel = { x, z, width, depth, yaw: angle };
-          const corners = cornersOf(parcel, terrain);
-          if (!clear(parcel, corners, { masks, water })) continue;
-          const centre = terrain.height(x, z);
-          const half = Math.hypot(width, depth) / 2;
+          const depth = stripDepth - gap;
+          const [minWidth, minDepth] = [style.size[0] * 0.6, style.size[0] * 0.6];
+          let parcel = null;
+          let corners = null;
+          for (const shape of fits({ x, z, width, depth, yaw: angle })) {
+            if (shape.width < minWidth || shape.depth < minDepth) continue;
+            const shapeCorners = cornersOf(shape, terrain);
+            if (clear(shape, shapeCorners, { masks, taken, water })) {
+              parcel = shape;
+              corners = shapeCorners;
+              break;
+            }
+          }
+          if (!parcel) continue;
+          const centre = terrain.height(parcel.x, parcel.z);
+          const half = Math.hypot(parcel.width, parcel.depth) / 2;
           let steepest = 0;
           for (let k = 0; k < 4; k += 1) steepest = Math.max(steepest, Math.abs(corners[k * 3 + 1] - centre) / half);
-          const at = landKindWeights({ mix: regionMix(x, z, regions, seed), shore: shore(x, z), slope: steepest, height: centre - water, village: villageDistance(x, z) });
+          const at = landKindWeights({ mix: regionMix(parcel.x, parcel.z, regions, seed), shore: shore(parcel.x, parcel.z), slope: steepest, height: centre - water, village: villageDistance(parcel.x, parcel.z) });
           if (at[kind] <= 0) continue;
           const [top] = mix;
           const crops = REGION_STYLE[top.kind].crops[season];
@@ -191,7 +234,8 @@ export function planLandUse({ terrain, roads, regions = [], settlements = [], se
             edge: style.edge === "none" ? "none" : regionEdge(top.kind),
             tint: rTint * 2 - 1,
           });
-          stampField(masks, parcel);
+          stampField(taken, parcel);
+          if (!OPEN_TO_TREES.has(kind)) stampField(masks, parcel);
           if (parcels.length >= LAND_USE.maxParcels) break;
         }
       }

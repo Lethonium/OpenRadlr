@@ -110,3 +110,27 @@ test("the plan hands the land use to the page", () => {
   const scene = sceneOf({ plan: planOf(valley) });
   assert.ok(scene.plan.landUse.parcels.length > 0);
 });
+
+test("the land use covers much of the island", () => {
+  assert.ok(coverageOf(valley, planOf(valley).landUse.parcels) >= 0.4);
+});
+
+/** Share of the dry land cells (50 m grid) that lie inside a parcel. */
+function coverageOf(world, parcels, step = 50) {
+  const water = waterLevel(world.roads);
+  const { x0, z0, x1, z1 } = world.bounds;
+  let land = 0;
+  let covered = 0;
+  for (let z = z0; z < z1; z += step) {
+    for (let x = x0; x < x1; x += step) {
+      if (world.terrain.height(x, z) < water + 1) continue;
+      land += 1;
+      if (parcels.some((p) => {
+        const [dx, dz] = [x - p.x, z - p.z];
+        const [c, s] = [Math.cos(p.yaw), Math.sin(p.yaw)];
+        return Math.abs(dx * c + dz * s) <= p.width / 2 && Math.abs(-dx * s + dz * c) <= p.depth / 2;
+      })) covered += 1;
+    }
+  }
+  return covered / land;
+}

@@ -18,8 +18,9 @@ export const FARM = Object.freeze({
   ringPoints: 12,
   maxRelief: 8, // metres of ground height across the yard
   aboveWater: 2,
-  behind: Object.freeze([45, 60, 75]), // metres past a field's far edge, tried in turn
+  behind: Object.freeze([60, 75, 90]), // metres past a field's far edge, tried in turn
   slide: Object.freeze([0, -0.3, 0.3]), // sideways shifts as a share of the field's width
+  anchorReach: 200, // a field whose half-length plus the yard's offset passes this is no anchor
   gate: 23, // metres from the yard's centre to the gate
   step: 3, // metres between drive points
   paddock: Object.freeze({ width: 54, depth: 38, spots: Object.freeze([[0, -70], [-80, 0], [80, 0]]) }),
@@ -45,8 +46,8 @@ export const FARM = Object.freeze({
 /** Yard-local (u along the front, v to its left) to world x/z. */
 const toWorld = (yard, u, v) => [yard.x + Math.cos(yard.yaw) * u - Math.sin(yard.yaw) * v, yard.z + Math.sin(yard.yaw) * u + Math.cos(yard.yaw) * v];
 
-/** True if the ground at (x, z) is dry and untouched: free of road, verge, river, field and building. */
-const open = (masks, terrain, water, x, z) => maskAt(masks, x, z) === MASK.free && terrain.height(x, z) >= water + FARM.aboveWater;
+/** True if the ground at (x, z) is dry and untouched: free of road, verge, river and building; land use may give way (the plan then drops what the yard covers). */
+const open = (masks, terrain, water, x, z, onField = false) => (maskAt(masks, x, z) === MASK.free || (onField && maskAt(masks, x, z) === MASK.field)) && terrain.height(x, z) >= water + FARM.aboveWater;
 
 /** The yard's ground height if its rings are open and its ground gentle; else null. */
 function yardGround({ terrain, masks, water }, x, z) {
@@ -56,12 +57,12 @@ function yardGround({ terrain, masks, water }, x, z) {
     [low, high] = [Math.min(low, h), Math.max(high, h)];
   };
   sample(x, z);
-  if (!open(masks, terrain, water, x, z)) return null;
+  if (!open(masks, terrain, water, x, z, true)) return null;
   for (const r of FARM.checkRings) {
     for (let k = 0; k < FARM.ringPoints; k += 1) {
       const a = (k / FARM.ringPoints) * Math.PI * 2;
       const [px, pz] = [x + Math.cos(a) * r, z + Math.sin(a) * r];
-      if (!open(masks, terrain, water, px, pz)) return null;
+      if (!open(masks, terrain, water, px, pz, true)) return null;
       sample(px, pz);
     }
   }
@@ -104,25 +105,35 @@ export function planFarms({ fields, terrain, roads, regions = [], seed, masks, w
     const away = Math.hypot(fx, fz) || 1;
     const [ux, uz] = [fx / away, fz / away];
     const [behind, slide] = [FARM.behind[Math.floor(random() * FARM.behind.length)], FARM.slide[Math.floor(random() * FARM.slide.length)]];
-    const reach = Math.abs(ux * Math.cos(field.yaw) + uz * Math.sin(field.yaw)) < 0.7 ? field.depth / 2 : field.width / 2;
+    const along = Math.abs(ux * Math.cos(field.yaw) + uz * Math.sin(field.yaw));
+    if (along > 0.3 && along < 0.95) continue; // a field set aslant to the road: its corners would reach the yard
+    const [reach, flank] = along < 0.7 ? [field.depth / 2, field.width / 2] : [field.width / 2, field.depth / 2];
     const [sx, sz] = [-uz, ux];
-    const x = field.x + ux * (reach + behind) + sx * slide * field.width;
-    const z = field.z + uz * (reach + behind) + sz * slide * field.width;
     const [pick, gone, silos] = [random(), random(), random()];
-    const neighbour = roads.nearest(x, z, 3);
-    if (!neighbour || neighbour.distance < FARM.roadDistance[0] || neighbour.distance > FARM.roadDistance[1]) continue;
+    // Behind the field, away from the road; failing that in front of it, beside it, or on its other flank (fields lie far from roads now).
+    let [x, z, neighbour] = [0, 0, null];
+    for (const [dx, dz, half, tx, tz, wide] of [[ux, uz, reach, sx, sz, flank], [-ux, -uz, reach, sx, sz, flank], [sx, sz, flank, ux, uz, reach], [-sx, -sz, flank, ux, uz, reach]]) {
+      if (half + behind > FARM.anchorReach) continue; // a vast parcel would put the yard too far from its edge's middle
+      x = field.x + dx * (half + behind) + tx * slide * wide * 2;
+      z = field.z + dz * (half + behind) + tz * slide * wide * 2;
+      neighbour = roads.nearest(x, z, 3);
+      if (neighbour && neighbour.distance >= FARM.roadDistance[0] && neighbour.distance <= FARM.roadDistance[1]) break;
+      neighbour = null;
+    }
+    if (!neighbour) continue;
     if (farms.some((f) => Math.hypot(f.x - x, f.z - z) < FARM.spacing)) continue;
+    if (fields.some((f) => rectDistance(f, x, z) < FARM.yard + masks.cell * 2)) continue; // a yard never bites into a field
     if (settlements.some((s) => Math.hypot(s.center[0] - x, s.center[1] - z) < s.radius + FARM.townReach)) continue;
     const y = yardGround(ground, x, z);
     if (y === null) continue;
     const yaw = Math.atan2(neighbour.sample.z - z, neighbour.sample.x - x);
     const yard = { x, z, yaw };
-    const paddock = planPaddock(yard, ground, FARM.paddock.spots[Math.floor(pick * FARM.paddock.spots.length)], roads);
+    const paddock = planPaddock(yard, ground, FARM.paddock.spots[Math.floor(pick * FARM.paddock.spots.length)], roads, fields);
     const pumpAt = toWorld(yard, ...FARM.pump.at);
     const pump = gone < FARM.pump.chance && open(masks, terrain, water, pumpAt[0], pumpAt[1]) ? { x: pumpAt[0], z: pumpAt[1] } : null;
-    stampDisc(masks, x, z, FARM.yard, MASK.built);
+    stampDisc(masks, x, z, FARM.yard, MASK.built, [MASK.field]);
     if (paddock) stampBuilt(masks, paddock);
-    if (pump) stampDisc(masks, pump.x, pump.z, FARM.pump.radius, MASK.built);
+    if (pump) stampDisc(masks, pump.x, pump.z, FARM.pump.radius, MASK.built, [MASK.field]);
     farms.push({
       x, y, z, yaw, style: REGION_STYLE[regionMix(x, z, regions, seed)[0].kind].houses, houses: random() < FARM.secondHouseChance ? 2 : 1, silos: silos < FARM.silosChance ? 2 : 1,
       paddock, drive: driveTo(yard, neighbour.sample), pump,
@@ -131,13 +142,21 @@ export function planFarms({ fields, terrain, roads, regions = [], seed, masks, w
   return farms;
 }
 
+/** Metres from (x, z) to the rectangle of `field` (0 inside it). */
+function rectDistance({ x, z, width, depth, yaw }, px, pz) {
+  const [dx, dz] = [px - x, pz - z];
+  const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
+  return Math.hypot(Math.max(0, Math.abs(dx * c + dz * s) - width / 2), Math.max(0, Math.abs(-dx * s + dz * c) - depth / 2));
+}
+
 /** A paddock beside the yard at local `spot` if its corners and centre are open ground and clear of any road. */
-function planPaddock(yard, { terrain, masks, water }, spot, roads) {
+function planPaddock(yard, { terrain, masks, water }, spot, roads, fields) {
   const [x, z] = toWorld(yard, spot[0], spot[1]);
   const { width, depth } = FARM.paddock;
   const [c, s] = [Math.cos(yard.yaw), Math.sin(yard.yaw)];
   const corners = [[0, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]].map(([a, b]) => [x + (a * c * width - b * s * depth) / 2, z + (a * s * width + b * c * depth) / 2]);
-  if (!corners.every(([px, pz]) => open(masks, terrain, water, px, pz))) return null;
+  // Land use gives way to a paddock, but a crop field does not.
+  if (!corners.every(([px, pz]) => open(masks, terrain, water, px, pz, true) && !fields.some((f) => rectDistance(f, px, pz) < masks.cell * 2))) return null;
   const near = roads.nearest(x, z, 1);
   if (near && near.distance < FARM.roadDistance[0] / 2) return null;
   return { x, z, width, depth, yaw: yard.yaw };

@@ -55,17 +55,19 @@ export const regionEdge = (regionKind) => (MEDITERRANEAN.has(regionKind) ? "wall
  * Arable is the region's `fieldShare`.
  */
 const BASE = Object.freeze({
-  meadow: { pasture: 0.4, fallow: 0.04, orchard: 0.02 },
-  farmBelt: { pasture: 0.2, fallow: 0.05, orchard: 0.02 },
-  deepWood: { pasture: 0.1, fallow: 0.02, scrub: 0.1 },
-  wetland: { pasture: 0.4, fallow: 0.02, scrub: 0.1 },
-  highCountry: { pasture: 0.4, scrub: 0.2 },
+  meadow: { pasture: 0.55, fallow: 0.08, orchard: 0.03, scrub: 0.05 },
+  farmBelt: { pasture: 0.08, fallow: 0.03, orchard: 0.03, scrub: 0.03 },
+  deepWood: { pasture: 0.2, fallow: 0.04, scrub: 0.25 },
+  wetland: { pasture: 0.55, fallow: 0.03, scrub: 0.2 },
+  highCountry: { pasture: 0.45, scrub: 0.3 },
   pineCoast: { scrub: 0.35, orchard: 0.1, vineyard: 0.05, pasture: 0.05 },
   oliveTerraces: { orchard: 0.4, scrub: 0.15, vineyard: 0.05, pasture: 0.05, fallow: 0.03 },
   lavenderFields: { pasture: 0.1, vineyard: 0.1, orchard: 0.1, scrub: 0.15, fallow: 0.05 },
   almondValley: { orchard: 0.4, vineyard: 0.1, scrub: 0.1, pasture: 0.05, fallow: 0.03 },
 });
 
+/** Scales some base shares: the regions' farm shares alone leave most of the island wild. */
+const FILL = Object.freeze({ arable: 1.5, pasture: 1.6, fallow: 1.6, scrub: 1.6 });
 const COAST_DUNE = 0.4;
 const COAST_SCRUB = 0.3;
 const FARM = ["arable", "orchard", "vineyard"];
@@ -82,14 +84,14 @@ export function landKindWeights({ mix, shore, slope, height, village }) {
     out.wild = 1;
     return out;
   }
-  const farmland = 2 ** (-Math.max(0, village) / VILLAGE_HALF);
+  const farmland = 0.25 + 0.75 * 2 ** (-Math.max(0, village) / VILLAGE_HALF);
   const uphill = Math.min(1, Math.max(0, (700 - height) / 400));
   for (const { kind: region, weight } of mix) {
     const base = { arable: REGION_STYLE[region]?.fieldShare ?? 0.2, ...BASE[region] };
     for (const kind of LAND_KINDS) {
-      const share = base[kind] ?? 0;
+      const share = (base[kind] ?? 0) * (FILL[kind] ?? 1);
       if (share === 0) continue;
-      const near = kind === "scrub" || kind === "dune" ? 1 : farmland;
+      const near = kind === "scrub" || kind === "dune" || kind === "pasture" ? 1 : farmland;
       out[kind] += weight * share * near * (kind === "arable" ? uphill : 1);
     }
   }

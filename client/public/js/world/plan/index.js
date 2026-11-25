@@ -11,7 +11,7 @@ import { planFauna } from "./fauna.js";
 import { planFarIslands } from "./islands.js";
 import { planLandmarks } from "./landmarks.js";
 import { planLandUse } from "./landUse.js";
-import { MASK, buildMasks, stampDisc } from "./masks.js";
+import { MASK, buildMasks, maskAt, stampDisc } from "./masks.js";
 import { planRoadside } from "./roadside.js";
 import { planSettlements } from "./settlements/plan.js";
 import { planTurbines } from "./turbines.js";
@@ -40,6 +40,13 @@ export const PLAN_BUDGET = Object.freeze({
  * @property {import("./masks.js").Masks} masks 0 free, 1 road, 2 river, 3 field, 4 verge, 5 built
  */
 
+/** True if the parcel's corners or centre lie on built ground. */
+function builtUnder(masks, { x, z, corners }) {
+  if (maskAt(masks, x, z) === MASK.built) return true;
+  for (let k = 0; k < 4; k += 1) if (maskAt(masks, corners[k * 3], corners[k * 3 + 2]) === MASK.built) return true;
+  return false;
+}
+
 /**
  * @param {{terrain: object, roads: import("../roads.js").RoadIndex, rivers: object[], regions?: object[], forests?: {x: number, z: number}[], settlements?: object[], landmarks?: object[], clearings?: {x: number, z: number, radius: number}[], routes?: object[], seed: number, season: string, detail?: "low"|"medium"|"high"|"ultra", bounds: {x0: number, z0: number, x1: number, z1: number}}} input
  * @returns {WorldPlan}
@@ -52,9 +59,11 @@ export function planWorld({ terrain, roads, rivers, regions = [], forests = [], 
   for (const { x, z, radius } of clearings) stampDisc(masks, x, z, radius, MASK.built, [MASK.verge]);
   const villages = planSettlements({ settlements, routes, terrain, roads, regions, seed, masks, water, clearings });
   const places = planLandmarks({ landmarks, terrain, roads, seed, masks, water });
-  const landUse = planLandUse({ terrain, roads, regions, settlements: villages, seed, season, masks, water, bounds });
+  const planned = planLandUse({ terrain, roads, regions, settlements: villages, seed, season, masks, water, bounds });
+  const farms = planFarms({ fields: fieldsFromParcels(planned.parcels, roads), terrain, roads, regions, seed, masks, water, settlements: villages });
+  // A yard may take ground from the land use: the parcels it covers are dropped.
+  const landUse = { parcels: planned.parcels.filter((p) => !builtUnder(masks, p)) };
   const fields = fieldsFromParcels(landUse.parcels, roads);
-  const farms = planFarms({ fields, terrain, roads, regions, seed, masks, water, settlements: villages });
   const turbines = planTurbines({ terrain, roads, seed, masks, water, bounds });
   const islands = planFarIslands({ terrain, seed: terrain.seed ?? seed });
   const trees = planWoods({ terrain, roads, regions, forests, seed, bounds, masks, water, budget: budget.trees });
