@@ -166,6 +166,8 @@ export function createSpriteBaker({ season, createRenderer = defaultRenderer, cr
       world.dispose();
       tracker.disposeAll();
       renderer.dispose();
+      // A disposed renderer keeps its WebGL context until the garbage collector runs; browsers allow only a few.
+      renderer.forceContextLoss?.();
     },
   };
 }

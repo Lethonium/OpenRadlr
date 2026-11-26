@@ -112,3 +112,18 @@ test("probe: the job list holds both views, day and night, and six rider looks e
   assert.equal(new Set(jobs.map((entry) => entry.key)).size, jobs.length);
   assert.equal(jobs.filter((entry) => entry.id === "cyclist").length, 12);
 });
+
+test("baker: dispose releases the WebGL context so only one stays live", () => {
+  const { baker, renderer } = bakerWith();
+  let lost = 0;
+  renderer.forceContextLoss = () => (lost += 1);
+  baker.dispose();
+  assert.equal(lost, 1);
+  assert.equal(renderer.calls.disposed, 1);
+});
+
+test("baker: dispose works on a renderer without forceContextLoss", () => {
+  const { baker, renderer } = bakerWith();
+  baker.dispose();
+  assert.equal(renderer.calls.disposed, 1);
+});

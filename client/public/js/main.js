@@ -5879,6 +5879,8 @@ function show2d(scene) {
 function dispose2d() {
   app.view2d?.dispose();
   app.view2d = null;
+  // The side view goes with the 2D views: fall back to the map and hide its button (the stored choice stays).
+  setViewMode(app.viewMode === "side" ? "map" : app.viewMode, { remember: false });
 }
 
 function setViewMode(mode, { remember = true } = {}) {
