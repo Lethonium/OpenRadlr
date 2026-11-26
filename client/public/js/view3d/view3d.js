@@ -841,7 +841,6 @@ export class View3D {
   }
 
   dispose() {
-    this.#studio?.dispose();
     this.#labels.forEach((element) => element.remove());
     this.#labels.clear();
     // The world scene is this view's; the engine stays for the next view on the canvas.

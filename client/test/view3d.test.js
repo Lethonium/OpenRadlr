@@ -1049,3 +1049,8 @@ test("the view keeps no chunk list", () => {
   view.render({ riders: [], myId: null, timeS: 1, colors });
   assert.equal("chunks" in view, false);
 });
+
+test("a view with a studio disposes without throwing", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  assert.doesNotThrow(() => view.dispose());
+});
