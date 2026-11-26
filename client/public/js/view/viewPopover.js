@@ -80,14 +80,15 @@ export function createViewPopover({
     for (const option of options) {
       option.setAttribute("aria-pressed", String(current[option.dataset.kind] === option.dataset.id));
     }
-    // Camera and time of day belong to the 3D view; a camera not offered here
-    // (the workout's gym camera) cannot be changed, so the row goes.
-    const flat = current.mode === "2d";
+    // The camera belongs to the 3D view; a camera not offered here (the workout's
+    // gym camera) cannot be changed, so the row goes. The time of day shows in every view.
+    const flat = current.mode === "map" || current.mode === "side";
     const offered = controls.cameras.some((camera) => camera.id === current.camera);
     if (rows.camera) rows.camera.hidden = (flat && controls.modes.length > 0) || !offered;
-    if (rows.time) rows.time.hidden = flat;
     for (const option of options) {
-      if (option.dataset.kind === "mode" && option.dataset.id === "3d") option.disabled = current.has3d === false;
+      if (option.dataset.kind !== "mode") continue;
+      if (option.dataset.id === "3d") option.disabled = current.has3d === false;
+      if (option.dataset.id === "side") option.hidden = current.hasSide === false;
     }
     root.setAttribute("data-sheet", String(Boolean(matchNarrow.matches)));
   }

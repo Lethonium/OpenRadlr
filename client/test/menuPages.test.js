@@ -65,7 +65,8 @@ test("open ignores pages that are not in the list", () => {
 
 test("status lines read as in the spec", () => {
   assert.equal(pageStatus("view", ctx), "3D · Chase");
-  assert.equal(pageStatus("view", { ...ctx, viewMode: "2d" }), "2D");
+  assert.equal(pageStatus("view", { ...ctx, viewMode: "map" }), "Map");
+  assert.equal(pageStatus("view", { ...ctx, viewMode: "side" }), "Side");
   assert.equal(pageStatus("vehicle", ctx), "Not boarded");
   assert.equal(pageStatus("vehicle", { ...ctx, vehicleLabel: "Tandem" }), "Tandem");
   assert.equal(pageStatus("race", ctx), "None running");

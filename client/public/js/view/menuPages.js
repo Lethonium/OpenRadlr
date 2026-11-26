@@ -31,7 +31,8 @@ const RACE_PHASES = { countdown: "menuPage.race.countdown", running: "menuPage.r
 export function pageStatus(id, ctx) {
   switch (id) {
     case "view":
-      return ctx.viewMode === "2d" ? t("menuPage.status.view2d")
+      return ctx.viewMode === "map" ? t("menuPage.status.viewMap")
+        : ctx.viewMode === "side" ? t("menuPage.status.viewSide")
         : t("menuPage.status.view3d", { camera: ctx.cameraLabel });
     case "vehicle":
       return ctx.vehicleLabel ?? t("menuPage.status.notBoarded");

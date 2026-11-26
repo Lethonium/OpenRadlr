@@ -94,6 +94,8 @@ import {
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawRideMap } from "./view/rideMapView.js";
+import { View2D } from "./view2d/view2d.js";
+import { nextViewMode } from "./view2d/viewMode.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
 import { ftpProvenance } from "./view/ftpProvenance.js";
@@ -278,6 +280,7 @@ function buildRideWorld() {
       // maps at once are too much for a low-end GPU.
       app.view3d?.dispose();
       app.view3d = null;
+      dispose2d();
       show3d(scene);
     })
     .catch((error) => {
@@ -467,11 +470,14 @@ const app = {
   ftpTest: null,
   workouts: [...PRESET_WORKOUTS],
   view3d: null,
+  /** The 2D views drawn from the 3D world (null where the baker cannot start, or before the world is built). */
+  view2d: null,
   /** The start menu's map, profile and drone view (null once riding). */
   menu: null,
   /** The menu's 3D view, handed over to the ride when it was built for the joined route. */
   menuView: null,
-  viewMode: "2d",
+  /** "3d", "map" or "side". */
+  viewMode: "map",
   /** The selected time of day, also used by the 2D map when there is no 3D view. */
   timeMode: TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day",
   hud: null,
@@ -985,7 +991,7 @@ function probeFirstRide(time) {
   writeSetting(QUALITY_AUTO_KEY, "0");
   const next = adjustQuality(qualityLevel(readSetting(QUALITY_KEY)), probe.frameMs);
   if (next === "2d") {
-    setViewMode("2d");
+    setViewMode("map");
     notify(t("quality.picked2d"));
   } else {
     setQuality(next);
@@ -2428,6 +2434,7 @@ function endRide() {
   // Leave the trainer on a flat road, not holding the last ERG target.
   if (app.session && canControl(app.trainer)) Promise.resolve(app.trainer.setGrade(0)).catch(() => {});
   app.view3d?.dispose();
+  dispose2d();
   app.studioView?.dispose();
   app.menuView?.dispose();
   if ("speechSynthesis" in globalThis) speechSynthesis.cancel();
@@ -2485,8 +2492,9 @@ function endRide() {
     training: null,
     ftpTest: null,
     view3d: null,
+    view2d: null,
     menuView: null,
-    viewMode: "2d",
+    viewMode: "map",
     hud: null,
     standing: null,
     workoutPower: { joules: 0, seconds: 0, lastT: null },
@@ -2763,7 +2771,7 @@ function startRoad({ simulated, setSimPower }) {
     powerDown: () => (app.training.mode === "erg" || app.training.guided ? adjustErg(-1) : simulated && setSimPower(app.trainer.power - 10)),
     shiftUp: () => shift(+1),
     shiftDown: () => shift(-1),
-    toggleView: () => setViewMode(app.viewMode === "3d" ? "2d" : "3d"),
+    toggleView: () => setViewMode(nextViewMode(app.viewMode, { has3d: Boolean(app.view3d), hasSide: Boolean(app.view2d) })),
     cycleCamera: () => cycleCamera(),
     cycleTime: () => {
       const next = TIME_MODES[(TIME_MODES.indexOf($("time-mode").value) + 1) % TIME_MODES.length];
@@ -5107,6 +5115,7 @@ function initViewPopover() {
       mode: app.viewMode,
       time: $("time-mode").value,
       has3d: Boolean(app.view3d),
+      hasSide: Boolean(app.view2d),
     }),
     onPick: (kind, id) => {
       if (kind === "camera") setCamera(id);
@@ -5696,7 +5705,8 @@ function renderWorkoutProgress(time) {
 
 function initViews() {
   $("view-3d").addEventListener("click", () => setViewMode("3d"));
-  $("view-2d").addEventListener("click", () => setViewMode("2d"));
+  $("view-map").addEventListener("click", () => setViewMode("map"));
+  $("view-side").addEventListener("click", () => setViewMode("side"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
   $("quality-mode").addEventListener("click", () => {
     writeSetting(QUALITY_AUTO_KEY, "0");
@@ -5704,7 +5714,7 @@ function initViews() {
   });
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
-  setViewMode("2d", { remember: false });
+  setViewMode("map", { remember: false });
 
   if (!isWebGl2Available()) {
     $("view-note").textContent = t("view.needsWebgl");
@@ -5760,6 +5770,7 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   app.view3d.setLemons(app.lemonHunt?.lemons);
+  show2d(app.view3d.world);
   applyClassicRider();
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
@@ -5847,18 +5858,40 @@ function setTimeMode(mode) {
   app.timeMode = next;
   // The 2D map has no view to configure, but it reads the same setting.
   app.view3d?.setTimeMode(next);
+  app.view2d?.setTimeMode(next);
   $("time-mode").value = next;
   writeSetting(TIME_KEY, next);
   app.viewPopover?.refresh();
 }
 
+/** The 2D views of the built world (the same scene the 3D view draws); none where the sprite baker cannot start. */
+function show2d(scene) {
+  dispose2d();
+  if (!scene) return;
+  const view = new View2D($("ride-map"), app.route, scene, { season: app.season, timeMode: app.timeMode, weather: weatherToday() });
+  if (!view.available) {
+    view.dispose();
+    return;
+  }
+  app.view2d = view;
+}
+
+function dispose2d() {
+  app.view2d?.dispose();
+  app.view2d = null;
+}
+
 function setViewMode(mode, { remember = true } = {}) {
   const use3d = mode === "3d" && Boolean(app.view3d);
-  app.viewMode = use3d ? "3d" : "2d";
+  const side = mode === "side" && Boolean(app.view2d);
+  app.viewMode = use3d ? "3d" : side ? "side" : "map";
+  app.view2d?.setMode(app.viewMode);
   $("world-wrap").hidden = !use3d;
   $("ride-map").hidden = use3d;
   $("view-3d").setAttribute("aria-pressed", String(use3d));
-  $("view-2d").setAttribute("aria-pressed", String(!use3d));
+  $("view-map").setAttribute("aria-pressed", String(app.viewMode === "map"));
+  $("view-side").setAttribute("aria-pressed", String(side));
+  $("view-side").hidden = !app.view2d;
   $("scene-controls").hidden = !use3d;
   if (remember) writeSetting(VIEW_KEY, app.viewMode);
   app.viewPopover?.refresh();
@@ -6137,6 +6170,8 @@ function frame() {
   probeFirstRide(time);
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
+  } else if (app.view2d) {
+    app.view2d.render({ riders, myId: app.riderId, me, myCadence: app.session.latest.cadence, draft, lemons: app.lemonHunt?.lemons, ghost, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }
