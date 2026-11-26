@@ -5,6 +5,7 @@ import * as THREE from "../public/js/three.js";
 import { createSharedUniforms } from "../public/js/view3d/assets/materials.js";
 import { BUILDINGS, HOUSE_STYLES } from "../public/js/view3d/assets/buildings/index.js";
 import { triangleCount } from "../public/js/view3d/assets/geom.js";
+import { createScratch, createTurners } from "../public/js/view3d/scene/buildingMerge.js";
 import { createFarmLayer } from "../public/js/view3d/scene/farmLayer.js";
 import { createSettlementLayer } from "../public/js/view3d/scene/settlementLayer.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
@@ -166,4 +167,18 @@ test("settlement and farm layers dispose everything after a season and a quality
   assert.equal(tracker.live(), before, "a switch frees what it replaced");
   scene.dispose();
   assert.equal(tracker.live(), 0);
+});
+
+test("a turning part keeps its own copy of the geometry when the build's scratch is freed", () => {
+  const scratch = createScratch();
+  const kept = [];
+  const turners = createTurners(new THREE.Group(), new THREE.MeshBasicMaterial(), (resource) => (kept.push(resource), resource));
+  const sails = scratch.own(new THREE.BoxGeometry(1, 1, 1));
+  const mesh = turners.add({ geometry: sails, x: 0, y: 0, z: 0, axis: [0, 0, 1] }, { x: 0, y: 0, z: 0, yaw: 0 });
+  let disposed = false;
+  mesh.geometry.addEventListener("dispose", () => (disposed = true));
+  scratch.release();
+  assert.notEqual(mesh.geometry, sails);
+  assert.equal(disposed, false, "the copy outlives the scratch");
+  assert.deepEqual(kept, [mesh.geometry], "the layer owns the copy");
 });

@@ -131,8 +131,9 @@ export function setGlow(material, night) {
  * `far` metres away (`Infinity`: always shown).
  * @param {import("../../three.js").Group} object where the groups go
  * @param {import("../../three.js").Material} material
+ * @param {<T>(resource: T) => T} own keeps each turning part's geometry (a copy: the asset's own goes with the build's scratch)
  */
-export function createTurners(object, material) {
+export function createTurners(object, material, own) {
   const list = [];
   return {
     list,
@@ -144,7 +145,7 @@ export function createTurners(object, material) {
       const group = new THREE.Group();
       group.position.set(at.x, at.y, at.z);
       group.rotation.y = at.yaw;
-      const mesh = new THREE.Mesh(mover.geometry, material);
+      const mesh = new THREE.Mesh(own(mover.geometry.clone()), material);
       mesh.position.set(mover.x, mover.y, mover.z);
       mesh.castShadow = true;
       mesh.quaternion.setFromAxisAngle(new THREE.Vector3(...mover.axis), phase);

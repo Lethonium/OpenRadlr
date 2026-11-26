@@ -270,3 +270,10 @@ test("as the workbench runs it, every limb stays on the body at every moment", (
     made.dispose();
   }
 });
+
+test("legs alternate: every walker has legs in both halves of the stride", () => {
+  for (const id of IDS) {
+    const phases = new Set(build(id).limbs.filter((limb) => limb.swing === "leg").map((limb) => limb.phase));
+    if (phases.size) assert.equal(phases.size, 2, id);
+  }
+});

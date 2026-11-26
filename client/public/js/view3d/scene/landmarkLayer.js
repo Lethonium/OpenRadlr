@@ -85,7 +85,7 @@ export function createLandmarkLayer(plan, { season = "summer", settings, uniform
   const materials = createBuildingMaterials({ uniforms, grain, own });
   const reach = settings.buildings;
   const detail = settings.detail;
-  const turners = createTurners(object, materials.solid);
+  const turners = createTurners(object, materials.solid, own);
   const scratch = createScratch();
   const part = (asset, options) => asset.parts({ season, detail, ...options, own: scratch.own });
 

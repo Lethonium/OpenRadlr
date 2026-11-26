@@ -30,7 +30,7 @@ export function createFarmLayer(plan, { season = "summer", settings, uniforms, t
   const reach = settings.buildings;
   const detail = settings.detail;
   const heightAt = ground && heightSampler(ground.near);
-  const turners = createTurners(object, materials.solid);
+  const turners = createTurners(object, materials.solid, own);
   const scratch = createScratch();
   const part = (asset, options) => asset.parts({ season, detail, ...options, own: scratch.own });
 

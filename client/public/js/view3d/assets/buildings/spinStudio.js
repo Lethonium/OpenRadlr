@@ -163,7 +163,7 @@ export function createStudioRoom({ own = (resource) => resource, ceiling = true 
     emitters.push({ glow, intensity });
     group.add(mesh(own(merge(lit[name])), glow, `lit-${name}`));
   }
-  const trainers = new THREE.InstancedMesh(own(trainerGeometry(fit)), own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 })), 16);
+  const trainers = own(new THREE.InstancedMesh(own(trainerGeometry(fit)), own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 })), 16));
   trainers.name = "trainer";
   trainers.frustumCulled = false;
   trainers.castShadow = true;

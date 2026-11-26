@@ -54,7 +54,7 @@ export function createSettlementLayer(plan, { season = "summer", settings, unifo
   const detail = settings.detail;
   const heightAt = ground && heightSampler(ground.near);
   const water = ground?.near.water;
-  const turners = createTurners(object, materials.solid);
+  const turners = createTurners(object, materials.solid, own);
   const scratch = createScratch();
   const part = (asset, options) => asset.parts({ season, detail, ...options, own: scratch.own });
 

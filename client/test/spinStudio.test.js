@@ -139,3 +139,9 @@ test("a shell without glass has no front frames either", () => {
   assert.ok(front(createStudioShell({ floors: 1 })) > 0);
   assert.equal(front(createStudioShell({ floors: 1, glass: false })), 0);
 });
+
+test("the room owns its trainers' instanced mesh, so disposal frees its instance buffer", () => {
+  const owned = new Set();
+  const { object } = createStudioRoom({ own: (resource) => (owned.add(resource), resource), uniforms: createSharedUniforms() });
+  assert.ok(owned.has(object.getObjectByName("trainer")));
+});
