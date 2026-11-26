@@ -6,6 +6,7 @@
  * fields as unknown. See docs/superpowers/specs/2026-10-18-splits-laps-ride-history-design.md.
  */
 
+import { WORLD_STAMP } from "../profile/worldStamp.js";
 import { bestEfforts, rideLoad, weightedPower } from "./powerAnalysis.js";
 
 const PREFIX = "ride:";
@@ -21,6 +22,8 @@ export function rideRecord({ recorder, splits, splitMode, routeId, measured, pro
   const weighted = weightedPower(recorder.samples, recorder.pauses);
   return {
     version: 2,
+    // The world the ride was made in (profile/achievements.js); records without it are older.
+    world: WORLD_STAMP,
     id: String(first.t),
     startedAt: first.t,
     endedAt: last.t,

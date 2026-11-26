@@ -207,6 +207,13 @@ ${outlined("M50 47L50 66", "#ff6b9a", 9)}
 <g transform="rotate(-35 50 50)"><rect x="28" y="47" width="44" height="6" rx="3" fill="#cfd6df" ${LINE} stroke-width="2"/>
 <rect x="22" y="38" width="9" height="24" rx="3" fill="#ef4b4b" ${LINE}/><rect x="69" y="38" width="9" height="24" rx="3" fill="#ef4b4b" ${LINE}/>
 <rect x="17" y="42" width="6" height="16" rx="2.5" fill="#ef4b4b" ${LINE} stroke-width="2"/><rect x="77" y="42" width="6" height="16" rx="2.5" fill="#ef4b4b" ${LINE} stroke-width="2"/></g>`,
+  classicRider: `<polygon points="45.9,72.0 32.0,80.0 18.1,72.0 18.1,56.0 32.0,48.0 45.9,56.0" fill="#dfe4ea" ${LINE}/>
+<polygon points="81.9,72.0 68.0,80.0 54.1,72.0 54.1,56.0 68.0,48.0 81.9,56.0" fill="#dfe4ea" ${LINE}/>
+<polygon points="37.2,67.0 32.0,70.0 26.8,67.0 26.8,61.0 32.0,58.0 37.2,61.0" fill="#9aa5b4" ${LINE} stroke-width="2.4"/>
+<polygon points="73.2,67.0 68.0,70.0 62.8,67.0 62.8,61.0 68.0,58.0 73.2,61.0" fill="#9aa5b4" ${LINE} stroke-width="2.4"/>
+<path d="M34 64L46 46L62 46L66 64M46 46L52 64L34 64M52 64L62 46" fill="none" stroke="${INK}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M34 64L46 46L62 46L66 64M46 46L52 64L34 64M52 64L62 46" fill="none" stroke="#ef4b4b" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M43 40h8M60 40v6" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`,
 };
 
 /** Which pin each achievement wears. */
@@ -238,6 +245,7 @@ export const BADGE_SHAPES = Object.freeze({
   thumbWarrior: "burst",
   bendy: "burst",
   crossTrainer: "burst",
+  classicRider: "round",
 });
 
 let nextUid = 0;

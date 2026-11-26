@@ -5,8 +5,14 @@
  */
 
 import { weekStart } from "./stats.js";
+import { WORLD_STAMP } from "./worldStamp.js";
 import { PRESETS } from "../workout/presets.js";
 import { VENUES } from "../workout/venues.js";
+
+export { WORLD_STAMP };
+
+/** Whether the saved achievements hold Old School, which unlocks the classic rider. */
+export const hasClassicRider = (state) => Boolean(state?.earned?.classicRider);
 
 const YOGA_PLANS = new Set(PRESETS.filter((p) => VENUES[p.venue]?.category === "yoga").map((p) => p.id));
 const WEEK_STEP_MS = 8 * 86_400_000;
@@ -84,6 +90,7 @@ export const ACHIEVEMENTS = Object.freeze([
   def("thumbWarrior", anyRide((r) => r.device === "paddle"), true),
   def("bendy", (f) => f.workouts.some((w) => YOGA_PLANS.has(w.planId)), true),
   def("crossTrainer", (f) => [...f.workoutWeeks].some((w) => f.rideWeeks.has(w)), true),
+  def("classicRider", anyRide((r) => r.world !== WORLD_STAMP)),
 ]);
 
 /** The ids whose check holds on `sources` ({records, summits, lemons, routes}). */

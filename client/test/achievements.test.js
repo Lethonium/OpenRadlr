@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
+import { WORLD_STAMP, hasClassicRider, ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
 
 // Tuesday 10 Nov 2026, 18:00 local: hits none of the time-based ones.
 const at = (y, m, d, h = 18, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -19,6 +19,7 @@ const ride = (overrides = {}) => ({
   ftp: 200,
   routeId: "rolling-hills",
   test: null,
+  world: WORLD_STAMP,
   ...overrides,
 });
 const workout = (planId, startedAt = BASE) => ({ kind: "workout", planId, startedAt, durationS: 1200 });
@@ -32,7 +33,7 @@ const weekly = (offsets) => offsets.map((w) => ride({ startedAt: BASE + w * 7 * 
 test("the list has the spec's ids in order", () => {
   assert.deepEqual(
     ACHIEVEMENTS.map((a) => a.id),
-    ["firstRide", "marathon", "century", "climb1000", "climb4000", "everest", "km1000", "croissants", "weeks4", "weeks12", "tourist", "local", "bothWays", "lavaFeet", "lemons10", "summits10", "knowThyself", "stronger", "watts1000", "nightOwl", "earlyBird", "lunchBreak", "cookieBurner", "newYear", "thumbWarrior", "bendy", "crossTrainer"],
+    ["firstRide", "marathon", "century", "climb1000", "climb4000", "everest", "km1000", "croissants", "weeks4", "weeks12", "tourist", "local", "bothWays", "lavaFeet", "lemons10", "summits10", "knowThyself", "stronger", "watts1000", "nightOwl", "earlyBird", "lunchBreak", "cookieBurner", "newYear", "thumbWarrior", "bendy", "crossTrainer", "classicRider"],
   );
 });
 
@@ -132,7 +133,7 @@ test("crossTrainer: a ride and a workout in the same week earn it", () => yes("c
 test("crossTrainer: in different weeks they don't", () => no("crossTrainer", [ride(), workout("tabata", BASE + 7 * DAY)]));
 
 test("records without the newer fields earn nothing they can't prove", () => {
-  assert.deepEqual(earnedNow({ records: [{ startedAt: BASE, distanceM: 10_000 }], summits: [], lemons: 0, routes: null }), ["firstRide"]);
+  assert.deepEqual(earnedNow({ records: [{ startedAt: BASE, distanceM: 10_000, world: WORLD_STAMP }], summits: [], lemons: 0, routes: null }), ["firstRide"]);
 });
 
 test("facts sort the records oldest first", () => {
@@ -237,4 +238,17 @@ test("backdate on a long history stays well under a frame budget per ride", () =
   const start = performance.now();
   backdate({ records, lemons: 10, summits: [] }, NOW);
   assert.ok(performance.now() - start < 250, "2,000 rides backdate in under 250 ms");
+});
+
+test("classicRider: a ride without the world stamp earns it", () => yes("classicRider", [ride({ world: undefined })]));
+test("classicRider: a ride stamped with the world doesn't", () => no("classicRider", [ride({ world: WORLD_STAMP })]));
+test("classicRider: an unstamped workout alone doesn't", () => no("classicRider", [workout("tabata")]));
+test("classicRider: one old ride among new ones is enough", () => yes("classicRider", [ride({ world: WORLD_STAMP }), ride({ startedAt: BASE + DAY, world: undefined })]));
+test("classicRider: no records don't", () => no("classicRider", []));
+test("the world stamp is 2", () => assert.equal(WORLD_STAMP, 2));
+test("hasClassicRider: true once earned, false without or without state", () => {
+  assert.equal(hasClassicRider({ earned: { classicRider: 5 } }), true);
+  assert.equal(hasClassicRider({ earned: {} }), false);
+  assert.equal(hasClassicRider(null), false);
+  assert.equal(hasClassicRider(undefined), false);
 });

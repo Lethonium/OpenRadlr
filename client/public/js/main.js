@@ -19,6 +19,7 @@ import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
+import { WORLD_STAMP } from "./profile/worldStamp.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
@@ -4219,6 +4220,7 @@ function checkAchievements(summary) {
   const live = {
     ...summary,
     startedAt: first.t,
+    world: WORLD_STAMP,
     routeId: app.studio ? null : app.rideRoute.id,
     device: deviceKind(app.trainer),
     measured: hasRealPowerSource(app.trainer),

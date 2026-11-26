@@ -1001,6 +1001,8 @@ export default {
   "achievement.bendy.hint": "Do a yoga workout.",
   "achievement.crossTrainer.name": "Cross-Trainer",
   "achievement.crossTrainer.hint": "Ride and do a workout in the same week.",
+  "achievement.classicRider.name": "Old School",
+  "achievement.classicRider.hint": "Ride before the new world arrived.",
   "screens.title": "Second screen",
   "screens.hint": "Show your ride on a phone, or use this device as a cockpit for another tablet.",
   "screens.pair": "Pair a second screen",
