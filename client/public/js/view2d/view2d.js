@@ -161,12 +161,14 @@ export class View2D {
   /** A rider as the map draws them: a place and heading in the world. */
   #onMap(rider, myId, colors) {
     const { position, forward } = riderPosition(this.#route, rider.distance, rider.lane);
+    const color = this.#colorOf(rider, myId, colors);
     return {
       id: rider.id,
       x: position[0],
       z: position[2],
       heading: Math.atan2(forward[0], -forward[2]),
-      look: this.#lookOf(rider.id, this.#colorOf(rider, myId, colors)),
+      color,
+      look: this.#lookOf(rider.id, color),
       name: riderLabel(rider, t),
       mine: rider.id === myId,
       ghost: Boolean(rider.ghost),

@@ -153,6 +153,13 @@ test("at a pixel ratio of 2 the views draw in CSS pixels through a doubled trans
   }
 });
 
+test("before their sprites are baked riders are dots in their kit colour, mine in mine", () => {
+  const { view, screen } = make();
+  view.render(frame({ riders: [rider(1, 10), rider(2, 30)] }));
+  assert.ok(screen.fills.includes(COLORS.me), "me");
+  assert.ok(screen.fills.includes(COLORS.human), "another rider");
+});
+
 test("setRoute places the riders on the new route and keeps the store", () => {
   const made = [];
   const far = new RouteGeometry({ ...tinyLoopFile(), id: "far", points: tinyLoopFile().points.map(([x, y, z]) => [x + 5000, y + 5000, z]) });
