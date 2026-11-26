@@ -9,6 +9,7 @@ import { CROWD } from "./crowd.js";
 import { GYM_SIGN, GYM_TOP } from "../world/venues.js";
 import { add, cellKey, normalize, scale, yawFor } from "./math.js";
 import { seededRandom } from "../world/noise.js";
+import { FOOTPRINT } from "./studioLayout.js";
 import { temperate } from "./biomes/index.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
 
@@ -364,7 +365,7 @@ export function buildOutdoorGym(route, terrain, { occupancy, avoid = () => false
 /** Metres after the start line where the spin studio stands, across the road from the café. */
 export const STUDIO_DISTANCE = CAFE_DISTANCE + 12;
 /** The studio's footprint in its local frame (riders face -Z; the glass front is at `front`). */
-export const STUDIO_FOOTPRINT = Object.freeze({ halfWidth: 8.5, front: -10, back: 8 });
+export const STUDIO_FOOTPRINT = FOOTPRINT;
 /** Metres between the road edge and the studio's glass front. */
 const STUDIO_SETBACK = 8;
 

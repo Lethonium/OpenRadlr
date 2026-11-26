@@ -14,7 +14,7 @@
  * coarse height grid), so it runs on the main thread without the terrain.
  */
 import { lerp3 } from "./math.js";
-import { FLOOR_HEIGHT } from "./studioBuilding.js";
+import { FLOOR_HEIGHT } from "./studioLayout.js";
 import { roadFrame } from "../world/roads.js";
 
 export const MENU_CAMERA = Object.freeze({

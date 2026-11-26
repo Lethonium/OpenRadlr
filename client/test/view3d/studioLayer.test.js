@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { StudioLayer, floorCount, floorTransform, seatWorld } from "../../public/js/view3d/studioLayer.js";
-import { FLOOR_HEIGHT } from "../../public/js/view3d/studioBuilding.js";
+import { FLOOR_HEIGHT } from "../../public/js/view3d/studioLayout.js";
 
 const site = { position: [100, 20, -50], yaw: 0 };
 const turned = { position: [100, 20, -50], yaw: Math.PI / 2 };

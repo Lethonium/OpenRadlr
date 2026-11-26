@@ -4,6 +4,7 @@
  * beside the clumps. The landmark props (balloon, boat) live in `BUILDINGS`.
  */
 import * as bikeCafe from "../buildings/bikeCafe.js";
+import * as spinStudio from "../buildings/spinStudio.js";
 import { bench } from "./bench.js";
 import { boardwalk } from "./boardwalk.js";
 import { beehive } from "./beehive.js";
@@ -24,6 +25,7 @@ export const PROPS = Object.freeze({ beehive, bench, boardwalk, cairn, cart, log
 /** Workbench-only props: not on the verge, drawn by their own layers (`{meta, create}`). */
 export const FLOATERS = Object.freeze({
   "bike-cafe": Object.freeze({ meta: bikeCafe.meta, create: bikeCafe.create }),
+  "spin-studio": Object.freeze({ meta: spinStudio.meta, create: spinStudio.create }),
   lemon: Object.freeze({ meta: lemon.meta, create: lemon.create }),
   "outdoor-gym": Object.freeze({ meta: outdoorGym.meta, create: outdoorGym.create }),
   "route-arch": Object.freeze({ meta: routeArch.meta, create: routeArch.create }),

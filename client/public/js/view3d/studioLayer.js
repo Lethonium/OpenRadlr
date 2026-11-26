@@ -6,9 +6,9 @@
  * face −Z, up is +Y; the site gives its origin and yaw.
  */
 import { multiply, placement, transformPoint } from "./math.js";
-import { FLOOR_HEIGHT, SLAB, buildStudioShell } from "./studioBuilding.js";
+import { buildStudioShell } from "./studioBuilding.js";
 import { buildStudioRoom } from "./studioRoom.js";
-import { INSTRUCTOR, seatPosition } from "./studioLayout.js";
+import { FLOOR_HEIGHT, INSTRUCTOR, SLAB, seatPosition } from "./studioLayout.js";
 
 /** The building never has fewer storeys than this, so it reads as a building. */
 const MIN_FLOORS = 2;

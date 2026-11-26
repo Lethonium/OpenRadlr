@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "../../public/js/view3d/studioCamera.js";
 import { StudioCamera } from "../../public/js/view3d/studioCamera.js";
-import { FLOOR_HEIGHT, SLAB } from "../../public/js/view3d/studioBuilding.js";
+import { FLOOR_HEIGHT, SLAB } from "../../public/js/view3d/studioLayout.js";
 import { seatPosition } from "../../public/js/view3d/studioLayout.js";
 import { RIDER_GEOMETRY } from "../../public/js/view3d/riderModel.js";
 

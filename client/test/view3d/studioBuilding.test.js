@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FLOOR_HEIGHT, buildStudioShell } from "../../public/js/view3d/studioBuilding.js";
+import { buildStudioShell } from "../../public/js/view3d/studioBuilding.js";
+import { FLOOR_HEIGHT } from "../../public/js/view3d/studioLayout.js";
 import { STUDIO_FOOTPRINT } from "../../public/js/view3d/features.js";
 
 const vertices = (mesh) => {
