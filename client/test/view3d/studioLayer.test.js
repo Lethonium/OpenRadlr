@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { StudioLayer, floorCount, floorTransform, seatWorld } from "../../public/js/view3d/studioLayer.js";
-import { FLOOR_HEIGHT } from "../../public/js/view3d/studioLayout.js";
+import { StudioFloors, StudioLayer, coachWorld, floorCount, floorTransform, seatWorld } from "../../public/js/view3d/studioLayer.js";
+import { FLOOR_HEIGHT, INSTRUCTOR, coachId, isCoach } from "../../public/js/view3d/studioLayout.js";
 
 const site = { position: [100, 20, -50], yaw: 0 };
 const turned = { position: [100, 20, -50], yaw: Math.PI / 2 };
@@ -107,4 +107,32 @@ test("a seat on a higher room grows the building, without being told the room co
   assert.equal(layer.floors, 3);
   assert.equal(layer.coaches().length, 3);
   assert.ok(placed.position[1] < floorTransform(site, layer.floors)[13], "the rider sits below the roof");
+});
+
+// ---------- StudioFloors: the placement without a renderer
+
+test("rider in room 2 opens three floors", () => {
+  const floors = new StudioFloors(site);
+  floors.setRooms(1);
+  floors.riders([{ id: 9, studio: { room: 2, seat: 0 } }]);
+  assert.equal(floors.floors, 3);
+  assert.equal(floors.open, 3);
+});
+
+test("coaches have one id per floor", () => {
+  const floors = new StudioFloors(site);
+  floors.setRooms(2);
+  floors.setOpen(2);
+  const coaches = floors.coaches();
+  assert.deepEqual(coaches.map((c) => c.rider.id), [-1, -2]);
+  assert.ok(coaches.every((c) => c.rider.lookId === INSTRUCTOR.id && c.rider.coach === true));
+  assert.deepEqual(coaches.map((c) => c.rider.id), [coachId(0), coachId(1)]);
+  assert.ok(coaches.every((c) => isCoach(c.rider.id)));
+  assert.ok(!isCoach(INSTRUCTOR.id) && !isCoach(7));
+});
+
+test("coachWorld stands on the stage of its floor", () => {
+  const up = coachWorld(site, 1);
+  const down = coachWorld(site, 0);
+  assert.ok(Math.abs(up.position[1] - down.position[1] - FLOOR_HEIGHT) < 1e-4);
 });

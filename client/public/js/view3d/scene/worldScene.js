@@ -19,6 +19,7 @@ import { createFurnitureLayer } from "./furnitureLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
 import { createLemonLayer } from "./lemonLayer.js";
 import { createVenueLayer } from "./venueLayer.js";
+import { createStudioBuildingLayer } from "./studioBuildingLayer.js";
 import { createHighlightLayer } from "./highlightLayer.js";
 import { createStatueLayer } from "./statueLayer.js";
 import { createRiderLayer } from "./riderLayer.js";
@@ -65,6 +66,7 @@ const LIGHTNING = 3;
  * @property {import("./riderLayer.js").VehicleEntry[]} [vehicles] the shared vehicles with their seated riders (none when missing)
  * @property {{index: number, yaw: number, lift: number, pose: boolean, flagSwing: number}[]} [crowd] the spectators out, `index` into `world.crowd.people` (none when missing)
  * @property {{position: number[], yaw: number}[]} [lemons] the golden lemons to draw, `position` their centre (none when missing)
+ * @property {{floors: number, open: number}} [studio] the spin studio's storeys and how many are lit (none when missing: the building stays as it was)
  * @property {{gym: object, index: number} | null} [statueGlow] the statue plinth to light (none when missing)
  */
 
@@ -108,6 +110,7 @@ export function createWorldScene(world, { settings, track }) {
     arches: () => createArchLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     furniture: () => createFurnitureLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     venues: () => createVenueLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
+    studio: () => createStudioBuildingLayer(world.studio, plants()),
     riders: () => createRiderLayer(plants()),
     athletes: () => createAthleteLayer(plants()),
     statues: () => createStatueLayer(plants()),
@@ -126,7 +129,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.arches(), makers.furniture(), makers.venues(), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
+  layers.push(makers.arches(), makers.furniture(), makers.venues(), ...(world.studio ? [makers.studio()] : []), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -177,7 +180,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
+    rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "studio", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
   };
   setQuality(settings);
 

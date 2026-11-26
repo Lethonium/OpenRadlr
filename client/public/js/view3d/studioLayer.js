@@ -8,7 +8,7 @@
 import { multiply, placement, transformPoint } from "./math.js";
 import { buildStudioShell } from "./studioBuilding.js";
 import { buildStudioRoom } from "./studioRoom.js";
-import { FLOOR_HEIGHT, INSTRUCTOR, SLAB, seatPosition } from "./studioLayout.js";
+import { FLOOR_HEIGHT, INSTRUCTOR, SLAB, coachId, seatPosition } from "./studioLayout.js";
 
 /** The building never has fewer storeys than this, so it reads as a building. */
 const MIN_FLOORS = 2;
@@ -34,7 +34,7 @@ export function seatWorld(site, room, seat) {
 }
 
 /** World pose of the coach on `floor`'s stage. */
-function coachWorld(site, floor) {
+export function coachWorld(site, floor) {
   const [x, y, z] = INSTRUCTOR.position;
   const at = transformPoint(floorTransform(site, floor), [x, y + SLAB, z]);
   return { position: [at[0], at[1], at[2]], yaw: site.yaw + INSTRUCTOR.yaw };
@@ -42,30 +42,29 @@ function coachWorld(site, floor) {
 
 const forwardOf = (yaw) => [-Math.sin(yaw), 0, -Math.cos(yaw)];
 
-export class StudioLayer {
-  #renderer;
+/**
+ * Where the studio's floors and riders are, with no drawing: how many storeys (rooms, and any a rider sits above), which
+ * are open (lit) and where each studio rider and each floor's coach stands.
+ */
+export class StudioFloors {
   #site;
   #rooms = MIN_FLOORS;
   #declaredOpen = 0;
   #open = 0;
-  #handles;
 
-  /**
-   * @param {object} renderer uploads and draws meshes (the WebGL one, or a fake in tests)
-   * @param {{position: number[], yaw: number}} site from `studioSite`
-   */
-  constructor(renderer, site) {
-    this.#renderer = renderer;
+  /** @param {{position: number[], yaw: number}} site from `studioSite` */
+  constructor(site) {
     this.#site = site;
-    const shell = buildStudioShell();
-    const room = buildStudioRoom();
-    const up = (mesh) => renderer.upload(mesh);
-    this.#handles = { base: up(shell.base), floor: up(shell.floor), roof: up(shell.roof), glass: up(shell.glass), room: up(room.room), accents: up(room.accents) };
   }
 
   /** Storeys for the studio's rooms, or more where riders sit on a higher floor (road views never hear the room count). */
   get floors() {
     return Math.max(floorCount(this.#rooms), this.#open);
+  }
+
+  /** Floors below this count are open (lit): the declared ones, and those riders sit on. */
+  get open() {
+    return this.#open;
   }
 
   /** How many floors have a room, from the studio's room count. */
@@ -94,21 +93,49 @@ export class StudioLayer {
     return placed;
   }
 
-  /** The coach on every open floor, as placed riders (id 0, pedalling). */
+  /** The coach on every open floor, as placed riders: one id per floor (`coachId`), all with the instructor's look, pedalling. */
   coaches() {
     const placed = [];
     for (let floor = 0; floor < Math.min(this.#open, this.floors); floor += 1) {
       const { position, yaw } = coachWorld(this.#site, floor);
-      placed.push({ rider: { id: INSTRUCTOR.id, power: 1, speed: 0, studio: { room: floor, seat: -1 } }, position, forward: forwardOf(yaw), yaw });
+      placed.push({ rider: { id: coachId(floor), lookId: INSTRUCTOR.id, coach: true, power: 1, speed: 0, studio: { room: floor, seat: -1 } }, position, forward: forwardOf(yaw), yaw });
     }
     return placed;
+  }
+}
+
+/**
+ * The renderer-drawn studio of the old view (`view3d.js`), until the Three.js scene takes over: the floors plus the
+ * building's meshes. Its coaches keep the instructor's id, as the old view draws them by it.
+ */
+export class StudioLayer extends StudioFloors {
+  #renderer;
+  #site;
+  #handles;
+
+  /**
+   * @param {object} renderer uploads and draws meshes (the WebGL one, or a fake in tests)
+   * @param {{position: number[], yaw: number}} site from `studioSite`
+   */
+  constructor(renderer, site) {
+    super(site);
+    this.#renderer = renderer;
+    this.#site = site;
+    const shell = buildStudioShell();
+    const room = buildStudioRoom();
+    const up = (mesh) => renderer.upload(mesh);
+    this.#handles = { base: up(shell.base), floor: up(shell.floor), roof: up(shell.roof), glass: up(shell.glass), room: up(room.room), accents: up(room.accents) };
+  }
+
+  coaches() {
+    return super.coaches().map((placed) => ({ ...placed, rider: { ...placed.rider, id: INSTRUCTOR.id } }));
   }
 
   /** "opaque": base, storeys, rooms, roof. "glass": the front panes, after every opaque mesh. */
   draw(pass, _ctx) {
     const r = this.#renderer;
     const h = this.#handles;
-    const open = (floor) => floor < this.#open;
+    const open = (floor) => floor < this.open;
     if (pass === "opaque") {
       r.draw(h.base, floorTransform(this.#site, 0));
       for (let floor = 0; floor < this.floors; floor += 1) {

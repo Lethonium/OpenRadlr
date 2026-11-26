@@ -57,6 +57,8 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {number} grade percent
  * @property {number[]} tint linear 0-1 jersey colour
  * @property {boolean} ghost
+ * @property {number} [lookId] the id the look, kit and seed come from (default `id`): the studio's coaches have one id per floor but one look
+ * @property {boolean} [hideBody] the rider is not drawn, its bike is (my own point of view in the studio)
  */
 
 /**
@@ -111,11 +113,11 @@ export function createRiderLayer({ settings, uniforms, track }) {
 
   /** Dresses a cyclist in the jersey of `tint`, swapping out the old kit. */
   const paint = (record, tint) => {
-    const key = `${record.id}|${tint.join(",")}`;
+    const key = `${record.lookId}|${tint.join(",")}`;
     if (record.kitKey === key) return;
     const previous = record.kit;
     record.kit = createOwner(track);
-    const texture = kitTexture({ ...lookOf(record.id), primary: hexOf(tint) }, record.kit.own);
+    const texture = kitTexture({ ...lookOf(record.lookId), primary: hexOf(tint) }, record.kit.own);
     if (record.cyclist) record.cyclist.setKit(texture);
     else record.rig?.setTexture(texture);
     record.kitKey = key;
@@ -123,11 +125,12 @@ export function createRiderLayer({ settings, uniforms, track }) {
     previous?.disposeAll();
   };
 
-  const create = (id, tint) => {
-    const record = { id, owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
+  const create = (id, tint, lookId = id) => {
+    const record = { id, lookId, bodyHidden: false, bodyMeshes: [], owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
     paint(record, tint);
-    record.cyclist = createCyclist({ ...lookOf(id), primary: hexOf(tint) }, { own: record.owner.own, uniforms, seed: id, texture: record.texture });
+    record.cyclist = createCyclist({ ...lookOf(lookId), primary: hexOf(tint) }, { own: record.owner.own, uniforms, seed: lookId, texture: record.texture });
     record.cyclist.object.traverse((child) => child.isMesh && record.casts.set(child, child.castShadow));
+    record.cyclist.rider.object.traverse((child) => child.isMesh && record.bodyMeshes.push(child));
     return record;
   };
 
@@ -150,18 +153,29 @@ export function createRiderLayer({ settings, uniforms, track }) {
     }
   };
 
+  /**
+   * Shows or hides the rider's body, the bike staying. The skinned meshes themselves are hidden: their bones live under them,
+   * so hiding a parent of the bones would stop the posing.
+   */
+  const setBody = (record, shown) => {
+    if (record.bodyHidden === !shown) return;
+    record.bodyHidden = !shown;
+    for (const mesh of record.bodyMeshes) mesh.visible = shown;
+  };
+
   /** The cyclist for this entry: the one in the scene, one off the free list, or a new one. */
   const acquire = (rider) => {
     let record = active.get(rider.id);
     if (!record) {
       record = free.get(rider.id);
       if (record) free.delete(rider.id);
-      else record = create(rider.id, rider.tint);
+      else record = create(rider.id, rider.tint, rider.lookId ?? rider.id);
       active.set(rider.id, record);
       object.add(record.cyclist.object);
     }
     paint(record, rider.tint);
     setGhost(record, rider.ghost);
+    setBody(record, !rider.hideBody);
     return record;
   };
 
@@ -185,7 +199,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
   const heads = new Map();
 
   const createSeatedRider = (id, tint) => {
-    const record = { id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
+    const record = { id, lookId: id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
     paint(record, tint);
     record.rig = createRider({ ...lookOf(id), primary: hexOf(tint) }, { own: record.owner.own, uniforms, texture: record.texture });
     return record;

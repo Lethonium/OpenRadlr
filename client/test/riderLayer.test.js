@@ -239,3 +239,50 @@ test("a vehicle past the reach is not drawn unless I am aboard", () => {
   layer.update(vframe([beer([occupant(11, { me: true }), null, null, null, null, null, null], { position: [900, 0, 0] })]));
   assert.ok(layer.vehicleOf(1));
 });
+
+// ---------- studio entries: lookId and hideBody
+
+const riderMeshes = (cyclist) => {
+  const found = [];
+  cyclist.rider.object.traverse((child) => child.isMesh && found.push(child));
+  return found;
+};
+const bikeMeshes = (cyclist) => {
+  const found = [];
+  cyclist.bike.object.traverse((child) => child.isMesh && found.push(child));
+  return found;
+};
+const shown = (object) => {
+  for (let node = object; node; node = node.parent) if (!node.visible) return false;
+  return true;
+};
+
+test("hideBody keeps the bike", () => {
+  const { layer } = make();
+  layer.update(frame([entry(1, 3, { me: true, hideBody: true })]));
+  const cyclist = layer.cyclistOf(1);
+  assert.ok(riderMeshes(cyclist).length > 0 && riderMeshes(cyclist).every((mesh) => !mesh.visible));
+  assert.ok(bikeMeshes(cyclist).every((mesh) => shown(mesh)));
+  layer.update(frame([entry(1, 3, { me: true })]));
+  assert.ok(riderMeshes(layer.cyclistOf(1)).every((mesh) => shown(mesh)), "the body comes back");
+});
+
+test("two coaches are two cyclists", () => {
+  const { layer } = make();
+  layer.update(frame([entry(-1, 3, { lookId: 0 }), entry(-2, 5, { lookId: 0 })]));
+  assert.equal(layer.stats().full, 2);
+  assert.ok(layer.cyclistOf(-1) && layer.cyclistOf(-2));
+  assert.notEqual(layer.cyclistOf(-1), layer.cyclistOf(-2));
+});
+
+test("lookId picks the look", () => {
+  const { layer } = make();
+  layer.update(frame([entry(0, 3), entry(-1, 5, { lookId: 0 }), entry(2, 7)]));
+  const kit = (id) => {
+    let map;
+    layer.cyclistOf(id).object.traverse((child) => child.material?.map?.isDataTexture && (map = child.material.map));
+    return Array.from(map.image.data.slice(0, 4096));
+  };
+  assert.deepEqual(kit(-1), kit(0));
+  assert.notDeepEqual(kit(2), kit(0));
+});
