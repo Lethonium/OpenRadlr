@@ -1,7 +1,7 @@
 /** Where a world point lies against the route (distance along, offset beside), and the scenery that stands near it. */
 const CELL = 60;
 const BUILDINGS = new Set(["house", "farm", "cafe", "landmark"]);
-/** Nothing stands this close to the centre line, and buildings keep at least this far behind the road. */
+/** Nothing stands this close to the centre line (but people at the roadside and the arches over it), and buildings keep at least this far behind the road. */
 const ROAD_CLEAR_M = 3.5;
 const BUILDING_LATERAL_M = -7;
 const NEAR_SIDE_MAX_M = 22;
@@ -68,7 +68,7 @@ export function sideScenery(index, route, { behind = 70, front = NEAR_SIDE_MAX_M
     if (item.layer === "scrub" && item.id !== "bush" && item.id !== "lavender") continue;
     const pr = projector.project(item.x, item.z, reach);
     if (!pr || pr.lateral < -behind || pr.lateral > front) continue;
-    if (Math.abs(pr.lateral) < ROAD_CLEAR_M && item.layer !== "person") continue;
+    if (Math.abs(pr.lateral) < ROAD_CLEAR_M && item.layer !== "person" && item.layer !== "arch") continue;
     const building = BUILDINGS.has(item.layer);
     if (building && pr.lateral > 0) continue; // on the near side it would hide the road
     if (!building && pr.lateral > 0 && item.layer === "tree" && (Math.floor(item.x * 7 + item.z * 3) & 3) !== 0) continue;

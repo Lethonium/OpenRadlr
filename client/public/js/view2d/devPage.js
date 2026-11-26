@@ -16,14 +16,14 @@ import { createSpriteBaker } from "./sprites/baker.js";
 import { createSpriteStore } from "./sprites/spriteStore.js";
 import { indexWorld } from "./worldIndex.js";
 
-/** Riders put on the route: a kit colour, a lane, and metres ahead (or behind) of me. */
+/** Riders put on the route: a kit colour, a lane, metres ahead (or behind) of me and a cadence. */
 const KITS = Object.freeze([
-  { name: "You", color: "#ff7a1a", lane: 1, gap: 0, mine: true }, // i18n-ok: developer page
-  { name: "Mara", color: "#2f7de1", lane: 0, gap: 9 }, // i18n-ok: developer page
-  { name: "Jonas", color: "#e23b5b", lane: 2, gap: 4 }, // i18n-ok: developer page
-  { name: "Lea", color: "#28b37a", lane: 1, gap: -7 }, // i18n-ok: developer page
-  { name: "Tom", color: "#9b5de5", lane: 0, gap: 22 }, // i18n-ok: developer page
-  { name: "Ines", color: "#f2c230", lane: 2, gap: -15 }, // i18n-ok: developer page
+  { name: "You", color: "#ff7a1a", lane: 1, gap: 0, cadence: 88, mine: true }, // i18n-ok: developer page
+  { name: "Mara", color: "#2f7de1", lane: 0, gap: 9, cadence: 92 }, // i18n-ok: developer page
+  { name: "Jonas", color: "#e23b5b", lane: 2, gap: 4, cadence: 85 }, // i18n-ok: developer page
+  { name: "Lea", color: "#28b37a", lane: 1, gap: -7, cadence: 90 }, // i18n-ok: developer page
+  { name: "Tom", color: "#9b5de5", lane: 0, gap: 22, cadence: 80 }, // i18n-ok: developer page
+  { name: "Ines", color: "#f2c230", lane: 2, gap: -15, cadence: 95 }, // i18n-ok: developer page
 ]);
 /** The id of my rider. */
 const ME_ID = "You"; // i18n-ok: developer page
@@ -70,7 +70,7 @@ async function main() {
   store.setNight(look.night);
   const sampler = groundSampler(scene.ground);
   const createCanvas = (w, h) => new OffscreenCanvas(w, h);
-  const view = viewName === "side" ? createSideView({ scene, route, sampler, createCanvas }) : createMapView({ scene, route, index: indexWorld(scene), sampler, store, createCanvas });
+  const view = viewName === "side" ? createSideView({ scene, route, sampler, createCanvas, index: indexWorld(scene), store }) : createMapView({ scene, route, index: indexWorld(scene), sampler, store, createCanvas });
   const looks = KITS.map((kit, i) => ({ ...lookOf(i), primary: kit.color }));
 
   function resize() {
@@ -84,18 +84,24 @@ async function main() {
   function frame(t) {
     const meD = route.wrap(startD + t * SPEED_MS);
     const meAt = frameAt(route, meD, 1);
-    const riders = KITS.map((kit, i) => ({
-      ...frameAt(route, route.wrap(meD + kit.gap + Math.sin(t * 0.3 + i) * 1.5), kit.lane),
-      id: kit.name, // i18n-ok: developer page
-      look: looks[i],
-      name: kit.name,
-      mine: Boolean(kit.mine),
-    }));
+    const riders = KITS.map((kit, i) => {
+      const d = route.wrap(meD + kit.gap + Math.sin(t * 0.3 + i) * 1.5);
+      return {
+        ...frameAt(route, d, kit.lane),
+        d,
+        lane: kit.lane,
+        cadence: kit.cadence,
+        phase: i / KITS.length,
+        id: kit.name, // i18n-ok: developer page
+        look: looks[i],
+        name: kit.name,
+        mine: Boolean(kit.mine),
+      };
+    });
     view.draw(ctx, { width: canvas.width, height: canvas.height, me: { ...meAt, d: meD, distance: meD, lane: 1, id: ME_ID }, riders, look, t });
   }
 
   const summary = (extra) => `${viewName} · ${detail} · ${season} · ${timeMode} · ${kind} · world built in ${Math.round(builtMs)} ms${extra}`; // i18n-ok: developer page
-  if (viewName === "side") info.textContent = summary(" · land, road and sky so far"); // i18n-ok: developer page
   if (still) {
     // Draw to ask for the sprites, bake them all, draw again until nothing new is asked for.
     const start = performance.now();

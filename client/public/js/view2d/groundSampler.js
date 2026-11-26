@@ -43,8 +43,8 @@ export function groundSampler(ground) {
     return h > water - FOAM_DEPTH ? mix(colour, FOAM, 0.5) : colour;
   };
 
-  /** sRGB 0–1 of the ground at (x, z) lit from `sun` (a unit vector towards the light, y up). */
-  const color = (x, z, sun) => {
+  /** sRGB 0–1 of the ground at (x, z) lit from `sun` (a unit vector towards the light, y up); `grain` is the share of random brightness. */
+  const color = (x, z, sun, grain = GRAIN) => {
     const h = height(x, z);
     if (h < water + EDGE) return sea(h);
     let r = toSrgb(bilinear(near.colors, 3, 0, x, z));
@@ -67,7 +67,7 @@ export function groundSampler(ground) {
     // The 3D scene's z points the other way from the sun vector's.
     const lit = 0.72 + 0.5 * Math.max(0, nx * sun[0] + ny * sun[1] - nz * sun[2]) - 0.25 * (1 - ny);
     const noise = (Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
-    const k = lit * (1 + noise * GRAIN);
+    const k = lit * (1 + noise * grain);
     return [Math.min(1, r * k), Math.min(1, g * k), Math.min(1, b * k)];
   };
 

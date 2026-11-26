@@ -28,6 +28,8 @@ const HAZE_FULL_M = 4000;
 /** After dark the ground loses colour before the blue tint (as the map's does) so it reads blue-grey. */
 const NIGHT_DESATURATE = 0.7;
 const NIGHT_BRIGHTEN = 1.5;
+/** Per-column grain would show as vertical stripes up close, so the slices take (almost) none. */
+const SIDE_GRAIN = 0.004;
 
 /** What the cached images depend on besides the camera size. */
 const lookKey = (look) => `${look.season}|${look.time}|${look.night}|${look.sky.horizon.map((v) => v.toFixed(3))}|${look.sun.map((v) => v.toFixed(2))}`;
@@ -54,7 +56,7 @@ export function createSideBands({ route, sampler, createCanvas }) {
     const l = Math.hypot(dx, dz) || 1;
     const x = p.x + (-dz / l) * lateral;
     const z = -p.y + (dx / l) * lateral;
-    let color = sampler.color(x, z, look.sun);
+    let color = sampler.color(x, z, look.sun, SIDE_GRAIN);
     if (look.night) {
       const grey = (color[0] + color[1] + color[2]) / 3;
       color = color.map((v) => Math.min(1, (v + (grey - v) * NIGHT_DESATURATE) * NIGHT_BRIGHTEN));

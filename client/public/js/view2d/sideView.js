@@ -1,12 +1,19 @@
 /**
- * The 2D side view: the route unrolled by distance, the camera across the road. This file draws the sky, the sea,
- * the land in perspective (sideBands.js), the road and the verge in front of it, then the time of day's tint and
- * the weather. The scenery and the riders go between the slices and on the road in the next step.
+ * The 2D side view: the route unrolled by distance, the camera across the road. It draws the sky, the sea, the
+ * land in perspective (sideBands.js) with the scenery behind the road standing between the slices by depth, the
+ * road and the verge, the arches, lemons, riders and the near-side scenery, the time of day's tint, lamps, windows
+ * and bike lights after dark, the weather, and the route strip along the bottom.
  */
-import { drawTint, drawWeather } from "./overlays.js";
+import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
+import { laneOffset } from "../view/rideMapView.js";
+import { drawGlows, drawTint, drawWeather } from "./overlays.js";
 import { css, mix, toSrgb } from "./look2d.js";
+import { drawProfileStrip, profileStrip } from "./profileStrip.js";
 import { MIDDLE_LATERALS, createSideBands } from "./sideBands.js";
-import { sideCamera } from "./sideCamera.js";
+import { SPAN_M, VEX, sideCamera } from "./sideCamera.js";
+import { drawSprite } from "./drawSprite.js";
+import { sideScenery } from "./routeProjector.js";
+import { BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
 
 /** Sea to the horizon, mixed with the sky's haze. */
 const SEA = [0.12, 0.38, 0.52];
@@ -27,16 +34,138 @@ const CLOUD_PARALLAX = 0.05;
 const CLOUD_DRIFT_PX_S = 6;
 const STARS = 120;
 const TAU = Math.PI * 2;
+/** Every building turns a little away from straight-on, so it shows a side wall and reads as a solid. */
+export const HOUSE_TILT = -0.45;
+/** Scenery is drawn as a miniature (of the camera's pixels per metre at its depth), riders and vehicles bigger than life. */
+const SCENERY_PX_PER_M = 0.8;
+const RIDER_PX_PER_M = 1.52;
+const ARCH_PX_PER_M = 1.5;
+const LEMON_PX_PER_M = 2;
+/** Things behind the road fade into the haze: by this much of the way to the lateral reach, up to this fraction of an alpha. */
+const FADE_REACH_M = 140;
+const FADE_MAX = 0.5;
+const FADE_STRENGTH = 0.7;
+/** Near-side scenery stands this far below the road's height, and a rider's wheels this far below the road line (metres). */
+const NEAR_DROP_M = 0.6;
+const WHEEL_DROP_M = 0.05;
+/** Buildings stand at least this far above the road. */
+const BUILDING_ABOVE_ROAD_M = 0.2;
+const SPECTATOR_HOP_M = 0.3;
+/** Near-side scenery this close (metres along the road) to a rider is drawn at this opacity, so it never hides them. */
+const HIDING_M = 3.5;
+const HIDING_ALPHA = 0.3;
+/** Name label: metres above the wheels (in rider metres), its font and padding. */
+const LABEL_M = 2.4;
+const LABEL_FONT_PX = 12;
+const FLAMME = "#d8262b";
+const GHOST_ALPHA = 0.35;
+const LABEL_FONT = "600 12px system-ui, sans-serif"; // i18n-ok: a css font
+const FLAMME_H_M = 3.6;
+/** Screen margin (px) beyond which scenery is not drawn. */
+const MARGIN_PX = 120;
+/** The strip's place along the bottom. */
+const STRIP_H_PX = 54;
+const STRIP_SIDE_PX = 16;
+const STRIP_BOTTOM_PX = 10;
+const PRIORITY_PER_M = 1;
+/** After-dark glows: `r` in sprite metres at the thing's own scale; colours and strengths as the map's. */
+const LAMP_GLOW = Object.freeze({ r: 5, rgb: [1, 0.77, 0.47], a: 0.45 });
+const WINDOW_GLOW = Object.freeze({ r: 1.8, rgb: [1, 0.82, 0.51], a: 0.55 });
+const CAFE_GLOW = Object.freeze({ r: 7, rgb: [1, 0.75, 0.43], a: 0.5 });
+const HEADLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.98, 0.88], a: 0.5 });
+const TAILLIGHT = Object.freeze({ r: 1, rgb: [1, 0.16, 0.16], a: 0.35 });
+
+/** The side-view sprite jobs by workbench id, and the houses by style and turn; built once from the catalog. */
+const JOBS = (() => {
+  const byId = new Map();
+  const houses = new Map();
+  for (const job of spriteJobs({ view: "side" })) {
+    if (job.id === "house") {
+      if (!houses.has(job.options.style)) houses.set(job.options.style, []);
+      houses.get(job.options.style).push(job);
+    } else if (!byId.has(job.id)) byId.set(job.id, job);
+  }
+  return { byId, houses };
+})();
+
+/** The sprite job a scenery item draws as, or null. `turn` is a house's turn against the camera. */
+function jobOf(item, turn) {
+  switch (item.layer) {
+    case "tree":
+    case "roadside":
+    case "row":
+    case "scrub":
+    case "animal":
+      return JOBS.byId.get(item.id) ?? null;
+    case "house": {
+      const set = JOBS.houses.get(item.id) ?? JOBS.houses.get("cottage");
+      const want = turn + HOUSE_TILT;
+      return set.reduce((best, job) => (Math.abs(job.yaw - want) < Math.abs(best.yaw - want) ? job : best));
+    }
+    case "farm":
+    case "cafe":
+    case "lamp":
+      return JOBS.byId.get(BUILDING_SPRITES[item.layer]) ?? null;
+    case "landmark":
+      return JOBS.byId.get(BUILDING_SPRITES[item.id] ?? item.id) ?? null;
+    case "person":
+      return JOBS.byId.get("spectator") ?? null;
+    case "arch":
+      return item.id === "arch" ? JOBS.byId.get("route-arch") ?? null : null;
+    default:
+      return null;
+  }
+}
+const FLIPPED = new Set(["tree", "roadside", "row", "scrub", "person", "animal"]);
+const BUILDINGS = new Set(["house", "farm", "cafe"]);
+const VEHICLE_JOBS = Object.freeze({ tandem: "tandem", beer_bike: "beer-bike" });
 
 const shade = (c, f) => c.map((v) => Math.min(1, v * f));
 
 /**
- * @param {{scene: {roads: {style: {surface: number[]}}}, route: object, sampler: object, createCanvas: (w: number, h: number) => object}} deps
- * @returns {{draw: (ctx: object, frame: {width: number, height: number, me: {d: number}, riders?: object[], look: object, t?: number}) => void, resize: () => void, dispose: () => void}}
+ * @param {{scene: {roads: {style: {surface: number[]}}}, route: object, sampler: object, createCanvas: (w: number, h: number) => object, index?: {query: Function}, store?: object}} deps
+ *   `index` (worldIndex) and `store` (spriteStore) are optional: without them only land, road, riders-less strip are drawn
+ * @returns {{draw: (ctx: object, frame: {width: number, height: number, me: {d: number, id?: string}, riders?: {id: string, d: number, lane: number, look: object, name?: string, mine?: boolean, ghost?: boolean, cadence?: number, phase?: number, vehicle?: object}[], lemons?: {distance: number, lane: number, collected?: boolean}[], look: object, t?: number}) => void, resize: () => void, dispose: () => void}}
+ *   `phase` is in turns; `cadence` in rpm; `lane` as the map's (0 is leftmost)
  */
-export function createSideView({ scene, route, sampler, createCanvas }) {
+export function createSideView({ scene, route, sampler, createCanvas, index = null, store = null }) {
   const bands = createSideBands({ route, sampler, createCanvas });
   const asphalt = css(scene.roads.style.surface.map(toSrgb));
+  const scenery = index ? sideScenery(index, route) : [];
+  const strip = profileStrip(route);
+
+  /** `d` as the camera sees it: the copy of this distance on the loop nearest the rider. */
+  const nearTo = (me, d) => me.d + route.signedGap(me.d, d);
+  /** A sprite for a job, asked for at `metres` from the rider; null until baked. */
+  function sprite(job, metres) {
+    if (!store || !job) return null;
+    store.want(job, metres * PRIORITY_PER_M);
+    return store.get(job.key);
+  }
+  /** Where a scenery entry stands on the screen: its sprite position and metres-to-pixels. */
+  function placeOf(camera, entry) {
+    const d = nearTo({ d: camera.meD }, entry.d);
+    const { item, lateral } = entry;
+    const road = route.elevationAt(d);
+    const own = item.layer === "lamp" || item.layer === "animal" ? Math.max(sampler.height(item.x, item.z), sampler.water) : item.y;
+    const f = camera.f(lateral);
+    const pxm = camera.scale * SCENERY_PX_PER_M * f * (item.layer === "tree" || item.layer === "roadside" || item.layer === "row" || item.layer === "scrub" ? item.s || 1 : 1);
+    const x = camera.x(d, lateral);
+    if (lateral >= 0) return { x, y: camera.y(Math.min(road, own), lateral) + camera.scale * NEAR_DROP_M, pxm, d };
+    const stand = BUILDINGS.has(item.layer) ? Math.max(own, road + BUILDING_ABOVE_ROAD_M) : own;
+    return { x, y: camera.y(stand, lateral), pxm, d };
+  }
+  function drawThing(ctx, camera, entry, t, riderDs = []) {
+    const { item } = entry;
+    const place = placeOf(camera, entry);
+    const image = sprite(jobOf(item, entry.turn), Math.abs(place.d - camera.meD));
+    if (!image) return;
+    const fade = entry.lateral < 0 ? Math.min(FADE_MAX, -entry.lateral / FADE_REACH_M) : 0;
+    const hop = item.layer === "person" && item.arms ? Math.abs(Math.sin(t * 7 + item.phase)) * SPECTATOR_HOP_M * place.pxm : 0;
+    const flip = FLIPPED.has(item.layer) && (Math.floor(item.x * 3.1 + item.z * 1.7) & 1) === 1;
+    const hides = entry.lateral >= 0 && riderDs.some((d) => Math.abs(d - place.d) < HIDING_M);
+    drawSprite(ctx, image, place.x, place.y - hop, place.pxm, { alpha: (1 - fade * FADE_STRENGTH) * (hides ? HIDING_ALPHA : 1), flip });
+  }
 
   function drawSky(ctx, camera, look, t) {
     const { width, height, roadY, scale } = camera;
@@ -143,16 +272,140 @@ export function createSideView({ scene, route, sampler, createCanvas }) {
     line("rgba(255,255,255,0.7)", LINE_W_M, -LINE_RISE_M);
   }
 
-  function draw(ctx, { width, height, me, look, t = 0 }) {
+  /** The arches over the road; the flamme rouge as a red pole with a pennant (it has no asset). */
+  function drawArches(ctx, camera, arches) {
+    for (const entry of arches) {
+      const d = nearTo({ d: camera.meD }, entry.d);
+      const x = camera.x(d, 0);
+      const y = camera.y(route.elevationAt(d), 0);
+      const pxm = camera.scale * ARCH_PX_PER_M;
+      if (entry.item.id === "flammeRouge") {
+        const [pole, top] = [0.12 * pxm, FLAMME_H_M * pxm];
+        ctx.fillStyle = FLAMME;
+        ctx.fillRect(x - pole, y - top, pole * 2, top);
+        ctx.beginPath();
+        ctx.moveTo(x + pole, y - top);
+        ctx.lineTo(x + pole + 1.8 * pxm, y - top + 0.55 * pxm);
+        ctx.lineTo(x + pole, y - top + 1.1 * pxm);
+        ctx.closePath();
+        ctx.fill();
+        continue;
+      }
+      const image = sprite(jobOf(entry.item, 0), Math.abs(d - camera.meD));
+      if (image) drawSprite(ctx, image, x, y, pxm);
+    }
+  }
+
+  function drawLemons(ctx, camera, lemons) {
+    const job = JOBS.byId.get("lemon");
+    for (const lemon of lemons) {
+      if (lemon.collected) continue;
+      const d = nearTo({ d: camera.meD }, lemon.distance);
+      const lateral = laneOffset(lemon.lane, route.lanes);
+      const x = camera.x(d, lateral);
+      if (x < -MARGIN_PX || x > camera.width + MARGIN_PX) continue;
+      const image = sprite(job, Math.abs(d - camera.meD));
+      if (image) drawSprite(ctx, image, x, camera.y(route.elevationAt(d), lateral), camera.scale * LEMON_PX_PER_M * camera.f(lateral));
+    }
+  }
+
+  /** Riders and vehicles, the far lane first; returns where each stands, for the labels and the lights. */
+  function drawRiders(ctx, camera, me, riders, t) {
+    const marks = [
+      ...soloRiders(riders).map((rider) => ({ rider, kind: null, label: rider.name, mine: rider.mine })),
+      ...vehicleMarkers(riders, me.id).map((m) => ({ rider: m.rider, kind: m.kind, label: m.label, mine: m.mine })),
+    ].map((mark) => ({ ...mark, lateral: laneOffset(mark.rider.lane ?? (route.lanes - 1) / 2, route.lanes) }));
+    marks.sort((a, b) => a.lateral - b.lateral);
+    const placed = [];
+    for (const mark of marks) {
+      const { rider, lateral } = mark;
+      const d = nearTo(me, rider.d);
+      const x = camera.x(d, lateral);
+      if (x < -MARGIN_PX * 2 || x > camera.width + MARGIN_PX * 2) continue;
+      const y = camera.y(route.elevationAt(d), lateral) + camera.scale * WHEEL_DROP_M;
+      const pxm = camera.scale * RIDER_PX_PER_M * camera.f(lateral);
+      const metres = Math.abs(d - me.d);
+      const image = mark.kind ? sprite(JOBS.byId.get(VEHICLE_JOBS[mark.kind]), metres) : store?.rider(rider.look, "side", metres * PRIORITY_PER_M);
+      placed.push({ ...mark, x, y, pxm });
+      if (!image) continue;
+      const frames = image.frames.length;
+      const frame = Math.floor(((t * (rider.cadence ?? 0)) / 60 + (rider.phase ?? 0)) * frames);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-Math.atan((route.gradeAt(d) / 100) * VEX));
+      drawSprite(ctx, image, 0, 0, pxm, { frame, alpha: rider.ghost ? GHOST_ALPHA : 1 });
+      ctx.restore();
+    }
+    return placed;
+  }
+
+  function drawLabels(ctx, placed) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = LABEL_FONT;
+    for (const { x, y, pxm, label, mine } of placed) {
+      if (!label || mine) continue;
+      const top = y - LABEL_M * pxm;
+      const w = ctx.measureText(label).width + 10;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.fillRect(x - w / 2, top, w, LABEL_FONT_PX + 4);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, x, top + LABEL_FONT_PX);
+    }
+    ctx.restore();
+  }
+
+  /** What glows after dark, in screen pixels. */
+  function glowsOf(camera, entries, placed) {
+    const glows = [];
+    const add = (glow, x, y, pxm) => glows.push({ rgb: glow.rgb, a: glow.a, r: glow.r * pxm, x, y });
+    for (const entry of entries) {
+      const { layer, seed } = entry.item;
+      if (layer !== "lamp" && layer !== "cafe" && !(layer === "house" && seed % 3 !== 0)) continue;
+      const { x, y, pxm } = placeOf(camera, entry);
+      if (layer === "lamp") add(LAMP_GLOW, x + 0.7 * pxm, y - 4.5 * pxm, pxm);
+      else if (layer === "cafe") add(CAFE_GLOW, x, y - 2 * pxm, pxm);
+      else for (const side of [-1, 1]) add(WINDOW_GLOW, x + side * 1.5 * pxm, y - 2.6 * pxm, pxm);
+    }
+    for (const { x, y, pxm } of placed) {
+      add(HEADLIGHT, x + 1.1 * pxm, y - 1.0 * pxm, pxm);
+      add(TAILLIGHT, x - 0.95 * pxm, y - 0.9 * pxm, pxm);
+    }
+    return glows;
+  }
+
+  function draw(ctx, { width, height, me, riders = [], lemons = [], look, t = 0 }) {
     const camera = sideCamera({ width, height, me, route });
+    const onScreen = scenery.filter((entry) => {
+      const x = camera.x(nearTo(me, entry.d), entry.lateral);
+      return x > -MARGIN_PX && x < width + MARGIN_PX;
+    });
+    const arches = onScreen.filter((entry) => entry.item.layer === "arch");
+    const things = onScreen.filter((entry) => entry.item.layer !== "arch");
+    const behind = things.filter((entry) => entry.lateral < 0);
     drawSky(ctx, camera, look, t);
     ctx.fillStyle = css(mix(SEA, look.sky.horizon, SEA_HAZE));
     ctx.fillRect(0, camera.horizonY - 2, width, height - camera.horizonY + 2);
     bands.drawFar(ctx, camera, look);
-    for (const lateral of MIDDLE_LATERALS) bands.drawSlice(ctx, lateral, camera, look);
+    // Things between two slices stand on the farther one, so they are drawn after it and before the nearer.
+    let next = 0;
+    for (const lateral of MIDDLE_LATERALS) {
+      while (next < behind.length && behind[next].lateral < lateral) drawThing(ctx, camera, behind[next++], t);
+      bands.drawSlice(ctx, lateral, camera, look);
+    }
+    while (next < behind.length) drawThing(ctx, camera, behind[next++], t);
     drawRoad(ctx, camera, look, roadPoints(camera));
+    drawArches(ctx, camera, arches);
+    drawLemons(ctx, camera, lemons);
+    const placed = drawRiders(ctx, camera, me, riders, t);
+    const riderDs = placed.map((mark) => nearTo(me, mark.rider.d));
+    for (const entry of things) if (entry.lateral >= 0) drawThing(ctx, camera, entry, t, riderDs);
+    drawLabels(ctx, placed);
     drawTint(ctx, look, { x: 0, y: 0, width, height });
+    if (look.lights > 0) drawGlows(ctx, look, glowsOf(camera, things, placed));
     drawWeather(ctx, look, { width, height, t });
+    const rect = { x: STRIP_SIDE_PX, y: height - STRIP_H_PX - STRIP_BOTTOM_PX, width: width - 2 * STRIP_SIDE_PX, height: STRIP_H_PX };
+    drawProfileStrip(ctx, strip, { rect, me, riders: riders.map((r) => ({ d: r.d, mine: r.mine, look: r.look })), viewM: SPAN_M });
   }
 
   return { draw, resize: () => bands.resize(), dispose: () => bands.resize() };

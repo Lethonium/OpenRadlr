@@ -67,7 +67,7 @@ test("the side scenery keeps buildings behind the road and nothing on it", () =>
   const buildings = ["house", "farm", "cafe", "landmark"];
   for (const e of entries) {
     if (buildings.includes(e.item.layer)) assert.ok(e.lateral <= -7, `${e.item.layer} at ${e.lateral}`);
-    if (e.item.layer !== "person") assert.ok(Math.abs(e.lateral) >= 3.5, `${e.item.layer} at ${e.lateral}`);
+    if (e.item.layer !== "person" && e.item.layer !== "arch") assert.ok(Math.abs(e.lateral) >= 3.5, `${e.item.layer} at ${e.lateral}`);
     assert.ok(Math.abs(e.turn) <= Math.PI / 2 + 1e-9);
     assert.ok(e.lateral <= 22 && e.lateral >= -70);
   }
