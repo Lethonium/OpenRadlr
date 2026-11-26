@@ -14,6 +14,7 @@ use crate::protocol::{
 use crate::screens::WatchView;
 use crate::studio::STUDIO_ID;
 use crate::ServerInfo;
+use openradlr_id::rider_key;
 use openradlr_sim::RiderId;
 use std::sync::Arc;
 
@@ -67,6 +68,9 @@ pub enum Action {
         screen_key: Option<String>,
         /// Optional extras the client asked for (see `ClientMessage::Join`).
         features: Vec<String>,
+        /// The rider's public key, if they proved holding it by signing this connection's
+        /// challenge (ADR 0032); `None` for an unsigned join.
+        rider_key: Option<String>,
     },
     /// Offer a pairing code for the screen `key`.
     PairOffer {
@@ -148,10 +152,13 @@ pub struct Session {
     /// When this connection last offered a pairing code: it then waits for the claim.
     offered_s: Option<f64>,
     afk: AfkWatch,
+    /// What `join` signs (ADR 0032), sent in `welcome`; random per connection.
+    challenge: String,
 }
 
 impl Session {
-    pub fn new(info: Arc<ServerInfo>, limits: ConnectionLimits, now_s: f64) -> Self {
+    /// `challenge` must be unguessable and fresh for each connection: it is what the rider signs.
+    pub fn new(info: Arc<ServerInfo>, limits: ConnectionLimits, now_s: f64, challenge: String) -> Self {
         Self {
             phase: Phase::AwaitingHello,
             info,
@@ -165,6 +172,7 @@ impl Session {
             last_message_s: now_s,
             offered_s: None,
             afk: AfkWatch::inert(),
+            challenge,
         }
     }
 
@@ -215,6 +223,15 @@ impl Session {
         }
     }
 
+    /// The key a `join` proved to hold: `Some(None)` for an unsigned join (an older client,
+    /// its key unverified and dropped), `None` for a signature that doesn't check out.
+    fn rider_key(&self, public_key: Option<String>, signature: Option<String>) -> Option<Option<String>> {
+        let Some(signature) = signature else { return Some(None) };
+        let key = public_key?;
+        rider_key::verify(&key, &rider_key::join_message(&self.challenge), &signature).ok()?;
+        Some(Some(key))
+    }
+
     pub fn on_text(&mut self, text: &str, now_s: f64) -> Action {
         self.last_message_s = now_s;
         if !self.messages.allow(now_s) {
@@ -246,6 +263,7 @@ impl Session {
                     auth_mode: self.info.auth_mode.clone(),
                     route_id: self.info.route_id.clone(),
                     grace_s: self.info.grace_s,
+                    challenge: self.challenge.clone(),
                 })
             }
             (Phase::AwaitingHello, _) => Action::Reply(ServerMessage::error("hello_required", "send hello first")),
@@ -263,48 +281,56 @@ impl Session {
                     resume,
                     screen_key,
                     features,
-                    ..
+                    public_key,
+                    signature,
                 },
-            ) => match device {
-                _ if screen_key.as_deref().is_some_and(|key| !valid_screen_key(key)) => bad_screen_key(),
-                DeviceKind::Sim if !self.info.allow_simulated_trainer => Action::Reply(ServerMessage::error(
-                    "device_not_allowed",
-                    "this server only accepts real trainers",
+            ) => match self.rider_key(public_key, signature) {
+                None => Action::Reply(ServerMessage::error(
+                    "bad_signature",
+                    "the join signature doesn't match the public key",
                 )),
-                DeviceKind::Paddle if !self.info.allow_paddle_mode => Action::Reply(ServerMessage::error(
-                    "device_not_allowed",
-                    "this server doesn't allow phone paddles",
-                )),
-                // A workout stays at the start café: no studio, no vehicle, no resume point.
-                DeviceKind::Workout if route_id.as_deref() == Some(STUDIO_ID) => Action::Reply(ServerMessage::error(
-                    "unknown_route",
-                    "workouts can't join the spin studio",
-                )),
-                DeviceKind::Workout => Action::Join {
-                    name,
-                    weight_kg,
-                    route_id,
-                    ftp_w,
-                    level_w,
-                    device,
-                    vehicle_code: None,
-                    resume_token,
-                    resume: None,
-                    screen_key,
-                    features,
-                },
-                _ => Action::Join {
-                    name,
-                    weight_kg,
-                    route_id,
-                    ftp_w,
-                    level_w,
-                    device,
-                    vehicle_code,
-                    resume_token,
-                    resume,
-                    screen_key,
-                    features,
+                Some(rider_key) => match device {
+                    _ if screen_key.as_deref().is_some_and(|key| !valid_screen_key(key)) => bad_screen_key(),
+                    DeviceKind::Sim if !self.info.allow_simulated_trainer => Action::Reply(ServerMessage::error(
+                        "device_not_allowed",
+                        "this server only accepts real trainers",
+                    )),
+                    DeviceKind::Paddle if !self.info.allow_paddle_mode => Action::Reply(ServerMessage::error(
+                        "device_not_allowed",
+                        "this server doesn't allow phone paddles",
+                    )),
+                    // A workout stays at the start café: no studio, no vehicle, no resume point.
+                    DeviceKind::Workout if route_id.as_deref() == Some(STUDIO_ID) => Action::Reply(
+                        ServerMessage::error("unknown_route", "workouts can't join the spin studio"),
+                    ),
+                    DeviceKind::Workout => Action::Join {
+                        name,
+                        weight_kg,
+                        route_id,
+                        ftp_w,
+                        level_w,
+                        device,
+                        vehicle_code: None,
+                        resume_token,
+                        resume: None,
+                        screen_key,
+                        features,
+                        rider_key,
+                    },
+                    _ => Action::Join {
+                        name,
+                        weight_kg,
+                        route_id,
+                        ftp_w,
+                        level_w,
+                        device,
+                        vehicle_code,
+                        resume_token,
+                        resume,
+                        screen_key,
+                        features,
+                        rider_key,
+                    },
                 },
             },
             (Phase::AwaitingJoin, ClientMessage::PairOffer { key, name }) => {
@@ -431,7 +457,78 @@ mod tests {
             }),
             limits,
             0.0,
+            CHALLENGE.into(),
         )
+    }
+
+    // A WebCrypto key and its signature over `join_message(CHALLENGE)` (see openradlr-id's rider_key tests).
+    const CHALLENGE: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"; // pragma: allowlist secret (a public test vector)
+    const RIDER_KEY: &str = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2aVICCzovZqdsrfc9Jdz1KhS8saJOLk8J3UkA6Jooo/dagkdURAZWMWmANIuI81NxRQ/G/rOdo1ApRtk/aRkxQ=="; // pragma: allowlist secret (a public test vector)
+    const SIGNATURE: &str = "LOqt43v6AZ+yrsvVZ7lqxcz9wLMsccqS5uAZHSEo5BTH5t/wHr8ujzLGjj1PP23hhhOUjHQgo9CPPABi1To8JQ=="; // pragma: allowlist secret (a public test vector)
+
+    fn join_with(key: Option<&str>, signature: Option<&str>) -> String {
+        let mut join = serde_json::json!({"type": "join", "name": "Anna", "weight_kg": 70});
+        if let Some(key) = key {
+            join["public_key"] = key.into();
+        }
+        if let Some(signature) = signature {
+            join["signature"] = signature.into();
+        }
+        join.to_string()
+    }
+
+    fn joined_key(action: Action) -> Option<String> {
+        match action {
+            Action::Join { rider_key, .. } => rider_key,
+            other => panic!("expected a join, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn welcome_carries_the_connection_challenge() {
+        assert!(matches!(
+            session().on_text(HELLO, 0.0),
+            Action::Reply(ServerMessage::Welcome { challenge, .. }) if challenge == CHALLENGE
+        ));
+    }
+
+    #[test]
+    fn a_signed_join_carries_the_verified_key() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(
+            joined_key(s.on_text(&join_with(Some(RIDER_KEY), Some(SIGNATURE)), 0.1)),
+            Some(RIDER_KEY.into())
+        );
+    }
+
+    #[test]
+    fn a_signature_over_another_challenge_is_refused() {
+        let mut s = session_with(ConnectionLimits::default());
+        s.challenge = "ff".repeat(32);
+        s.on_text(HELLO, 0.0);
+        assert!(is_error(
+            &s.on_text(&join_with(Some(RIDER_KEY), Some(SIGNATURE)), 0.1),
+            "bad_signature"
+        ));
+        assert_eq!(s.phase(), Phase::AwaitingJoin);
+    }
+
+    #[test]
+    fn a_signature_without_a_key_is_refused() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert!(is_error(
+            &s.on_text(&join_with(None, Some(SIGNATURE)), 0.1),
+            "bad_signature"
+        ));
+    }
+
+    #[test]
+    fn an_unsigned_key_joins_unverified() {
+        let mut s = session();
+        s.on_text(HELLO, 0.0);
+        assert_eq!(joined_key(s.on_text(&join_with(Some(RIDER_KEY), None), 0.1)), None);
     }
 
     const HELLO: &str = r#"{"type":"hello","protocol_version":2}"#;
@@ -463,6 +560,7 @@ mod tests {
                 resume: None,
                 screen_key: None,
                 features: vec![],
+                rider_key: None,
             }
         );
         s.joined(5, DeviceKind::Trainer, 0.0);
@@ -504,6 +602,7 @@ mod tests {
                 }),
                 ConnectionLimits::default(),
                 0.0,
+                CHALLENGE.into(),
             );
             s.on_text(HELLO, 0.0);
             let join = format!(r#"{{"type":"join","name":"Anna","weight_kg":70,"device":"{device}"}}"#);
@@ -540,6 +639,7 @@ mod tests {
                 resume: None,
                 screen_key: None,
                 features: vec![],
+                rider_key: None,
             }
         );
     }

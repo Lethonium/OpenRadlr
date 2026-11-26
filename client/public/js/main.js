@@ -16,8 +16,8 @@ import { activateFocused, focusableIn, moveFocus } from "./input/focusNav.js";
 import { createMenuDialog } from "./view/menuDialog.js";
 import { createDeleteConfirm, deleteTexts } from "./view/deleteConfirm.js";
 import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
-import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveRows, dataRows, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
-import { deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
+import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
+import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
@@ -46,6 +46,7 @@ import { changePinFlow, removePinFlow, setPinFlow } from "./profile/pinFlows.js"
 import { riderRows } from "./view/riderSwitcher.js";
 import { deviceStorage, riderDbName, riderIdsInStorage, riderStorage } from "./profile/riderStorage.js";
 import { ProfileStore, keepValid, validateProfile } from "./profile/profileStore.js";
+import { RiderKey } from "./profile/riderKey.js";
 import { draftInfo } from "./ride/draft.js";
 import { applyDifficulty } from "./ride/difficulty.js";
 import { RideSession } from "./ride/rideSession.js";
@@ -57,7 +58,7 @@ import { RiderSmoother } from "./ride/smoothing.js";
 import { backAction } from "./input/back.js";
 import { createPanelStack } from "./input/panelStack.js";
 import { JUNCTION_WINDOW_M, OFF_ROUTE_ID, junctionAhead, offRouteRoad, stepOption } from "./ride/junction.js";
-import { continueAllowed, deleteIndexedDb, unfinishedLabel } from "./ride/rideAutosave.js";
+import { continueAllowed, deleteIndexedDb, indexedDbStore, unfinishedLabel } from "./ride/rideAutosave.js";
 import { backToMenuWarning, createFinishController } from "./ride/finishController.js";
 import { LemonHunt, lemonDay, lemonsFor } from "./ride/lemons.js";
 import { BotCalls } from "./ride/botCalls.js";
@@ -139,6 +140,11 @@ import { languageOptions } from "./i18n/selector.js";
 import { displayFrame, rideId, workoutPlanFrame } from "./display/displayFrame.js";
 import { PairingSession, claimCode, isPaired, renewScreenKey, screenKey } from "./net/screenPairing.js";
 import { createScreensDialog } from "./view/screensDialog.js";
+import { AccountClient } from "./net/account.js";
+import { createPasskey, getPasskey, passkeysAvailable } from "./net/passkeys.js";
+import { AccountFlow } from "./profile/accountFlow.js";
+import { Backup } from "./profile/backup.js";
+import { accountMenuItem, finishOffer, renderAccount as renderAccountCard, riderBadge } from "./view/accountView.js";
 
 // Inside the OpenRadlr app: native Bluetooth, wake lock and file saving (docs/app.md).
 const nativeApp = installNativeApp();
@@ -300,7 +306,11 @@ let unlockedRider = isLocked(riders, riders.active) ? null : riders.active;
 /** Everything that belongs to the active rider; device keys go through `rawStorage`. */
 const riderStore = riderStorage(rawStorage, activeRider);
 
-const profiles = new ProfileStore({ storage: riderStore });
+/** The key pair of rider `id` (or of whoever is active, for a function), in their own database (ADR 0032). */
+const riderKeys = (id) => new RiderKey({ store: indexedDbStore(() => riderDbName("openradlr-keys", typeof id === "function" ? id() : id)) });
+const profiles = new ProfileStore({ storage: riderStore, keys: riderKeys(activeRider) });
+/** Signs a join for the active rider. */
+const signAsRider = (message) => profiles.sign(message);
 
 const deviceLog = new DeviceLog(deviceLogOptions(location.search));
 /** Every open panel, so Esc closes the top one. */
@@ -773,6 +783,7 @@ function initSetup() {
     joinRide().catch(joinFailed);
   });
   initProfile();
+  bindAccount();
 }
 
 /** The workout cards of the Workout tab: the saved choice preselected, the cue checkbox below. */
@@ -1115,35 +1126,60 @@ function renderRiderSwitcher() {
   const rows = riderRows(riders, nameOf);
   const current = rows.find((row) => row.active) ?? rows[0];
   $("rider-switch-initial").textContent = current.initial;
+  $("rider-switch-initial").classList.toggle("unnamed", current.unnamed);
   $("rider-switch-name").textContent = current.name;
+  // Where this rider's progress is kept (ADR 0032), on the row's second line.
+  const badge = app.account ? riderBadge(app.account.state) : null;
+  $("rider-switch-status").hidden = !badge;
+  $("rider-switch-status").textContent = badge ? t(badge.key, badge.params) : "";
+  $("rider-switch-status").classList.toggle("ok", Boolean(badge?.ok));
   const open = !$("rider-picker").hidden;
   $("rider-switch").setAttribute("aria-expanded", String(open));
-  const choice = (label, initial, onClick, checked) => {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "secondary";
+  const button = (label, mark, onClick, { checked, markClass = "rider-initial", highlight = false, unnamed = false } = {}) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = highlight ? "secondary highlight" : "secondary";
     if (checked !== undefined) {
-      button.setAttribute("role", "radio");
-      button.setAttribute("aria-checked", String(checked));
+      item.setAttribute("role", "radio");
+      item.setAttribute("aria-checked", String(checked));
     }
-    const mark = document.createElement("span");
-    mark.className = "rider-initial";
-    mark.setAttribute("aria-hidden", "true");
-    mark.textContent = initial;
+    const icon = document.createElement("span");
+    icon.className = unnamed ? `${markClass} unnamed` : markClass;
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = mark;
     const text = document.createElement("span");
+    text.className = "rider-picker-label";
     text.textContent = label;
-    button.append(mark, text);
-    button.addEventListener("click", onClick);
-    item.append(button);
+    item.append(icon, text);
+    item.addEventListener("click", onClick);
     return item;
   };
-  $("rider-picker").setAttribute("role", "radiogroup");
-  $("rider-picker").setAttribute("aria-label", t("riders.switch"));
-  $("rider-picker").replaceChildren(
-    ...rows.map((row) => choice(row.name, row.initial, () => requestSwitch(row.id), row.active)),
-    choice(t("riders.add"), "+", () => addNewRider()),
-  );
+  const row = (...children) => {
+    const item = document.createElement("li");
+    item.append(...children);
+    return item;
+  };
+  // Leaving for a page of the profile closes the menu first.
+  const go = (page) => () => {
+    toggleRiderPicker(false);
+    openProfile(page);
+  };
+  const actions = [];
+  // Until the rider is saved the menu offers it; afterwards the account is a page of the profile.
+  const offer = app.account ? accountMenuItem(app.account.state) : null;
+  if (offer) actions.push(row(button(t(offer.key, offer.params), "", go("account"), { markClass: "picker-icon picker-icon-account", highlight: true })));
+  actions.push(row(button(t("profilePage.open"), "", go(undefined), { markClass: "picker-icon picker-icon-profile" })));
+  const separator = document.createElement("li");
+  separator.setAttribute("role", "separator");
+  separator.className = "rider-picker-separator";
+  const others = document.createElement("ul");
+  others.className = "rider-picker-riders";
+  others.setAttribute("role", "radiogroup");
+  others.setAttribute("aria-label", t("riders.switch"));
+  others.replaceChildren(...rows.map((entry) => row(button(entry.name, entry.initial, () => requestSwitch(entry.id), { checked: entry.active, unnamed: entry.unnamed }))));
+  // With one rider the list would only repeat the row above it: just the offer to add one.
+  const riderList = rows.length > 1 ? [row(others)] : [];
+  $("rider-picker").replaceChildren(...actions, separator, ...riderList, row(button(t("riders.add"), "+", () => addNewRider())));
 }
 
 function toggleRiderPicker(open = $("rider-picker").hidden) {
@@ -1207,6 +1243,7 @@ function applyRoster(roster) {
   app.unfinished = null;
   renderUnfinished();
   refreshUnfinished();
+  app.account?.riderChanged();
 }
 
 /** Switches to rider `id` in place; false when a ride or a dialog is open or the rider is unknown. */
@@ -1250,7 +1287,7 @@ function askForPin(id, { canForget = true } = {}) {
   });
 }
 
-const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave"].map((base) => riderDbName(base, id));
+const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys"].map((base) => riderDbName(base, id));
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
@@ -1284,7 +1321,7 @@ async function forgetRider(id) {
       if (fresh) {
         // Like a fresh install: stored defaults and a key pair for the new rider.
         const generation = app.riderGeneration;
-        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id) });
+        const store = new ProfileStore({ storage: riderStorage(rawStorage, () => fresh.id), keys: riderKeys(fresh.id) });
         const profile = await store.ensureKeys(store.save(store.load()));
         if (generation === app.riderGeneration) app.profile = profile;
       }
@@ -1373,7 +1410,7 @@ async function addNewRider() {
   saveLocale(locale, browserStorage());
   applyRoster(roster);
   // Like a fresh install: stored defaults and a key pair, written for this rider even if the rider switches meanwhile.
-  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id) });
+  const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id), keys: riderKeys(id) });
   const generation = app.riderGeneration;
   const profile = await own.ensureKeys(own.save(own.load()));
   if (generation !== app.riderGeneration) return;
@@ -1405,6 +1442,7 @@ function renderAccount() {
 
 function renderStartMenu() {
   renderAccount();
+  initAccount();
   // Until the first answer: connecting, not "unreachable".
   const status = app.infoLoaded ? serverStatus(app.info) : { text: t("menu.server.connecting"), full: false, phoneFull: false, online: false };
   $("server-label").textContent = serverName(app.info);
@@ -2200,6 +2238,7 @@ async function joinRide(restored = null) {
   const joinAt = joinAtMetres(location.search);
   app.riderId = await connection.join({
     ...app.profile,
+    sign: signAsRider,
     vehicleCode,
     routeId: route?.id,
     level: levelOf(app.profile),
@@ -2284,7 +2323,7 @@ async function joinWorkout(profile, errors) {
   const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
-  app.riderId = await connection.join({ ...app.profile, routeId, level: levelOf(app.profile), device: "workout" });
+  app.riderId = await connection.join({ ...app.profile, sign: signAsRider, routeId, level: levelOf(app.profile), device: "workout" });
   closeMenuStage(routeId, app.routeFile.map?.id ?? null);
   app.workoutPlan = plan;
   app.workout = new WorkoutSession({ plan, now, wallNow: () => Date.now() });
@@ -3282,6 +3321,138 @@ function reconcileAchievements(records, rider = riders.active) {
   return next;
 }
 
+// -------------------------------------------------------------- account ---
+
+/** The account service on this server (ADR 0032); used only once `/api/info` offers it. */
+const accountClient = new AccountClient();
+
+/** One backup per rider: its runs are folded together, however many places ask for one. */
+const backups = new Map();
+
+/** Backs rider `id` up to the signed-in account, from their own stores and key. */
+function backupFor(id) {
+  if (!backups.has(id)) backups.set(id, makeBackup(id));
+  return backups.get(id);
+}
+
+function makeBackup(id) {
+  const storage = riderStorage(rawStorage, () => id);
+  const own = rideStores(id);
+  return new Backup({
+    account: accountClient,
+    storage,
+    sign: (message, publicKey) => riderKeys(id).sign(message, publicKey),
+    history: own.history,
+    snapshot: () => backupSnapshot({ storage, stores: { history: own.history.store, ghosts: own.ghosts.store, autosave: own.autosave.store }, now: Date.now() }),
+  });
+}
+
+/** Starts the account card once the server says it offers accounts; a no-op after that. */
+function initAccount() {
+  if (app.account || !app.info?.account) return;
+  app.account = new AccountFlow({
+    client: accountClient,
+    backup: () => backupFor(riders.active),
+    // Linking signs with the rider key, so make sure there is one (an old profile moves its key here).
+    rider: async () => {
+      const id = riders.active;
+      const own = new ProfileStore({ storage: riderStorage(rawStorage, () => id), keys: riderKeys(id) });
+      const profile = await own.ensureKeys(own.load()).catch(() => own.load());
+      if (id === riders.active) app.profile = profile;
+      return { name: profile.name, publicKey: profile.publicKey };
+    },
+    passkeys: { available: passkeysAvailable(), create: createPasskey, get: getPasskey },
+    lang: getLocale,
+    onChange: renderAccountState,
+  });
+  $("profile-nav-account").hidden = false;
+  // A saved rider is backed up on every start too: whatever a failed run missed goes now.
+  app.account.refresh().then(() => app.account?.backupNow());
+}
+
+const accountEls = () => ({
+  signedOut: $("account-signed-out"), signedIn: $("account-signed-in"), emailForm: $("account-email-form"), codeForm: $("account-code-form"),
+  passkey: $("account-passkey"), passkeyOr: $("account-passkey-or"), codeSent: $("account-code-sent"), emailSend: $("account-email-send"),
+  codeVerify: $("account-code-verify"), codeResend: $("account-code-resend"), saveRider: $("account-save-rider"), backupButton: $("account-backup"),
+  passkeyAdd: $("account-passkey-add"), signOut: $("account-sign-out"), deleteGo: $("account-delete-go"), deleteConfirm: $("account-delete-confirm"),
+  error: $("account-error"), avatar: $("account-avatar"), who: $("account-who"), since: $("account-since"), riderCard: $("account-rider-card"),
+  riderStatus: $("account-rider-status"), riderDetail: $("account-rider-detail"), passkeysSection: $("account-passkeys-section"), passkeyList: $("account-passkeys"),
+  methodEmail: $("account-method-email"), note: $("account-note"),
+});
+
+/** Draws the account card, the start menu's line and the summary's offer from the flow's state. */
+function renderAccountState() {
+  const state = app.account?.state ?? { phase: "loading" };
+  renderRiderSwitcher();
+  $("finish-account").hidden = !app.account || !finishOffer(state);
+  if (!app.account) return;
+  // A backup that just finished marks its rides in the open ride list.
+  if (app.profileDialog?.isOpen && app.profileData && !state.backup?.running) renderProfileRides();
+  renderAccountCard(accountEls(), state, {
+    passkeys: passkeysAvailable(),
+    riderName: app.profile.name || t("rider.title"),
+    backedUpAt: backupFor(riders.active).backedUpAt(),
+    locale: getLocale(),
+    onRemovePasskey: (id) => app.account.removePasskey(id),
+  });
+}
+
+/** The account card's buttons and forms, wired once. */
+function bindAccount() {
+  $("account-email-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await app.account?.sendCode($("account-email").value);
+    if (app.account?.state.phase === "codeSent") $("account-code").focus();
+  });
+  const verifyCode = async () => {
+    await app.account?.verify($("account-code").value);
+    $("account-code").value = "";
+    if (app.account?.state.phase === "codeSent") $("account-code").focus();
+  };
+  $("account-code-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    verifyCode();
+  });
+  // Digits only; the sixth one signs in, so a pasted or autofilled code needs no tap.
+  $("account-code").addEventListener("input", () => {
+    const digits = $("account-code").value.replace(/\D/g, "").slice(0, 6);
+    if (digits !== $("account-code").value) $("account-code").value = digits;
+    if (digits.length === 6 && !app.account?.state.busy) verifyCode();
+  });
+  $("account-code-resend").addEventListener("click", async () => {
+    await app.account?.resend();
+    $("account-code").focus();
+  });
+  $("account-code-back").addEventListener("click", () => {
+    app.account?.changeEmail();
+    $("account-email").focus();
+  });
+  $("account-passkey").addEventListener("click", () => app.account?.passkeySignIn());
+  $("account-passkey-add").addEventListener("click", () =>
+    app.account?.addPasskey(t("account.passkeys.defaultName", { date: new Date().toLocaleDateString(getLocale()) })),
+  );
+  $("account-save-rider").addEventListener("click", () => app.account?.saveRider());
+  $("account-backup").addEventListener("click", () => app.account?.backupNow());
+  $("account-sign-out").addEventListener("click", () => app.account?.signOut());
+  $("account-delete").addEventListener("click", () => {
+    $("account-delete-confirm").hidden = false;
+    $("account-delete-cancel").focus();
+  });
+  $("account-delete-cancel").addEventListener("click", () => {
+    $("account-delete-confirm").hidden = true;
+    $("account-delete").focus();
+  });
+  $("account-delete-go").addEventListener("click", async () => {
+    await app.account?.deleteAccount();
+    $("account-delete-confirm").hidden = true;
+  });
+  // From the summary: back to the menu (asking first if the ride isn't saved), then the card.
+  $("finish-account-save").addEventListener("click", () => {
+    if (leaveRide()) openProfile("account");
+  });
+  relocaliseHooks.push(renderAccountState);
+}
+
 // -------------------------------------------------------------- profile ---
 
 /** The profile dialog over the start menu: the in-game menu's dialog with its own pages. */
@@ -3299,7 +3470,6 @@ function initProfile() {
       // A canvas on a hidden page has no size: draw the chart when its page shows.
       if (page === "overview") renderProfileFtp();
     },
-    onChange: ({ open }) => $("open-profile").setAttribute("aria-expanded", String(open)),
   });
   app.deleteConfirm = createDeleteConfirm({
     els: {
@@ -3324,7 +3494,6 @@ function initProfile() {
     stack: panels,
     fallbackFocus: () => $("rider-switch"),
   });
-  $("open-profile").addEventListener("click", () => openProfile());
   $("pin-set").addEventListener("click", () => changeRiderPin(setPinFlow));
   $("pin-change").addEventListener("click", () => changeRiderPin(changePinFlow));
   $("pin-remove").addEventListener("click", () => changeRiderPin(removePinFlow));
@@ -3449,31 +3618,69 @@ function renderProfileRides() {
   $("profile-rides-empty").hidden = records.length > 0;
   $("profile-rides-empty").textContent = historyReadable() ? t("profilePage.rides.empty") : t("profilePage.unreadable");
   $("profile-rides-more").hidden = records.length <= shown.length;
-  $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i])));
+  // Rides the rider's account holds get a cloud (ADR 0032).
+  const backedUp = app.account ? backupFor(riders.active).backedUpRides() : new Set();
+  $("profile-rides").replaceChildren(...rows.map((row, i) => profileRideItem(row, shown[i], backedUp.has(String(row.id)))));
 }
 
-function profileRideItem(row, record) {
+/** A ride as a card: the date tile, route and start, its figures, and the detail when opened. */
+function profileRideItem(row, record, backedUp = false) {
   const open = app.profileOpenRide === row.id;
   const item = document.createElement("li");
   item.className = "profile-ride";
+  item.classList.toggle("open", open);
   const summary = document.createElement("button");
   summary.type = "button";
   summary.className = "profile-ride-summary";
   summary.setAttribute("aria-expanded", String(open));
-  const when = textElement("span", `${row.date} · ${row.route}`);
-  when.className = "profile-ride-when";
+
+  const tile = document.createElement("span");
+  tile.className = "profile-ride-date";
+  tile.setAttribute("aria-hidden", "true");
+  tile.append(textElement("strong", row.day), textElement("span", row.month));
+
+  const heading = document.createElement("span");
+  heading.className = "profile-ride-heading";
+  const title = document.createElement("span");
+  title.className = "profile-ride-title";
+  const name = textElement("span", row.route);
+  name.className = "profile-ride-name";
+  title.append(name);
   if (row.device) {
     const icon = document.querySelector(`.mode-card[data-mode="${row.device === "paddle" ? "paddles" : "sim"}"] svg`)?.cloneNode(true);
     if (icon) {
       icon.setAttribute("role", "img");
       icon.setAttribute("aria-label", row.device === "paddle" ? t("devices.paddlesLabel") : t("start.simulator"));
       icon.removeAttribute("aria-hidden");
-      when.append(" ", icon);
+      title.append(icon);
     }
   }
-  const figures = textElement("span", [row.distance, row.time, row.power, row.climbing].filter((part) => part !== null).join(" · "));
-  figures.className = "profile-ride-figures";
-  summary.append(when, figures);
+  if (backedUp) {
+    const cloud = document.createElement("span");
+    cloud.className = "ride-backed-up";
+    cloud.setAttribute("role", "img");
+    cloud.setAttribute("aria-label", t("account.rideBackedUp"));
+    cloud.title = t("account.rideBackedUp");
+    title.append(cloud);
+  }
+  const when = textElement("span", row.when);
+  when.className = "profile-ride-when";
+  heading.append(title, when);
+
+  const stats = document.createElement("span");
+  stats.className = "profile-ride-stats";
+  stats.append(...row.stats.map(({ label, value }) => {
+    const cell = document.createElement("span");
+    cell.className = "profile-ride-stat";
+    cell.append(textElement("strong", value), textElement("span", label));
+    return cell;
+  }));
+
+  const chevron = document.createElement("span");
+  chevron.className = "profile-ride-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+
+  summary.append(tile, heading, stats, chevron);
   summary.addEventListener("click", () => {
     app.profileOpenRide = open ? null : row.id;
     renderProfileRides();
@@ -3485,26 +3692,55 @@ function profileRideItem(row, record) {
   return item;
 }
 
+/** An opened ride: its other figures as tiles, best power as bars, the splits, and deleting. */
 function profileRideDetail(record) {
   const detail = document.createElement("div");
   detail.className = "profile-ride-detail";
-  const splits = document.createElement("table");
-  splits.className = "splits";
-  renderSplits(splits, record.splits ?? [], unitMetres());
-  const curve = curveRows(record.curve);
-  if (curve.length) {
-    const list = document.createElement("dl");
-    list.className = "profile-totals";
-    list.append(...curve.flatMap(({ label, watts }) => [textElement("dt", label), textElement("dd", watts)]));
-    detail.append(textElement("h3", t("profilePage.rides.curve")), list);
+  const extras = rideExtras(record);
+  if (extras.length) {
+    const tiles = document.createElement("div");
+    tiles.className = "profile-ride-tiles";
+    tiles.append(...extras.map(({ label, value }) => {
+      const tile = document.createElement("div");
+      tile.className = "profile-ride-tile";
+      tile.append(textElement("span", label), textElement("strong", value));
+      return tile;
+    }));
+    detail.append(tiles);
   }
-  const scroller = document.createElement("div");
-  scroller.className = "profile-splits";
-  scroller.append(splits);
-  detail.prepend(scroller);
+  const bars = curveBars(record.curve);
+  if (bars.length) {
+    const section = document.createElement("section");
+    section.className = "profile-ride-section";
+    const list = document.createElement("ul");
+    list.className = "profile-ride-curve";
+    list.append(...bars.map(({ label, watts, share }) => {
+      const bar = document.createElement("li");
+      const fill = document.createElement("span");
+      fill.className = "profile-ride-bar";
+      fill.style.setProperty("--share", String(share));
+      bar.append(textElement("span", label), fill, textElement("strong", watts));
+      return bar;
+    }));
+    section.append(textElement("h3", t("profilePage.rides.curve")), list);
+    detail.append(section);
+  }
+  // One split is the whole ride again: the table needs two (splitsView.js).
+  if (record.splits?.length > 1) {
+    const section = document.createElement("section");
+    section.className = "profile-ride-section";
+    const splits = document.createElement("table");
+    splits.className = "splits";
+    renderSplits(splits, record.splits, unitMetres());
+    const scroller = document.createElement("div");
+    scroller.className = "profile-splits";
+    scroller.append(splits);
+    section.append(textElement("h3", t("profilePage.rides.splits")), scroller);
+    detail.append(section);
+  }
   const remove = textElement("button", t("profilePage.delete.ride.action"));
   remove.type = "button";
-  remove.className = "secondary small profile-ride-delete";
+  remove.className = "profile-ride-remove";
   remove.addEventListener("click", () => deleteRide(record));
   detail.append(remove);
   return detail;
@@ -4187,6 +4423,8 @@ function saveFinishedRide() {
   app.historySave
     .then(() => history.list())
     .then((records) => reconcileAchievements(records, rider))
+    // A saved rider's new ride (and the progress it brought) goes to their account (ADR 0032).
+    .then(() => (rider === riders.active ? app.account?.backupNow() : undefined))
     .catch(() => {});
   return app.historySave
     .then(() => offerFtp(history, generation))
@@ -4196,6 +4434,7 @@ function saveFinishedRide() {
 /** Shows the summary of the finished ride; saves nothing. */
 function openFinish() {
   closeDrawers();
+  renderAccountState();
   const stats = finishStats();
   app.finishScene = null;
   app.summaryDrawn = false;
@@ -4353,6 +4592,7 @@ async function rejoin(lost) {
   try {
     const riderId = await connection.join({
       ...app.profile,
+      sign: signAsRider,
       routeId: app.route.id,
       level: levelOf(app.profile),
       // A workout rider is flagged again by its join, also when the server forgot it.

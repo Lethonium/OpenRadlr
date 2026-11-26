@@ -108,6 +108,29 @@ export async function exportData({ storage, stores, now }) {
   };
 }
 
+/** Keys about the account link itself: they describe this device's link, not the rider. */
+const ACCOUNT_KEYS = ["openradlr.account.rider", "openradlr.account.backedUp", "openradlr.account.rides"];
+
+/**
+ * What the account backup keeps besides the rides (ADR 0032): the export without the rides
+ * (they go one by one), the unfinished ride, the secrets and the account link.
+ */
+export async function backupSnapshot({ storage, stores, now }) {
+  const profile = { ...parseJson(storage.getItem(PROFILE_KEY), null) };
+  delete profile.privateKeyJwk;
+  const kept = (key) => !SECRET_KEYS.includes(key) && !ACCOUNT_KEYS.includes(key);
+  const settings = Object.fromEntries(settingsKeys(storage).filter(kept).map((key) => [key, storage.getItem(key)]));
+  return {
+    version: 1,
+    takenAt: now,
+    profile,
+    bestLaps: await values(stores.ghosts, await stores.ghosts.keys()),
+    goals: parseJson(storage.getItem(GOALS_KEY), null),
+    progress: progressOf(storage),
+    settings,
+  };
+}
+
 /** "openradlr-data-2026-11-13.json", by the local date. */
 export function exportFileName(now) {
   const date = new Date(now);

@@ -405,6 +405,7 @@ mod tests {
             auth_mode: "none".into(),
             route_id: "r".into(),
             grace_s: 0.0,
+            challenge: "c".into(),
         });
         host.publish(&ServerMessage::Joined {
             rider_id: 7,

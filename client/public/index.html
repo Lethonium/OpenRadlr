@@ -33,18 +33,23 @@
     <link rel="modulepreload" href="js/input/panelStack.js" />
     <link rel="modulepreload" href="js/native/app.js" />
     <link rel="modulepreload" href="js/native/backgroundRide.js" />
+    <link rel="modulepreload" href="js/net/account.js" />
     <link rel="modulepreload" href="js/net/connection.js" />
+    <link rel="modulepreload" href="js/net/passkeys.js" />
     <link rel="modulepreload" href="js/net/protocol.js" />
     <link rel="modulepreload" href="js/net/reconnector.js" />
     <link rel="modulepreload" href="js/net/screenPairing.js" />
     <link rel="modulepreload" href="js/net/strava.js" />
     <link rel="modulepreload" href="js/net/stravaUpload.js" />
+    <link rel="modulepreload" href="js/profile/accountFlow.js" />
     <link rel="modulepreload" href="js/profile/achievements.js" />
+    <link rel="modulepreload" href="js/profile/backup.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
     <link rel="modulepreload" href="js/profile/pinFlows.js" />
     <link rel="modulepreload" href="js/profile/pinLock.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
+    <link rel="modulepreload" href="js/profile/riderKey.js" />
     <link rel="modulepreload" href="js/profile/riderStorage.js" />
     <link rel="modulepreload" href="js/profile/riders.js" />
     <link rel="modulepreload" href="js/profile/seasonGoals.js" />
@@ -83,6 +88,7 @@
     <link rel="modulepreload" href="js/studio/studioSession.js" />
     <link rel="modulepreload" href="js/util/format.js" />
     <link rel="modulepreload" href="js/util/wakeLock.js" />
+    <link rel="modulepreload" href="js/view/accountView.js" />
     <link rel="modulepreload" href="js/view/achievementsView.js" />
     <link rel="modulepreload" href="js/view/badges.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
@@ -462,15 +468,18 @@
 
           <form id="profile-form" class="card start-panel" novalidate>
             <fieldset>
-              <legend class="rider-heading">
-                <span data-i18n="rider.title">Rider</span>
-                <button type="button" id="open-profile" class="secondary small" aria-controls="profile-dialog" aria-expanded="false" data-i18n="profilePage.open">Profile</button>
-              </legend>
-              <!-- Who is riding on this device: the active rider, and the list to switch or add one -->
+              <legend class="rider-heading"><span data-i18n="rider.title">Rider</span></legend>
+              <!-- Who is riding: one row with the rider and where their progress is kept; it opens the
+                   menu with the account, the profile and the other riders of this device. -->
               <div id="rider-switcher" class="rider-switcher">
-                <button type="button" id="rider-switch" class="secondary rider-switch" aria-expanded="false" aria-controls="rider-picker" aria-label="Who's riding" data-i18n-attr="aria-label:riders.switch">
-                  <span id="rider-switch-initial" class="rider-initial" aria-hidden="true">?</span>
-                  <span id="rider-switch-name" class="rider-switch-name"></span>
+                <button type="button" id="rider-switch" class="secondary rider-switch" aria-expanded="false" aria-controls="rider-picker">
+                  <span id="rider-switch-initial" class="rider-initial unnamed" aria-hidden="true"></span>
+                  <span class="rider-switch-text">
+                    <span class="visually-hidden" data-i18n="riders.menu">Rider menu:</span>
+                    <span id="rider-switch-name" class="rider-switch-name"></span>
+                    <span id="rider-switch-status" class="rider-switch-status" hidden></span>
+                  </span>
+                  <span class="rider-switch-chevron" aria-hidden="true"></span>
                 </button>
                 <ul id="rider-picker" class="rider-picker" hidden></ul>
               </div>
@@ -697,6 +706,7 @@
                 <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
                 <button type="button" id="profile-nav-achievements" class="menu-nav-item" data-menu-nav="achievements"><span class="menu-nav-title" data-i18n="profilePage.achievements">Achievements</span></button>
                 <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
+                <button type="button" id="profile-nav-account" class="menu-nav-item" data-menu-nav="account" hidden><span class="menu-nav-title" data-i18n="account.title">Account</span></button>
                 <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
               </nav>
               <div class="menu-pages">
@@ -785,6 +795,110 @@
                     <button type="button" id="profile-rides-more" class="secondary small" hidden data-i18n="profilePage.rides.more">Show more</button>
                   </div>
                 </div>
+                <div class="menu-page" data-menu-page="account" role="region" aria-labelledby="profile-nav-account" hidden>
+                  <div class="panel account-panel">
+                    <h2 class="visually-hidden" data-i18n="account.title">Account</h2>
+                    <!-- Signed out: one field, then the code; a passkey for those who have one -->
+                    <div id="account-signed-out" class="account-auth">
+                      <div class="account-hero">
+                        <span class="account-hero-icon" aria-hidden="true"></span>
+                        <h3 data-i18n="account.hero.title">Keep your progress safe</h3>
+                        <p data-i18n="account.hero.text">Rides, best laps and achievements stay with you, even if this device is lost or its browser is cleared.</p>
+                      </div>
+                      <form id="account-email-form" class="account-form" novalidate>
+                        <label class="visually-hidden" for="account-email" data-i18n="account.email">Email</label>
+                        <div class="account-inline">
+                          <input id="account-email" type="email" autocomplete="email" inputmode="email" maxlength="254" required placeholder="name@example.org" data-i18n-attr="placeholder:account.email.placeholder" />
+                          <button type="submit" id="account-email-send" class="primary" data-i18n="account.email.send">Continue</button>
+                        </div>
+                        <p class="account-fine" data-i18n="account.email.hint">No password: we email you a code. New here? It creates your account.</p>
+                        <div id="account-passkey-or" class="account-or"><span data-i18n="account.or">or</span></div>
+                        <button type="button" id="account-passkey" class="account-passkey" data-i18n="account.passkey.signIn">Sign in with a passkey</button>
+                      </form>
+                      <form id="account-code-form" class="account-form" novalidate hidden>
+                        <p id="account-code-sent" class="account-code-sent"></p>
+                        <input id="account-code" class="account-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required placeholder="000000" aria-label="Code" data-i18n-attr="aria-label:account.code" />
+                        <button type="submit" id="account-code-verify" class="primary" data-i18n="account.code.verify">Sign in</button>
+                        <p class="account-links">
+                          <button type="button" id="account-code-resend" class="account-link" data-i18n="account.code.resend">Send a new code</button>
+                          <span aria-hidden="true">·</span>
+                          <button type="button" id="account-code-back" class="account-link" data-i18n="account.code.back">Use another address</button>
+                        </p>
+                      </form>
+                    </div>
+                    <!-- Signed in: who (with signing out), then grouped lists: backup, sign-in methods, deleting -->
+                    <div id="account-signed-in" class="account-home" hidden>
+                      <div class="account-identity">
+                        <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
+                        <div class="account-identity-text">
+                          <p id="account-who" class="account-email"></p>
+                          <p id="account-since" class="account-fine"></p>
+                        </div>
+                        <button type="button" id="account-sign-out" class="secondary small" data-i18n="account.signOut">Sign out</button>
+                      </div>
+
+                      <section class="account-group" aria-labelledby="account-backup-title">
+                        <h3 id="account-backup-title" data-i18n="account.group.backup">Backup</h3>
+                        <div id="account-rider-card" class="account-row account-rider" aria-live="polite">
+                          <span class="account-row-icon account-icon-cloud" aria-hidden="true"></span>
+                          <div class="account-row-text">
+                            <p id="account-rider-status" class="account-row-title"></p>
+                            <p id="account-rider-detail" class="account-fine"></p>
+                          </div>
+                          <button type="button" id="account-save-rider" class="primary small account-row-action" hidden data-i18n="account.saveRider">Save this rider</button>
+                          <button type="button" id="account-backup" class="secondary small account-row-action" hidden data-i18n="account.backupNow">Back up now</button>
+                        </div>
+                        <p class="account-group-note" data-i18n="account.note">Your email address and, for each rider you save, their profile, goals, progress, settings, best laps and rides. Never the private half of your rider key.</p>
+                      </section>
+
+                      <section class="account-group" aria-labelledby="account-methods-title">
+                        <h3 id="account-methods-title" data-i18n="account.group.signIn">Sign-in</h3>
+                        <ul class="account-list">
+                          <li class="account-row">
+                            <span class="account-row-icon account-icon-mail" aria-hidden="true"></span>
+                            <div class="account-row-text">
+                              <p class="account-row-title" data-i18n="account.method.email">Code by email</p>
+                              <p id="account-method-email" class="account-fine account-ellipsis"></p>
+                            </div>
+                            <span class="account-badge" data-i18n="account.method.on">On</span>
+                          </li>
+                        </ul>
+                        <ul id="account-passkeys" class="account-list account-passkeys"></ul>
+                        <div id="account-passkeys-section" class="account-list" hidden>
+                          <button type="button" id="account-passkey-add" class="account-row account-row-button">
+                            <span class="account-row-icon account-icon-plus" aria-hidden="true"></span>
+                            <span class="account-row-text">
+                              <span class="account-row-title" data-i18n="account.passkeys.add">Add a passkey</span>
+                              <span class="account-fine" data-i18n="account.passkeys.lede">Sign in with your fingerprint, face or device PIN instead of a code.</span>
+                            </span>
+                          </button>
+                        </div>
+                      </section>
+
+                      <section class="account-group account-danger">
+                        <button type="button" id="account-delete" class="account-row account-row-button">
+                          <span class="account-row-icon account-icon-trash" aria-hidden="true"></span>
+                          <span class="account-row-text">
+                            <span class="account-row-title" data-i18n="account.delete">Delete account</span>
+                            <span class="account-fine" data-i18n="account.delete.hint">Deletes the account and its backups. What is on this device stays.</span>
+                          </span>
+                        </button>
+                        <div id="account-delete-confirm" class="account-confirm" role="alertdialog" aria-labelledby="account-delete-text" hidden>
+                          <p id="account-delete-text" data-i18n="account.delete.confirm">Delete your account and everything backed up in it? What is on this device stays.</p>
+                          <div class="account-confirm-actions">
+                            <button type="button" id="account-delete-cancel" class="secondary small" data-i18n="pin.cancel">Cancel</button>
+                            <button type="button" id="account-delete-go" class="danger small" data-i18n="account.delete.go">Delete for good</button>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                    <p id="account-error" class="error account-error" role="alert" hidden></p>
+                    <details id="account-note" class="account-note">
+                      <summary data-i18n="account.note.title">What does the account keep?</summary>
+                      <p data-i18n="account.note">Your email address and, for each rider you save, their profile, goals, progress, settings, best laps and rides. Never the private half of your rider key.</p>
+                    </details>
+                  </div>
+                </div>
                 <div class="menu-page" data-menu-page="data" role="region" aria-labelledby="profile-nav-data" hidden>
                   <div class="panel">
                     <h2 data-i18n="profilePage.data">Your data</h2>
@@ -806,7 +920,7 @@
                         <button type="button" id="pin-remove" class="secondary" data-i18n="pin.button.remove">Remove PIN</button>
                       </div>
                     </div>
-                    <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it. Everything else stays here.</p>
+                    <p class="field-hint" data-i18n="profilePage.data.note">What leaves this device: while you ride, the server gets your name, weight, riding level and rider key, and your live ride. A ride goes to Strava only when you upload it, and to an account only once you save this rider there. Everything else stays here.</p>
                   </div>
                 </div>
               </div>
@@ -1387,6 +1501,10 @@
                 <button type="button" id="ftp-prompt-use" class="primary" data-i18n="ride.useIt">Use it</button>
                 <button type="button" id="ftp-prompt-dismiss" class="secondary" data-i18n="ride.notNow">Not now</button>
               </div>
+            </section>
+            <section id="finish-account" class="finish-account" hidden>
+              <p data-i18n="account.finish.text">This ride is only on this device. Save your progress in an account to keep it safe.</p>
+              <button type="button" id="finish-account-save" class="primary" data-i18n="account.finish.save">Save your progress</button>
             </section>
             <section id="finish-strava" class="strava-upload" aria-labelledby="finish-strava-title" hidden>
               <div class="strava-row">

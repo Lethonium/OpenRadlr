@@ -26,6 +26,10 @@ const RIDER_KEYS = [
   "openradlr.studio-camera",
   "openradlr.coach-voice",
   "openradlr.locale",
+  // The rider's link to their account and when it was last backed up (ADR 0032).
+  "openradlr.account.rider",
+  "openradlr.account.backedUp",
+  "openradlr.account.rides",
 ];
 // Bare prefixes used to recognise our keys, not keys themselves.
 const PREFIXES = ["openradlr.", "openride.", RIDER_PREFIX, ...DEVICE_PREFIXES];

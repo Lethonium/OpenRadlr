@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deviceStorage, riderStorage } from "../public/js/profile/riderStorage.js";
-import { DATA_ITEMS, deleteItem, deleteRider, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
+import { DATA_ITEMS, backupSnapshot, deleteItem, deleteRider, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "../public/js/profile/localData.js";
 
 function fakeStorage(entries) {
   const map = new Map(Object.entries(entries));
@@ -104,6 +104,25 @@ test("export leaves out the private key and the screen key", async () => {
   assert.equal(data.bestLaps.length, 1);
   assert.deepEqual(data.progress, { summits: ["a", "b"], lemons: 12, achievements: { firstRide: 1, century: 2 } });
   assert.equal(data.unfinished, null);
+});
+
+test("a backup snapshot holds everything but the rides, the unfinished ride and the secrets", async () => {
+  const s = storage();
+  s.setItem("openradlr.account.rider", "rider-1");
+  s.setItem("openradlr.account.backedUp", "5");
+  const data = await backupSnapshot({ storage: s, stores: { ...stores(), autosave: mapStore({ current: { startedAt: 3 } }) }, now: 7 });
+  assert.equal(data.takenAt, 7);
+  assert.equal(data.profile.publicKey, "pk");
+  assert.equal(data.profile.privateKeyJwk, undefined);
+  assert.equal("rides" in data, false);
+  assert.equal("unfinished" in data, false);
+  assert.equal(data.bestLaps.length, 1);
+  assert.equal(data.goals.goals.length, 2);
+  assert.equal(data.progress.lemons, 12);
+  assert.equal(data.settings["openradlr.screenKey"], undefined);
+  assert.equal(data.settings["openradlr.account.rider"], undefined);
+  assert.equal(data.settings["openradlr.account.backedUp"], undefined);
+  assert.equal(data.settings["openradlr.devices"], "[]");
 });
 
 test("export keeps the unfinished ride but not its photos", async () => {
