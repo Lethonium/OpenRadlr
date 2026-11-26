@@ -28,6 +28,7 @@ restyled to the project's lint and naming rules, not pasted as is.
 | `assets/buildings/lighthouse.js` | `assets/buildings/lighthouse.js`: banded tower, gallery, glazed lantern, keeper's cottage (no beam) |
 | `assets/buildings/windmill.js` | `assets/buildings/windmill.js`: the lattice sails with canvas (the tower is #127's Mallorcan mill) |
 | `assets/buildings/windTurbine.js`, `windpump.js` | `assets/buildings/wind-turbine.js`, `windpump.js`: tapered blades and nacelle; lattice tower, multi-blade wheel, tank |
+| `assets/buildings/spinStudio.js` | `assets/buildings/spin-studio.js`: the spin studio, ported from the reference (shell, one storey's room, bikes, sign), replacing the old hand-built studio mesh |
 | `assets/props/balloon.js`, `boat.js` | `props/balloon.js`, `props/boat.js`: the basket and ropes, the hull, cabin and sail |
 | `assets/creatures/*.js` | `assets/creatures/*.js`, `_walk.js`: cow, sheep, horse, pig, chicken, deer, rabbit, fox, bird, butterfly, dolphin, rebuilt as merged vertex-coloured parts with swinging limbs (seeded coats, no canvas wing texture) |
 

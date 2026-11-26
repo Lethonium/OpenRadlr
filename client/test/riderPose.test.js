@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { transformPoint } from "../public/js/view3d/math.js";
-import * as model from "../public/js/view3d/riderModel.js";
+import * as model from "./support/riderMeshes.js";
 import { JOINTS, LYING_ROOT_Y, blend, bodyTransforms, poseAt, validClip } from "../public/js/view3d/riderPose.js";
 
 const { BODY_JOINTS, RIDER_GEOMETRY, ridingBodyParts, variantLook } = model;

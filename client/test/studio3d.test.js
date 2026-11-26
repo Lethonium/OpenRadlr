@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
-import { buildStudioRoom } from "../public/js/view3d/studioRoom.js";
 import { lookAt } from "../public/js/view3d/math.js";
 import { fakeEngine } from "./support/fakeEngine.js";
 import { coachId } from "../public/js/view3d/studioLayout.js";
@@ -28,19 +27,6 @@ test("every camera stays inside the room and looks towards its target", () => {
   }
   const { eye } = studioCamera("seat", 3);
   assert.ok(eye[2] > seatPosition(3)[2], "behind my bike");
-});
-
-test("the room mesh: walls and floor face into the room, accents glow separately", () => {
-  const { room, accents } = buildStudioRoom();
-  assert.ok(room.vertexCount > 300 && accents.vertexCount > 0);
-  const centre = [0, ROOM.height / 2, (ROOM.front + ROOM.back) / 2];
-  // The shell (first five quads) faces the centre of the room.
-  for (let i = 0; i < 5 * 6; i += 3) {
-    const normal = [room.normals[i * 3], room.normals[i * 3 + 1], room.normals[i * 3 + 2]];
-    const p = [room.positions[i * 3], room.positions[i * 3 + 1], room.positions[i * 3 + 2]];
-    const toCentre = centre.map((c, axis) => c - p[axis]);
-    assert.ok(normal.reduce((sum, n, axis) => sum + n * toCentre[axis], 0) > 0, `shell triangle ${i / 3} faces inwards`);
-  }
 });
 
 test("the room-only view keeps my bike in my own point of view", () => {

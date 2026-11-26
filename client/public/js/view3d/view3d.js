@@ -15,7 +15,7 @@ import { cameraFromMatrices } from "./engine/camera.js";
 import { engineFor } from "./engine/engine.js";
 import { createWorldScene } from "./scene/worldScene.js";
 import { createTracker } from "./scene/tracker.js";
-import { RIDER_GEOMETRY } from "./riderModel.js";
+import { RIDER_GEOMETRY } from "./riderGeometry.js";
 import { blend, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { PLINTHS, statueSlots } from "./statues.js";

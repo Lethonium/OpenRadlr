@@ -4,7 +4,7 @@ import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "../../public/js/view
 import { StudioCamera } from "../../public/js/view3d/studioCamera.js";
 import { FLOOR_HEIGHT, SLAB } from "../../public/js/view3d/studioLayout.js";
 import { seatPosition } from "../../public/js/view3d/studioLayout.js";
-import { RIDER_GEOMETRY } from "../../public/js/view3d/riderModel.js";
+import { RIDER_GEOMETRY } from "../../public/js/view3d/riderGeometry.js";
 
 const site = { position: [100, 20, 80], yaw: 0 };
 

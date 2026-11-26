@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { invert, transformPoint } from "../public/js/view3d/math.js";
-import * as model from "../public/js/view3d/riderModel.js";
+import * as model from "./support/riderMeshes.js";
 import { CLIPS, STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "../public/js/view3d/clips.js";
 import { EXERCISES } from "../public/js/workout/plan.js";
 import { bodyTransforms, poseAt, validClip } from "../public/js/view3d/riderPose.js";

@@ -2,7 +2,6 @@
  * Winter's props: the roadside markers as snowmen. (The café, with its snow roof, is the new world's: assets/buildings/bikeCafe.js.)
  */
 import { MeshBuilder } from "../../meshBuilder.js";
-import { buildVillageSign, buildWarningSign } from "../../structures.js";
 
 /**
  * A roadside marker as a snowman: three snowballs, coal eyes, a carrot nose,
@@ -33,6 +32,4 @@ export function buildWinterPost(km = false) {
 /** Every model a winter world needs. */
 export const winterModels = Object.freeze({
   post: buildWinterPost,
-  warning: buildWarningSign,
-  villageSign: buildVillageSign,
 });

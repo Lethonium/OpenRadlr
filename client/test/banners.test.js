@@ -4,7 +4,7 @@ import { RouteGeometry } from "../public/js/route/geometry.js";
 import { BANNERS, ARCH_TEXT, archSpots, bannerPlacements, bannerSpots } from "../public/js/view3d/banners.js";
 import { GLYPHS, pixelText, textWidth } from "../public/js/view3d/assets/pixelFont.js";
 import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
-import { SIGN_TEXT } from "../public/js/view3d/studioBuilding.js";
+import { SIGN_TEXT } from "../public/js/view3d/assets/buildings/spinStudio.js";
 
 // --- pixel font -------------------------------------------------------------------
 

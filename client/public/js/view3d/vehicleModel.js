@@ -1,6 +1,6 @@
 /**
  * Shared vehicles: the tandem (2 seats) and the beer bike (5, 7 or 9 seats).
- * Same local axes and units as riderModel.js: forward = −Z, up = +Y, ground at
+ * Same local axes and units as riderGeometry.js: forward = −Z, up = +Y, ground at
  * y = 0, metres, origin on the ground in the middle of the wheelbase.
  *
  * Pure layout data: where each seat's rider has the hip, the bottom bracket and
@@ -8,7 +8,7 @@
  * are built on the rigged rider by `assets/riders/vehicles.js`.
  */
 import { add } from "./math.js";
-import { RIDER_GEOMETRY } from "./riderModel.js";
+import { RIDER_GEOMETRY } from "./riderGeometry.js";
 
 /** Hip to bottom bracket of the solo rider, in the rider's frame (the legs' IK assumes it). */
 const HIP_TO_BB = RIDER_GEOMETRY.bottomBracket.map((v, i) => v - RIDER_GEOMETRY.hip[i]);

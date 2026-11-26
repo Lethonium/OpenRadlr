@@ -8,7 +8,7 @@
  *
  * Pure data and pure functions: this runs in the world worker and in tests.
  */
-import { PALETTE, buildVillageSign, buildWarningSign } from "../structures.js";
+import { PALETTE } from "../structures.js";
 import { fbm, valueNoise } from "../../world/noise.js";
 
 export const COLORS = Object.freeze({
@@ -79,11 +79,8 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
   return [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
 }
 
-/** Buildings and props: a biome swaps these for its own shapes and skins. */
-const models = Object.freeze({
-  warning: buildWarningSign,
-  villageSign: buildVillageSign,
-});
+/** Props: a biome swaps these for its own shapes (temperate keeps the plain roadside posts). */
+const models = Object.freeze({});
 
 export const temperate = Object.freeze({
   id: "temperate",

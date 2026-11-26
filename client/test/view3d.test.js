@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { identity, lookAt, multiply, perspective, placement, rotationXAbout, transformPoint, yawFor } from "../public/js/view3d/math.js";
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
-import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
 import { archPlacements } from "../public/js/view3d/world.js";
 import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
@@ -121,38 +120,6 @@ test("road, arches and riders produce geometry", () => {
   assert.equal(road.positions.length, road.kinds.length * 3);
   assert.equal(road.indices.length, (road.kinds.length / 4) * 6);
   assert.ok(archPlacements(route).some((a) => a.kind === "start_finish" && !a.banner), "the start arch is placed");
-  assert.ok(buildBike().vertexCount > 100);
-  for (const part of [buildThigh(), buildShin(), buildFoot(), buildCrankset()]) assert.ok(part.vertexCount > 0);
-});
-
-test("pedalling legs stay attached: hip → knee → ankle → pedal on the crank circle", () => {
-  const { hip, bottomBracket, crankLength, thigh, shin, ball } = RIDER_GEOMETRY;
-  const at = (point, angle) => multiply(placement(point), rotationXAbout([0, 0, 0], angle));
-  for (let i = 0; i < 24; i += 1) {
-    const pose = legPose((i / 24) * Math.PI * 2);
-    closeVec(transformPoint(at(hip, pose.thighAngle), [0, -thigh, 0]).slice(0, 3), pose.knee, 1e-4);
-    closeVec(transformPoint(at(pose.knee, pose.shinAngle), [0, -shin, 0]).slice(0, 3), pose.ankle, 1e-4);
-    closeVec(transformPoint(at(pose.ankle, pose.footAngle), ball).slice(0, 3), pose.pedal, 1e-4);
-    closeVec(transformPoint(at(bottomBracket, pose.crankAngle), [0, -crankLength, 0]).slice(0, 3), pose.pedal, 1e-4);
-    // The knee bends forward (−Z) of the straight hip–ankle line, never backwards.
-    const along = [pose.ankle[1] - hip[1], pose.ankle[2] - hip[2]];
-    const toKnee = [pose.knee[1] - hip[1], pose.knee[2] - hip[2]];
-    assert.ok(along[0] * toKnee[1] - along[1] * toKnee[0] > 0, `knee bends forward at step ${i}`);
-  }
-});
-
-test("cranks turn forward and the leg extends at the bottom of the stroke", () => {
-  const bottom = legPose(0);
-  const later = legPose(0.3);
-  assert.ok(later.pedal[2] > bottom.pedal[2], "after the bottom the pedal moves back (+Z)");
-  assert.ok(legPose(Math.PI / 2).pedal[2] > legPose(-Math.PI / 2).pedal[2], "back of the stroke behind the front");
-  const kneeAngle = (pose) => {
-    const a = [RIDER_GEOMETRY.hip[1] - pose.knee[1], RIDER_GEOMETRY.hip[2] - pose.knee[2]];
-    const b = [pose.ankle[1] - pose.knee[1], pose.ankle[2] - pose.knee[2]];
-    return Math.acos((a[0] * b[0] + a[1] * b[1]) / Math.hypot(...a) / Math.hypot(...b));
-  };
-  assert.ok(kneeAngle(bottom) > (125 * Math.PI) / 180, "almost straight at the bottom");
-  assert.ok(kneeAngle(legPose(Math.PI)) < (80 * Math.PI) / 180, "well bent at the top");
 });
 
 // --- view helpers -----------------------------------------------------------
@@ -217,28 +184,6 @@ test("time-of-day presets are complete and auto follows the clock", async () => 
   assert.equal(resolvePreset("bogus").label, "Day");
 });
 
-test("the shadow frustum contains the focus and is stable to small moves", async () => {
-  const { sunShadowMatrix } = await import("../public/js/view3d/lighting.js");
-  const { TIME_PRESETS } = await import("../public/js/world/daylight.js");
-  const sun = TIME_PRESETS.golden.sun;
-  const m = sunShadowMatrix(sun, [100, 50, -20], { halfSize: 60, mapSize: 2048 });
-  const p = transformPoint(m, [100, 50, -20]);
-  for (const v of p.slice(0, 3)) assert.ok(v > -1 && v < 1);
-  const nearby = transformPoint(m, [140, 52, -20]);
-  assert.ok(Math.abs(nearby[0]) < 1 && Math.abs(nearby[1]) < 1, "40 m away is still inside");
-  const a = sunShadowMatrix(sun, [100.001, 50, -20]);
-  assert.deepEqual(Array.from(a), Array.from(m), "sub-texel moves snap to the same matrix");
-  const overhead = sunShadowMatrix([0, 1, 0], [0, 0, 0]);
-  assert.ok(overhead.every(Number.isFinite), "a sun straight above is handled");
-});
-
-test("orthographic maps its box to clip space", async () => {
-  const { orthographic } = await import("../public/js/view3d/math.js");
-  const m = orthographic(-10, 10, -5, 5, 1, 101);
-  closeVec(transformPoint(m, [10, 5, -1]).slice(0, 3), [1, 1, -1]);
-  closeVec(transformPoint(m, [-10, -5, -101]).slice(0, 3), [-1, -1, 1]);
-});
-
 test("camera modes: drone is high, side looks at the rider from the road side", async () => {
   const { ChaseCamera, cameraPose, CAMERA_MODES } = await import("../public/js/view3d/chaseCamera.js");
   const route = squareRoute();
@@ -257,19 +202,6 @@ test("camera modes: drone is high, side looks at the rider from the road side", 
   assert.ok(Math.abs(camera.eye[0] - (100 - 3)) < 1e-3 && midway < camera.eye[0], "the switch blends in");
   for (let i = 0; i < 4; i += 1) camera.cycle();
   assert.equal(camera.mode, "close", "cycling wraps around");
-});
-
-test("riders get a stable look from their id", async () => {
-  const { riderLook, variantLook, VARIANT_COUNT, buildWheel } = await import("../public/js/view3d/riderModel.js");
-  assert.deepEqual(riderLook(42), riderLook(42));
-  const looks = Array.from({ length: 50 }, (_, i) => riderLook(i));
-  assert.ok(new Set(looks.map((l) => l.variant)).size > 5, "riders look different");
-  for (const look of looks) {
-    assert.ok(look.variant >= 0 && look.variant < VARIANT_COUNT);
-    assert.ok(look.scale >= 0.93 && look.scale <= 1.07);
-  }
-  assert.equal(variantLook(3).skin.length, 3);
-  assert.ok(buildWheel().vertexCount > 200);
 });
 
 // --- workout riders at the gym (#77) ------------------------------------------

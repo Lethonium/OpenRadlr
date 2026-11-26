@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RIDER_GEOMETRY } from "../public/js/view3d/riderModel.js";
+import { RIDER_GEOMETRY } from "../public/js/view3d/riderGeometry.js";
 import { vehicleLayout } from "../public/js/view3d/vehicleModel.js";
 
 test("tandem layout puts the captain ahead of the stoker on the centre line", () => {
