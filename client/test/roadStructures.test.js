@@ -125,8 +125,8 @@ test("the world gives the road's posts as placements, the same in every biome", 
   const warm = buildWorld(route);
   const cold = buildWorld(route, { biome: "winter" });
   assert.ok(Array.isArray(warm.roads.posts));
-  assert.equal(warm.roads.posts.length, 188);
-  assert.equal(cold.roads.posts.length, 188);
+  assert.equal(warm.roads.posts.length, 186, "none on the bridges");
+  assert.equal(cold.roads.posts.length, 186);
   assert.deepEqual(cold.roads.posts.map((post) => post.position), warm.roads.posts.map((post) => post.position), "the same spots");
   assert.ok(warm.roads.posts.every((post) => post.kind === "post" || post.kind === "kmPost"));
   assert.ok(cold.roads.posts.every((post) => post.kind === "marker" || post.kind === "kmMarker"));
@@ -241,4 +241,11 @@ test("the workbench has the road post and the bridge", () => {
     made.dispose();
     assert.equal(tracker.live(), 0, id);
   }
+});
+
+test("no post stands on a bridge, where the parapets run", async () => {
+  const { RIVER } = await import("../public/js/world/rivers.js");
+  const world = buildWorld(flats());
+  const onRiver = world.roads.posts.filter(({ position: [x, , z] }) => world.terrain.riverDistance(x, z) < RIVER.halfWidth + RIVER.bank);
+  assert.deepEqual(onRiver, []);
 });

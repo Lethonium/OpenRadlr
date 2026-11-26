@@ -259,6 +259,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const ridden = new Set(network ? roads.filter((road) => sharedStretches(road, [route]).length > 0) : []);
   const strips = [];
   const posts = [];
+  // Where a road crosses a river on a bridge: no posts or rails there (the parapets stand in their place).
+  const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
   for (const [i, r] of routes.entries()) {
     const stretches = sharedStretches(r, routes.slice(0, i));
     shared.set(r, stretches);
@@ -275,7 +277,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
         ...(junctionPoints.length ? { bankAt } : {}),
       }),
     );
-    buildRoadPosts(r, { biome, detail: !long, skip, clear: otherRoad, into: posts });
+    buildRoadPosts(r, { biome, detail: !long, skip: (d) => skip(d) || onBridge(r, d), clear: otherRoad, into: posts });
   }
 
   // Where roads of a network meet at an angle, an asphalt pad closes the
@@ -289,7 +291,6 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   const nearRiver = (x, z, margin = 0) => terrain.riverDistance(x, z) < RIVER.halfWidth + RIVER.bank * 0.6 + margin;
   const nearRoad = (x, z, radius) => terrain.distanceToRoad(x, z) < half + radius * 0.8;
   const avoid = (x, z, radius = 0) => nearRiver(x, z, radius) || terrain.height(x, z) < ground.water + 2.5 || nearRoad(x, z, radius);
-  const onBridge = (r, d) => rivers.some((river) => river.route === r && Math.abs(r.wrap(d - river.at + r.length / 2) - r.length / 2) < BRIDGE_HALF_LENGTH + 6);
 
   // The bike café where rides start, before anything else claims the spot
   // (one for all routes that start at the same place); each cafe road gets one.
