@@ -364,7 +364,7 @@ export class View3D {
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
     this.tracker = createTracker();
-    this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.terrain?.seed ?? 0 };
+    this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.seed ?? world.terrain?.seed ?? 0 };
     /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
     this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
     this.worldCamera = new THREE.PerspectiveCamera();

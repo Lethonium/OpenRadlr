@@ -95,3 +95,8 @@ test("a world scene draws the clouds, and rebuilds them with the quality", () =>
   const bare = createWorldScene({ ground: groundFixture() }, { settings: qualitySettings("high"), track: createTracker().track });
   assert.equal(bare.scene.getObjectByName("clouds").children.length, 0, "no clouds planned, none drawn");
 });
+
+test("the world's scene carries the map's seed across the worker, for its weather", () => {
+  assert.equal(sceneOf(world).seed, world.terrain.seed);
+  assert.equal(sceneOf({}).seed, 0);
+});

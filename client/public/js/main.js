@@ -3086,6 +3086,7 @@ function studioRoomOnly() {
     const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
+    app.studioView.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
     applyClassicRider();
   } catch (error) {
     console.error(error);
