@@ -2,7 +2,7 @@
  * A fake 2D canvas: `canvas.getContext()` is a proxy that counts drawing calls and
  * records what was set. `calls` counts `lineTo, fill, fillRect, stroke, arc, fillText`;
  * `fills`, `strokes` and `alphas` list every value assigned to `fillStyle`, `strokeStyle`
- * and `globalAlpha`; `images` lists every `drawImage(image, ...args)` as `{ image, args }`.
+ * and `globalAlpha`; `images` lists every `drawImage(image, ...args)` as `{ image, args }`; `createImageData` gives a real pixel array.
  */
 export function fakeCanvas(width = 800, height = 600) {
   const calls = { lineTo: 0, fill: 0, fillRect: 0, stroke: 0, arc: 0, fillText: 0 };
@@ -16,6 +16,7 @@ export function fakeCanvas(width = 800, height = 600) {
       get: (_, name) => {
         if (name === "measureText") return () => ({ width: 20 });
         if (name === "drawImage") return (image, ...args) => images.push({ image, args });
+        if (name === "createImageData") return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
         if (name === "createLinearGradient" || name === "createRadialGradient") return () => ({ addColorStop() {} });
         if (name in calls) return () => (calls[name] += 1);
         return () => {};

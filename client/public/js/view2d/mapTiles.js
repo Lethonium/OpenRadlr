@@ -1,0 +1,265 @@
+/**
+ * The map's ground in tiles: 64 m squares painted once at 6 px/m and kept in an LRU of 64. A tile holds the
+ * ground (from the sampler), rivers, roads (the world's own road mesh), hedges and walls, and the scenery as
+ * sprites. A tile records the sprites it drew (or missed); it is remade when the store has a better one.
+ */
+import { ROAD_KIND } from "../world/plan/roadStrips.js";
+import { css, toSrgb } from "./look2d.js";
+import { drawSprite } from "./drawSprite.js";
+import { HOUSE_YAWS, BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
+
+export const MAP_TILE_M = 64;
+export const MAP_TILE_PPM = 6;
+export const MAP_TILE_CACHE = 64;
+/** Ground pixels are worked out every this many pixels, then filled square. */
+const STEP = 2;
+/** Scenery this far outside a tile is still drawn into it, so crowns reach over the seams. */
+const MARGIN_M = 12;
+const TAU = Math.PI * 2;
+
+const HEDGE = [0.2, 0.38, 0.18];
+const HEDGE_BARE = [0.36, 0.3, 0.24];
+const WALL = [0.7, 0.67, 0.6];
+const VINE = [0.34, 0.5, 0.2];
+const FLAMME = "#d8262b";
+/** Road quads, drawn in this order (first underneath). */
+const ROAD_ORDER = Object.freeze([ROAD_KIND.bank, ROAD_KIND.verge, ROAD_KIND.pavement, ROAD_KIND.rut, ROAD_KIND.asphalt, ROAD_KIND.edge, ROAD_KIND.marking]);
+
+/** Triangles of a mesh by the tiles their box touches: `Map<"tx,tz", number[]>` of index offsets. */
+function bucketTriangles(positions, indices) {
+  const buckets = new Map();
+  for (let k = 0; k < indices.length; k += 3) {
+    const xs = [positions[indices[k] * 3], positions[indices[k + 1] * 3], positions[indices[k + 2] * 3]];
+    const zs = [positions[indices[k] * 3 + 2], positions[indices[k + 1] * 3 + 2], positions[indices[k + 2] * 3 + 2]];
+    const [i0, i1] = [Math.floor(Math.min(...xs) / MAP_TILE_M), Math.floor(Math.max(...xs) / MAP_TILE_M)];
+    const [j0, j1] = [Math.floor(Math.min(...zs) / MAP_TILE_M), Math.floor(Math.max(...zs) / MAP_TILE_M)];
+    for (let i = i0; i <= i1; i += 1) {
+      for (let j = j0; j <= j1; j += 1) {
+        const key = `${i},${j}`;
+        const list = buckets.get(key);
+        if (list) list.push(k);
+        else buckets.set(key, [k]);
+      }
+    }
+  }
+  return buckets;
+}
+
+/** The top-view job each item draws as: `{ job, scale }`, or null. Built once from the catalog. */
+function spriteIndex() {
+  const byId = new Map();
+  const houses = new Map();
+  for (const job of spriteJobs({ view: "top" })) {
+    if (job.id === "house") houses.set(`${job.options.style}:${Math.round((job.yaw / TAU) * HOUSE_YAWS)}`, job);
+    else if (!byId.has(job.id)) byId.set(job.id, job);
+  }
+  const named = (name) => byId.get(BUILDING_SPRITES[name] ?? name) ?? null;
+  return {
+    named,
+    plant: (id) => byId.get(id) ?? null,
+    house(item) {
+      const yaw = Math.atan2(item.facing?.[0] ?? 0, item.facing?.[1] ?? 1);
+      const k = ((Math.round((yaw / TAU) * HOUSE_YAWS) % HOUSE_YAWS) + HOUSE_YAWS) % HOUSE_YAWS;
+      return houses.get(`${item.id}:${k}`) ?? houses.get(`cottage:${k}`) ?? null;
+    },
+    /** The sprite job of a static scenery item. */
+    of(item) {
+      switch (item.layer) {
+        case "tree":
+        case "roadside":
+        case "row":
+          return this.plant(item.id);
+        case "house":
+          return this.house(item);
+        case "farm":
+        case "cafe":
+        case "lamp":
+          return named(item.layer);
+        case "landmark":
+          return named(item.id);
+        case "arch":
+          return item.id === "arch" ? this.plant("route-arch") : null;
+        default:
+          return null;
+      }
+    },
+  };
+}
+
+/**
+ * @param {{scene: object, index: {query: Function}, sampler: {color: Function, water: number}, store: {want: Function, get: Function}, createCanvas: (w: number, h: number) => object}} deps
+ */
+export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
+  const tiles = new Map(); // key -> {canvas, used: Map<jobKey, sprite|null>, signature}
+  const sprites = spriteIndex();
+  const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices);
+  const riverBuckets = bucketTriangles(scene.rivers.strips.positions, scene.rivers.strips.indices);
+  const roadColors = roadPalette(scene.roads.style);
+  const size = MAP_TILE_M * MAP_TILE_PPM;
+
+  function paintGround(ctx, tx, tz, sun) {
+    const image = ctx.createImageData(size, size);
+    for (let py = 0; py < size; py += STEP) {
+      for (let px = 0; px < size; px += STEP) {
+        const [r, g, b] = sampler.color(tx * MAP_TILE_M + px / MAP_TILE_PPM, tz * MAP_TILE_M + py / MAP_TILE_PPM, sun);
+        for (let oy = 0; oy < STEP; oy += 1) {
+          for (let ox = 0; ox < STEP; ox += 1) {
+            const k = ((py + oy) * size + px + ox) * 4;
+            image.data[k] = r * 255;
+            image.data[k + 1] = g * 255;
+            image.data[k + 2] = b * 255;
+            image.data[k + 3] = 255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
+  function paintTriangles(ctx, mesh, list, filter = null) {
+    ctx.beginPath();
+    for (const k of list) {
+      if (filter && !filter(mesh.indices[k])) continue;
+      const [a, b, c] = [mesh.indices[k] * 3, mesh.indices[k + 1] * 3, mesh.indices[k + 2] * 3];
+      ctx.moveTo(mesh.positions[a], mesh.positions[a + 2]);
+      ctx.lineTo(mesh.positions[b], mesh.positions[b + 2]);
+      ctx.lineTo(mesh.positions[c], mesh.positions[c + 2]);
+    }
+    ctx.fill();
+  }
+
+  function paintWater(ctx, key) {
+    const list = riverBuckets.get(key);
+    if (!list) return;
+    ctx.fillStyle = css(scene.rivers.style.color.map(toSrgb), 1);
+    paintTriangles(ctx, scene.rivers.strips, list);
+  }
+
+  function paintRoads(ctx, key) {
+    const list = roadBuckets.get(key);
+    if (!list) return;
+    const mesh = scene.roads.strips;
+    for (const kind of ROAD_ORDER) {
+      ctx.fillStyle = roadColors[kind];
+      paintTriangles(ctx, mesh, list, (vertex) => mesh.kinds[vertex] === kind);
+    }
+  }
+
+  function paintEdges(ctx, items, look) {
+    ctx.lineCap = "round";
+    for (const e of items) {
+      if (e.layer !== "edge") continue;
+      const hedge = e.id === "hedge";
+      ctx.strokeStyle = css(hedge ? (look.season === "winter" ? HEDGE_BARE : HEDGE) : WALL);
+      ctx.lineWidth = hedge ? 1.6 : 0.6;
+      const [hx, hz] = [Math.cos(e.yaw) * e.len * 0.5, Math.sin(e.yaw) * e.len * 0.5];
+      ctx.beginPath();
+      ctx.moveTo(e.x - hx, e.z - hz);
+      ctx.lineTo(e.x + hx, e.z + hz);
+      ctx.stroke();
+    }
+  }
+
+  /** The flamme rouge has no asset: a red bar across the road with a pennant. */
+  function paintFlamme(ctx, item) {
+    ctx.save();
+    ctx.translate(item.x, item.z);
+    ctx.rotate(-item.yaw);
+    ctx.fillStyle = FLAMME;
+    ctx.fillRect(-(item.w ?? 8) / 2, -0.35, item.w ?? 8, 0.7);
+    ctx.beginPath();
+    ctx.moveTo(-(item.w ?? 8) / 2, -0.35);
+    ctx.lineTo(-(item.w ?? 8) / 2, -3.5);
+    ctx.lineTo(-(item.w ?? 8) / 2 + 2.4, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function paintScenery(ctx, tx, tz, look, used, priority) {
+    const items = index.query(tx * MAP_TILE_M - MARGIN_M, tz * MAP_TILE_M - MARGIN_M, (tx + 1) * MAP_TILE_M + MARGIN_M, (tz + 1) * MAP_TILE_M + MARGIN_M);
+    paintEdges(ctx, items, look);
+    const things = [];
+    for (const item of items) {
+      if (item.layer === "arch" && item.id === "flammeRouge") {
+        paintFlamme(ctx, item);
+        continue;
+      }
+      if (item.layer === "row" && item.id === "vine") {
+        ctx.fillStyle = css(VINE);
+        ctx.beginPath();
+        ctx.arc(item.x, item.z, 0.55, 0, TAU);
+        ctx.fill();
+        continue;
+      }
+      const job = sprites.of(item);
+      if (!job) continue;
+      store.want(job, priority);
+      const sprite = store.get(job.key);
+      used.set(job.key, sprite);
+      if (sprite) things.push({ item, sprite });
+    }
+    // Low things first, so crowns fall over their neighbours' shadows.
+    things.sort((a, b) => a.item.z - b.item.z);
+    for (const { item, sprite } of things) {
+      if (item.layer === "arch") {
+        ctx.save();
+        ctx.translate(item.x, item.z);
+        ctx.rotate(-item.yaw);
+        drawSprite(ctx, sprite, 0, 0, 1);
+        ctx.restore();
+      } else drawSprite(ctx, sprite, item.x, item.z, item.s || 1);
+    }
+  }
+
+  function make(tx, tz, look, priority) {
+    const canvas = createCanvas(size, size);
+    const ctx = canvas.getContext("2d");
+    const used = new Map();
+    paintGround(ctx, tx, tz, look.sun);
+    ctx.setTransform(MAP_TILE_PPM, 0, 0, MAP_TILE_PPM, -tx * MAP_TILE_M * MAP_TILE_PPM, -tz * MAP_TILE_M * MAP_TILE_PPM);
+    paintWater(ctx, `${tx},${tz}`);
+    paintRoads(ctx, `${tx},${tz}`);
+    paintScenery(ctx, tx, tz, look, used, priority);
+    return { canvas, used, signature: signatureOf(look) };
+  }
+
+  const signatureOf = (look) => `${look.season}|${look.time}`;
+  const stale = (tile, look) => tile.signature !== signatureOf(look) || [...tile.used].some(([key, sprite]) => store.get(key) !== sprite);
+
+  return {
+    /** The tile's canvas, made (or remade, when the look changed or a sprite it lacked has been baked) if needed. `priority`: its distance from the rider, metres. */
+    tile(tx, tz, look, priority = 0) {
+      const key = `${tx},${tz}`;
+      let tile = tiles.get(key);
+      if (tile && !stale(tile, look)) {
+        tiles.delete(key);
+        tiles.set(key, tile); // most recent last
+        return tile.canvas;
+      }
+      tile = make(tx, tz, look, priority);
+      tiles.delete(key);
+      tiles.set(key, tile);
+      while (tiles.size > MAP_TILE_CACHE) tiles.delete(tiles.keys().next().value);
+      return tile.canvas;
+    },
+    clear() {
+      tiles.clear();
+    },
+    count: () => tiles.size,
+  };
+}
+
+/** Road colours by quad kind, as css. */
+function roadPalette(style) {
+  const colors = [];
+  const set = (kind, rgb) => (colors[kind] = css(rgb.map(toSrgb)));
+  set(ROAD_KIND.asphalt, style.surface);
+  set(ROAD_KIND.verge, style.verge);
+  set(ROAD_KIND.marking, style.marking);
+  set(ROAD_KIND.bank, style.bank?.color ?? style.verge);
+  set(ROAD_KIND.rut, style.rut?.color ?? style.surface);
+  set(ROAD_KIND.edge, style.edge);
+  set(ROAD_KIND.pavement, style.pavement ?? style.verge);
+  return colors;
+}
