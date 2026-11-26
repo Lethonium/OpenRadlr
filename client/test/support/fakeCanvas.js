@@ -16,6 +16,7 @@ export function fakeCanvas(width = 800, height = 600) {
       get: (_, name) => {
         if (name === "measureText") return () => ({ width: 20 });
         if (name === "drawImage") return (image, ...args) => images.push({ image, args });
+        if (name === "createLinearGradient" || name === "createRadialGradient") return () => ({ addColorStop() {} });
         if (name in calls) return () => (calls[name] += 1);
         return () => {};
       },
