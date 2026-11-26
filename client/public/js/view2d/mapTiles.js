@@ -1,5 +1,5 @@
 /**
- * The map's ground in tiles: 64 m squares painted once at 6 px/m and kept in an LRU of 64. A tile holds the
+ * The map's ground in tiles: 64 m squares painted once at 6 px/m and kept in an LRU of 32. A tile holds the
  * ground (from the sampler), rivers, roads (the world's own road mesh), hedges and walls, and the scenery as
  * sprites. The ground (the costly part) is kept in a canvas of its own; a tile records the sprites it drew (or
  * missed) and, when the store has a better one, only redraws the scenery over the kept ground. The ground is
@@ -12,7 +12,7 @@ import { HOUSE_YAWS, BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
 
 export const MAP_TILE_M = 64;
 export const MAP_TILE_PPM = 6;
-export const MAP_TILE_CACHE = 64;
+export const MAP_TILE_CACHE = 32;
 /** Ground pixels are worked out every this many pixels, then filled square. */
 const STEP = 2;
 /** Scenery this far outside a tile is still drawn into it, so crowns reach over the seams. */

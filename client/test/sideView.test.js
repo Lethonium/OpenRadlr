@@ -50,7 +50,7 @@ test("the camera: no shrink on the road, half at the camera's distance, the ride
   const cam = sideCamera({ width: W, height: H, me, route: open });
   assert.equal(cam.f(0), 1);
   assert.equal(cam.f(-CAM_M), 0.5);
-  assert.equal(cam.scale, W / SPAN_M);
+  assert.equal(cam.scale, W / 55);
   assert.equal(cam.x(me.d, 0), RIDER_AT * W);
   assert.equal(cam.y(open.elevationAt(me.d), 0), ROAD_AT * H);
 });

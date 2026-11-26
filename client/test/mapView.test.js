@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
-import { MAP_RIDER_SCALE, MAP_SPAN_M, createMapView } from "../public/js/view2d/mapView.js";
+import { MAP_SPAN_M, createMapView } from "../public/js/view2d/mapView.js";
 import { MAP_TILE_M, roadTriangles } from "../public/js/view2d/mapTiles.js";
 import { groundSampler } from "../public/js/view2d/groundSampler.js";
 import { look2d } from "../public/js/view2d/look2d.js";
@@ -196,7 +196,7 @@ test("riders are drawn with their sprites at 2.4 times, labels upright", () => {
   const screen = frame(view, { riders: [rider("a", 0, 0, { mine: true, name: "Me" }), rider("b", 3, -6, { name: "Bea" })] });
   const sprites = screen.images.filter((entry) => entry.image.name === "rider");
   assert.equal(sprites.length, 2);
-  assert.ok(Math.abs(sprites[0].args[2] - MAP_RIDER_SCALE) < 1e-9, "2.4 m across at a 1 m sprite");
+  assert.ok(Math.abs(sprites[0].args[2] - 2.4) < 1e-9, "2.4 m across at a 1 m sprite");
   assert.equal(screen.calls.fillText, 1, "only the other rider has a label");
 });
 
