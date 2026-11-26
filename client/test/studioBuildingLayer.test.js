@@ -73,3 +73,11 @@ test("disposes", () => {
   layer.dispose();
   assert.equal(tracker.live(), 0);
 });
+
+test("an open floor's glass is light and clear", () => {
+  const { layer } = make();
+  layer.update({ studio: { floors: 2, open: 1 } });
+  const { material } = panes(layer)[0];
+  assert.ok(material.opacity <= 0.18, `opacity ${material.opacity}`);
+  assert.ok(material.color.getHSL({}).l >= 0.6);
+});

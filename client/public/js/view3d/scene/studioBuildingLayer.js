@@ -6,12 +6,12 @@
  * are ordinary entries of the rider layer.
  */
 import * as THREE from "../../three.js";
-import { createStudioRoom, createStudioShell } from "../assets/buildings/spinStudio.js";
+import { GLASS_LOOK, createStudioRoom, createStudioShell } from "../assets/buildings/spinStudio.js";
 import { FLOOR_HEIGHT, SLAB } from "../../world/studioLayout.js";
 import { createOwner } from "./tracker.js";
 
 /** The glass of an open floor, and of a closed one. */
-const OPEN_GLASS = Object.freeze({ opacity: 0.2, colour: 0xcfe6ee });
+const OPEN_GLASS = Object.freeze({ opacity: GLASS_LOOK.opacity, colour: new THREE.Color(GLASS_LOOK.colour).getHex() });
 const CLOSED_GLASS = Object.freeze({ opacity: 0.75, colour: 0x405060 });
 
 /**

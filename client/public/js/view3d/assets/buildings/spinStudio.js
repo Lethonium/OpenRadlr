@@ -26,7 +26,8 @@ const COL = Object.freeze({
 });
 const MATS = ["#6ba5a0", "#d98a8a", "#8e8bc4"];
 const WALL = 0.3;
-const GLASS = "#cfe6ee";
+/** Open glass by day: pale sky tint, mostly clear (closed floors are darkened by the layer). */
+export const GLASS_LOOK = Object.freeze({ colour: "#e6f4fa", opacity: 0.14 });
 /** The sign board: texture width in texels and the board's size in metres. */
 const SIGN = Object.freeze({ texels: 1024, ratio: 13.2 / 1.8, width: 13.2, height: 1.8 });
 /** Wall props hug the side walls; centre distance from the room's middle line. */
@@ -184,10 +185,10 @@ export function createStudioRoom({ own = (resource) => resource, ceiling = true 
 
 /**
  * The building: plinth, a slab and walls per storey, the glass fronts, the roof with its sign.
- * @param {{floors: number, own?: Function, uniforms?: object, roof?: boolean}} options `roof: false` leaves the top open
+ * @param {{floors: number, own?: Function, uniforms?: object, roof?: boolean, glass?: boolean}} options `roof: false` leaves the top open, `glass: false` the fronts
  * @returns {{object: import("../../../three.js").Group, glass: import("../../../three.js").Mesh[]}} one pane per storey
  */
-export function createStudioShell({ floors, own = (resource) => resource, uniforms = createSharedUniforms(), roof = true }) {
+export function createStudioShell({ floors, own = (resource) => resource, uniforms = createSharedUniforms(), roof = true, glass: withGlass = true }) {
   const { halfWidth: W, front: F, back: B } = FOOTPRINT;
   const depth = B - F;
   const mid = (F + B) / 2;
@@ -221,10 +222,10 @@ export function createStudioShell({ floors, own = (resource) => resource, unifor
   building.receiveShadow = true;
   object.add(building);
 
-  const paneMaterial = own(new THREE.MeshStandardMaterial({ color: GLASS, transparent: true, opacity: 0.2, roughness: 0.04, metalness: 0.2, depthWrite: false, side: THREE.DoubleSide }));
+  const paneMaterial = own(new THREE.MeshStandardMaterial({ color: GLASS_LOOK.colour, transparent: true, opacity: GLASS_LOOK.opacity, roughness: 0.1, metalness: 0, depthWrite: false, side: THREE.DoubleSide }));
   const pane = own(new THREE.PlaneGeometry(W * 2 - 0.2, wallHeight));
   const glass = [];
-  for (let s = 0; s < floors; s += 1) {
+  for (let s = 0; s < (withGlass ? floors : 0); s += 1) {
     const each = mesh(pane, paneMaterial, "glass");
     each.position.set(0, s * FLOOR_HEIGHT + SLAB + wallHeight / 2, F + 0.02);
     each.renderOrder = 2;
@@ -238,18 +239,22 @@ export function createStudioShell({ floors, own = (resource) => resource, unifor
   sign.position.set(0, signY, F + 0.34);
   sign.rotation.y = Math.PI;
   object.add(sign);
+  // One-sided planes: seen from behind (the workbench's camera starts there) the board would be blank, so the back reads too.
+  const back = mesh(sign.geometry, sign.material, "sign-back");
+  back.position.set(0, signY, F + 0.56);
+  object.add(back);
   return { object, glass };
 }
 
-/** Workbench entry: the shell with a room in every storey (the top one open to the sky when `cutaway`). */
+/** Workbench entry: the shell with a room in every storey (`cutaway`: no roof, ceilings or glass fronts, so the rooms show). */
 export function create({ track, uniforms, storeys = 1, open = true, cutaway = true } = {}) {
   const owner = createOwner(track);
   const floors = Math.max(1, Math.min(3, Math.round(storeys)));
   const object = new THREE.Group();
   object.name = "spin-studio";
-  object.add(createStudioShell({ floors, own: owner.own, uniforms, roof: !cutaway }).object);
+  object.add(createStudioShell({ floors, own: owner.own, uniforms, roof: !cutaway, glass: !cutaway }).object);
   for (let s = 0; s < floors; s += 1) {
-    const room = createStudioRoom({ own: owner.own, uniforms, ceiling: !cutaway || s < floors - 1 });
+    const room = createStudioRoom({ own: owner.own, uniforms, ceiling: !cutaway });
     room.setOpen(open);
     room.object.position.y = s * FLOOR_HEIGHT + SLAB;
     object.add(room.object);

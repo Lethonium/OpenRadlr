@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
 import { lookAt } from "../public/js/view3d/math.js";
 import { fakeEngine } from "./support/fakeEngine.js";
-import { coachId } from "../public/js/view3d/studioLayout.js";
+import { COACH_KIT, coachId } from "../public/js/view3d/studioLayout.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
   const front = [0, 1, 2, 3, 4, 5, 6, 7].map(seatPosition);
@@ -126,6 +126,19 @@ test("the coach stays drawn when the camera is on top of them", () => {
   view.cameraMode = "coach";
   withDocument(() => view.render(frameOf([rider(7, 3)])));
   assert.ok(view.riderLayer.cyclistOf(coachId(0)), "the coach is drawn");
+  view.dispose();
+});
+
+test("the coach wears lemon yellow, not the theme's accent", () => {
+  const view = studioView();
+  const entries = [];
+  const update = view.riderLayer.update;
+  view.riderLayer.update = (frame) => (entries.push(...frame.riders), update(frame));
+  withDocument(() => view.render(frameOf([rider(7, 3)], { colors: { ...COLORS, accent: "#ff7a1a" } })));
+  const linear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const expected = [1, 3, 5].map((i) => linear(Number.parseInt(COACH_KIT.slice(i, i + 2), 16) / 255));
+  assert.equal(COACH_KIT, "#f5d000");
+  assert.deepEqual(entries.find((entry) => entry.id === coachId(0)).tint, expected);
   view.dispose();
 });
 

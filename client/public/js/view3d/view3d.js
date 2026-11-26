@@ -19,7 +19,7 @@ import { RIDER_GEOMETRY } from "./riderGeometry.js";
 import { blend, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { PLINTHS, statueSlots } from "./statues.js";
-import { isCoach } from "./studioLayout.js";
+import { COACH_KIT, isCoach } from "./studioLayout.js";
 import { StudioFloors } from "./studioLayer.js";
 import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
@@ -637,8 +637,8 @@ export class View3D {
     const viewProjection = multiply(projection, view);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
-    // The coach wears the theme's accent, the bot grey where the colours have none.
-    const coachTint = colors.accent ? hexToRgb(colors.accent) : tints.bot;
+    // The coach wears lemon yellow, whatever the theme.
+    const coachTint = hexToRgb(COACH_KIT);
     // Road riders go to the world scene's rider layer, workout riders (at the gym) to its athlete layer.
     const roadRiders = [];
     const athletes = [];

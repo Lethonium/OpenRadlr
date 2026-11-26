@@ -13,7 +13,7 @@ import { cameraFromMatrices } from "./engine/camera.js";
 import { engineFor } from "./engine/engine.js";
 import { createRiderLayer } from "./scene/riderLayer.js";
 import { createTracker, createOwner } from "./scene/tracker.js";
-import { INSTRUCTOR, ROOM, STAGE, coachId, seatPosition } from "./studioLayout.js";
+import { COACH_KIT, INSTRUCTOR, ROOM, STAGE, coachId, seatPosition } from "./studioLayout.js";
 import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "./studioCamera.js";
 import { hexToRgb, linearOf, projectToScreen, visibleLabels } from "./view3d.js";
 import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
@@ -178,7 +178,7 @@ export class StudioView3D {
     this.#camera.far = 60;
     this.#camera.aspect = width / height;
 
-    const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), coach: hexToRgb(colors.accent) };
+    const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), coach: hexToRgb(COACH_KIT) };
     const placed = riders.map((rider) => ({ rider, position: seatPosition(rider.seat), yaw: 0 }));
     placed.push({ rider: { id: INSTRUCTOR.id, name: INSTRUCTOR.name, is_bot: false, coach: true }, position: INSTRUCTOR.position, yaw: INSTRUCTOR.yaw });
     const visible = shownInRoom(placed, myId, eye);

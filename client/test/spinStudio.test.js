@@ -85,3 +85,36 @@ test("the workbench entry builds and disposes", () => {
   entry.dispose();
   assert.equal(tracker.live(), 0);
 });
+
+const named = (object, name) => {
+  const found = [];
+  object.traverse((child) => child.name === name && found.push(child));
+  return found;
+};
+
+test("the roof sign carries its text and faces the glass front, with a mirror for the back", () => {
+  const shell = createStudioShell({ floors: 1, own: (resource) => resource, uniforms: createSharedUniforms() });
+  const [front] = named(shell.object, "sign");
+  assert.ok(front.material.map?.isTexture, "text texture set");
+  const normal = (mesh) => new THREE.Vector3(0, 0, 1).transformDirection(mesh.updateMatrixWorld(true) || mesh.matrixWorld);
+  assert.ok(normal(front).z < -0.99, "front text faces -z");
+  const [back] = named(shell.object, "sign-back");
+  assert.ok(back.material.map?.isTexture, "the back reads too");
+  assert.ok(normal(back).z > 0.99, "back text faces +z");
+});
+
+test("cutaway takes off the roof, the ceilings and the glass of every storey", () => {
+  const cut = create({ track: (resource) => resource, uniforms: createSharedUniforms(), storeys: 3, open: true, cutaway: true });
+  assert.equal(named(cut.object, "glass").length, 0);
+  assert.equal(named(cut.object, "lit-panel").length, 0, "no ceiling light panels");
+  const whole = create({ track: (resource) => resource, uniforms: createSharedUniforms(), storeys: 3, open: true, cutaway: false });
+  assert.equal(named(whole.object, "glass").length, 3);
+  assert.equal(named(whole.object, "lit-panel").length, 3);
+});
+
+test("the glass is light and clear", () => {
+  const shell = createStudioShell({ floors: 1, own: (resource) => resource, uniforms: createSharedUniforms() });
+  const { material } = shell.glass[0];
+  assert.ok(material.opacity <= 0.18, `opacity ${material.opacity}`);
+  assert.ok(material.color.getHSL({}).l >= 0.6);
+});

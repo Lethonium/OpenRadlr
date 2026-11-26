@@ -18,7 +18,7 @@ import { GYM_CAMERA, GymCamera, RIDE_LENS, projectToScreen, SIDE_CAMERA, View3D,
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 import { coachWorld, seatWorld } from "../public/js/view3d/studioLayer.js";
-import { INSTRUCTOR, coachId, isCoach } from "../public/js/view3d/studioLayout.js";
+import { COACH_KIT, INSTRUCTOR, coachId, isCoach } from "../public/js/view3d/studioLayout.js";
 
 const hexRgb = (hex) => [1, 3, 5].map((k) => Number.parseInt(hex.slice(k, k + 2), 16) / 255);
 const linear = (rgb) => rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -886,9 +886,9 @@ test("studio riders ride the rider layer, with a coach on the open floor", () =>
   assert.equal(coach.lookId, INSTRUCTOR.id);
   closeVec(coach.position, coachWorld(studioSite, 0).position);
   assert.deepEqual(frame.studio, { floors: 2, open: 1 });
-  assert.deepEqual(coach.tint, linear(hexRgb(colors.bot)), "no accent in the colours: the bot grey");
-  view.render({ riders: [studioRider(5, 3)], myId: null, timeS: 1.1, colors: { ...colors, accent: "#ffee00" } });
-  assert.deepEqual(frames.at(-1).riders.find((r) => r.id === coachId(0)).tint, linear(hexRgb("#ffee00")), "the theme's accent");
+  assert.deepEqual(coach.tint, linear(hexRgb(COACH_KIT)), "lemon yellow, whatever the colours");
+  view.render({ riders: [studioRider(5, 3)], myId: null, timeS: 1.1, colors: { ...colors, accent: "#ff7a1a" } });
+  assert.deepEqual(frames.at(-1).riders.find((r) => r.id === coachId(0)).tint, linear(hexRgb("#f5d000")), "not the theme's accent");
 });
 
 test("a rider above the studio's rooms grows the building and lights the floor", () => {

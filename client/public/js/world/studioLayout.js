@@ -22,6 +22,9 @@ export const SLAB = 0.3;
 /** The studio building's footprint in its local frame (the glass front is at `front`). */
 export const FOOTPRINT = Object.freeze({ halfWidth: 8.5, front: -10, back: 8 });
 
+/** The coach's jersey: lemon yellow in every view, whatever the theme. */
+export const COACH_KIT = "#f5d000";
+
 /** The coach of `floor` (0 = ground) as a rider id: negative, so it never meets a real rider's (those start at 1) nor shares a pooled cyclist with another floor's coach. */
 export const coachId = (floor) => -1 - floor;
 /** Whether `id` is a floor's coach (see `coachId`). */
