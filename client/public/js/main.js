@@ -5978,6 +5978,7 @@ function switchRoute(route, named = null) {
   app.route = route;
   app.smoother.route = route;
   app.view3d?.setRoute(route);
+  app.view2d?.setRoute(route);
   startLemonHunt(route);
   startGhostLap(route);
   // Distances on the new road don't continue the old one's.

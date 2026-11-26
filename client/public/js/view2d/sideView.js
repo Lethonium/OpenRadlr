@@ -134,10 +134,19 @@ const shade = (c, f) => c.map((v) => Math.min(1, v * f));
  *   `phase` is in turns; `cadence` in rpm; `lane` as the map's (0 is leftmost)
  */
 export function createSideView({ scene, route, sampler, createCanvas, index = null, store = null }) {
-  const bands = createSideBands({ route, sampler, createCanvas });
   const asphalt = css(scene.roads.style.surface.map(toSrgb));
-  const scenery = index ? sideScenery(index, route) : [];
-  const strip = profileStrip(route);
+  // What depends on the route, remade by `setRoute`.
+  let bands;
+  let scenery;
+  let strip;
+  function useRoute(next) {
+    route = next;
+    bands?.resize();
+    bands = createSideBands({ route, sampler, createCanvas });
+    scenery = index ? sideScenery(index, route) : [];
+    strip = profileStrip(route);
+  }
+  useRoute(route);
 
   /** `d` as the camera sees it: the copy of this distance on the loop nearest the rider. */
   const nearTo = (me, d) => me.d + route.signedGap(me.d, d);
@@ -419,5 +428,11 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     drawProfileStrip(ctx, strip, { rect, me, riders: riders.map((r) => ({ d: r.d, mine: r.mine, look: r.look })), viewM: SPAN_M });
   }
 
-  return { draw, resize: () => bands.resize(), dispose: () => bands.resize() };
+  return {
+    draw,
+    /** My road changed (a junction turn): the land, the scenery and the profile strip are remade for it. */
+    setRoute: useRoute,
+    resize: () => bands.resize(),
+    dispose: () => bands.resize(),
+  };
 }

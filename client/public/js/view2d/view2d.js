@@ -99,6 +99,13 @@ export class View2D {
     this.#lookCache = null;
   }
 
+  /** My road changed (a junction turn): riders are placed on the new route, and the views remake what depends on it. The world index, sampler and store are kept. */
+  setRoute(route) {
+    this.#route = route;
+    this.#views?.map?.setRoute(route);
+    this.#views?.side?.setRoute(route);
+  }
+
   /** The canvas changed size or pixel ratio: what the views cached at the old scale goes. */
   resize() {
     this.#views?.map?.resize();

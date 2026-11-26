@@ -36,7 +36,7 @@ const topJobs = new Map(spriteJobs({ view: "top" }).map((job) => [job.id, job]))
 
 /**
  * @param {{scene: object, route: object, index: {query: Function}, sampler: object, store: object, createCanvas: (w: number, h: number) => object}} deps
- * @returns {{draw: Function, resize: () => void, dispose: () => void}}
+ * @returns {{draw: Function, setRoute: (route: object) => void, resize: () => void, dispose: () => void}}
  */
 export function createMapView({ scene, route, index, sampler, store, createCanvas }) {
   const tiles = createMapTiles({ scene, index, sampler, store, createCanvas });
@@ -210,6 +210,8 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
 
   return {
     draw,
+    /** My road changed (a junction turn): the draft band and lemons follow the new one; the tiles are the world's, kept. */
+    setRoute: (next) => (route = next),
     /** The canvas changed size or pixel ratio: the tiles go and are remade as the view needs them. */
     resize: () => tiles.clear(),
     dispose: () => tiles.clear(),

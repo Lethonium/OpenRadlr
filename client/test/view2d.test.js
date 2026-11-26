@@ -153,6 +153,25 @@ test("at a pixel ratio of 2 the views draw in CSS pixels through a doubled trans
   }
 });
 
+test("setRoute places the riders on the new route and keeps the store", () => {
+  const made = [];
+  const far = new RouteGeometry({ ...tinyLoopFile(), id: "far", points: tinyLoopFile().points.map(([x, y, z]) => [x + 5000, y + 5000, z]) });
+  const { view, baker } = make({ createCanvas: (w, h) => (made.push([w, h]), fakeCanvas(w, h).canvas) });
+  for (let k = 0; k < 3; k += 1) view.render(frame());
+  const tiles = made.length;
+  view.render(frame());
+  assert.equal(made.length, tiles, "a frame on the same route, once the sprites are baked, makes no tile");
+  const baked = baker.jobs.length;
+  view.setRoute(far);
+  view.render(frame());
+  assert.ok(made.length > tiles, "tiles for the new route's place");
+  view.setMode("side");
+  view.render(frame());
+  view.setRoute(route);
+  assert.doesNotThrow(() => view.render(frame()));
+  assert.ok(baker.jobs.length >= baked);
+});
+
 test("dispose frees the baker once", () => {
   const { view, baker } = make();
   view.render(frame());

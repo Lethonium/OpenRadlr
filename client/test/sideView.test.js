@@ -369,3 +369,18 @@ test("at a pixel ratio of 2 the cached bands are made at device size and drawn a
   const drawn = screen.images.at(-1).args;
   assert.equal(drawn[2], CHUNK_PX + 1, "a chunk is drawn at CSS size");
 });
+
+test("setRoute remakes the scenery and the profile strip for the new route", () => {
+  const { view, store } = sideSetup([treeAt(700, -20, { id: "olive" })], { route: loop });
+  const screen = fakeCanvas(W, H);
+  const draw = () => view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: 700 }, riders: [], look: DAY, t: 0 });
+  draw();
+  assert.equal(store.asked.some((key) => key.includes("olive")), false, "no tree beside the old route");
+  view.setRoute(open);
+  draw();
+  assert.equal(store.asked.some((key) => key.includes("olive")), true, "the tree beside the new route");
+  const { ctx, calls } = recorder();
+  view.draw(ctx, { width: W, height: H, me: { d: open.length }, riders: [], look: DAY, t: 0 });
+  const lines = calls.slice(0, calls.findIndex((c) => c.name === "roundRect")).filter((c) => c.name === "lineTo");
+  assert.ok(lines.every((c) => c.args[0] <= RIDER_AT * W + 1e-6 || c.args[1] >= H), "the road ends where the open route does");
+});
