@@ -321,6 +321,9 @@ test("after dark lamps, windows and bike lights glow; by day nothing does", () =
   assert.equal(radials(NIGHT, [lamp], []), 1);
   assert.equal(radials(NIGHT, [lamp], [rider]), 3, "a head light and a tail light");
   assert.equal(radials(DAY, [lamp], [rider]), 1, "only the sun's own glow");
+  const house = { layer: "house", id: "cottage", x: 200, y: 10, z: -12, yaw: 0, w: 8, d: 6, seed: 1, facing: [0, 1] };
+  assert.equal(radials(NIGHT, [house], []), 4, "a few window glows over the wall");
+  assert.equal(radials(NIGHT, [{ ...house, seed: 3 }], []), 0, "a dark house");
 });
 
 test("the profile strip is drawn along the bottom", () => {

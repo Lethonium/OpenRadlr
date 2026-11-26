@@ -70,10 +70,15 @@ const STRIP_BOTTOM_PX = 10;
 const PRIORITY_PER_M = 1;
 /** After-dark glows: `r` in sprite metres at the thing's own scale; colours and strengths as the map's. */
 const LAMP_GLOW = Object.freeze({ r: 5, rgb: [1, 0.77, 0.47], a: 0.45 });
-const WINDOW_GLOW = Object.freeze({ r: 1.8, rgb: [1, 0.82, 0.51], a: 0.55 });
+const WINDOW_GLOW = Object.freeze({ r: 0.9, rgb: [1, 0.82, 0.51], a: 0.55 });
 const CAFE_GLOW = Object.freeze({ r: 7, rgb: [1, 0.75, 0.43], a: 0.5 });
-const HEADLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.98, 0.88], a: 0.5 });
-const TAILLIGHT = Object.freeze({ r: 1, rgb: [1, 0.16, 0.16], a: 0.35 });
+const HEADLIGHT = Object.freeze({ r: 0.55, rgb: [1, 0.98, 0.88], a: 0.5 });
+/** Where on a lit sprite the glows sit: the lamp's head as a share of its height; windows as [across (share of the width), up (share of the height)]. */
+const LAMP_HEAD = 0.93;
+const WINDOW_SPREAD = 0.2;
+const WINDOW_SHIFT = -0.07;
+const WINDOWS = Object.freeze([[-1, 0.13], [1, 0.13], [-1, 0.42], [1, 0.42]]);
+const TAILLIGHT = Object.freeze({ r: 0.5, rgb: [1, 0.16, 0.16], a: 0.35 });
 
 /** The side-view sprite jobs by workbench id, and the houses by style and turn; built once from the catalog. */
 const JOBS = (() => {
@@ -361,11 +366,17 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     const add = (glow, x, y, pxm) => glows.push({ rgb: glow.rgb, a: glow.a, r: glow.r * pxm, x, y });
     for (const entry of entries) {
       const { layer, seed } = entry.item;
-      if (layer !== "lamp" && layer !== "cafe" && !(layer === "house" && seed % 3 !== 0)) continue;
-      const { x, y, pxm } = placeOf(camera, entry);
-      if (layer === "lamp") add(LAMP_GLOW, x + 0.7 * pxm, y - 4.5 * pxm, pxm);
-      else if (layer === "cafe") add(CAFE_GLOW, x, y - 2 * pxm, pxm);
-      else for (const side of [-1, 1]) add(WINDOW_GLOW, x + side * 1.5 * pxm, y - 2.6 * pxm, pxm);
+      const lit = layer === "lamp" || layer === "cafe" || layer === "farm" || (layer === "house" && seed % 3 !== 0);
+      if (!lit) continue;
+      const { x, y, pxm, d } = placeOf(camera, entry);
+      const image = store?.get(jobOf(entry.item, entry.turn)?.key);
+      if (!image || Math.abs(d - camera.meD) > camera.width) continue;
+      // The sprite's size in its own metres: height above the anchor and the middle of its width.
+      const [high, centre] = [image.oy / image.ppm, x + ((image.frames[0].width / 2 - image.ox) * pxm) / image.ppm];
+      const wide = image.frames[0].width / image.ppm;
+      if (layer === "lamp") add(LAMP_GLOW, x + (image.frames[0].width / 2 - image.ox) * pxm / image.ppm, y - high * LAMP_HEAD * pxm, pxm);
+      else if (layer === "cafe") add(CAFE_GLOW, centre, y - high * 0.3 * pxm, pxm);
+      else for (const [k, row] of WINDOWS) add(WINDOW_GLOW, centre + (WINDOW_SHIFT + k * WINDOW_SPREAD) * wide * pxm, y - high * row * pxm, pxm);
     }
     for (const { x, y, pxm } of placed) {
       add(HEADLIGHT, x + 1.1 * pxm, y - 1.0 * pxm, pxm);
