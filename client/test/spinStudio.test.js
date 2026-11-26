@@ -107,6 +107,7 @@ test("cutaway takes off the roof, the ceilings and the glass of every storey", (
   const cut = create({ track: (resource) => resource, uniforms: createSharedUniforms(), storeys: 3, open: true, cutaway: true });
   assert.equal(named(cut.object, "glass").length, 0);
   assert.equal(named(cut.object, "lit-panel").length, 0, "no ceiling light panels");
+  assert.equal(named(cut.object, "sign").length, 0, "no sign floating over the open top");
   const whole = create({ track: (resource) => resource, uniforms: createSharedUniforms(), storeys: 3, open: true, cutaway: false });
   assert.equal(named(whole.object, "glass").length, 3);
   assert.equal(named(whole.object, "lit-panel").length, 3);

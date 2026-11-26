@@ -314,8 +314,9 @@ export class View3D {
   sideView = null;
   /** The last frame's draw calls and triangles before the post chain (the dev `?stats` readout); null before one. */
   frameStats = null;
-  /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
+  /** Whether my rider is drawn as the classic rider and bike (the Old School setting). */
   #classicRider = false;
+  /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
   #sideAhead = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();

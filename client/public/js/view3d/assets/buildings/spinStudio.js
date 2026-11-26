@@ -208,14 +208,15 @@ export function createStudioShell({ floors, own = (resource) => resource, unifor
   }
   if (withGlass) parts.push(box(1.8, 2.4, 0.1, C(COL.door), W - 2.2, SLAB + 1.2, F + 0.05));
   const top = floors * FLOOR_HEIGHT;
+  const signY = top + SLAB + 1.6;
+  // The sign stands on the roof, so the cutaway (no roof) leaves it out too.
   if (roof) {
     parts.push(box(W * 2, SLAB, depth, C(COL.slab), 0, top + SLAB / 2, mid));
     for (const z of [F + 0.15, B - 0.15]) parts.push(box(W * 2, 0.7, 0.3, C(COL.render), 0, top + SLAB + 0.35, z));
     for (const side of [-1, 1]) parts.push(box(0.3, 0.7, depth - 0.6, C(COL.render), side * (W - 0.15), top + SLAB + 0.35, mid));
+    parts.push(box(13.6, 2.0, 0.2, C(COL.board), 0, signY, F + 0.45));
+    for (const side of [-1, 1]) parts.push(box(0.12, 1.6, 0.12, C(COL.frame), side * 6, top + SLAB + 0.8, F + 0.6));
   }
-  const signY = top + SLAB + 1.6;
-  parts.push(box(13.6, 2.0, 0.2, C(COL.board), 0, signY, F + 0.45));
-  for (const side of [-1, 1]) parts.push(box(0.12, 1.6, 0.12, C(COL.frame), side * 6, top + SLAB + 0.8, F + 0.6));
 
   const object = new THREE.Group();
   object.name = "studio-shell";
@@ -235,16 +236,18 @@ export function createStudioShell({ floors, own = (resource) => resource, unifor
     object.add(each);
   }
 
-  const light = (hex) => toSrgb([C(hex).r, C(hex).g, C(hex).b]);
-  const map = textTexture(SIGN_TEXT, { background: light(COL.board), ink: light(COL.lemon), width: SIGN.texels, height: Math.round(SIGN.texels / SIGN.ratio) }, own);
-  const sign = mesh(own(new THREE.PlaneGeometry(SIGN.width, SIGN.height)), own(new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.9, roughness: 0.5 })), "sign");
-  sign.position.set(0, signY, F + 0.34);
-  sign.rotation.y = Math.PI;
-  object.add(sign);
-  // One-sided planes: seen from behind (the workbench's camera starts there) the board would be blank, so the back reads too.
-  const back = mesh(sign.geometry, sign.material, "sign-back");
-  back.position.set(0, signY, F + 0.56);
-  object.add(back);
+  if (roof) {
+    const light = (hex) => toSrgb([C(hex).r, C(hex).g, C(hex).b]);
+    const map = textTexture(SIGN_TEXT, { background: light(COL.board), ink: light(COL.lemon), width: SIGN.texels, height: Math.round(SIGN.texels / SIGN.ratio) }, own);
+    const sign = mesh(own(new THREE.PlaneGeometry(SIGN.width, SIGN.height)), own(new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.9, roughness: 0.5 })), "sign");
+    sign.position.set(0, signY, F + 0.34);
+    sign.rotation.y = Math.PI;
+    object.add(sign);
+    // One-sided planes: seen from behind the board would be blank, so the back reads too.
+    const back = mesh(sign.geometry, sign.material, "sign-back");
+    back.position.set(0, signY, F + 0.56);
+    object.add(back);
+  }
   return { object, glass };
 }
 

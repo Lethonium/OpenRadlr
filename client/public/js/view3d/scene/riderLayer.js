@@ -121,7 +121,6 @@ export function createRiderLayer({ settings, uniforms, track }) {
     const key = `${record.lookId}|${tint.join(",")}`;
     if (record.kitKey === key) return;
     if (record.classic) {
-      record.kit ??= createOwner(track);
       record.cyclist?.setPrimary(hexOf(tint));
       record.kitKey = key;
       return;
@@ -148,7 +147,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
 
   const destroy = (record) => {
     record.owner.disposeAll();
-    record.kit.disposeAll();
+    record.kit?.disposeAll();
   };
 
   /** Sets or clears the see-through look of a cyclist. */
@@ -438,7 +437,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
       for (const record of [...vehicles.values(), ...freeVehicles.values()]) destroyVehicle(record);
       for (const record of [...seated.values(), ...freeSeated.values()]) {
         record.owner.disposeAll();
-        record.kit.disposeAll();
+        record.kit?.disposeAll();
       }
       active.clear();
       free.clear();
