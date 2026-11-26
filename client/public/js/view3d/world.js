@@ -1,5 +1,5 @@
 /**
- * Builds the static 3D world for a route: road, verge, lane markings, posts,
+ * Builds the static 3D world for a route: road, verge, lane markings, post and bridge placements,
  * the ground as grids (an island: fine over the land, coarse out to the
  * horizon; the main thread tiles them, see scene/terrainLayer.js) and arches (the plants, towns, farms,
  * landmarks and far islands are the scene's layers). The sea
@@ -36,7 +36,6 @@ import {
   waterLevel,
 } from "../world/roads.js";
 import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath, withRivers } from "../world/rivers.js";
-import { MeshBuilder } from "./meshBuilder.js";
 import { inStretch, resolveZones } from "../world/zones.js";
 import { normalize, yawFor } from "./math.js";
 import { resolveBiome, temperate } from "./biomes/index.js";
@@ -259,7 +258,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
   // On a network the ridden route runs on roads of the index: those aren't "other" roads to it.
   const ridden = new Set(network ? roads.filter((road) => sharedStretches(road, [route]).length > 0) : []);
   const strips = [];
-  const posts = new MeshBuilder();
+  const posts = [];
   for (const [i, r] of routes.entries()) {
     const stretches = sharedStretches(r, routes.slice(0, i));
     shared.set(r, stretches);
@@ -357,7 +356,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     overview: worldOverview(terrain, ground.water),
     arches: archPlacements(route),
     furniture,
-    roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts: posts.build() },
+    roads: { strips: mergeStrips(strips), style: roadStyle(biome), posts },
     rivers: { strips: riverStrips(rivers, riverStyle), bridges: buildBridges(rivers, terrain, biome), style: riverStyle },
     crowd: { people, figure: biome.people.motion === "clap" ? "penguin" : "person" },
   };

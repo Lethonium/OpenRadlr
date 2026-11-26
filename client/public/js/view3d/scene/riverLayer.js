@@ -6,9 +6,9 @@
  * Bridges are plain lit meshes.
  */
 import * as THREE from "../../three.js";
+import { bridgeGeometry } from "../assets/props/bridge.js";
 import { ICE_KIND } from "../../world/plan/riverStrips.js";
 import { NOISE_GLSL } from "./noiseGlsl.js";
-import { meshGeometry } from "./roadLayer.js";
 import { seaLight } from "./sea.js";
 import { createOwner } from "./tracker.js";
 
@@ -59,7 +59,7 @@ function iceGeometry(ice, style) {
 }
 
 /**
- * @param {{strips: import("../../world/plan/riverStrips.js").RiverStrips, bridges?: object | null,
+ * @param {{strips: import("../../world/plan/riverStrips.js").RiverStrips, bridges?: {boxes: Float32Array, colors: Float32Array} | null,
  *   style: {color: number[], alpha?: number, ice?: {color: number[], crack?: number[]} | null}}} rivers
  * @param {{uniforms: {time: {value: number}}, track: import("./tracker.js").Tracker["track"]}} options
  */
@@ -93,8 +93,8 @@ export function createRiverLayer(rivers, { uniforms, track }) {
       group.add(patches);
     }
   }
-  if (rivers.bridges?.vertexCount) {
-    const bridges = new THREE.Mesh(own(meshGeometry(rivers.bridges)), own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 })));
+  if (rivers.bridges?.boxes.length) {
+    const bridges = new THREE.Mesh(own(bridgeGeometry(rivers.bridges)), own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 })));
     bridges.name = "river-bridges";
     bridges.castShadow = bridges.receiveShadow = true;
     group.add(bridges);

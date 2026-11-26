@@ -94,13 +94,15 @@ test("rivers: a ribbon on the water, flowing downhill", () => {
 
 test("every river crossing has a bridge at least as high as the road", () => {
   const world = tinyWorld();
-  const mesh = buildBridges(world.rivers, world.terrain, resolveBiome("temperate"));
-  assert.ok(mesh.vertexCount > 0);
+  const { boxes } = buildBridges(world.rivers, world.terrain, resolveBiome("temperate"));
+  assert.ok(boxes.length > 0);
   for (const river of world.rivers) {
     const frame = roadFrame(river.route, river.at);
     let top = -Infinity;
-    for (let i = 0; i < mesh.positions.length; i += 3) {
-      if (Math.hypot(mesh.positions[i] - frame.center[0], mesh.positions[i + 2] - frame.center[2]) < 6) top = Math.max(top, mesh.positions[i + 1]);
+    for (let i = 0; i < boxes.length; i += 12) {
+      // A box's highest point: its centre plus half of each edge's climb.
+      const highest = boxes[i + 1] + (Math.abs(boxes[i + 4]) + Math.abs(boxes[i + 7]) + Math.abs(boxes[i + 10])) / 2;
+      if (Math.hypot(boxes[i] - frame.center[0], boxes[i + 2] - frame.center[2]) < 6) top = Math.max(top, highest);
     }
     assert.ok(top >= frame.center[1], `deck ${top} vs road ${frame.center[1]}`);
   }

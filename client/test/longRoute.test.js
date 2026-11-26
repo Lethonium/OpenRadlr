@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { FloatBuffer } from "../public/js/view3d/meshBuilder.js";
+import { triangleCount } from "../public/js/view3d/assets/geom.js";
+import { roadPostGeometry } from "../public/js/view3d/assets/props/roadPost.js";
 import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
 import { terrainModel } from "../public/js/world/roads.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
@@ -55,9 +56,15 @@ test("a 50 km route builds its terrain with the horizon around the whole island"
 });
 
 /** Triangles of the road's quads and its posts (the adapter draws nothing else of the world). */
-const roadTriangles = (scene) =>
-  scene.roads.strips.indices.length / 3 +
-  scene.roads.posts.vertexCount / 3;
+const roadTriangles = (scene) => {
+  const shapes = new Map();
+  const triangles = (post) => {
+    const shape = `${post.kind}${post.capped}`;
+    if (!shapes.has(shape)) shapes.set(shape, triangleCount(roadPostGeometry(post.kind, scene.roads.style.post, { capped: post.capped })));
+    return shapes.get(shape);
+  };
+  return scene.roads.strips.indices.length / 3 + scene.roads.posts.reduce((sum, post) => sum + triangles(post), 0);
+};
 
 test("the valley world keeps its density", () => {
   const scene = buildSceneNow(JSON.parse(readFileSync(new URL("../../routes/rolling-hills.json", import.meta.url))));
@@ -83,13 +90,4 @@ test("a long route stays inside the triangle budget in every biome", () => {
     assert.ok(perKm < 12_000, `${id}: ${Math.round(perKm)} triangles per km`);
     assert.ok(triangles <= temperate * 1.3, `${id}: ${triangles} triangles vs temperate ${temperate}`);
   }
-});
-
-test("FloatBuffer grows and trims", () => {
-  const buffer = new FloatBuffer();
-  for (let i = 0; i < 1000; i += 1) buffer.push(i, i + 0.5);
-  buffer.pushRange([7, 8, 9], 1, 3);
-  const out = buffer.toFloat32();
-  assert.equal(out.length, 2002);
-  assert.deepEqual([...out.slice(-4)], [999, 999.5, 8, 9]);
 });

@@ -79,9 +79,6 @@ function terrainColor({ x, z, height, steep, seed, water, riverDistance = Infini
   return [0, 1, 2].map((i) => (base[i] * shade) * (1 - high) + HIGH[i] * high);
 }
 
-/** Props: a biome swaps these for its own shapes (temperate keeps the plain roadside posts). */
-const models = Object.freeze({});
-
 export const temperate = Object.freeze({
   id: "temperate",
   label: "biome.temperate",
@@ -152,7 +149,6 @@ export const temperate = Object.freeze({
   }),
   seaFloor: SEA_FLOOR,
   palette: PALETTE,
-  models,
   /** `motion` tells the view how the crowd cheers; the figures are assets/people. */
   people: Object.freeze({ motion: "jump", tint: true, shirts: SHIRTS }),
   terrainColor,

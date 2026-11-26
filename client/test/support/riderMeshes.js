@@ -1,9 +1,9 @@
 /**
- * The old low-poly body parts, kept for the clip and pose tests: they measure
+ * The old low-poly body parts (their points; the colours are ignored), kept for the clip and pose tests: they measure
  * a pose against the shapes the rig was modelled from (ground contact, limbs
  * joined, arms clear of the head). Not used at run time.
  */
-import { MeshBuilder } from "../../public/js/view3d/meshBuilder.js";
+import { Solids } from "./solids.js";
 import { placement } from "../../public/js/view3d/math.js";
 import { BODY_ATTITUDE, BODY_JOINTS, BODY_PARENTS, RIDER_GEOMETRY } from "../../public/js/view3d/riderGeometry.js";
 
@@ -42,14 +42,14 @@ const minus = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 /** Shorts, origin at the pelvis joint. */
 export function buildPelvis({ shorts } = variantLook(0)) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   m.box(minus([0, 1.02, 0.16], BODY_JOINTS.pelvis), [0.32, 0.12, 0.2], shorts);
   return m.build();
 }
 
 /** Chest, shoulders and neck, origin at the base of the spine. */
 export function buildTorso({ skin } = variantLook(0)) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const at = (p) => minus(p, BODY_JOINTS.spine);
   m.segment(at(RIDER_GEOMETRY.hip), at([0, 1.28, -0.16]), 0.34, 0.22, KIT);
   m.segment(at([0, 1.28, -0.16]), at([0, 1.36, -0.3]), 0.38, 0.22, KIT);
@@ -59,7 +59,7 @@ export function buildTorso({ skin } = variantLook(0)) {
 
 /** Head, helmet and visor, origin at the base of the neck. */
 export function buildHead({ skin, helmet } = variantLook(0)) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const at = (p) => minus(p, BODY_JOINTS.neck);
   m.ellipsoid(at([0, 1.53, -0.4]), [0.1, 0.11, 0.11], skin, 3, 6);
   m.ellipsoid(at([0, 1.6, -0.38]), [0.13, 0.09, 0.17], helmet, 3, 7);
@@ -69,7 +69,7 @@ export function buildHead({ skin, helmet } = variantLook(0)) {
 
 /** Upper arm to the elbow, origin at the shoulder; `side` is −1 (left) or 1 (right). */
 export function buildUpperArm(_look = variantLook(0), side = 1) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const joint = side < 0 ? BODY_JOINTS.shoulderL : BODY_JOINTS.shoulderR;
   const elbow = side < 0 ? BODY_JOINTS.elbowL : BODY_JOINTS.elbowR;
   m.segment([0, 0, 0], minus(elbow, joint), 0.1, 0.1, KIT);
@@ -78,7 +78,7 @@ export function buildUpperArm(_look = variantLook(0), side = 1) {
 
 /** Forearm and hand, origin at the elbow; `side` is −1 (left) or 1 (right). */
 export function buildForearm({ skin } = variantLook(0), side = 1) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const elbow = side < 0 ? BODY_JOINTS.elbowL : BODY_JOINTS.elbowR;
   const hand = side < 0 ? BODY_JOINTS.handL : BODY_JOINTS.handR;
   m.segment([0, 0, 0], minus(hand, elbow), 0.08, 0.08, skin);
@@ -87,7 +87,7 @@ export function buildForearm({ skin } = variantLook(0), side = 1) {
 
 /** Thigh hanging from the hip (origin): shorts, then a bit of bare skin above the knee. */
 export function buildThigh({ skin, shorts } = variantLook(0)) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const length = RIDER_GEOMETRY.thigh;
   m.segment([0, 0.02, 0], [0, -length * 0.78, 0], 0.15, 0.16, shorts);
   m.segment([0, -length * 0.78, 0], [0, -length, 0], 0.12, 0.12, skin);
@@ -96,7 +96,7 @@ export function buildThigh({ skin, shorts } = variantLook(0)) {
 
 /** Shin hanging from the knee (origin), with a kneecap that hides the joint and a sock. */
 export function buildShin({ skin } = variantLook(0)) {
-  const m = new MeshBuilder();
+  const m = new Solids();
   const length = RIDER_GEOMETRY.shin;
   m.ellipsoid([0, 0, 0], [0.065, 0.07, 0.07], skin, 3, 6);
   m.segment([0, 0, 0], [0, -length * 0.45, 0], 0.11, 0.11, skin); // calf
@@ -109,7 +109,7 @@ const shoe = (m) => m.box([0, -0.025, -0.07], [0.09, 0.07, 0.26], SHOE);
 
 /** The shoe alone, off the bike (sole 6 cm under the ankle); ankle at the origin, toes to −Z. */
 export function buildShoe() {
-  const m = new MeshBuilder();
+  const m = new Solids();
   shoe(m);
   return m.build();
 }

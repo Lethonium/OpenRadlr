@@ -109,7 +109,7 @@ test("the river crosses the road only at the bridge, below it and above the lake
   assert.ok(bridge[1] - valley > 6, "the bridge spans a real valley");
   assert.ok(valley > world.waterLevel, "the river bed is above the sea");
   assert.ok(world.rivers.strips.positions.length / 3 > 100);
-  assert.ok(world.rivers.bridges.vertexCount > 0, "a bridge carries the road");
+  assert.ok(world.rivers.bridges.boxes.length > 0, "a bridge carries the road");
 });
 
 test("the world has village boards, lamps and spectators off the road", () => {

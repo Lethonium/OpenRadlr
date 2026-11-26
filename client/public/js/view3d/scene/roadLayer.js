@@ -9,6 +9,7 @@
 import * as THREE from "../../three.js";
 import { addHook, cloudShadows, heightFog } from "../assets/materials.js";
 import { asphaltTexture, kindColors } from "../assets/road.js";
+import { roadPostGeometry } from "../assets/props/roadPost.js";
 import { ROAD_KIND } from "../../world/plan/roadStrips.js";
 import { createOwner } from "./tracker.js";
 
@@ -74,23 +75,42 @@ export function areaGeometries(strips, keep, palette) {
 }
 
 /**
- * A built flat-shaded mesh (the adapter's format: positions, normals, rgba colours) as a geometry.
- * @param {{positions: Float32Array, normals: Float32Array, colors: Float32Array, vertexCount: number}} mesh
+ * The posts as instanced meshes, one per shape and `CELL` square so a long road is culled piece by piece; each shape
+ * is built once. Named `road-posts-<kind>`.
+ * @param {import("../roadPosts.js").PostPlacement[]} posts
+ * @param {import("../roadStyle.js").PostStyle} style
  */
-export function meshGeometry(mesh) {
-  const colors = new Float32Array(mesh.vertexCount * 3);
-  for (let i = 0; i < mesh.vertexCount; i += 1) colors.set(mesh.colors.subarray(i * 4, i * 4 + 3), i * 3);
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
-  geometry.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.computeBoundingSphere();
-  return geometry;
+function addPosts(posts, style, group, own) {
+  if (posts.length === 0) return;
+  const material = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 }));
+  const geometries = new Map();
+  const areas = new Map();
+  for (const post of posts) {
+    const shape = `${post.kind}${post.capped ? "+cap" : ""}`;
+    const key = `${shape}|${Math.floor(post.position[0] / CELL)},${Math.floor(post.position[2] / CELL)}`;
+    if (!areas.has(key)) areas.set(key, { shape, post, list: [] });
+    areas.get(key).list.push(post);
+  }
+  const matrix = new THREE.Matrix4();
+  const at = new THREE.Vector3();
+  const turn = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const size = new THREE.Vector3(1, 1, 1);
+  for (const { shape, post, list } of areas.values()) {
+    if (!geometries.has(shape)) geometries.set(shape, own(roadPostGeometry(post.kind, style, { capped: post.capped })));
+    const mesh = new THREE.InstancedMesh(geometries.get(shape), material, list.length);
+    mesh.name = `road-posts-${post.kind}`;
+    list.forEach((each, i) => mesh.setMatrixAt(i, matrix.compose(at.fromArray(each.position), turn.setFromAxisAngle(up, each.yaw), size)));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.castShadow = mesh.receiveShadow = true;
+    group.add(mesh);
+  }
 }
 
 /**
  * @param {{strips: import("../../world/plan/strips.js").Strips, style: import("../roadStyle.js").RoadStyle,
- *   posts?: {positions: Float32Array, normals: Float32Array, colors: Float32Array, vertexCount: number} | null}} roads
+ *   posts?: import("../roadPosts.js").PostPlacement[] | null}} roads
  * @param {{uniforms: ReturnType<typeof import("../assets/materials.js").createSharedUniforms>, track: import("./tracker.js").Tracker["track"]}} options
  */
 export function createRoadLayer(roads, { uniforms, track }) {
@@ -117,12 +137,7 @@ export function createRoadLayer(roads, { uniforms, track }) {
       group.add(mesh);
     }
   }
-  if (roads.posts?.vertexCount) {
-    const posts = new THREE.Mesh(own(meshGeometry(roads.posts)), own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 })));
-    posts.name = "road-posts";
-    posts.castShadow = posts.receiveShadow = true;
-    group.add(posts);
-  }
+  addPosts(roads.posts ?? [], roads.style.post, group, own);
   return {
     object: group,
     update() {},

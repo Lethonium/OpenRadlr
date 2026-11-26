@@ -3,7 +3,6 @@
  * heights and road geometry are the terrain's; this module only supplies the
  * season's colours, shapes and ground rules.
  */
-import { winterModels } from "./buildings.js";
 import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
 import { terrainColor } from "./terrain.js";
 
@@ -34,6 +33,8 @@ export const winter = Object.freeze({
     bank: Object.freeze({ color: SNOW, height: 0.3 }),
     rut: Object.freeze({ color: Object.freeze([0.55, 0.58, 0.64]), width: 0.36 }),
     postCap: Object.freeze({ color: SNOW }),
+    /** The roadside markers are snowmen (assets/props/roadPost.js) instead of reflector posts. */
+    marker: "snowman",
     /** Frosted event barriers with an icy blue stripe. */
     barrier: Object.freeze({
       post: WINTER_PALETTE.metal,
@@ -107,7 +108,6 @@ export const winter = Object.freeze({
     }),
   }),
   palette: WINTER_PALETTE,
-  models: winterModels,
   /** The roadside crowd becomes clapping penguins; the scarf takes the per-person tint. */
   people: Object.freeze({ motion: "clap", tint: true, shirts: SHIRTS }),
   /** Workout riders and their statues become penguins too: the rigged rider in a penguin outfit. */

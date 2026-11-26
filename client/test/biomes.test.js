@@ -26,7 +26,7 @@ test("the registry knows every biome and falls back to the default", () => {
 test("a biome brings everything the world draws with", () => {
   for (const id of BIOME_IDS) {
     const biome = resolveBiome(id);
-    for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "preview", "sand", "seaFloor", "palette", "models", "people", "terrainColor", "flora"]) {
+    for (const key of ["id", "label", "road", "arch", "water", "river", "sky", "preview", "sand", "seaFloor", "palette", "people", "terrainColor", "flora"]) {
       assert.ok(biome[key] !== undefined, `${id} is missing ${key}`);
     }
     assert.equal(typeof biome.people.motion, "string", `${id} says how the crowd moves`);
@@ -137,15 +137,9 @@ test("a junction apron flattens winter's ploughed bank", () => {
   assert.ok(highest(apron, 250, 350) > 10.3, "the bank comes back away from the junction");
 });
 
-test("winter's roadside posts are snowmen, yellow-scarfed at every kilometre", () => {
-  const winter = resolveBiome("winter");
-  assert.equal(typeof winter.models.post, "function", "the posts have their own model");
-  const ordinary = winter.models.post(false);
-  const kilometre = winter.models.post(true);
-  assert.ok(ordinary.positions.length > 0, "a snowman has geometry");
-  assert.equal(ordinary.positions.length, kilometre.positions.length, "the same snowman, only re-dressed");
-  assert.notDeepEqual(ordinary.colors, kilometre.colors, "the kilometre pair wears a yellow scarf");
-  assert.equal(resolveBiome("temperate").models.post, undefined, "temperate keeps its plain posts");
+test("winter's roadside posts are snowmen, temperate keeps its plain posts", () => {
+  assert.equal(resolveBiome("winter").road.marker, "snowman");
+  assert.equal(resolveBiome("temperate").road.marker, undefined);
 });
 
 test("winter changes the look, not the layout", () => {

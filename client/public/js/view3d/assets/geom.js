@@ -37,6 +37,18 @@ export const ico = (radius, detail, color, x = 0, y = 0, z = 0) => placed(paint(
 
 export const box = (width, height, depth, color, x = 0, y = 0, z = 0) => placed(paint(new THREE.BoxGeometry(width, height, depth), color), x, y, z);
 
+/**
+ * A box spanned by three edge vectors (full lengths) around `center`, not necessarily at right angles: a sloping
+ * deck, a limb between two points. A left-handed set is turned round (the box is the same) so its faces point out.
+ */
+export function orientedBox(center, u, v, w, color) {
+  const edges = [u, v, w].map((edge) => new THREE.Vector3(...edge));
+  const matrix = new THREE.Matrix4().makeBasis(...edges);
+  if (matrix.determinant() < 0) matrix.makeBasis(edges[0], edges[1], edges[2].negate());
+  matrix.setPosition(...center);
+  return paint(new THREE.BoxGeometry(1, 1, 1), color).applyMatrix4(matrix);
+}
+
 /** A thin cylinder between two points. */
 export function rod(from, to, radius, color, segments = 5, open = false) {
   const a = new THREE.Vector3(...from);
