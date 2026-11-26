@@ -99,7 +99,8 @@ asset's ground point in the image; `ppm`: pixels per metre).
 - Baked lit by day; time of day is a tint over the land (below). Buildings that light up get a second,
   night bake with their windows glowing, used at dusk and night.
 - Budget: the prototype baked ~130 sprites in ~20 s in headless software GL. **First step of the build:
-  measure the bake on a real slow device.** Then, as needed: bake what is in view first and show the
+  a probe page that bakes the full set and reports the time and memory**; the owner runs it on a real slow
+  device later, so the build goes on meanwhile with the mitigations below ready to switch on. Then, as needed: bake what is in view first and show the
   view as soon as that is done; lower resolution; keep the sprites for the session (a persistent cache is
   a follow-up). Cap the sprites' memory (starting value 40 MB).
 
@@ -163,7 +164,7 @@ asset's ground point in the image; `ppm`: pixels per metre).
 - The View popover's 3D/2D switch becomes **3D / Map / Side**, offered on every device (not only weak
   ones); the choice is remembered like today's view mode (per profile, as the other view settings).
 - On WebGL2 devices the new Map replaces today's `rideMapView`.
-- A device sent to 2D by the quality pick starts on **Map** (owner's call open; Side is the alternative).
+- A device sent to 2D by the quality pick starts on **Map** (owner's choice).
 - No WebGL2: Map is today's `rideMapView`; Side is not offered.
 
 ## Left to the builder
