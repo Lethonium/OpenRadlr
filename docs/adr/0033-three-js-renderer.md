@@ -1,4 +1,4 @@
-# 0030 — Three.js as the 3D renderer, vendored
+# 0033 — Three.js as the 3D renderer, vendored
 
 Date: 2026-11-23 · Status: accepted · Supersedes [0005](0005-own-webgl-renderer.md)
 
