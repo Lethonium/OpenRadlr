@@ -10,7 +10,7 @@ import { drawGlows, drawTint, drawWeather } from "./overlays.js";
 import { css, mix, toSrgb } from "./look2d.js";
 import { drawProfileStrip, profileStrip } from "./profileStrip.js";
 import { MIDDLE_LATERALS, createSideBands } from "./sideBands.js";
-import { SPAN_M, VEX, sideCamera } from "./sideCamera.js";
+import { CAM_M, SPAN_M, VEX, sideCamera } from "./sideCamera.js";
 import { drawSprite } from "./drawSprite.js";
 import { sideScenery } from "./routeProjector.js";
 import { BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
@@ -68,6 +68,8 @@ const STRIP_H_PX = 54;
 const STRIP_SIDE_PX = 16;
 const STRIP_BOTTOM_PX = 10;
 const PRIORITY_PER_M = 1;
+/** Lamps and windows further than this along the road (metres) are too far to light the view: its span, with room for the far land that shrinks. */
+const GLOW_REACH_M = SPAN_M * 2;
 /** After-dark glows: `r` in sprite metres at the thing's own scale; colours and strengths as the map's. */
 const LAMP_GLOW = Object.freeze({ r: 5, rgb: [1, 0.77, 0.47], a: 0.45 });
 const WINDOW_GLOW = Object.freeze({ r: 0.9, rgb: [1, 0.82, 0.51], a: 0.55 });
@@ -137,13 +139,17 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
   const asphalt = css(scene.roads.style.surface.map(toSrgb));
   // What depends on the route, remade by `setRoute`.
   let bands;
-  let scenery;
+  let scenery; // by lateral, far to near: the order it is drawn in
+  let byDistance; // indices into `scenery`, by distance along the route
+  let nearestShrink; // the smallest `f` of any entry: the widest stretch of road it can show
   let strip;
   function useRoute(next) {
     route = next;
     bands?.resize();
     bands = createSideBands({ route, sampler, createCanvas });
     scenery = index ? sideScenery(index, route) : [];
+    byDistance = scenery.map((_, k) => k).sort((a, b) => scenery[a].d - scenery[b].d);
+    nearestShrink = Math.min(1, ...scenery.map((entry) => CAM_M / (CAM_M - entry.lateral)));
     strip = profileStrip(route);
   }
   useRoute(route);
@@ -379,7 +385,7 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
       if (!lit) continue;
       const { x, y, pxm, d } = placeOf(camera, entry);
       const image = store?.get(jobOf(entry.item, entry.turn)?.key);
-      if (!image || Math.abs(d - camera.meD) > camera.width) continue;
+      if (!image || Math.abs(d - camera.meD) > GLOW_REACH_M) continue;
       // The sprite's size in its own metres: height above the anchor and the middle of its width.
       const [high, centre] = [image.oy / image.ppm, x + ((image.frames[0].width / 2 - image.ox) * pxm) / image.ppm];
       const wide = image.frames[0].width / image.ppm;
@@ -394,9 +400,39 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     return glows;
   }
 
+  /** The first of `byDistance` at or after the distance `d`. */
+  function firstFrom(d) {
+    let [lo, hi] = [0, byDistance.length];
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (scenery[byDistance[mid]].d < d) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  /** The scenery that could be on screen, in drawing order: a window of the route's distances round the camera (two pieces where a loop wraps) instead of every entry. */
+  function nearScenery(camera) {
+    if (scenery.length === 0) return scenery;
+    const ahead = (camera.width + MARGIN_PX - camera.riderX) / (camera.scale * nearestShrink);
+    const behind = (camera.riderX + MARGIN_PX) / (camera.scale * nearestShrink);
+    if (ahead + behind >= route.length) return scenery;
+    const from = camera.meD - behind;
+    const pieces = [];
+    if (route.loop === false) pieces.push([from, camera.meD + ahead]);
+    else {
+      const start = route.wrap(from);
+      pieces.push([start, start + behind + ahead]);
+      if (start + behind + ahead > route.length) pieces.push([start - route.length, start + behind + ahead - route.length]);
+    }
+    const found = [];
+    for (const [a, b] of pieces) for (let i = firstFrom(a); i < byDistance.length && scenery[byDistance[i]].d <= b; i += 1) found.push(byDistance[i]);
+    return found.sort((p, q) => p - q).map((k) => scenery[k]);
+  }
+
   function draw(ctx, { width, height, ratio = 1, me, riders = [], lemons = [], look, t = 0 }) {
     const camera = sideCamera({ width, height, me, route, ratio });
-    const onScreen = scenery.filter((entry) => {
+    const onScreen = nearScenery(camera).filter((entry) => {
       const x = camera.x(nearTo(me, entry.d), entry.lateral);
       return x > -MARGIN_PX && x < width + MARGIN_PX;
     });

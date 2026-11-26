@@ -384,3 +384,25 @@ test("setRoute remakes the scenery and the profile strip for the new route", () 
   const lines = calls.slice(0, calls.findIndex((c) => c.name === "roundRect")).filter((c) => c.name === "lineTo");
   assert.ok(lines.every((c) => c.args[0] <= RIDER_AT * W + 1e-6 || c.args[1] >= H), "the road ends where the open route does");
 });
+
+test("only the scenery near the camera is looked at, in the same drawing order", () => {
+  const trees = Array.from({ length: 1000 }, (_, k) => treeAt(k * 0.8, k % 2 ? -20 : -45, { id: k % 2 ? "pine" : "olive" }));
+  let gaps = 0;
+  const counted = new Proxy(open, { get: (target, key) => (key === "signedGap" ? (...a) => ((gaps += 1), target[key](...a)) : typeof target[key] === "function" ? target[key].bind(target) : target[key]) });
+  const { view, store } = sideSetup(trees, { route: counted });
+  const screen = fakeCanvas(W, H);
+  gaps = 0;
+  view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: 400 }, riders: [], look: DAY, t: 0 });
+  assert.ok(gaps < 400, `${gaps} lookups for ${trees.length} trees`);
+  assert.ok(store.asked.length > 0);
+});
+
+test("scenery across the start of a loop is seen from just before it", () => {
+  const { view, store } = sideSetup([treeAt(20, -20, { id: "olive" })], { route: loop });
+  const screen = fakeCanvas(W, H);
+  view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: loop.length - 10 }, riders: [], look: DAY, t: 0 });
+  assert.ok(store.asked.some((key) => key.includes("olive")), "30 m ahead, on the next lap");
+  const behind = sideSetup([{ ...treeAt(0, 0, { id: "olive" }), x: 5, z: -20 }], { route: loop });
+  behind.view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: 0 }, riders: [], look: DAY, t: 0 });
+  assert.ok(behind.store.asked.some((key) => key.includes("olive")), "20 m behind, on the last lap");
+});
