@@ -20,7 +20,7 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpCha
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { WORLD_STAMP } from "./profile/worldStamp.js";
-import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
+import { AchievementWatch, classicRiderChoice, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
@@ -176,6 +176,8 @@ const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
+/** "on" when Old School riders ride the classic rider and bike on their own screen (per rider, like the other settings). */
+const CLASSIC_RIDER_KEY = "openride.classicRider";
 /** How many golden lemons this browser's rider has collected, all rides together. */
 const LEMONS_KEY = "openradlr.lemons";
 /** The climbs' tops this browser's rider has been over ("routeId:metres"), for the first-time banner. */
@@ -706,6 +708,30 @@ function fillSetupFields() {
   $("chainring").value = app.profile.chainring;
   $("cog").value = app.profile.cog;
   fillWorkoutSetup();
+  applyClassicRider();
+  refreshClassicRider();
+}
+
+/** Shows the Classic rider checkbox when the rider has Old School, and gives the views the setting (a stale "on" does nothing without it). */
+function applyClassicRider() {
+  const { available, on } = classicRiderChoice(loadAchievements(browserStorage()), readSetting(CLASSIC_RIDER_KEY));
+  $("classic-rider-row").hidden = !available;
+  $("classic-rider").checked = on;
+  app.view3d?.setClassicRider(on);
+  app.studioView?.setClassicRider(on);
+}
+
+/** Latches the achievements from the kept rides (Old School may be earned by rides never opened in the profile), then shows the setting. */
+function refreshClassicRider() {
+  const generation = app.riderGeneration;
+  app.history
+    .list()
+    .then((records) => {
+      if (generation !== app.riderGeneration) return;
+      reconcileAchievements(records);
+      applyClassicRider();
+    })
+    .catch(() => {});
 }
 
 function initSetup() {
@@ -733,6 +759,10 @@ function initSetup() {
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", showShiftingSettings);
+  $("classic-rider").addEventListener("change", (event) => {
+    writeSetting(CLASSIC_RIDER_KEY, event.target.checked ? "on" : "off");
+    applyClassicRider();
+  });
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
   for (const card of document.querySelectorAll(".mode-card")) {
@@ -3041,6 +3071,7 @@ function buildStudioWorld() {
       view.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
       view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
       app.view3d = view;
+      applyClassicRider();
       $("view-note").textContent = "";
     })
     .catch((error) => {
@@ -3056,6 +3087,7 @@ function studioRoomOnly() {
     const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
+    applyClassicRider();
   } catch (error) {
     console.error(error);
     notify(t("studio.unavailable3d"), "error");
@@ -5729,6 +5761,7 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   app.view3d.setLemons(app.lemonHunt?.lemons);
+  applyClassicRider();
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;

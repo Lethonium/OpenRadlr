@@ -1054,3 +1054,36 @@ test("a view with a studio disposes without throwing", () => {
   const { view } = gymView([], "temperate", studioSite);
   assert.doesNotThrow(() => view.dispose());
 });
+
+test("only my road entry is classic, and only once the classic rider is on", (t) => {
+  const element = () => ({ style: {}, classList: { toggle() {} }, append() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+  const { view } = gymView([]);
+  view.labelLayer = { append() {} };
+  const frames = recordFrames(view);
+  const riders = [{ ...workoutRider, id: 7 }, { ...workoutRider, id: 8, distance: 110 }];
+  view.render({ riders, myId: 7, timeS: 12, colors });
+  assert.ok(frames.at(-1).riders.every((r) => !r.classic), "off by default");
+  view.setClassicRider(true);
+  view.render({ riders, myId: 7, timeS: 12.1, colors });
+  const [mine, other] = [7, 8].map((id) => frames.at(-1).riders.find((r) => r.id === id));
+  assert.equal(mine.classic, true);
+  assert.ok(!other.classic, "the others keep the new look");
+  view.setClassicRider(false);
+  view.render({ riders, myId: 7, timeS: 12.2, colors });
+  assert.ok(frames.at(-1).riders.every((r) => !r.classic));
+});
+
+test("my studio entry is classic when the classic rider is on, the coach never", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
+  view.setClassicRider(true);
+  view.camera = fixedCamera([100, 101.5, 90]);
+  view.render({ riders: [studioRider(9, 3), studioRider(5, 4)], myId: 9, timeS: 1, colors });
+  const entries = frames.at(-1).riders;
+  assert.equal(entries.find((r) => r.id === 9).classic, true);
+  assert.ok(!entries.find((r) => r.id === 5).classic);
+  assert.ok(!entries.find((r) => r.id === coachId(0)).classic);
+});

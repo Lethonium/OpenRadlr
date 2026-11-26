@@ -66,6 +66,7 @@ const forwardOf = (yaw) => [-Math.sin(yaw), 0, -Math.cos(yaw)];
 
 export class StudioView3D {
   #labels = new Map();
+  #classicRider = false;
   #lastTime = null;
   #reducedMotion;
   #owner;
@@ -117,6 +118,11 @@ export class StudioView3D {
     this.#uniforms.sunCol.value.setRGB(...STUDIO_LIGHT.sunColor);
     this.#shadows(settings);
     this.#makeRiders(settings);
+  }
+
+  /** Draws my own rider as the classic cyclist (the old rider and bike); the others and the coach keep the new look. */
+  setClassicRider(on) {
+    this.#classicRider = Boolean(on);
   }
 
   /** The room's riders, rebuilt for a graphics level. */
@@ -196,6 +202,7 @@ export class StudioView3D {
         grade: 0,
         tint: linearOf(tint),
         ghost: false,
+        classic: mine && this.#classicRider,
         // In my own point of view the camera sits in my head: the body is left out, the bike stays.
         hideBody: mine && this.cameraMode === "pov",
       };

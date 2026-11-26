@@ -286,3 +286,40 @@ test("lookId picks the look", () => {
   assert.deepEqual(kit(-1), kit(0));
   assert.notDeepEqual(kit(2), kit(0));
 });
+
+// ---------- the classic rider style
+
+const isClassic = (cyclist) => typeof cyclist.setPrimary === "function";
+
+test("a classic entry is drawn as the classic cyclist, others as the rig", () => {
+  const { layer } = make();
+  layer.update(frame([entry(1, 3, { me: true, classic: true }), entry(2, 6)]));
+  assert.ok(isClassic(layer.cyclistOf(1)), "mine is classic");
+  assert.ok(!isClassic(layer.cyclistOf(2)), "the other keeps the new look");
+});
+
+test("flipping the style swaps the cyclist and releases the old one without a leak", () => {
+  const { layer, tracker } = make();
+  const baseline = () => tracker.live();
+  layer.update(frame([entry(1, 3, { me: true })]));
+  const rig = layer.cyclistOf(1);
+  layer.update(frame([entry(1, 3, { me: true, classic: true })]));
+  const classic = layer.cyclistOf(1);
+  assert.ok(isClassic(classic) && classic !== rig);
+  assert.equal(rig.object.parent, null, "the old one left the scene");
+  layer.update(frame([entry(1, 3, { me: true })]));
+  const settled = baseline();
+  for (let i = 0; i < 10; i += 1) {
+    layer.update(frame([entry(1, 3, { me: true, classic: true })]));
+    layer.update(frame([entry(1, 3, { me: true })]));
+  }
+  assert.equal(baseline(), settled, "flipping back and forth rebuilds nothing");
+});
+
+test("hideBody hides the classic rider's body, the bike stays", () => {
+  const { layer } = make();
+  layer.update(frame([entry(1, 3, { me: true, classic: true, hideBody: true })]));
+  const cyclist = layer.cyclistOf(1);
+  assert.ok(riderMeshes(cyclist).length > 0 && riderMeshes(cyclist).every((mesh) => !mesh.visible));
+  assert.ok(bikeMeshes(cyclist).every((mesh) => shown(mesh)));
+});

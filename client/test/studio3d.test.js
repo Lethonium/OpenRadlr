@@ -115,6 +115,26 @@ test("my own point of view leaves my body out", () => {
   view.dispose();
 });
 
+test("the classic rider is mine only, and my point of view still hides its body", () => {
+  const view = studioView();
+  const entries = [];
+  const update = view.riderLayer.update;
+  view.riderLayer.update = (frame) => (entries.push(...frame.riders), update(frame));
+  view.setClassicRider(true);
+  view.cameraMode = "pov";
+  withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9)])));
+  const mine = entries.find((e) => e.id === 7);
+  assert.equal(mine.classic, true);
+  assert.equal(mine.hideBody, true);
+  assert.ok(!entries.find((e) => e.id === 8).classic);
+  assert.ok(!entries.find((e) => e.id === coachId(0)).classic);
+  view.setClassicRider(false);
+  entries.length = 0;
+  withDocument(() => view.render(frameOf([rider(7, 3)], { timeS: 2 })));
+  assert.ok(!entries.find((e) => e.id === 7).classic);
+  view.dispose();
+});
+
 test("the coach stays drawn when the camera is on top of them", () => {
   const eye = studioCamera("coach", 3).eye;
   const placed = [

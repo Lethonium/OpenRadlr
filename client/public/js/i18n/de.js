@@ -1260,6 +1260,8 @@ export default {
   "goals.image.progress": "Ziele und der Fortschritt dieser Woche",
   "goals.image.off": "Nichts",
 
+  "settings.classicRider": "Klassischer Fahrer",
+  "settings.classicRiderHint": "Der alte Fahrer mit Rad, auf deinem Bildschirm",
   "settings.climbFeelHint": "Wie viel von jedem Anstieg die Rolle simuliert — 100 % ist die echte Steigung. Dein Tempo bleibt gleich. Auch im Fahrtmenü. Nicht bei virtuellem Schalten: Das übernehmen die Gänge.",
   "keys.lane": "Spur wechseln",
   "keys.race": "Rennen beitreten / verlassen",

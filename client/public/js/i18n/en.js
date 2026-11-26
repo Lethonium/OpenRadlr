@@ -1260,6 +1260,8 @@ export default {
   "goals.image.progress": "Goals and this week's progress",
   "goals.image.off": "Nothing",
 
+  "settings.classicRider": "Classic rider",
+  "settings.classicRiderHint": "The old rider and bike, on your screen",
   "settings.climbFeelHint": "How much of each climb the trainer simulates — 100 % is the real gradient. Your speed stays the same. Also in the ride menu. Not used with virtual shifting: the gears do it.",
   "keys.lane": "Change lane",
   "keys.race": "Join / leave a race",

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WORLD_STAMP, hasClassicRider, ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
+import { WORLD_STAMP, classicRiderChoice, hasClassicRider, ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
 
 // Tuesday 10 Nov 2026, 18:00 local: hits none of the time-based ones.
 const at = (y, m, d, h = 18, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -251,4 +251,16 @@ test("hasClassicRider: true once earned, false without or without state", () => 
   assert.equal(hasClassicRider({ earned: {} }), false);
   assert.equal(hasClassicRider(null), false);
   assert.equal(hasClassicRider(undefined), false);
+});
+
+test("classicRiderChoice: offered once earned, on only when chosen", () => {
+  const earned = { earned: { classicRider: 5 } };
+  assert.deepEqual(classicRiderChoice(earned, "on"), { available: true, on: true });
+  assert.deepEqual(classicRiderChoice(earned, "off"), { available: true, on: false });
+  assert.deepEqual(classicRiderChoice(earned, null), { available: true, on: false });
+});
+
+test("classicRiderChoice: a stored on without the achievement stays off and hidden", () => {
+  assert.deepEqual(classicRiderChoice({ earned: {} }, "on"), { available: false, on: false });
+  assert.deepEqual(classicRiderChoice(null, "on"), { available: false, on: false });
 });

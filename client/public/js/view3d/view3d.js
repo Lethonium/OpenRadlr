@@ -315,6 +315,7 @@ export class View3D {
   /** The last frame's draw calls and triangles before the post chain (the dev `?stats` readout); null before one. */
   frameStats = null;
   /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
+  #classicRider = false;
   #sideAhead = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
@@ -378,6 +379,11 @@ export class View3D {
     this.crowd = world.crowd ?? { people: [], figure: "person" };
     /** What hides a label: the ground and the plots' boxes, built once per world. */
     this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
+  }
+
+  /** Draws my own rider as the classic cyclist (the old rider and bike) on this screen; the others keep the new look. */
+  setClassicRider(on) {
+    this.#classicRider = Boolean(on);
   }
 
   /** "auto" (by local clock), "day", "golden", "dusk" or "night". */
@@ -649,7 +655,7 @@ export class View3D {
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
       const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
       if (!gym) {
-        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), tint: linearOf(tint), ghost: Boolean(rider.ghost) });
+        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), tint: linearOf(tint), ghost: Boolean(rider.ghost), classic: rider.id === myId && this.#classicRider });
         continue;
       }
       athletes.push({
@@ -699,6 +705,7 @@ export class View3D {
           grade: 0,
           tint: linearOf(tint),
           ghost: false,
+          classic: mine && this.#classicRider,
           // In my own point of view the camera sits in my head: the body is left out, the bike stays.
           hideBody: mine && this.camera.mode === "pov",
         });

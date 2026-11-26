@@ -4,7 +4,7 @@
  * rest are cheap instanced riders. Ghosts are always full cyclists, drawn see-through, and count toward neither.
  * Without a shadow map a dark disc under each drawn rider stands in for the shadow.
  *
- * A full cyclist is pooled by rider id: a rider that is not full for `POOL_DELAY` seconds is taken out of the scene and
+ * A full cyclist is pooled by rider id and style (rigged or classic, so a flip of the style releases the old one): a rider that is not full for `POOL_DELAY` seconds is taken out of the scene and
  * kept on a short free list, so one that comes back is not rebuilt; the oldest beyond `POOL_SIZE` are freed. The jersey
  * is painted from the tint (the colour code) and repainted when the tint changes.
  *
@@ -15,6 +15,7 @@
  */
 import * as THREE from "../../three.js";
 import { createCyclist } from "../assets/riders/cyclist.js";
+import { createClassicCyclist } from "../assets/riders/classicCyclist.js";
 import { bakeCheapRiders } from "../assets/riders/cheapRider.js";
 import { kitTexture } from "../assets/riders/kitPainter.js";
 import { lookOf } from "../assets/riders/look.js";
@@ -58,6 +59,7 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {number[]} tint linear 0-1 jersey colour
  * @property {boolean} ghost
  * @property {number} [lookId] the id the look, kit and seed come from (default `id`): the studio's coaches have one id per floor but one look
+ * @property {boolean} [classic] drawn as the classic cyclist (the old rider and bike) instead of the rigged one
  * @property {boolean} [hideBody] the rider is not drawn, its bike is (my own point of view in the studio)
  */
 
@@ -111,10 +113,19 @@ export function createRiderLayer({ settings, uniforms, track }) {
     return target.setFromEuler(euler);
   };
 
-  /** Dresses a cyclist in the jersey of `tint`, swapping out the old kit. */
+  /** The pool key of a rider's cyclist: the id, with a suffix for the classic style. */
+  const poolKey = (rider) => (rider.classic ? `${rider.id}c` : rider.id);
+
+  /** Dresses a cyclist in the jersey of `tint`, swapping out the old kit (the classic jersey is vertex-coloured). */
   const paint = (record, tint) => {
     const key = `${record.lookId}|${tint.join(",")}`;
     if (record.kitKey === key) return;
+    if (record.classic) {
+      record.kit ??= createOwner(track);
+      record.cyclist?.setPrimary(hexOf(tint));
+      record.kitKey = key;
+      return;
+    }
     const previous = record.kit;
     record.kit = createOwner(track);
     const texture = kitTexture({ ...lookOf(record.lookId), primary: hexOf(tint) }, record.kit.own);
@@ -125,10 +136,11 @@ export function createRiderLayer({ settings, uniforms, track }) {
     previous?.disposeAll();
   };
 
-  const create = (id, tint, lookId = id) => {
-    const record = { id, lookId, bodyHidden: false, bodyMeshes: [], owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
+  const create = (id, tint, lookId = id, classic = false) => {
+    const record = { id, key: classic ? `${id}c` : id, classic, lookId, bodyHidden: false, bodyMeshes: [], owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
     paint(record, tint);
-    record.cyclist = createCyclist({ ...lookOf(lookId), primary: hexOf(tint) }, { own: record.owner.own, uniforms, seed: lookId, texture: record.texture });
+    const look = { ...lookOf(lookId), primary: hexOf(tint) };
+    record.cyclist = classic ? createClassicCyclist(look, { own: record.owner.own, uniforms, seed: lookId }) : createCyclist(look, { own: record.owner.own, uniforms, seed: lookId, texture: record.texture });
     record.cyclist.object.traverse((child) => child.isMesh && record.casts.set(child, child.castShadow));
     record.cyclist.rider.object.traverse((child) => child.isMesh && record.bodyMeshes.push(child));
     return record;
@@ -165,12 +177,16 @@ export function createRiderLayer({ settings, uniforms, track }) {
 
   /** The cyclist for this entry: the one in the scene, one off the free list, or a new one. */
   const acquire = (rider) => {
-    let record = active.get(rider.id);
+    const key = poolKey(rider);
+    // The other style of the same rider is dropped at once: the style flipped, one cyclist stays.
+    const other = active.get(poolKey({ id: rider.id, classic: !rider.classic }));
+    if (other) release(other);
+    let record = active.get(key);
     if (!record) {
-      record = free.get(rider.id);
-      if (record) free.delete(rider.id);
-      else record = create(rider.id, rider.tint, rider.lookId ?? rider.id);
-      active.set(rider.id, record);
+      record = free.get(key);
+      if (record) free.delete(key);
+      else record = create(rider.id, rider.tint, rider.lookId ?? rider.id, Boolean(rider.classic));
+      active.set(key, record);
       object.add(record.cyclist.object);
     }
     paint(record, rider.tint);
@@ -180,9 +196,9 @@ export function createRiderLayer({ settings, uniforms, track }) {
   };
 
   const release = (record) => {
-    active.delete(record.id);
+    active.delete(record.key);
     object.remove(record.cyclist.object);
-    free.set(record.id, record);
+    free.set(record.key, record);
     while (free.size > POOL_SIZE) {
       const [oldest] = free.keys();
       destroy(free.get(oldest));
@@ -344,7 +360,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
     /** What was drawn last frame, for tests and the readout. */
     stats: () => ({ ...counts }),
     /** The full cyclist drawn for this rider id last frame, or null. */
-    cyclistOf: (id) => (active.get(id)?.drawn ? active.get(id).cyclist : null),
+    cyclistOf: (id) => [active.get(id), active.get(`${id}c`)].find((record) => record?.drawn)?.cyclist ?? null,
     /** The vehicle asset drawn for this vehicle id last frame, or null. */
     vehicleOf: (id) => [...vehicles.values()].find((record) => record.drawn && record.key.startsWith(`${id}|`))?.vehicle ?? null,
     /** The rig of a seated rider drawn last frame, or null. */

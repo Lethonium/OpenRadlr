@@ -204,6 +204,7 @@
     <link rel="modulepreload" href="js/view3d/assets/owner.js" />
     <link rel="modulepreload" href="js/view3d/assets/riders/bicycle.js" />
     <link rel="modulepreload" href="js/view3d/assets/riders/cheapRider.js" />
+    <link rel="modulepreload" href="js/view3d/assets/riders/classicCyclist.js" />
     <link rel="modulepreload" href="js/view3d/assets/riders/cyclist.js" />
     <link rel="modulepreload" href="js/view3d/assets/riders/kitPainter.js" />
     <link rel="modulepreload" href="js/view3d/assets/riders/look.js" />
@@ -639,6 +640,12 @@
                   <label class="setting-row">
                     <span class="setting-label" data-i18n="rider.autoPause">Auto-pause when I stop</span>
                     <input id="auto-pause" type="checkbox" />
+                  </label>
+                  <label id="classic-rider-row" class="setting-row" hidden>
+                    <span class="setting-label"><span data-i18n="settings.classicRider">Classic rider</span>
+                      <span class="setting-desc" data-i18n="settings.classicRiderHint">The old rider and bike, on your screen</span>
+                    </span>
+                    <input id="classic-rider" type="checkbox" />
                   </label>
                   <div class="setting-row setting-row-wide ride-only" id="difficulty-row">
                     <span class="setting-label"><span id="difficulty-label" data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value" for="difficulty">50 %</output></span>
