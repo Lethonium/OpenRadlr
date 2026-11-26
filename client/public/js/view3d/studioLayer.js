@@ -1,20 +1,13 @@
 /**
- * The spin studio building in the valley, as a layer of the main-thread view
- * (like the statues): the shell's base once, a storey and a room per floor,
- * the roof on top. The floor count follows the studio's rooms, so nothing of
- * it is baked into the world chunks. Local frame as in the studio: riders
- * face −Z, up is +Y; the site gives its origin and yaw.
+ * Where the spin studio's floors and riders are, with no drawing: the floor count follows the studio's rooms (and the
+ * riders), so nothing of it is baked into the world chunks. The scene draws the building (scene/studioBuildingLayer.js)
+ * and the riders (riderLayer). Local frame as in the studio: riders face −Z, up is +Y; the site gives its origin and yaw.
  */
-import { multiply, placement, transformPoint } from "./math.js";
-import { buildStudioShell } from "./studioBuilding.js";
-import { buildStudioRoom } from "./studioRoom.js";
+import { placement, transformPoint } from "./math.js";
 import { FLOOR_HEIGHT, INSTRUCTOR, SLAB, coachId, seatPosition } from "./studioLayout.js";
 
 /** The building never has fewer storeys than this, so it reads as a building. */
 const MIN_FLOORS = 2;
-const CLOSED_TINT = Object.freeze([0.3, 0.32, 0.36]);
-const CLOSED_GLASS = Object.freeze({ alpha: 0.75, tint: [0.25, 0.3, 0.36] });
-const OPEN_GLASS = Object.freeze({ alpha: 0.12, tint: [1, 1, 1] });
 
 /** Storeys drawn for `rooms` studio rooms. */
 export function floorCount(rooms) {
@@ -101,63 +94,5 @@ export class StudioFloors {
       placed.push({ rider: { id: coachId(floor), lookId: INSTRUCTOR.id, coach: true, power: 1, speed: 0, studio: { room: floor, seat: -1 } }, position, forward: forwardOf(yaw), yaw });
     }
     return placed;
-  }
-}
-
-/**
- * The renderer-drawn studio of the old view (`view3d.js`), until the Three.js scene takes over: the floors plus the
- * building's meshes. Its coaches keep the instructor's id, as the old view draws them by it.
- */
-export class StudioLayer extends StudioFloors {
-  #renderer;
-  #site;
-  #handles;
-
-  /**
-   * @param {object} renderer uploads and draws meshes (the WebGL one, or a fake in tests)
-   * @param {{position: number[], yaw: number}} site from `studioSite`
-   */
-  constructor(renderer, site) {
-    super(site);
-    this.#renderer = renderer;
-    this.#site = site;
-    const shell = buildStudioShell();
-    const room = buildStudioRoom();
-    const up = (mesh) => renderer.upload(mesh);
-    this.#handles = { base: up(shell.base), floor: up(shell.floor), roof: up(shell.roof), glass: up(shell.glass), room: up(room.room), accents: up(room.accents) };
-  }
-
-  coaches() {
-    return super.coaches().map((placed) => ({ ...placed, rider: { ...placed.rider, id: INSTRUCTOR.id } }));
-  }
-
-  /** "opaque": base, storeys, rooms, roof. "glass": the front panes, after every opaque mesh. */
-  draw(pass, _ctx) {
-    const r = this.#renderer;
-    const h = this.#handles;
-    const open = (floor) => floor < this.open;
-    if (pass === "opaque") {
-      r.draw(h.base, floorTransform(this.#site, 0));
-      for (let floor = 0; floor < this.floors; floor += 1) {
-        const model = floorTransform(this.#site, floor);
-        r.draw(h.floor, model);
-        const at = multiply(model, placement([0, SLAB, 0]));
-        if (open(floor)) {
-          r.draw(h.room, at);
-          r.drawBright(h.accents, at, 0.8);
-        } else {
-          r.draw(h.room, at, CLOSED_TINT);
-        }
-      }
-      r.draw(h.roof, floorTransform(this.#site, this.floors));
-    } else if (pass === "glass") {
-      for (let floor = 0; floor < this.floors; floor += 1) {
-        r.drawTransparent(h.glass, floorTransform(this.#site, floor), open(floor) ? OPEN_GLASS : CLOSED_GLASS);
-      }
-    }
-  }
-
-  dispose() {
-    for (const handle of Object.values(this.#handles)) this.#renderer.dispose(handle);
   }
 }

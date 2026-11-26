@@ -2,7 +2,7 @@
  * The post-processing chain, ported from the reference renderer without the
  * comic ink pass: atmosphere (occlusion, sun rays, far depth of field), bloom,
  * then tone mapping with a colour grade. It starts from the engine's scene
- * target, which the world and the adapter's overlay passes have drawn into.
+ * target, which the scene has drawn into.
  */
 import * as THREE from "../../three.js";
 import { EffectComposer } from "../../../vendor/three/addons/postprocessing/EffectComposer.js";

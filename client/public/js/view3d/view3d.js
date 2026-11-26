@@ -7,39 +7,20 @@ import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "./clips.js";
 import * as THREE from "../three.js";
-import { TIME_MODES, TIME_PRESETS, environmentAt, resolvedLight, resolvePreset } from "../world/daylight.js";
+import { TIME_MODES, TIME_PRESETS, environmentAt, resolvePreset } from "../world/daylight.js";
 import { SEASONS } from "../world/seasons.js";
 import { precipitationAt, weatherFor } from "../world/weather.js";
-import { sunShadowMatrix } from "./lighting.js";
-import { invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
-import { ThreeRenderer } from "./threeRenderer.js";
+import { lerp3, lookAt, multiply, normalize, perspective, placement, scale, sub, transformPoint } from "./math.js";
 import { cameraFromMatrices } from "./engine/camera.js";
 import { engineFor } from "./engine/engine.js";
 import { createWorldScene } from "./scene/worldScene.js";
 import { createTracker } from "./scene/tracker.js";
-import {
-  RIDER_GEOMETRY,
-  VARIANT_COUNT,
-  WHEEL_HUBS,
-  buildBike,
-  buildCrankset,
-  buildFoot,
-  buildRiderShadow,
-  buildShin,
-  buildShoe,
-  buildThigh,
-  buildWheel,
-  legPose,
-  ridingBodyParts,
-  riderLook,
-  uploadBodyParts,
-  variantLook,
-} from "./riderModel.js";
+import { RIDER_GEOMETRY } from "./riderModel.js";
 import { blend, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
 import { PLINTHS, statueSlots } from "./statues.js";
-import { INSTRUCTOR } from "./studioLayout.js";
-import { StudioLayer } from "./studioLayer.js";
+import { isCoach } from "./studioLayout.js";
+import { StudioFloors } from "./studioLayer.js";
 import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
@@ -343,8 +324,6 @@ export class View3D {
   /** The spin studio building of the valley, null where the world has no site for it. */
   #studio = null;
   #studioSite = null;
-  #pedalPhase = new Map();
-  #wheelPhase = new Map();
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
   #clips = new Map();
   #lastTime = null;
@@ -364,11 +343,10 @@ export class View3D {
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
-   * @param {{renderer?: object, engine?: object}} [options] `renderer` replaces the adapter's (tests),
-   *   `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
+   * @param {{engine?: object, weather?: object}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
    *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null, engine = null, weather = null } = {}) {
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -380,13 +358,12 @@ export class View3D {
     this.network = null;
     // One engine per canvas, shared with every other view on it and never disposed here.
     this.engine = engine ?? engineFor(canvas);
-    this.renderer = renderer ?? new ThreeRenderer(canvas, { renderer: this.engine.renderer });
     this.engine.setQuality(qualitySettings(this.quality));
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
     this.tracker = createTracker();
     this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.terrain?.seed ?? 0 };
-    /** The world as a Three.js scene: ground, sea, sky and sun, drawn before the adapter's riders and features. */
+    /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
     this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
     this.worldCamera = new THREE.PerspectiveCamera();
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
@@ -395,32 +372,12 @@ export class View3D {
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];
     this.#studioSite = world.studio ?? null;
-    this.#studio = world.studio ? new StudioLayer(this.renderer, world.studio) : null;
-
-    this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
-
+    this.#studio = world.studio ? new StudioFloors(world.studio) : null;
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
     this.crowd = world.crowd ?? { people: [], figure: "person" };
-    this.bodies = [];
-    this.bodyParts = [];
-    this.thighs = [];
-    this.shins = [];
-    for (let i = 0; i < VARIANT_COUNT; i += 1) {
-      const look = variantLook(i);
-      this.bodies.push(this.renderer.upload(buildBike(look)));
-      this.bodyParts.push(uploadBodyParts(this.renderer, look));
-      this.thighs.push(this.renderer.upload(buildThigh(look)));
-      this.shins.push(this.renderer.upload(buildShin(look)));
-    }
-    this.foot = this.renderer.upload(buildFoot());
-    this.shoe = this.renderer.upload(buildShoe());
-    this.crankset = this.renderer.upload(buildCrankset());
-    this.wheel = this.renderer.upload(buildWheel());
-    this.riderShadow = this.renderer.upload(buildRiderShadow());
     /** What hides a label: the ground and the plots' boxes, built once per world. */
     this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
-    this.identity = placement([0, 0, 0]);
   }
 
   /** "auto" (by local clock), "day", "golden", "dusk" or "night". */
@@ -579,44 +536,6 @@ export class View3D {
     return { rider, ...at, forward: back ? scale(at.forward, -1) : at.forward };
   }
 
-  /** Advances a pedal phase (radians) by `cadence` rpm over `dt` seconds. */
-  #pedal(id, cadence, dt) {
-    const phase = ((this.#pedalPhase.get(id) ?? id) + (cadence / 60) * Math.PI * 2 * dt) % (Math.PI * 2);
-    this.#pedalPhase.set(id, phase);
-    return phase;
-  }
-
-  /**
-   * Crankset and both pedalling legs of one rider, hanging off `model` (the
-   * solo rider's frame: forward −Z, `hip` and `bottomBracket` as in the solo
-   * geometry). A seat in a vehicle supplies a `model` that puts that frame's
-   * hip on the seat.
-   */
-  #legs(model, look, phase, hip = RIDER_GEOMETRY.hip, bottomBracket = RIDER_GEOMETRY.bottomBracket) {
-    const joint = (at, angle) => multiply(model, multiply(placement(at), rotationXAbout([0, 0, 0], angle)));
-    const [, hy, hz] = hip;
-    const limbs = [];
-    // Right leg (+X, chainring side) on the crank arm that `buildCrankset` points down at phase 0.
-    for (const [side, offset] of [
-      [0.12, 0],
-      [-0.12, Math.PI],
-    ]) {
-      const pose = legPose(phase + offset);
-      if (offset === 0) limbs.push({ mesh: this.crankset, model: joint(bottomBracket, pose.crankAngle) });
-      limbs.push(
-        { mesh: this.thighs[look.variant], model: joint([side, hy, hz], pose.thighAngle) },
-        { mesh: this.shins[look.variant], model: joint([side, pose.knee[1], pose.knee[2]], pose.shinAngle) },
-        { mesh: this.foot, model: joint([side, pose.ankle[1], pose.ankle[2]], pose.footAngle) },
-      );
-    }
-    return limbs;
-  }
-
-  /** Upper-body parts of a rider in the riding pose, hung off `model` (the bike frame). */
-  #torso(model, look) {
-    return ridingBodyParts(look).map(({ mesh, model: local }) => ({ mesh: this.bodyParts[look.variant].get(mesh), model: multiply(model, local) }));
-  }
-
   /**
    * A workout rider's pose: their exercise's clip, faded over from the last one, mirrored on the left side.
    * `plantMesh` is the clip's planted mesh for that side, which the athlete layer holds still.
@@ -672,20 +591,6 @@ export class View3D {
     return spots;
   }
 
-  #riderParts(rider, position, forward, cadence, dt) {
-    const look = riderLook(rider.id);
-    const pitch = Math.asin(Math.max(-1, Math.min(1, forward[1])));
-    const model = multiply(placement(position, yawFor(forward), pitch), scaling(look.scale));
-
-    const limbs = this.#legs(model, look, this.#pedal(rider.id, cadence, dt));
-
-    // Rolling forward (−Z) turns the wheel backwards around X.
-    const spin = (this.#wheelPhase.get(rider.id) ?? 0) - ((rider.speed ?? 0) * dt) / (RIDER_GEOMETRY.wheelRadius * look.scale);
-    this.#wheelPhase.set(rider.id, spin % (Math.PI * 2));
-    const wheels = WHEEL_HUBS.map((hub) => multiply(model, multiply(placement(hub), rotationXAbout([0, 0, 0], spin))));
-    return { model, limbs, torso: this.#torso(model, look), wheels, variant: look.variant };
-  }
-
   /**
    * Draws one frame.
    * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, utcSeconds?: number, colors: {me: string, human: string, bot: string}}} frame
@@ -700,7 +605,6 @@ export class View3D {
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
     this.engine.resize(width, height, ratio);
-    this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
     const onRoads = riders.filter((rider) => !rider.studio).map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
@@ -726,16 +630,15 @@ export class View3D {
 
     const lens = this.lens;
     const preset = resolvePreset(this.timeMode);
-    const light = resolvedLight(preset, this.biome, lens.haze);
     const [ox, oy] = this.viewOffset;
     const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
     const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
     const view = lookAt(this.camera.eye, this.camera.target);
     const viewProjection = multiply(projection, view);
-    const inverseViewProjection = invert(viewProjection);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
-    const visible = [];
+    // The coach wears the theme's accent, the bot grey where the colours have none.
+    const coachTint = colors.accent ? hexToRgb(colors.accent) : tints.bot;
     // Road riders go to the world scene's rider layer, workout riders (at the gym) to its athlete layer.
     const roadRiders = [];
     const athletes = [];
@@ -777,19 +680,30 @@ export class View3D {
       vehicles.push({ id: vehicle.id, kind: vehicle.kind, layout, position, forward, speed: vehicle.at.rider.speed ?? 0, seats });
     }
 
-    // The spin studio's riders sit on their bikes in the building, with the coach on every open floor.
+    // The spin studio's riders sit on their bikes in the building, with the coach on every open floor: ordinary riders of the layer.
+    let studio;
     if (this.#studio) {
-      const seated = this.#studio.riders(riders);
-      for (const { rider, position, forward, yaw } of [...seated, ...this.#studio.coaches()]) {
+      for (const { rider, position, forward } of [...this.#studio.riders(riders), ...this.#studio.coaches()]) {
         const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
         const mine = rider.id === myId;
-        if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && rider.id !== INSTRUCTOR.id)) continue;
-        const tint = rider.id === INSTRUCTOR.id ? tints.bot : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-        const parts = this.#riderParts(rider, position, forward, rider.cadence ?? (rider.power > 0 ? 85 : 0), dt);
-        // In my own point of view the camera sits in my head: the body is left out, the bike stays.
-        const hidden = mine && this.camera.mode === "pov" ? { torso: [], limbs: [] } : {};
-        visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts, ...hidden });
+        if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && !isCoach(rider.id))) continue;
+        const tint = isCoach(rider.id) ? coachTint : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
+        roadRiders.push({
+          id: rider.id,
+          lookId: rider.lookId,
+          me: mine,
+          position,
+          forward,
+          cadence: rider.cadence ?? (rider.power > 0 ? 85 : 0),
+          speed: rider.speed ?? 0,
+          grade: 0,
+          tint: linearOf(tint),
+          ghost: false,
+          // In my own point of view the camera sits in my head: the body is left out, the bike stays.
+          hideBody: mine && this.camera.mode === "pov",
+        });
       }
+      studio = { floors: this.#studio.floors, open: this.#studio.open };
     }
 
     const eye = this.camera.eye;
@@ -807,35 +721,15 @@ export class View3D {
 
     const lemons = me && !me.gym ? this.#lemonFrames(me.rider, timeS) : [];
 
-    // Pass 0: shadow map around my rider (or the camera target), my riders.
-    if (this.shadowsEnabled && shadows && lens.shadows) {
-      const focus = me ? me.position : this.camera.target;
-      const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
-      this.renderer.beginShadows(lightMatrix);
-      for (const part of visible) {
-        if (Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
-        this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
-        for (const piece of part.torso) this.renderer.drawShadowCaster(piece.mesh, piece.model);
-        for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
-        for (const wheel of part.wheels) this.renderer.drawShadowCaster(this.wheel, wheel);
-      }
-      this.renderer.endShadows();
-    }
-
-    // The world first: ground, sea and sky from the Three.js scene into the engine's target. The adapter then
-    // draws the riders and features over it (overlay) and the engine's post chain presents the whole frame.
+    // The Three.js scene into the engine's target (ground, sea, sky, riders, features), then the post chain presents it.
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
-    // Passes 1 and 2: the lit features and riders, then the soft contact shadows (rivers are drawn by the new scene).
-    const scene = { light, lens, shadows, visible };
-    this.#drawWorld(scene, { viewProjection, inverseViewProjection, view, projection, eye });
-
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
-    if (me?.gym && this.sideView && this.renderer.viewport) {
+    if (me?.gym && this.sideView) {
       const box = this.sideView.getBoundingClientRect();
       const canvasBox = this.canvas.getBoundingClientRect?.() ?? { left: 0, top: 0, width, height };
       const rect = insetViewport(box, canvasBox, ratio);
@@ -846,29 +740,17 @@ export class View3D {
         const side = sideCameraPose(me.gym.spot, this.#sideAhead);
         const sideProjection = perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far);
         const sideView = lookAt(side.eye, side.target);
-        const sideViewProjection = multiply(sideProjection, sideView);
-        this.renderer.viewport(rect);
         this.sideCamera ??= new THREE.PerspectiveCamera();
         this.#aim(this.sideCamera, sideView, sideProjection, lens, rect.width / rect.height);
         // My rider alone: the next spots would stand in the way.
         this.worldScene.isolateAthlete(myId);
         this.engine.renderScene(this.worldScene.scene, this.sideCamera, rect);
         this.worldScene.isolateAthlete(null);
-        this.#drawWorld(
-          { ...scene, visible: [] },
-          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), view: sideView, projection: sideProjection, eye: side.eye },
-        );
-        this.renderer.viewport(null);
       }
     }
 
     this.#updateLabels(placed, myId, viewProjection, width, height, this.worldScene.seatHeads(), timeS);
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
-    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
-      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
-    }
-    // Closes the last pass (the side view, when a workout drew one), then the post chain draws the frame.
-    this.renderer.end();
     this.frameStats = this.engine.frameStats?.() ?? null;
     this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
   }
@@ -880,35 +762,12 @@ export class View3D {
     return route ? route.gradeAt(rider.distance) : 0;
   }
 
-  /** Points a Three.js camera where the adapter's matrices look, through the lens' near and far planes. */
+  /** Points a Three.js camera where the view's matrices look, through the lens' near and far planes. */
   #aim(camera, view, projection, lens, aspect) {
     cameraFromMatrices(camera, view, projection);
     camera.near = lens.near;
     camera.far = lens.far;
     camera.aspect = aspect;
-  }
-
-  /**
-   * Sky, the lit world and the blended pass, as seen through `view`: drawn
-   * once for the screen and, in a workout, once more for the side view.
-   */
-  #drawWorld({ light, shadows, visible }, { viewProjection, inverseViewProjection, view, projection, eye }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, view, projection, camera: eye, ...light, shadowStrength: shadows ? light.shadowStrength : 0, overlay: true });
-    for (const part of visible) {
-      this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
-      for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
-      for (const limb of part.limbs) this.renderer.draw(limb.mesh, limb.model);
-      for (const wheel of part.wheels) this.renderer.draw(this.wheel, wheel);
-    }
-
-    this.#studio?.draw("opaque", eye);
-
-    // Pass 2: blended — soft contact shadows under the bikes.
-    for (const part of visible) {
-      if (part.fromCamera > 150) continue;
-      this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
-    }
-    this.#studio?.draw("glass", eye);
   }
 
   /** The lemons not yet collected near my rider on my route for the scene: `{position, yaw}`, spinning slowly, bobbing at handlebar height. */
@@ -983,9 +842,6 @@ export class View3D {
 
   dispose() {
     this.#studio?.dispose();
-    for (const handle of [...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, this.crankset, this.wheel, this.riderShadow]) {
-      this.renderer.dispose(handle);
-    }
     this.#labels.forEach((element) => element.remove());
     this.#labels.clear();
     // The world scene is this view's; the engine stays for the next view on the canvas.

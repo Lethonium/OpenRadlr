@@ -3076,7 +3076,8 @@ function studioFrame() {
   const coachCadence = position?.cadence ? (position.cadence[0] + position.cadence[1]) / 2 : 75;
   if (app.view3d) {
     app.view3d.setStudioRooms(studio.state.rooms);
-    app.view3d.render({ riders: studioSceneRiders(studio.state), myId: app.riderId, myCadence: cadence, timeS: time, colors: themeColors() });
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+    app.view3d.render({ riders: studioSceneRiders(studio.state), myId: app.riderId, myCadence: cadence, timeS: time, colors: { ...themeColors(), accent } });
   } else if (app.studioView) {
     const colors = themeColors();
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();

@@ -1,30 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { StudioFloors, StudioLayer, coachWorld, floorCount, floorTransform, seatWorld } from "../../public/js/view3d/studioLayer.js";
+import { StudioFloors, coachWorld, floorCount, floorTransform, seatWorld } from "../../public/js/view3d/studioLayer.js";
 import { FLOOR_HEIGHT, INSTRUCTOR, coachId, isCoach } from "../../public/js/view3d/studioLayout.js";
 
 const site = { position: [100, 20, -50], yaw: 0 };
 const turned = { position: [100, 20, -50], yaw: Math.PI / 2 };
-
-class FakeRenderer {
-  uploads = [];
-  draws = [];
-  transparent = [];
-  upload(mesh) {
-    this.uploads.push(mesh);
-    return { id: this.uploads.length };
-  }
-  dispose() {}
-  draw(handle, model, tint) {
-    this.draws.push({ handle, model, tint });
-  }
-  drawBright(handle, model) {
-    this.draws.push({ handle, model, bright: true });
-  }
-  drawTransparent(handle, model, look) {
-    this.transparent.push({ handle, model, look });
-  }
-}
 
 test("the building has at least two floors", () => {
   assert.equal(floorCount(0), 2);
@@ -54,16 +34,16 @@ test("the site's yaw turns the seat offset around the site", () => {
 });
 
 test("studio riders face the road, the site's -Z", () => {
-  const layer = new StudioLayer(new FakeRenderer(), site);
+  const layer = new StudioFloors(site);
   const [placed] = layer.riders([{ id: 1, studio: { room: 0, seat: 0 } }]);
   assert.deepEqual(placed.forward.map((v) => Math.round(v) + 0), [0, 0, -1]);
-  const [turnedPlaced] = new StudioLayer(new FakeRenderer(), turned).riders([{ id: 1, studio: { room: 0, seat: 0 } }]);
+  const [turnedPlaced] = new StudioFloors(turned).riders([{ id: 1, studio: { room: 0, seat: 0 } }]);
   assert.ok(Math.abs(turnedPlaced.forward[0] + 1) < 1e-4);
   assert.ok(Math.abs(turnedPlaced.forward[2]) < 1e-4);
 });
 
 test("a studio rider is placed at its seat and a road rider is left alone", () => {
-  const layer = new StudioLayer(new FakeRenderer(), site);
+  const layer = new StudioFloors(site);
   const placed = layer.riders([
     { id: 7, studio: { room: 2, seat: 5 } },
     { id: 8, route: null, distance: 10 },
@@ -74,39 +54,11 @@ test("a studio rider is placed at its seat and a road rider is left alone", () =
 });
 
 test("a rider in room 2 opens the third floor, so three coaches are not needed below", () => {
-  const layer = new StudioLayer(new FakeRenderer(), site);
+  const layer = new StudioFloors(site);
   layer.setRooms(3);
   assert.equal(layer.coaches().length, 0);
   layer.riders([{ id: 7, studio: { room: 2, seat: 5 } }]);
   assert.equal(layer.coaches().length, 3);
-});
-
-test("a closed floor draws its room darker, an open one with its bright accents", () => {
-  const fake = new FakeRenderer();
-  const layer = new StudioLayer(fake, site);
-  layer.setRooms(3);
-  layer.setOpen(1);
-  layer.draw("opaque", {});
-  assert.equal(fake.draws.filter((d) => d.bright).length, 1);
-  assert.equal(fake.draws.filter((d) => d.tint).length, 2);
-});
-
-test("the glass is drawn blended, darker on closed floors", () => {
-  const fake = new FakeRenderer();
-  const layer = new StudioLayer(fake, site);
-  layer.setRooms(2);
-  layer.setOpen(1);
-  layer.draw("glass", {});
-  assert.equal(fake.transparent.length, 2);
-  assert.ok(fake.transparent[1].look.alpha > fake.transparent[0].look.alpha);
-});
-
-test("a seat on a higher room grows the building, without being told the room count", () => {
-  const layer = new StudioLayer(new FakeRenderer(), site);
-  const [placed] = layer.riders([{ id: 9, studio: { room: 2, seat: 0 } }]);
-  assert.equal(layer.floors, 3);
-  assert.equal(layer.coaches().length, 3);
-  assert.ok(placed.position[1] < floorTransform(site, layer.floors)[13], "the rider sits below the roof");
 });
 
 // ---------- StudioFloors: the placement without a renderer

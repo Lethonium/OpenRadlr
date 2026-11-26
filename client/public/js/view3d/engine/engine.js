@@ -1,6 +1,6 @@
 /**
  * One engine per canvas. It owns the `WebGLRenderer`, the scene target the
- * world and the adapter's overlay passes draw into, and the post chain that
+ * scene draws into, and the post chain that
  * presents it. Views on the same canvas (menu, ride, studio, gym) share it;
  * a view never disposes it.
  */
@@ -41,7 +41,7 @@ export class Engine {
     // The world's sun casts soft shadows; a level without a shadow map just leaves `castShadow` off.
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    // Sizes are in device pixels, as the adapter's callers pass them.
+    // Sizes are CSS pixels; the ratio scales the drawing buffer.
     this.renderer.setPixelRatio(1);
     this.settings = qualitySettings("high");
     this.size = { width: Math.max(1, canvas?.width ?? 1), height: Math.max(1, canvas?.height ?? 1) };
@@ -80,7 +80,7 @@ export class Engine {
     this.#post?.setSize(this.size.width, this.size.height);
   }
 
-  /** Binds the scene target and clears it; the adapter's overlay passes then draw into it. */
+  /** Binds the scene target and clears it; the scene is then drawn into it. */
   beginFrame() {
     const { renderer, target } = this;
     renderer.setRenderTarget(target);
