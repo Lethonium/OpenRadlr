@@ -1,7 +1,9 @@
 /**
  * The map's ground in tiles: 64 m squares painted once at 6 px/m and kept in an LRU of 64. A tile holds the
  * ground (from the sampler), rivers, roads (the world's own road mesh), hedges and walls, and the scenery as
- * sprites. A tile records the sprites it drew (or missed); it is remade when the store has a better one.
+ * sprites. The ground (the costly part) is kept in a canvas of its own; a tile records the sprites it drew (or
+ * missed) and, when the store has a better one, only redraws the scenery over the kept ground. The ground is
+ * repainted when the season, the time of day or the (coarsely quantised) sun changes.
  */
 import { ROAD_KIND } from "../world/plan/roadStrips.js";
 import { css, toSrgb } from "./look2d.js";
@@ -16,6 +18,9 @@ const STEP = 2;
 /** Scenery this far outside a tile is still drawn into it, so crowns reach over the seams. */
 const MARGIN_M = 12;
 const TAU = Math.PI * 2;
+/** The sun's direction is rounded to this step per component for the ground's light, so every tile of a view is lit alike and the ground is not repainted for a sun that has barely moved (about every ten minutes in `auto`). */
+const SUN_STEP = 0.05;
+const quantisedSun = (sun) => sun.map((v) => Math.round(v / SUN_STEP) * SUN_STEP);
 
 /** After dark the ground loses this much of its colour before the night tint (which is blue) multiplies it, so it reads blue like the road. */
 const NIGHT_DESATURATE = 0.7;
@@ -147,7 +152,7 @@ function spriteIndex() {
  * @param {{scene: object, index: {query: Function}, sampler: {color: Function, water: number}, store: {want: Function, get: Function}, createCanvas: (w: number, h: number) => object}} deps
  */
 export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
-  const tiles = new Map(); // key -> {canvas, used: Map<jobKey, sprite|null>, signature}
+  const tiles = new Map(); // key -> {canvas, ground, used: Map<jobKey, sprite|null>, signature}
   const sprites = spriteIndex();
   const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices, roadTriangles(scene.roads.strips));
   const riverBuckets = bucketTriangles(scene.rivers.strips.positions, scene.rivers.strips.indices);
@@ -273,27 +278,43 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
     }
   }
 
+  /** The scenery drawn over the kept ground into the tile's canvas; records the sprites it used. */
+  function compose(tile, tx, tz, look, priority) {
+    const ctx = tile.canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(tile.ground, 0, 0);
+    ctx.setTransform(MAP_TILE_PPM, 0, 0, MAP_TILE_PPM, -tx * MAP_TILE_M * MAP_TILE_PPM, -tz * MAP_TILE_M * MAP_TILE_PPM);
+    tile.used.clear();
+    paintScenery(ctx, tx, tz, look, tile.used, priority);
+  }
+
   function make(tx, tz, look, priority) {
-    const canvas = createCanvas(size, size);
-    const ctx = canvas.getContext("2d");
-    const used = new Map();
-    paintGround(ctx, tx, tz, look.sun, look.night);
+    const ground = createCanvas(size, size);
+    const ctx = ground.getContext("2d");
+    paintGround(ctx, tx, tz, quantisedSun(look.sun), look.night);
     ctx.setTransform(MAP_TILE_PPM, 0, 0, MAP_TILE_PPM, -tx * MAP_TILE_M * MAP_TILE_PPM, -tz * MAP_TILE_M * MAP_TILE_PPM);
     paintWater(ctx, `${tx},${tz}`);
     paintRoads(ctx, `${tx},${tz}`);
-    paintScenery(ctx, tx, tz, look, used, priority);
-    return { canvas, used, signature: signatureOf(look) };
+    const tile = { canvas: createCanvas(size, size), ground, used: new Map(), signature: signatureOf(look) };
+    compose(tile, tx, tz, look, priority);
+    return tile;
   }
 
-  const signatureOf = (look) => `${look.season}|${look.time}`;
-  const stale = (tile, look) => tile.signature !== signatureOf(look) || [...tile.used].some(([key, sprite]) => store.get(key) !== sprite);
+  const signatureOf = (look) => `${look.season}|${look.time}|${quantisedSun(look.sun).map((v) => v.toFixed(2))}`;
+  /** A sprite the tile missed (or drew as the day's) is there now; a sprite since evicted does not count, or the tile would ask for it again and again. */
+  const gainedSprite = (tile) => [...tile.used].some(([key, sprite]) => {
+    const now = store.get(key);
+    return now && now !== sprite;
+  });
 
   return {
-    /** The tile's canvas, made (or remade, when the look changed or a sprite it lacked has been baked) if needed. `priority`: its distance from the rider, metres. */
+    /** The tile's canvas, made if needed (its ground remade when the look changed, its scenery redrawn when a sprite it lacked has been baked). `priority`: its distance from the rider, metres. */
     tile(tx, tz, look, priority = 0) {
       const key = `${tx},${tz}`;
       let tile = tiles.get(key);
-      if (tile && !stale(tile, look)) {
+      if (tile && tile.signature === signatureOf(look)) {
+        if (gainedSprite(tile)) compose(tile, tx, tz, look, priority);
         tiles.delete(key);
         tiles.set(key, tile); // most recent last
         return tile.canvas;

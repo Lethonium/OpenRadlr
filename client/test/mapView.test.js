@@ -39,6 +39,9 @@ function fakeStore(have = null) {
   return store;
 }
 
+/** A tile is two canvases: the ground, and the scenery over it. */
+const tilesOf = (made) => made.length / 2;
+
 function make({ store = fakeStore(), indexOf = index, sampler = flat } = {}) {
   const made = [];
   const createCanvas = (w, h) => {
@@ -75,8 +78,8 @@ test("the first draw makes the tiles that cover the rotated view and no others",
     const first = Math.floor((me.x - corner) / MAP_TILE_M);
     const last = Math.floor((me.x + corner) / MAP_TILE_M);
     const possible = (last - first + 1) ** 2;
-    assert.ok(made.length >= 4, `heading ${heading}: ${made.length} tiles`);
-    assert.ok(made.length < possible, `heading ${heading}: ${made.length} of at most ${possible}`);
+    assert.ok(tilesOf(made) >= 4, `heading ${heading}: ${tilesOf(made)} tiles`);
+    assert.ok(tilesOf(made) < possible, `heading ${heading}: ${tilesOf(made)} of at most ${possible}`);
   }
 });
 
@@ -87,7 +90,7 @@ test("a view that points along the axes makes exactly the tiles it touches", () 
   const span = (lo, hi) => Math.floor(hi / MAP_TILE_M) - Math.floor(lo / MAP_TILE_M) + 1;
   const wanted = span(me.x - halfW, me.x + halfW) * span(me.z - up, me.z + down);
   // a tile whose edge lies exactly on the view's edge would not count, but the fixture does not hit that
-  assert.equal(made.length, wanted);
+  assert.equal(tilesOf(made), wanted);
 });
 
 test("a second draw at the same place makes no tiles", () => {
@@ -98,20 +101,67 @@ test("a second draw at the same place makes no tiles", () => {
   assert.equal(made.length, count);
 });
 
-test("a tile that missed a sprite is remade once the store has it", () => {
+/** A sampler that counts the colours asked of it. */
+const counting = () => {
+  const sampler = { ...flat, colors: 0, color: (...args) => ((sampler.colors += 1), flat.color(...args)) };
+  return sampler;
+};
+const archesDrawn = (made) => made.flatMap((canvas) => canvas.images).filter((entry) => entry.image.name === "route-arch").length;
+
+test("a tile that missed a sprite gets it drawn over its kept ground once the store has it", () => {
   const store = fakeStore([]);
-  const { view, made } = make({ store, indexOf: lonelyArch() });
+  const sampler = counting();
+  const { view, made } = make({ store, indexOf: lonelyArch(), sampler });
   frame(view);
-  const count = made.length;
+  const [count, colors] = [made.length, sampler.colors];
   const missed = store.wanted.some(({ job }) => job.id === "route-arch");
   assert.ok(missed, "the arch was asked for");
+  assert.equal(archesDrawn(made), 0);
   store.bake("route-arch");
   frame(view);
-  assert.equal(made.length, count + 1, "only the tile with the arch is remade");
-  const arches = made.flatMap((canvas) => canvas.images).filter((entry) => entry.image.name === "route-arch");
-  assert.equal(arches.length, 1);
+  assert.equal(archesDrawn(made), 1, "only the tile with the arch is redrawn");
+  assert.equal(made.length, count, "into the tile it has");
+  assert.equal(sampler.colors, colors, "the ground is not painted again");
   frame(view);
-  assert.equal(made.length, count + 1, "and once");
+  assert.equal(archesDrawn(made), 1, "and once");
+});
+
+test("the ground is painted once while sprites arrive one by one", () => {
+  const store = fakeStore([]);
+  const sampler = counting();
+  const { view } = make({ store, sampler });
+  frame(view);
+  const colors = sampler.colors;
+  assert.ok(colors > 0);
+  const ids = [...new Set(spriteJobs({ view: "top" }).map((job) => job.id))];
+  for (const id of ids) {
+    store.bake(id);
+    frame(view);
+  }
+  assert.equal(sampler.colors, colors);
+});
+
+test("a sprite evicted from the store does not make its tile ask for it again", () => {
+  const store = fakeStore();
+  const { view, made } = make({ store, indexOf: lonelyArch() });
+  frame(view);
+  const [count, asked] = [made.length, store.wanted.length];
+  store.baked.clear();
+  for (let k = 0; k < 3; k += 1) frame(view);
+  assert.equal(made.length, count);
+  assert.equal(store.wanted.length, asked, "no sprite is asked for again");
+});
+
+test("the sun, quantised, lights every tile alike and remakes them only when it has really moved", () => {
+  const sampler = counting();
+  const { view } = make({ sampler });
+  const sunAt = (shift) => ({ ...DAY, sun: DAY.sun.map((v, i) => (i === 0 ? v + shift : v)) });
+  frame(view, { look: sunAt(0) });
+  const colors = sampler.colors;
+  frame(view, { look: sunAt(0.004) });
+  assert.equal(sampler.colors, colors, "a sun that has barely moved changes nothing");
+  frame(view, { look: sunAt(0.3) });
+  assert.equal(sampler.colors, colors * 2, "a moved sun remakes every tile at once");
 });
 
 test("the sprites are asked for by their distance from the rider", () => {
@@ -137,7 +187,8 @@ test("a sprite swapped for its night variant remakes the tile that used it", () 
   const count = made.length;
   for (const [key] of store.baked) if (key.includes(":route-arch:")) store.baked.set(key, tiny("route-arch-night"));
   frame(view);
-  assert.equal(made.length, count + 1);
+  assert.equal(made.length, count);
+  assert.equal(made.flatMap((canvas) => canvas.images).filter((entry) => entry.image.name === "route-arch-night").length, 1);
 });
 
 test("riders are drawn with their sprites at 2.4 times, labels upright", () => {
@@ -177,6 +228,14 @@ test("a rider whose sprite is not baked yet is still drawn", () => {
   const { view } = make({ store });
   const screen = frame(view, { riders: [rider("b", 3, -6)] });
   assert.ok(screen.calls.arc >= 1);
+});
+
+test("a rider whose sprite is not baked yet is a dot in their own colour", () => {
+  const store = fakeStore();
+  store.noRiders = true;
+  const { view } = make({ store });
+  const screen = frame(view, { riders: [rider("b", 3, -6, { color: "#2f7de1" })] });
+  assert.ok(screen.fills.includes("#2f7de1"));
 });
 
 test("a ghost is drawn see-through", () => {
