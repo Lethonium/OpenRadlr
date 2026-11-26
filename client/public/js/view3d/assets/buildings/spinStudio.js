@@ -201,10 +201,12 @@ export function createStudioShell({ floors, own = (resource) => resource, unifor
     parts.push(box(W * 2, SLAB, depth, C(COL.slab), 0, y0 + SLAB / 2, mid));
     for (const side of [-1, 1]) parts.push(box(WALL, wallHeight, depth, C(COL.render), side * (W - WALL / 2 - 0.1), wallY, mid));
     parts.push(box(W * 2 - 0.2 - WALL * 2, wallHeight, WALL, C(COL.render), 0, wallY, B - WALL / 2));
+    // The mullions and rails go with the glass: a cutaway front is open.
+    if (!withGlass) continue;
     for (let x = -W + 0.5; x <= W - 0.5; x += 2) parts.push(box(0.12, wallHeight, 0.2, C(COL.frame), x, wallY, F + 0.12));
     parts.push(box(W * 2, 0.16, 0.22, C(COL.frame), 0, y0 + SLAB + 0.08, F + 0.12), box(W * 2, 0.16, 0.22, C(COL.frame), 0, y0 + FLOOR_HEIGHT - 0.08, F + 0.12));
   }
-  parts.push(box(1.8, 2.4, 0.1, C(COL.door), W - 2.2, SLAB + 1.2, F + 0.05));
+  if (withGlass) parts.push(box(1.8, 2.4, 0.1, C(COL.door), W - 2.2, SLAB + 1.2, F + 0.05));
   const top = floors * FLOOR_HEIGHT;
   if (roof) {
     parts.push(box(W * 2, SLAB, depth, C(COL.slab), 0, top + SLAB / 2, mid));
@@ -252,6 +254,8 @@ export function create({ track, uniforms, storeys = 1, open = true, cutaway = tr
   const floors = Math.max(1, Math.min(3, Math.round(storeys)));
   const object = new THREE.Group();
   object.name = "spin-studio";
+  // The bench camera stands on +z; the glass front (and the cutaway's open side) faces -z, so turn it round.
+  object.rotation.y = Math.PI;
   object.add(createStudioShell({ floors, own: owner.own, uniforms, roof: !cutaway, glass: !cutaway }).object);
   for (let s = 0; s < floors; s += 1) {
     const room = createStudioRoom({ own: owner.own, uniforms, ceiling: !cutaway });

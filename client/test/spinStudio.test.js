@@ -7,7 +7,7 @@ import { createOwner } from "../public/js/view3d/assets/owner.js";
 import { create, createStudioRoom, createStudioShell, meta } from "../public/js/view3d/assets/buildings/spinStudio.js";
 import { bikeGeometry } from "../public/js/view3d/assets/riders/bicycle.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
-import { FLOOR_HEIGHT, FOOTPRINT, ROOM, seatPosition } from "../public/js/view3d/studioLayout.js";
+import { FLOOR_HEIGHT, FOOTPRINT, ROOM, SLAB, seatPosition } from "../public/js/view3d/studioLayout.js";
 
 const EPS = 0.05;
 const room = (options = {}) => createStudioRoom({ own: (resource) => resource, uniforms: createSharedUniforms(), ...options });
@@ -117,4 +117,24 @@ test("the glass is light and clear", () => {
   const { material } = shell.glass[0];
   assert.ok(material.opacity <= 0.18, `opacity ${material.opacity}`);
   assert.ok(material.color.getHSL({}).l >= 0.6);
+});
+
+test("the workbench turns the glass front to the bench camera", () => {
+  const entry = create({ track: (resource) => resource, uniforms: createSharedUniforms() });
+  assert.equal(entry.object.rotation.y, Math.PI);
+});
+
+test("a shell without glass has no front frames either", () => {
+  const front = (shell) => {
+    let n = 0;
+    shell.object.updateMatrixWorld(true);
+    shell.object.traverse((child) => {
+      if (!child.isMesh || !child.geometry.attributes.position) return;
+      const p = child.geometry.attributes.position;
+      for (let i = 0; i < p.count; i += 1) if (Math.abs(p.getZ(i) - (FOOTPRINT.front + 0.12)) < 0.12 && p.getY(i) > SLAB + 0.5 && p.getY(i) < FLOOR_HEIGHT - 0.5 && Math.abs(p.getX(i)) < 6) n += 1;
+    });
+    return n;
+  };
+  assert.ok(front(createStudioShell({ floors: 1 })) > 0);
+  assert.equal(front(createStudioShell({ floors: 1, glass: false })), 0);
 });
