@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRoom, studioCamera } from "../public/js/view3d/studioScene.js";
 import { buildStudioRoom } from "../public/js/view3d/studioRoom.js";
 import { lookAt } from "../public/js/view3d/math.js";
+import { fakeEngine } from "./support/fakeEngine.js";
+import { coachId } from "../public/js/view3d/studioLayout.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
   const front = [0, 1, 2, 3, 4, 5, 6, 7].map(seatPosition);
@@ -41,75 +43,126 @@ test("the room mesh: walls and floor face into the room, accents glow separately
   }
 });
 
-test("the room-only view leaves me out in my own point of view", () => {
+test("the room-only view keeps my bike in my own point of view", () => {
   const placed = [
     { rider: { id: 7 }, position: seatPosition(3) },
     { rider: { id: 8 }, position: seatPosition(12) },
   ];
   const eye = studioCamera("pov", 3).eye;
-  assert.deepEqual(shownInRoom(placed, 7, eye, "seat").map(({ rider }) => rider.id), [7, 8]);
-  assert.deepEqual(shownInRoom(placed, 7, eye, "pov").map(({ rider }) => rider.id), [8]);
+  assert.deepEqual(shownInRoom(placed, 7, eye).map(({ rider }) => rider.id), [7, 8]);
 });
 
-class UploadOnlyRenderer {
-  frames = [];
-  ends = 0;
-  createShadowMap() {
-    return false;
-  }
-  upload(mesh) {
-    return mesh;
-  }
-  resize() {}
-  begin(frame) {
-    this.frames.push(frame);
-  }
-  end() {
-    this.ends += 1;
-  }
-  draw() {}
-  drawBright() {}
-  drawTransparent() {}
+const COLORS = { me: "#f00", human: "#0f0", bot: "#00f", accent: "#ff0" };
+const CANVAS = { clientWidth: 320, clientHeight: 200 };
+
+function frameOf(riders, extra = {}) {
+  return { riders, myId: 7, myCadence: 80, coachCadence: 90, timeS: 1, colors: COLORS, ...extra };
 }
 
+const rider = (id, seat) => ({ id, name: `R${id}`, is_bot: false, seat, cadence: 80, speed: 5 });
+
+/** Runs `body` with a document that makes label elements, and puts it back. */
+function withDocument(body) {
+  const realDocument = globalThis.document;
+  globalThis.document = { createElement: () => ({ className: "", style: {}, append() {}, remove() {}, hidden: false, textContent: "" }) };
+  try {
+    return body();
+  } finally {
+    globalThis.document = realDocument;
+  }
+}
+
+const studioView = (options = {}, canvas = CANVAS) => new StudioView3D(canvas, { append() {} }, { engine: fakeEngine(), reducedMotion: true, ...options });
+
 test("the room-only view keeps My view still with reduced motion", () => {
-  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer(), reducedMotion: true });
+  const view = new StudioView3D({}, null, { engine: fakeEngine(), reducedMotion: true });
   view.cameraMode = "pov";
   assert.deepEqual(view.cameraPose(3, 90, 0.17), view.cameraPose(3, 90, 0));
+  view.dispose();
 });
 
 test("the room-only view bobs My view with cadence otherwise", () => {
-  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer() });
+  const view = new StudioView3D({}, null, { engine: fakeEngine() });
   view.cameraMode = "pov";
   assert.notDeepEqual(view.cameraPose(3, 90, 0.17), view.cameraPose(3, 90, 0));
+  view.dispose();
 });
 
-test("a studio frame ends with end() and carries the seat camera's view", () => {
-  const renderer = new UploadOnlyRenderer();
-  const labels = { append() {} };
-  const realDocument = globalThis.document;
-  globalThis.document = { createElement: () => ({ className: "", style: {}, append() {}, remove() {}, hidden: false, textContent: "" }) };
-  const view = new StudioView3D({ clientWidth: 320, clientHeight: 200 }, labels, { renderer, reducedMotion: true });
-  view.render({
-    riders: [{ id: 7, name: "Me", is_bot: false, seat: 3, cadence: 80, speed: 5 }],
-    myId: 7,
-    myCadence: 80,
-    coachCadence: 90,
-    timeS: 1,
-    colors: { me: "#f00", human: "#0f0", bot: "#00f", accent: "#ff0" },
-  });
-  globalThis.document = realDocument;
-  assert.equal(renderer.ends, 1);
+test("a studio frame is drawn by the engine and carries the seat camera's view", () => {
+  const engine = fakeEngine();
+  const view = studioView({ engine });
+  withDocument(() => view.render(frameOf([rider(7, 3)])));
+  assert.deepEqual(engine.calls, ["beginFrame", "renderScene", "present"]);
   const { eye, target } = view.cameraPose(3, 80, 1);
-  assert.deepEqual([...renderer.frames[0].view], [...lookAt(eye, target)]);
+  const { camera } = engine.scenes[0];
+  assert.deepEqual([...camera.matrixWorldInverse.elements], [...lookAt(eye, target)]);
+  assert.equal(engine.presented[0].env.night, 0);
+  assert.ok(engine.presented[0].env.exposure > 0);
+  view.dispose();
+});
+
+test("it draws the room and the riders", () => {
+  const engine = fakeEngine();
+  const view = studioView({ engine });
+  withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9), rider(9, 12)])));
+  const { scene } = engine.scenes[0];
+  assert.ok(scene.getObjectByName("studio-room"), "the room is in the scene");
+  assert.deepEqual(view.riderLayer.stats(), { full: 4, cheap: 0, ghosts: 0 }, "three riders and the coach");
+  view.dispose();
+});
+
+test("my own point of view leaves my body out", () => {
+  const view = studioView();
+  const bodyShown = () => {
+    let shown = false;
+    view.riderLayer.cyclistOf(7).rider.object.traverse((child) => {
+      if (child.isSkinnedMesh && child.visible) shown = true;
+    });
+    return shown;
+  };
+  withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9)])));
+  assert.ok(bodyShown(), "seen from behind");
+  view.cameraMode = "pov";
+  withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9)], { timeS: 2 })));
+  assert.ok(view.riderLayer.cyclistOf(7), "my bike stays");
+  assert.ok(!bodyShown(), "in my point of view");
+  view.dispose();
+});
+
+test("the coach stays drawn when the camera is on top of them", () => {
+  const eye = studioCamera("coach", 3).eye;
+  const placed = [
+    { rider: { id: -1, coach: true }, position: [eye[0], 0, eye[2]] },
+    { rider: { id: 8 }, position: [eye[0], 0, eye[2]] },
+  ];
+  assert.deepEqual(shownInRoom(placed, 7, eye).map(({ rider }) => rider.id), [-1]);
+  const view = studioView();
+  view.cameraMode = "coach";
+  withDocument(() => view.render(frameOf([rider(7, 3)])));
+  assert.ok(view.riderLayer.cyclistOf(coachId(0)), "the coach is drawn");
+  view.dispose();
 });
 
 test("the room-only view takes every graphics level and ignores unknown ones", () => {
-  const view = new StudioView3D({}, null, { renderer: new UploadOnlyRenderer() });
+  const engine = fakeEngine();
+  const view = studioView({ engine });
   for (const level of ["low", "medium", "high", "ultra"]) {
     view.setQuality(level);
     assert.equal(view.quality, level);
   }
   view.setQuality("potato");
   assert.equal(view.quality, "ultra");
+  assert.ok(engine.qualities.length >= 5, "the engine follows the level");
+  view.dispose();
+});
+
+test("disposing frees the scene but not the engine", () => {
+  const engine = fakeEngine();
+  engine.dispose = () => assert.fail("the engine is shared");
+  const view = studioView({ engine });
+  const { tracker } = view;
+  withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9)])));
+  assert.ok(tracker.live() > 0);
+  view.dispose();
+  assert.equal(tracker.live(), 0);
 });

@@ -57,7 +57,7 @@ export function hexToRgb(hex) {
 }
 
 /** A colour code's sRGB tint as the linear colour the world scene's rider layer takes. */
-function linearOf(tint) {
+export function linearOf(tint) {
   return tint.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 }
 
