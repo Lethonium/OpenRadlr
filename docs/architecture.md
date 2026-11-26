@@ -169,27 +169,33 @@ dependencies (see [ADR 0005](adr/0005-own-webgl-renderer.md)):
 The 3D view consumes exactly the same smoothed rider list as the 2D views, so
 no server or protocol change was needed. The world is built right after
 joining, in a worker (a few seconds for the bundled map of three routes), while
-the ride already shows the 2D view. <kbd>V</kbd> toggles 3D and 2D, <kbd>C</kbd>
+the ride already shows the 2D view. <kbd>V</kbd> cycles 3D, Map and Side, <kbd>C</kbd>
 cycles cameras, <kbd>T</kbd> cycles the time of day; *Graphics: Low* turns off the
 shadow map and grass for weaker GPUs. Devices without WebGL 2 fall back to 2D.
 
-### 2D view
+### 2D views
 
-`view/rideMapView.js` draws the alternative view: a top-down map around the
-rider. The camera is heading-up with the rider mid-screen and the canvas height
-spanning 120 m (the cockpit's paddle meter overlays the lower third). Once the
-map network is loaded, the island's coast and a coarse hillshade from the
-network's heights are drawn first; then the map's tree dots and thin outline
-houses (from the route's scenery zones and the map's cafés, scaled with the
-zoom), every road as a thin context line, the road being ridden at full width
-with edge lines and dashed lane dividers, the golden lemons still on the road,
-the draft gap ahead of me when I am drafting, and the riders around me,
-including my best lap's ghost. Without a network it draws the current route
-on land, so the view needs neither WebGL 2 nor an extra request while the world
-builds. `view/rideMapTheme.js` colours it from the selected biome's 2D palette
-(the biome is the palette's only source) and the time-of-day preset, so the 2D
-map follows the same season and light as the 3D world. The map is clipped above
-the workout band in the Training layout, like the 3D view.
+`view2d/` draws two 2D views from the same scene the 3D world is built from, with
+sprites rendered on the device from the real 3D assets
+([ADR 0035](adr/0035-2d-views-from-baked-sprites.md)):
+
+| Module | Role |
+| --- | --- |
+| `sprites/catalog.js`, `sprites/baker.js` | What is baked (plants, houses at 7 turns side / 12 yaws top, buildings, creatures, riders as 12 pedalling frames, arches, lemons, vehicles) and the baker: one Three.js scene with an orthographic camera, the only Three.js user in `view2d/` |
+| `sprites/spriteStore.js`, `drawSprite.js` | Bakes in a per-frame budget, nearest first, with night variants, a default-look rider fallback and a 40 MB cap |
+| `worldIndex.js`, `routeProjector.js` | Everything placed, in 48 m buckets; scenery projected to (distance along, lateral offset) for the side view |
+| `look2d.js`, `groundSampler.js`, `overlays.js` | Season, time of day and weather from `world/daylight.js` and `world/weather.js`; ground colours with land-use paint and hill shading; night tint, glows, rain and snow |
+| `mapTiles.js`, `mapView.js` | **Map**: heading-up, 95 m tall; 64 m ground tiles kept in an LRU, sprites unrotated so the sun stays put, riders at 2.4×, lemons, draft gap and ghost |
+| `sideCamera.js`, `sideBands.js`, `sideView.js`, `profileStrip.js` | **Side**: a low camera 110 m to the right of the road, grades exaggerated 1.6×, a far band and middle terrain bands cached, scenery at its depth, pedalling riders tilted with the grade, the whole route's profile at the bottom |
+| `view2d.js`, `viewMode.js` | `View2D`, the controller `main.js` talks to next to `View3D`; the view choice `3d` / `map` / `side` (a stored `2d` reads as `map`) |
+
+`sprite-probe.html` times the bake on a device; `view2d.html` shows either view
+for a season, time and weather without a server ride.
+
+Devices without WebGL 2 cannot bake and keep `view/rideMapView.js`: a top-down
+map around the rider with the island's coast and hillshade, tree dots and
+outline houses, every road, the lemons, the draft gap and the ghost, coloured
+by `view/rideMapTheme.js` from the biome's 2D palette and the time of day.
 
 ### Ride screen
 
