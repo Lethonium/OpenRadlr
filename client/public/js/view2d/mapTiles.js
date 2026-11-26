@@ -17,18 +17,26 @@ const STEP = 2;
 const MARGIN_M = 12;
 const TAU = Math.PI * 2;
 
+/** After dark the ground loses this much of its colour before the night tint (which is blue) multiplies it, so it reads blue like the road. */
+const NIGHT_DESATURATE = 0.7;
+const NIGHT_BRIGHTEN = 1.5;
 const HEDGE = [0.2, 0.38, 0.18];
 const HEDGE_BARE = [0.36, 0.3, 0.24];
 const WALL = [0.7, 0.67, 0.6];
 const VINE = [0.34, 0.5, 0.2];
 const FLAMME = "#d8262b";
-/** Road quads, drawn in this order (first underneath). */
-const ROAD_ORDER = Object.freeze([ROAD_KIND.bank, ROAD_KIND.verge, ROAD_KIND.pavement, ROAD_KIND.rut, ROAD_KIND.asphalt, ROAD_KIND.edge, ROAD_KIND.marking]);
+/** Road quads, drawn in this order (first underneath). The gravel verge, bank and ruts are left to the ground's own paint. */
+const ROAD_ORDER = Object.freeze([ROAD_KIND.pavement, ROAD_KIND.asphalt, ROAD_KIND.edge, ROAD_KIND.marking]);
+/** Lane dividers are one dashed row per lane line; the map keeps the centre one. A road narrower than this keeps all. */
+const NARROW_ROAD_M = 3;
+const CENTRE_TOLERANCE_M = 0.5;
+const EDGE_SEARCH_M = 20;
+const EDGE_CELL_M = 8;
 
 /** Triangles of a mesh by the tiles their box touches: `Map<"tx,tz", number[]>` of index offsets. */
-function bucketTriangles(positions, indices) {
+function bucketTriangles(positions, indices, only = null) {
   const buckets = new Map();
-  for (let k = 0; k < indices.length; k += 3) {
+  for (const k of only ?? Array.from({ length: indices.length / 3 }, (_, n) => n * 3)) {
     const xs = [positions[indices[k] * 3], positions[indices[k + 1] * 3], positions[indices[k + 2] * 3]];
     const zs = [positions[indices[k] * 3 + 2], positions[indices[k + 1] * 3 + 2], positions[indices[k + 2] * 3 + 2]];
     const [i0, i1] = [Math.floor(Math.min(...xs) / MAP_TILE_M), Math.floor(Math.max(...xs) / MAP_TILE_M)];
@@ -43,6 +51,55 @@ function bucketTriangles(positions, indices) {
     }
   }
   return buckets;
+}
+
+/**
+ * The road mesh's triangles by tile, without the lane dividers away from the road's middle: a marking triangle is kept
+ * when it lies about midway between the road's two edge lines (or the road is narrow).
+ */
+export function roadTriangles(mesh) {
+  const { positions, indices, kinds } = mesh;
+  const centre = (k) => {
+    const [a, b, c] = [indices[k] * 3, indices[k + 1] * 3, indices[k + 2] * 3];
+    return [(positions[a] + positions[b] + positions[c]) / 3, (positions[a + 2] + positions[b + 2] + positions[c + 2]) / 3];
+  };
+  const edges = new Map();
+  for (let k = 0; k < indices.length; k += 3) {
+    if (kinds[indices[k]] !== ROAD_KIND.edge) continue;
+    const [x, z] = centre(k);
+    const key = `${Math.floor(x / EDGE_CELL_M)},${Math.floor(z / EDGE_CELL_M)}`;
+    const list = edges.get(key);
+    if (list) list.push([x, z]);
+    else edges.set(key, [[x, z]]);
+  }
+  const near = (x, z) => {
+    const found = [];
+    const reach = Math.ceil(EDGE_SEARCH_M / EDGE_CELL_M);
+    for (let i = -reach; i <= reach; i += 1) {
+      for (let j = -reach; j <= reach; j += 1) {
+        for (const e of edges.get(`${Math.floor(x / EDGE_CELL_M) + i},${Math.floor(z / EDGE_CELL_M) + j}`) ?? []) {
+          const d = Math.hypot(e[0] - x, e[1] - z);
+          if (d <= EDGE_SEARCH_M) found.push({ e, d });
+        }
+      }
+    }
+    return found.sort((p, q) => p.d - q.d);
+  };
+  const keep = [];
+  for (let k = 0; k < indices.length; k += 3) {
+    if (kinds[indices[k]] !== ROAD_KIND.marking) {
+      keep.push(k);
+      continue;
+    }
+    const [x, z] = centre(k);
+    const found = near(x, z);
+    if (found.length === 0) continue;
+    const first = found[0];
+    const opposite = found.find(({ e }) => (e[0] - x) * (first.e[0] - x) + (e[1] - z) * (first.e[1] - z) < 0);
+    if (!opposite) continue;
+    if (first.d + opposite.d < NARROW_ROAD_M || Math.abs(first.d - opposite.d) < CENTRE_TOLERANCE_M) keep.push(k);
+  }
+  return keep;
 }
 
 /** The top-view job each item draws as: `{ job, scale }`, or null. Built once from the catalog. */
@@ -92,16 +149,20 @@ function spriteIndex() {
 export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
   const tiles = new Map(); // key -> {canvas, used: Map<jobKey, sprite|null>, signature}
   const sprites = spriteIndex();
-  const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices);
+  const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices, roadTriangles(scene.roads.strips));
   const riverBuckets = bucketTriangles(scene.rivers.strips.positions, scene.rivers.strips.indices);
   const roadColors = roadPalette(scene.roads.style);
   const size = MAP_TILE_M * MAP_TILE_PPM;
 
-  function paintGround(ctx, tx, tz, sun) {
+  function paintGround(ctx, tx, tz, sun, night) {
     const image = ctx.createImageData(size, size);
     for (let py = 0; py < size; py += STEP) {
       for (let px = 0; px < size; px += STEP) {
-        const [r, g, b] = sampler.color(tx * MAP_TILE_M + px / MAP_TILE_PPM, tz * MAP_TILE_M + py / MAP_TILE_PPM, sun);
+        let [r, g, b] = sampler.color(tx * MAP_TILE_M + px / MAP_TILE_PPM, tz * MAP_TILE_M + py / MAP_TILE_PPM, sun);
+        if (night) {
+          const grey = (r + g + b) / 3;
+          [r, g, b] = [r, g, b].map((v) => Math.min(1, (v + (grey - v) * NIGHT_DESATURATE) * NIGHT_BRIGHTEN));
+        }
         for (let oy = 0; oy < STEP; oy += 1) {
           for (let ox = 0; ox < STEP; ox += 1) {
             const k = ((py + oy) * size + px + ox) * 4;
@@ -216,7 +277,7 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
     const canvas = createCanvas(size, size);
     const ctx = canvas.getContext("2d");
     const used = new Map();
-    paintGround(ctx, tx, tz, look.sun);
+    paintGround(ctx, tx, tz, look.sun, look.night);
     ctx.setTransform(MAP_TILE_PPM, 0, 0, MAP_TILE_PPM, -tx * MAP_TILE_M * MAP_TILE_PPM, -tz * MAP_TILE_M * MAP_TILE_PPM);
     paintWater(ctx, `${tx},${tz}`);
     paintRoads(ctx, `${tx},${tz}`);

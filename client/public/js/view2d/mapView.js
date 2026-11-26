@@ -28,7 +28,7 @@ const LAMP_GLOW = Object.freeze({ r: 9, rgb: [1, 0.77, 0.47], a: 0.45 });
 const WINDOW_GLOW = Object.freeze({ r: 3.2, rgb: [1, 0.82, 0.51], a: 0.55 });
 const CAFE_GLOW = Object.freeze({ r: 14, rgb: [1, 0.75, 0.43], a: 0.5 });
 const HEADLIGHT = Object.freeze({ r: 6, rgb: [1, 0.98, 0.88], a: 0.5 });
-const TAILLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.16, 0.16], a: 0.7 });
+const TAILLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.16, 0.16], a: 0.35 });
 const PRIORITY_PER_M = 1;
 
 /** The first top-view sprite job of a workbench id. */

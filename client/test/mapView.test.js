@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
 import { MAP_RIDER_SCALE, MAP_SPAN_M, createMapView } from "../public/js/view2d/mapView.js";
-import { MAP_TILE_M } from "../public/js/view2d/mapTiles.js";
+import { MAP_TILE_M, roadTriangles } from "../public/js/view2d/mapTiles.js";
 import { groundSampler } from "../public/js/view2d/groundSampler.js";
 import { look2d } from "../public/js/view2d/look2d.js";
 import { spriteJobs } from "../public/js/view2d/sprites/catalog.js";
@@ -242,4 +242,15 @@ test("it draws on the real ground sampler without a rider sprite or a store hit"
   const screen = frame(view, { riders: [rider("a", 0, 0)] });
   assert.ok(screen.images.length >= 4);
   assert.ok(Number.isFinite(screen.calls.fillRect));
+});
+
+test("only the centre lane divider of the road mesh is kept", () => {
+  const mesh = scene.roads.strips;
+  const count = (list) => list.filter((k) => mesh.kinds[mesh.indices[k]] === 2).length;
+  const all = Array.from({ length: mesh.indices.length / 3 }, (_, n) => n * 3);
+  const kept = roadTriangles(mesh);
+  assert.ok(count(all) > 30, "the fixture has dividers");
+  const ratio = count(kept) / count(all);
+  assert.ok(ratio > 0.2 && ratio < 0.5, `kept ${ratio.toFixed(2)} of the marking triangles (one row of three)`);
+  assert.equal(kept.length - count(kept), all.length - count(all), "every other triangle stays");
 });

@@ -70,11 +70,16 @@ export function createSpriteBaker({ season, createRenderer = defaultRenderer, cr
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
 
   let lit = null;
-  /** Lights the scene as day or night; only changes when the job's time differs from the last one. */
+  /**
+   * Lights the scene; only changes when the job's time differs from the last one. A night sprite is lit as by day
+   * with the night's lamps on (windows glow, the moon is not blue): the map and side view darken it with the
+   * shared night tint, as they do the ground, so the two do not stack.
+   */
   function light(night) {
     if (lit === night) return;
     lit = night;
-    const environment = environmentAt(resolvePreset(night ? "night" : "day"), season);
+    const day = environmentAt(resolvePreset("day"), season);
+    const environment = night ? { ...day, night: 1, moon: day.sun } : day;
     world.scene.fog = fog;
     world.setEnvironment(environment);
     world.scene.fog = null;

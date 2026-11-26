@@ -1,7 +1,7 @@
 /**
  * The 2D views' developer page: builds the valley world in the page, bakes the sprites for real, puts a few
  * riders on the route and draws the view. A dev aid like the sprite probe, not part of the app.
- * `?view=map&season=summer&time=day|golden|dusk|night&weather=clear|rain|snow&d=300&still`
+ * `?view=map&season=summer&time=day|golden|dusk|night&weather=clear|rain|snow&d=300&detail=high&still`
  * `still` draws one finished frame (every sprite baked) and sets `window.__ready`; otherwise it animates.
  */
 import { RouteGeometry } from "../route/geometry.js";
@@ -50,6 +50,7 @@ async function main() {
   const timeMode = pick(query.get("time"), TIMES, "day");
   const kind = pick(query.get("weather"), ["clear", "rain", "snow"], "clear");
   const viewName = query.get("view") ?? "map";
+  const detail = pick(query.get("detail"), ["low", "high"], "high");
   const startD = Number(query.get("d") ?? 300);
   const still = query.has("still");
   const canvas = document.getElementById("c");
@@ -59,7 +60,7 @@ async function main() {
   const [routeFile, networkFile] = await Promise.all([fetchJson("/routes/rolling-hills.json"), fetchJson("/routes/maps/valley.json")]);
   const route = new RouteGeometry(routeFile);
   const t0 = performance.now();
-  const scene = buildSceneNow(routeFile, [], networkFile, "temperate", season, "low");
+  const scene = buildSceneNow(routeFile, [], networkFile, "temperate", season, detail);
   const builtMs = performance.now() - t0;
 
   const baker = createSpriteBaker({ season });
@@ -90,7 +91,7 @@ async function main() {
     view.draw(ctx, { width: canvas.width, height: canvas.height, me: { ...meAt, distance: meD, lane: 1, id: ME_ID }, riders, look, t });
   }
 
-  const summary = (extra) => `${viewName} · ${season} · ${timeMode} · ${kind} · world built in ${Math.round(builtMs)} ms${extra}`; // i18n-ok: developer page
+  const summary = (extra) => `${viewName} · ${detail} · ${season} · ${timeMode} · ${kind} · world built in ${Math.round(builtMs)} ms${extra}`; // i18n-ok: developer page
   if (viewName !== "map") info.textContent = summary(" · only the map is drawn so far"); // i18n-ok: developer page
   if (still) {
     // Draw to ask for the sprites, bake them all, draw again until nothing new is asked for.

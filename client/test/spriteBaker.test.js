@@ -61,14 +61,13 @@ test("baker: the asset is disposed after baking", () => {
   assert.equal(baker.liveResources(), 0);
 });
 
-test("baker: a night job lights with the night environment, then a day job goes back", () => {
+test("baker: a night job is lit as by day (the views' tint darkens it), and day jobs follow it", () => {
   const { baker, renderer } = bakerWith();
   baker.bake(job("house"));
   const day = renderer.toneMappingExposure;
   baker.bake(spriteJobs({ view: "side", night: true }).find((candidate) => candidate.id === "house"));
-  const night = renderer.toneMappingExposure;
+  assert.equal(renderer.toneMappingExposure, day);
   baker.bake(job("house"));
-  assert.notEqual(night, day);
   assert.equal(renderer.toneMappingExposure, day);
   baker.dispose();
 });
