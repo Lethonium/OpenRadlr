@@ -84,10 +84,12 @@ export function createSideBands({ route, sampler, createCanvas }) {
   const stepOf = (f) => (f < WIDE_BELOW_F ? WIDE_STEP_PX : STEP_PX);
 
   function remakeFar(camera, look) {
-    const canvas = createCanvas(camera.width, camera.height);
-    canvas.width = camera.width;
-    canvas.height = camera.height;
+    const { ratio } = camera;
+    const canvas = createCanvas(Math.round(camera.width * ratio), Math.round(camera.height * ratio));
+    canvas.width = Math.round(camera.width * ratio);
+    canvas.height = Math.round(camera.height * ratio);
     const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, camera.width, camera.height);
     for (const lateral of FAR_LATERALS) {
       const f = camera.f(lateral);
@@ -104,16 +106,16 @@ export function createSideBands({ route, sampler, createCanvas }) {
       }
       paint(ctx, columns, camera.height);
     }
-    far = { canvas, d: camera.meD, elev: camera.elev, key: `${camera.width}x${camera.height}|${lookKey(look)}`, width: camera.width, height: camera.height };
+    far = { canvas, d: camera.meD, elev: camera.elev, key: `${camera.width}x${camera.height}x${ratio}|${lookKey(look)}`, width: camera.width, height: camera.height };
   }
 
   /** Draws the five far slices, from one cached image. */
   function drawFar(ctx, camera, look) {
-    const key = `${camera.width}x${camera.height}|${lookKey(look)}`;
+    const key = `${camera.width}x${camera.height}x${camera.ratio}|${lookKey(look)}`;
     const scrolled = far ? Math.abs(route.signedGap(far.d, camera.meD)) * camera.scale : Infinity;
     const lifted = far ? Math.abs(camera.elev - far.elev) * Math.max(...FAR_LATERALS.map((l) => camera.rise(l))) : Infinity;
     if (!far || far.key !== key || scrolled > SCROLL_TOLERANCE_PX || lifted > SCROLL_TOLERANCE_PX) remakeFar(camera, look);
-    ctx.drawImage(far.canvas, 0, 0);
+    ctx.drawImage(far.canvas, 0, 0, camera.width, camera.height);
   }
 
   function makeChunk(lateral, k, camera, look) {
@@ -139,19 +141,22 @@ export function createSideBands({ route, sampler, createCanvas }) {
     }
     top = Math.floor(top) - 2;
     const bottom = Math.ceil(camera.height);
-    const canvas = createCanvas(CHUNK_PX + OVERLAP_PX, Math.max(1, bottom - top));
-    canvas.width = CHUNK_PX + OVERLAP_PX;
-    canvas.height = Math.max(1, bottom - top);
+    const { ratio } = camera;
+    const [w, h] = [CHUNK_PX + OVERLAP_PX, Math.max(1, bottom - top)];
+    const canvas = createCanvas(Math.round(w * ratio), Math.round(h * ratio));
+    canvas.width = Math.round(w * ratio);
+    canvas.height = Math.round(h * ratio);
     const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, w, h);
     ctx.translate(0, -top);
     paint(ctx, columns, bottom);
-    return { canvas, top };
+    return { canvas, top, w, h };
   }
 
   /** Draws one middle slice (`lateral` one of MIDDLE_LATERALS) across the screen from its chunks. */
   function drawSlice(ctx, lateral, camera, look) {
-    const key = `${camera.width}x${camera.height}|${lookKey(look)}`;
+    const key = `${camera.width}x${camera.height}x${camera.ratio}|${lookKey(look)}`;
     if (key !== chunkKey) {
       chunks.clear();
       chunkKey = key;
@@ -168,7 +173,7 @@ export function createSideBands({ route, sampler, createCanvas }) {
       if (chunk) chunks.delete(id);
       else chunk = makeChunk(lateral, k, camera, look);
       chunks.set(id, chunk);
-      ctx.drawImage(chunk.canvas, Math.round(k * CHUNK_PX - origin), Math.round(chunk.top + lift));
+      ctx.drawImage(chunk.canvas, Math.round(k * CHUNK_PX - origin), Math.round(chunk.top + lift), chunk.w, chunk.h);
     }
     while (chunks.size > CHUNK_CACHE) chunks.delete(chunks.keys().next().value);
   }

@@ -192,18 +192,20 @@ export class View2D {
   render({ riders, myId, me, myCadence = 0, draft = null, lemons = [], ghost = null, timeS = 0, utcSeconds = 0, colors }) {
     if (!this.available) return;
     const ratio = Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO);
-    const width = Math.max(1, Math.round(this.#canvas.clientWidth * ratio));
-    const height = Math.max(1, Math.round(this.#canvas.clientHeight * ratio));
-    const size = `${width}x${height}`;
+    // The views draw in CSS pixels; the backing store has `ratio` device pixels to each, set as the context's transform.
+    const width = Math.max(1, Math.round(this.#canvas.clientWidth));
+    const height = Math.max(1, Math.round(this.#canvas.clientHeight));
+    const size = `${width}x${height}x${ratio}`;
     if (size !== this.#size) {
       this.#size = size;
-      this.#canvas.width = width;
-      this.#canvas.height = height;
+      this.#canvas.width = Math.round(width * ratio);
+      this.#canvas.height = Math.round(height * ratio);
       this.resize();
     }
     const ctx = this.#canvas.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, this.#canvas.width, this.#canvas.height);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     const mine = me ?? riders.find((rider) => rider.id === myId);
     if (!mine) return;
     const look = this.#look(utcSeconds);
@@ -213,6 +215,7 @@ export class View2D {
       this.#view("side").draw(ctx, {
         width,
         height,
+        ratio,
         look,
         t: timeS,
         me: { d: mine.distance, id: mine.id },

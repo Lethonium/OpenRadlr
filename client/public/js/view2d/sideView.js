@@ -385,8 +385,8 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     return glows;
   }
 
-  function draw(ctx, { width, height, me, riders = [], lemons = [], look, t = 0 }) {
-    const camera = sideCamera({ width, height, me, route });
+  function draw(ctx, { width, height, ratio = 1, me, riders = [], lemons = [], look, t = 0 }) {
+    const camera = sideCamera({ width, height, me, route, ratio });
     const onScreen = scenery.filter((entry) => {
       const x = camera.x(nearTo(me, entry.d), entry.lateral);
       return x > -MARGIN_PX && x < width + MARGIN_PX;

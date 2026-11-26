@@ -136,6 +136,23 @@ test("the canvas follows the element's size and a new pixel ratio", () => {
   }
 });
 
+test("at a pixel ratio of 2 the views draw in CSS pixels through a doubled transform", () => {
+  for (const mode of ["map", "side"]) {
+    const { view, screen } = make();
+    view.setMode(mode);
+    globalThis.devicePixelRatio = 2;
+    try {
+      view.render(frame());
+      assert.deepEqual(screen.transforms.at(-1), [2, 0, 0, 2, 0, 0], `${mode}: the draw transform`);
+      assert.ok(screen.fonts.length > 0 || mode === "map", "side: labels or none");
+      assert.ok(screen.fonts.every((font) => font.includes("12px")), `${mode}: ${screen.fonts}`);
+      assert.deepEqual([screen.canvas.width, screen.canvas.height], [1600, 1200]);
+    } finally {
+      delete globalThis.devicePixelRatio;
+    }
+  }
+});
+
 test("dispose frees the baker once", () => {
   const { view, baker } = make();
   view.render(frame());

@@ -21,10 +21,11 @@ const FLATTEN_FROM = 0.45;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 /**
- * @param {{width: number, height: number, me: {d: number}, route: {elevationAt: (d: number) => number}}} input
- * @returns {{width: number, height: number, scale: number, riderX: number, roadY: number, horizonY: number, elev: number, meD: number, f: (lateral: number) => number, vex: (f: number) => number, plane: (lateral: number) => number, rise: (lateral: number) => number, x: (d: number, lateral: number) => number, y: (height: number, lateral: number) => number}}
+ * @param {{width: number, height: number, me: {d: number}, route: {elevationAt: (d: number) => number}, ratio?: number}} input
+ *   `width`, `height` are in CSS pixels; `ratio` is the device pixels per CSS pixel, for the caches that draw at device resolution
+ * @returns {{width: number, height: number, ratio: number, scale: number, riderX: number, roadY: number, horizonY: number, elev: number, meD: number, f: (lateral: number) => number, vex: (f: number) => number, plane: (lateral: number) => number, rise: (lateral: number) => number, x: (d: number, lateral: number) => number, y: (height: number, lateral: number) => number}}
  */
-export function sideCamera({ width, height, me, route }) {
+export function sideCamera({ width, height, me, route, ratio = 1 }) {
   const scale = width / SPAN_M;
   const riderX = width * RIDER_AT;
   const roadY = height * ROAD_AT;
@@ -39,6 +40,7 @@ export function sideCamera({ width, height, me, route }) {
   return {
     width,
     height,
+    ratio,
     scale,
     riderX,
     roadY,

@@ -356,3 +356,16 @@ test("near-side scenery in front of a rider is drawn faint, so it never hides th
   view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: 200 }, riders, look: DAY, t: 0 });
   assert.deepEqual(screen.alphas, [0.3], "only the birch in front of the rider");
 });
+
+test("at a pixel ratio of 2 the cached bands are made at device size and drawn at CSS size", () => {
+  const { made, createCanvas } = canvases();
+  const view = createSideView({ scene: buildSceneNow(tinyLoopFile(), [], tinyNetworkFile()), route: loop, sampler: flat(), createCanvas });
+  const screen = fakeCanvas(W, H);
+  view.draw(screen.canvas.getContext("2d"), { width: W, height: H, ratio: 2, me: { d: 100 }, riders: [], look: DAY, t: 0 });
+  assert.deepEqual([made[0].canvas.width, made[0].canvas.height], [2 * W, 2 * H], "the far band");
+  assert.deepEqual(screen.images[0].args.slice(-2), [W, H], "drawn at CSS size");
+  const chunk = made.at(-1);
+  assert.equal(chunk.canvas.width, 2 * (CHUNK_PX + 1));
+  const drawn = screen.images.at(-1).args;
+  assert.equal(drawn[2], CHUNK_PX + 1, "a chunk is drawn at CSS size");
+});
