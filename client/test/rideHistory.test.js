@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RideHistory, rideRecord } from "../public/js/ride/rideHistory.js";
-import { WORLD_STAMP } from "../public/js/profile/achievements.js";
 import { RideRecorder } from "../public/js/ride/rideRecorder.js";
 
 function mapStore() {
@@ -25,8 +24,6 @@ function recorder(start = T0) {
 
 const record = (start) =>
   rideRecord({ recorder: recorder(start), splits: [], splitMode: "5", routeId: "rolling-hills", measured: true, profile: { ftp: 250, weightKg: 70 } });
-
-test("rideRecord: stamps the world a ride was made in", () => assert.equal(record().world, WORLD_STAMP));
 
 test("rideRecord: totals, identity and settings", () => {
   const r = record();

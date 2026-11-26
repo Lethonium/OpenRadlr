@@ -48,6 +48,8 @@
 
 ### Task 3: The "Old School" achievement and the world stamp
 
+> Changed after review (owner): no stamp; `NEW_WORLD_AT` in `profile/achievements.js` is the cutoff, rides that started before it earn Old School.
+
 **Files:** `client/public/js/ride/rideHistory.js`, `client/public/js/main.js` (~4221, the other record builder), `client/public/js/workout/workoutSession.js`, any import path that creates records (grep `startedAt:` and the import modules), `client/public/js/profile/achievements.js`, `client/public/js/view/badges.js`, `client/public/js/i18n/en.js`, `de.js`; tests next to the existing ones (`client/test/achievements.test.js`, `rideHistory.test.js`, …).
 
 **Produces:** `WORLD_STAMP = 2` (exported from `profile/achievements.js` or a small `profile/worldStamp.js`); records carry `world: 2`; achievement id `classicRider`; `hasClassicRider(achievementState) -> boolean` helper where the settings code can use it.

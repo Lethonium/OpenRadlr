@@ -173,7 +173,6 @@ test("a finished workout makes a history record", () => {
     blocksSkipped: 0,
     hr: { avg: 140, max: 160 },
     measured: false,
-    world: 2,
   });
 });
 

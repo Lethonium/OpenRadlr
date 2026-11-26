@@ -5,11 +5,14 @@
  */
 
 import { weekStart } from "./stats.js";
-import { WORLD_STAMP } from "./worldStamp.js";
 import { PRESETS } from "../workout/presets.js";
 import { VENUES } from "../workout/venues.js";
 
-export { WORLD_STAMP };
+/**
+ * When the new world landed (the Three.js rider, bikes and scenery): rides that started before it
+ * earn Old School. Set to the release day of the polished world.
+ */
+export const NEW_WORLD_AT = Date.UTC(2026, 11, 1);
 
 /** Whether the saved achievements hold Old School, which unlocks the classic rider. */
 export const hasClassicRider = (state) => Boolean(state?.earned?.classicRider);
@@ -96,7 +99,7 @@ export const ACHIEVEMENTS = Object.freeze([
   def("thumbWarrior", anyRide((r) => r.device === "paddle"), true),
   def("bendy", (f) => f.workouts.some((w) => YOGA_PLANS.has(w.planId)), true),
   def("crossTrainer", (f) => [...f.workoutWeeks].some((w) => f.rideWeeks.has(w)), true),
-  def("classicRider", anyRide((r) => r.world !== WORLD_STAMP)),
+  def("classicRider", anyRide((r) => num(r.startedAt) > 0 && r.startedAt < NEW_WORLD_AT)),
 ]);
 
 /** The ids whose check holds on `sources` ({records, summits, lemons, routes}). */

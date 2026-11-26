@@ -24,10 +24,9 @@ first piece of the coming avatar customization (owner, 2026-11-26).
 ## Design (calls made for the builder; the owner may overrule)
 
 - **Who earns it:** achievements are worked out on the device from saved ride records (`profile/achievements.js`).
-  New records get a stamp `world: 2` (the new world); records without it were made before. The achievement
-  `classicRider` is earned by any ride record without the stamp. Every place that creates a ride or workout record
-  stamps it, imports included, so an imported or new record never earns it by mistake. Once earned it stays
-  (achievements latch).
+  `classicRider` is earned by any ride that started before the new world landed (`NEW_WORLD_AT`, the release day
+  of the polished world). No stamp on the records: the start time every ride already has decides it (owner,
+  2026-11-26). Once earned it stays (achievements latch).
 - **Name:** "Old School" / "Alte Schule", hint "Ride before the new world arrived." / "Fahre vor der neuen Welt.",
   with its own badge drawing in `view/badges.js` (a simple low-poly bike).
 - **The look:** `view3d/assets/riders/classicCyclist.js` rebuilds the old rider and bike (the shapes of the deleted
@@ -42,6 +41,6 @@ first piece of the coming avatar customization (owner, 2026-11-26).
 
 ## Verification
 
-Node tests: the stamp on new records; `classicRider` earned by an unstamped record and not by a stamped one; the
+Node tests: `classicRider` earned by a ride before `NEW_WORLD_AT` and not by one since; the
 classic cyclist's interface and that it pedals (crank changes with cadence); the rider layer draws a classic
 cyclist for `classic: true`. A workbench shot and a ride shot with the switch on.

@@ -5,7 +5,6 @@
  *
  * Actions: ["send", exercise | null, side | null] (tell the server), ["cue"], ["finished"].
  */
-import { WORLD_STAMP } from "../profile/worldStamp.js";
 import { EXERCISES, planDuration, planPositionAt, withGetReady } from "./plan.js";
 
 const CUE_SECONDS = 3;
@@ -212,7 +211,6 @@ export class WorkoutSession {
       blocksSkipped: count("skipped"),
       hr,
       measured: false,
-      world: WORLD_STAMP,
     };
   }
 }
