@@ -1,7 +1,7 @@
 /**
  * The 2D views' developer page: builds the valley world in the page, bakes the sprites for real, puts a few
  * riders on the route and draws the view. A dev aid like the sprite probe, not part of the app.
- * `?view=map&season=summer&time=day|golden|dusk|night&weather=clear|rain|snow&d=300&detail=high&still`
+ * `?view=map|side&season=summer&time=day|golden|dusk|night&weather=clear|rain|snow&d=300&detail=high&still`
  * `still` draws one finished frame (every sprite baked) and sets `window.__ready`; otherwise it animates.
  */
 import { RouteGeometry } from "../route/geometry.js";
@@ -11,6 +11,7 @@ import { SEASONS } from "../world/seasons.js";
 import { groundSampler } from "./groundSampler.js";
 import { look2d } from "./look2d.js";
 import { createMapView } from "./mapView.js";
+import { createSideView } from "./sideView.js";
 import { createSpriteBaker } from "./sprites/baker.js";
 import { createSpriteStore } from "./sprites/spriteStore.js";
 import { indexWorld } from "./worldIndex.js";
@@ -67,7 +68,9 @@ async function main() {
   const store = createSpriteStore({ bake: baker.bake, now: () => performance.now(), budgetMs: still ? 1e9 : 6 });
   const look = look2d({ season, timeMode, weather: { kind, strength: 1 }, precipitation: kind === "clear" ? 0 : 1 });
   store.setNight(look.night);
-  const view = createMapView({ scene, route, index: indexWorld(scene), sampler: groundSampler(scene.ground), store, createCanvas: (w, h) => new OffscreenCanvas(w, h) });
+  const sampler = groundSampler(scene.ground);
+  const createCanvas = (w, h) => new OffscreenCanvas(w, h);
+  const view = viewName === "side" ? createSideView({ scene, route, sampler, createCanvas }) : createMapView({ scene, route, index: indexWorld(scene), sampler, store, createCanvas });
   const looks = KITS.map((kit, i) => ({ ...lookOf(i), primary: kit.color }));
 
   function resize() {
@@ -88,11 +91,11 @@ async function main() {
       name: kit.name,
       mine: Boolean(kit.mine),
     }));
-    view.draw(ctx, { width: canvas.width, height: canvas.height, me: { ...meAt, distance: meD, lane: 1, id: ME_ID }, riders, look, t });
+    view.draw(ctx, { width: canvas.width, height: canvas.height, me: { ...meAt, d: meD, distance: meD, lane: 1, id: ME_ID }, riders, look, t });
   }
 
   const summary = (extra) => `${viewName} · ${detail} · ${season} · ${timeMode} · ${kind} · world built in ${Math.round(builtMs)} ms${extra}`; // i18n-ok: developer page
-  if (viewName !== "map") info.textContent = summary(" · only the map is drawn so far"); // i18n-ok: developer page
+  if (viewName === "side") info.textContent = summary(" · land, road and sky so far"); // i18n-ok: developer page
   if (still) {
     // Draw to ask for the sprites, bake them all, draw again until nothing new is asked for.
     const start = performance.now();
