@@ -18,6 +18,7 @@ import {
   buildOutdoorGym,
   cafeClearing,
   gymClearing,
+  studioClearing,
   studioSite,
   roadsideFurniture,
   buildSpectators,
@@ -244,7 +245,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
         return road ? [{ road, cafeId: cafe.id }] : [];
       })
     : ordered.map((road) => ({ road, cafeId: null }));
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.flatMap(({ road }) => [cafeClearing(road), gymClearing(road)]), routes, seed, season, detail, bounds: ground.bounds });
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.flatMap(({ road, cafeId }) => [cafeClearing(road), gymClearing(road), ...(cafeId === "valley-cafe" ? [studioClearing(road)] : [])]), routes, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, landUse: plan.landUse });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow

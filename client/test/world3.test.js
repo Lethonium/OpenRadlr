@@ -717,3 +717,20 @@ test("no verge plant or tree stands inside a café or gym clearing", () => {
   }
   assert.ok(plants > 100, "the world still has plants");
 });
+
+import { STUDIO_FOOTPRINT } from "../public/js/view3d/features.js";
+
+test("no tree, plant or roadside prop stands on the spin studio's ground", () => {
+  const { position: [ox, , oz], yaw } = mapWorld.studio;
+  const { halfWidth, front, back } = STUDIO_FOOTPRINT;
+  const inside = (x, z) => {
+    const [dx, dz] = [x - ox, z - oz];
+    const [lx, lz] = [dx * Math.cos(yaw) - dz * Math.sin(yaw), dx * Math.sin(yaw) + dz * Math.cos(yaw)];
+    return Math.abs(lx) < halfWidth + 1 && lz > front - 1 && lz < back + 1;
+  };
+  for (const kind of ["trees", "roadside", "scrub", "landRows"]) {
+    for (const [id, spots] of Object.entries(mapWorld.plan[kind])) {
+      for (let i = 0; i < spots.length; i += 5) assert.ok(!inside(spots[i], spots[i + 2]), `${kind} ${id} at ${spots[i]}, ${spots[i + 2]}`);
+    }
+  }
+});

@@ -369,6 +369,23 @@ export const STUDIO_FOOTPRINT = FOOTPRINT;
 /** Metres between the road edge and the studio's glass front. */
 const STUDIO_SETBACK = 8;
 
+/** The studio's frame on `route`: its origin at the road, its yaw, and the middle and reach of its footprint. */
+function studioFrame(route) {
+  const side = -1;
+  const { halfWidth, front, back } = STUDIO_FOOTPRINT;
+  const f = roadFrame(route, route.wrap(STUDIO_DISTANCE));
+  const origin = add(f.center, scale(f.right, side * (roadHalfWidth(route.lanes) + STUDIO_SETBACK - front)));
+  const yaw = yawFor(scale(f.right, -side));
+  const local = (x, z) => [origin[0] + x * Math.cos(yaw) + z * Math.sin(yaw), origin[2] - x * Math.sin(yaw) + z * Math.cos(yaw)];
+  return { f, origin, yaw, local, mid: local(0, (front + back) / 2), reach: Math.hypot(halfWidth, (back - front) / 2) + 1 };
+}
+
+/** The ground the plan keeps plants off for the spin studio on `route` (its footprint, plus two metres). */
+export function studioClearing(route) {
+  const { mid, reach } = studioFrame(route);
+  return { x: mid[0], z: mid[1], radius: reach + 2 };
+}
+
 /**
  * Where the spin studio stands: on the side opposite the café, glass front
  * facing the road, on the highest ground under its footprint, which it
@@ -377,14 +394,8 @@ const STUDIO_SETBACK = 8;
  * @returns {{position: number[], yaw: number} | null}
  */
 export function studioSite(route, terrain, { occupancy, avoid = () => false }) {
-  const side = -1;
   const { halfWidth, front, back } = STUDIO_FOOTPRINT;
-  const f = roadFrame(route, route.wrap(STUDIO_DISTANCE));
-  const origin = add(f.center, scale(f.right, side * (roadHalfWidth(route.lanes) + STUDIO_SETBACK - front)));
-  const yaw = yawFor(scale(f.right, -side));
-  const local = (x, z) => [origin[0] + x * Math.cos(yaw) + z * Math.sin(yaw), origin[2] - x * Math.sin(yaw) + z * Math.cos(yaw)];
-  const [midX, midZ] = local(0, (front + back) / 2);
-  const reach = Math.hypot(halfWidth, (back - front) / 2) + 1;
+  const { f, origin, yaw, local, mid: [midX, midZ], reach } = studioFrame(route);
   if (avoid(origin[0], origin[2], 10) || avoid(midX, midZ, 10) || occupancy.blocked(midX, midZ, reach)) return null;
   const y = terrain ? Math.max(...[-halfWidth, halfWidth].flatMap((x) => [front, back].map((z) => terrain.height(...local(x, z))))) : f.center[1];
   occupancy.add(midX, midZ, reach);
