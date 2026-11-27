@@ -26,6 +26,10 @@ import { seededRandom } from "../../../world/noise.js";
  * @property {typeof BIKE_TYPES_FOR_LOOKS[number]} bike
  * @property {string} frame Frame colour, `#rrggbb`.
  * @property {string} frameAccent Frame trim colour, `#rrggbb`.
+ * @property {typeof SOCK_HEIGHTS[number]} [sockHeight] How high the socks reach (default `crew`).
+ * @property {typeof HAIR_STYLES[number]} [hairStyle] Hair under the helmet (default `short`).
+ * @property {boolean} [moustache] A handlebar moustache.
+ * @property {typeof HELMET_STYLES[number]} [helmetStyle] Road helmet, aero helmet, cycling cap or lemon (default `road`).
  */
 
 /** Skin tones, sRGB hex as the reference's `SKIN`. */
@@ -38,8 +42,17 @@ export const RIDER_SKINS = Object.freeze({
   dark: "#5e3b28",
 });
 
-/** Jersey patterns; `solid` is the plain colour. */
-export const RIDER_PATTERNS = Object.freeze(["solid", "hoops", "band", "sash", "panels", "chevron", "dots", "fade"]);
+/** Jersey patterns; `solid` is the plain colour. `rainbow` (five bands) is earned, never rolled. */
+export const RIDER_PATTERNS = Object.freeze(["solid", "hoops", "band", "sash", "panels", "chevron", "dots", "fade", "rainbow"]);
+/** The patterns `lookOf` rolls. */
+const ROLLED_PATTERNS = RIDER_PATTERNS.slice(0, 8);
+
+/** How high the socks reach: ankle, crew, tall (aero socks), knee-high. */
+export const SOCK_HEIGHTS = Object.freeze(["low", "crew", "tall", "knee"]);
+/** Hair under the helmet. */
+export const HAIR_STYLES = Object.freeze(["short", "long", "ponytail"]);
+/** Head gear: road helmet, aero helmet, cotton cycling cap, lemon helmet. */
+export const HELMET_STYLES = Object.freeze(["road", "aero", "cap", "lemon"]);
 
 /** Kit cuts: road jersey and bibs, long sleeves, skinsuit, casual top. */
 export const RIDER_KITS = Object.freeze(["road", "long", "skinsuit", "casual"]);
@@ -95,6 +108,18 @@ const SHORTS_DARK_CHANCE = 0.8;
 const GLASSES_CHANCE = 0.25;
 const GLOVES_CHANCE = 0.6;
 const MIX_MULTIPLIER = 2654435761;
+const SOCK_WEIGHTS = Object.freeze([
+  ["low", 0.25],
+  ["crew", 0.8],
+  ["tall", 1],
+]);
+const HAIR_WEIGHTS = Object.freeze([
+  ["short", 0.8],
+  ["long", 0.9],
+  ["ponytail", 1],
+]);
+const MOUSTACHE_CHANCE = 0.05;
+const AERO_CHANCE = 0.08;
 
 const pick = (list, roll) => list[Math.min(list.length - 1, Math.floor(roll * list.length))];
 
@@ -124,7 +149,7 @@ export function lookOf(id) {
   const skin = pick(Object.keys(RIDER_SKINS), rng());
   const hair = pick(HAIRS, rng());
   const kit = pickWeighted(KIT_WEIGHTS, rng());
-  const pattern = rng() < PATTERN_CHANCE_SOLID ? "solid" : pick(RIDER_PATTERNS.slice(1), rng());
+  const pattern = rng() < PATTERN_CHANCE_SOLID ? "solid" : pick(ROLLED_PATTERNS.slice(1), rng());
   const [primary, secondary, accent] = pick(JERSEY_PAIRS, rng());
   const shorts = rng() < SHORTS_DARK_CHANCE ? pick(SHORTS.slice(0, 5), rng()) : pick(SHORTS, rng());
   const socks = pick(SOCKS, rng());
@@ -136,6 +161,11 @@ export function lookOf(id) {
   const bike = pickWeighted(BIKE_WEIGHTS, rng());
   const frame = pick(FRAMES, rng());
   const frameAccent = pick(FRAME_ACCENTS, rng());
+  // drawn after every earlier field, so those stay as they were before these pieces existed
+  const sockHeight = pickWeighted(SOCK_WEIGHTS, rng());
+  const hairStyle = pickWeighted(HAIR_WEIGHTS, rng());
+  const moustache = rng() < MOUSTACHE_CHANCE;
+  const helmetStyle = rng() < AERO_CHANCE ? "aero" : "road";
 
   return {
     height,
@@ -157,5 +187,9 @@ export function lookOf(id) {
     bike,
     frame,
     frameAccent,
+    sockHeight,
+    hairStyle,
+    moustache,
+    helmetStyle,
   };
 }

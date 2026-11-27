@@ -23,6 +23,10 @@ const HEM = 0.06;
 /** Sleeve and trouser lengths by kit, as a fraction of the arm or leg region. */
 const SLEEVE = Object.freeze({ road: 0.32, long: 1, skinsuit: 0.36, casual: 0.24 });
 const TROUSER = Object.freeze({ road: 0.29, long: 1, skinsuit: 0.3, casual: 0.24 });
+/** Where the socks begin on the leg region (v 0 at the hip, 0.5 at the knee, 1 at the ankle), by sock height. */
+const SOCK_TOP = Object.freeze({ low: 0.95, crew: 0.86, tall: 0.76, knee: 0.55 });
+/** The rainbow's bands, top to bottom (blue, red, black, yellow, green). */
+const RAINBOW = Object.freeze(["#0a55a8", "#d3202a", "#141414", "#f6c800", "#16924a"]);
 /** Sub-samples per axis when covering a pixel with a polygon or an ellipse. */
 const SAMPLES = 3;
 
@@ -160,8 +164,9 @@ export function paintKit(look, size = 256) {
   if (kit !== "long") s.rect(leg, 0, 1, trouser - 0.022, trouser, kit === "skinsuit" ? secondary : accent);
   if (kit === "skinsuit" || pattern === "panels") s.rect(leg, 0.45, 0.55, 0, trouser - 0.025, secondary);
   if (kit !== "long") {
-    s.rect(leg, 0, 1, 0.86, 1, look.socks);
-    s.rect(leg, 0, 1, 0.9, 0.92, secondary);
+    const top = SOCK_TOP[look.sockHeight] ?? SOCK_TOP.crew;
+    s.rect(leg, 0, 1, top, 1, look.socks);
+    if (top < 0.95) s.rect(leg, 0, 1, top + 0.04, top + 0.06, secondary);
   } else s.rect(leg, 0, 1, 0.96, 1, look.socks);
 
   // hands: gloves
@@ -176,7 +181,7 @@ export function paintKit(look, size = 256) {
   s.rect(foot, 0.7, 0.8, 0.3, 0.42, accent);
   s.rect(foot, 0, 1, 0, 0.16, accent);
 
-  paintFace(s, look.hair);
+  paintFace(s, look.hair, look.hairStyle);
   return s.pixels;
 }
 
@@ -212,6 +217,7 @@ function paintPattern(s, pattern, look) {
       }
     }
   }
+  if (pattern === "rainbow") RAINBOW.forEach((hex, i) => s.rect(torso, 0, 1, 0.72 - i * 0.04, 0.76 - i * 0.04, hex));
   if (pattern === "fade") {
     const [, top] = s.pointIn(torso, 0, 1);
     const [, bottom] = s.pointIn(torso, 0, HEM);
@@ -220,7 +226,7 @@ function paintPattern(s, pattern, look) {
 }
 
 /** Hair, eyes, brows and lips on the head region. */
-function paintFace(s, hair) {
+function paintFace(s, hair, style = "short") {
   const { head } = KIT_ATLAS;
   // u 0.25 is the face, 0.75 the back; the hair reaches down to the nape so it shows under the helmet
   s.rect(head, 0.45, 1, 0.62, 1, hair);
@@ -229,6 +235,7 @@ function paintFace(s, hair) {
   s.rect(head, 0.5, 0.58, 0.5, 0.62, hair);
   s.rect(head, 0.92, 1, 0.5, 0.62, hair);
   s.rect(head, 0, 1, 0.9, 1, hair);
+  if (style === "long") s.rect(head, 0.55, 0.95, 0, 0.36, hair);
   const k = s.scale;
   for (const du of [-0.035, 0.035]) {
     const [x, y] = s.pointIn(head, 0.25 + du, 0.54);

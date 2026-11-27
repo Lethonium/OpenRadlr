@@ -359,8 +359,16 @@ function buildGeometry(joints, h, girth, belly) {
 
 const VENT = colour("#24262a");
 
-/** A vertex-coloured helmet shell on the head joint (in the bind pose's model space). */
-function helmetGeometry(joints, h, shell, trim) {
+const LEMON = colour("#f5d630");
+const LEMON_LEAF = colour("#3f8a2c");
+/** How far the tail sweeps back and down, and whether the shell has vents, by helmet style. */
+const HELMET_SHAPE = Object.freeze({ road: { tail: 0.25, drop: 0.35, vents: true }, aero: { tail: 1.1, drop: 1.1, vents: false }, lemon: { tail: 0.1, drop: 0.1, vents: false } });
+
+/** A vertex-coloured helmet (or cap) on the head joint (in the bind pose's model space), by style. */
+function helmetGeometry(joints, h, shell, trim, style = "road") {
+  if (style === "cap") return capGeometry(joints, h, shell, trim);
+  const shape = HELMET_SHAPE[style] ?? HELMET_SHAPE.road;
+  const lemon = style === "lemon";
   const geometry = new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.56).toNonIndexed();
   geometry.deleteAttribute("uv");
   const position = geometry.attributes.position;
@@ -372,20 +380,80 @@ function helmetGeometry(joints, h, shell, trim) {
     let y = position.getY(i);
     const z = position.getZ(i);
     const back = Math.max(0, -x);
-    y -= back * back * 0.35; // the tail sweeps down at the back
-    x *= 1 + back * 0.25;
+    y -= back * back * shape.drop; // the tail sweeps down at the back
+    x *= 1 + back * shape.tail;
     const azimuth = Math.atan2(z, x);
     const polar = Math.acos(Math.max(-1, Math.min(1, position.getY(i))));
-    let paint = shellColour;
-    if (polar > 0.3 && polar < 1.25 && Math.abs(Math.sin(azimuth * 5)) > 0.8 && Math.abs(azimuth) < 2.6) paint = VENT;
-    if (Math.abs(z) < 0.07 && y > 0.6) paint = trimColour;
-    if (polar > 1.6) paint = trimColour;
+    let paint = lemon ? LEMON : shellColour;
+    if (shape.vents && polar > 0.3 && polar < 1.25 && Math.abs(Math.sin(azimuth * 5)) > 0.8 && Math.abs(azimuth) < 2.6) paint = VENT;
+    if (!lemon && Math.abs(z) < 0.07 && y > 0.6) paint = trimColour;
+    if (lemon && polar < 0.22) paint = LEMON_LEAF; // the stalk
+    if (polar > 1.6 && !lemon) paint = trimColour;
+    if (lemon) {
+      // a lemon's pointed tip at the front, bumpy skin
+      const tip = Math.max(0, x) ** 6 * 0.35;
+      x *= 1 + tip;
+      y *= 1 + 0.03 * Math.sin(azimuth * 9) * Math.sin(polar * 7);
+    }
     colours.set([paint.r, paint.g, paint.b], i * 3);
-    position.setXYZ(i, x * 0.08 * h, y * 0.066 * h, z * 0.062 * h);
+    position.setXYZ(i, x * 0.08 * h, y * (lemon ? 0.084 : 0.066) * h, z * 0.062 * h);
   }
   geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
   geometry.computeVertexNormals();
-  return geometry.translate(joints.head.x - 0.004 * h, 0.957 * h, 0);
+  geometry.translate(joints.head.x - 0.004 * h, 0.957 * h, 0);
+  if (!lemon) return geometry;
+  // a leaf on top
+  const leaf = new THREE.SphereGeometry(0.03 * h, 8, 4).toNonIndexed();
+  leaf.deleteAttribute("uv");
+  leaf.scale(1, 0.18, 0.45).rotateZ(0.5).translate(joints.head.x - 0.02 * h, 1.025 * h, 0.01 * h);
+  return merge([geometry, withColour(leaf, LEMON_LEAF)]);
+}
+
+/** Paints every vertex of `geometry` one colour. */
+function withColour(geometry, paint) {
+  const count = geometry.attributes.position.count;
+  const colours = new Float32Array(count * 3);
+  for (let i = 0; i < count; i += 1) colours.set([paint.r, paint.g, paint.b], i * 3);
+  geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  return geometry;
+}
+
+/** A cotton cycling cap: a low crown in the helmet colour with a band in the trim, and a short brim up front. */
+function capGeometry(joints, h, crownHex, trimHex) {
+  const crown = new THREE.SphereGeometry(1, 24, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).toNonIndexed();
+  crown.deleteAttribute("uv");
+  const position = crown.attributes.position;
+  const colours = new Float32Array(position.count * 3);
+  const crownColour = colour(crownHex);
+  const trimColour = colour(trimHex);
+  for (let i = 0; i < position.count; i += 1) {
+    const y = position.getY(i);
+    const paint = y < 0.25 || Math.abs(position.getZ(i)) < 0.08 ? trimColour : crownColour;
+    colours.set([paint.r, paint.g, paint.b], i * 3);
+    position.setXYZ(i, position.getX(i) * 0.066 * h, y * 0.066 * h, position.getZ(i) * 0.056 * h);
+  }
+  crown.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  crown.computeVertexNormals();
+  crown.translate(joints.head.x + 0.006 * h, 0.938 * h, 0);
+  const brim = new THREE.CylinderGeometry(0.055 * h, 0.055 * h, 0.004 * h, 16, 1, false, Math.PI / 2 - 0.85, 1.7).toNonIndexed();
+  brim.deleteAttribute("uv");
+  brim.scale(1.35, 1, 1).rotateZ(0.12).translate(joints.head.x + 0.012 * h, 0.95 * h, 0);
+  return merge([crown, withColour(brim, crownColour)]);
+}
+
+/** A ponytail out from under the helmet at the back of the head. */
+function ponytailGeometry(h) {
+  const tail = [vec(-0.05 * h, 0.94 * h, 0), vec(-0.085 * h, 0.925 * h, 0), vec(-0.1 * h, 0.885 * h, 0), vec(-0.1 * h, 0.85 * h, 0)];
+  const radii = [0.014, 0.012, 0.009, 0.004];
+  return merge(tail.slice(1).map((to, i) => rod(tail[i], to, radii[i] * h)));
+}
+
+/** A handlebar moustache under the nose, its ends curled up. */
+function moustacheGeometry(h) {
+  return merge([-1, 1].flatMap((sign) => {
+    const points = [vec(0.064 * h, 0.917 * h, 0), vec(0.06 * h, 0.914 * h, sign * 0.017 * h), vec(0.052 * h, 0.917 * h, sign * 0.03 * h), vec(0.05 * h, 0.928 * h, sign * 0.035 * h)];
+    return points.slice(1).map((to, i) => rod(points[i], to, (0.0045 - i * 0.0012) * h));
+  }));
 }
 
 /** A thin rod from `from` to `to` (bind-pose model space). */
@@ -552,7 +620,7 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
   // rigid extras on the head bone
   const headInverse = model.head.clone().invert();
   const helmet = new THREE.Mesh(
-    own(helmetGeometry(joints, h, look.helmet, look.accent).applyMatrix4(headInverse)),
+    own(helmetGeometry(joints, h, look.helmet, look.accent, look.helmetStyle).applyMatrix4(headInverse)),
     own(lit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.1 }))),
   );
   helmet.castShadow = true;
@@ -560,7 +628,12 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
   helmet.name = "helmet";
   const strapMaterial = own(lit(new THREE.MeshStandardMaterial({ color: "#1d1f24", roughness: 0.8 })));
   const onHead = (geometries) => merge(geometries.map((geometry) => geometry.applyMatrix4(headInverse)));
-  bones.head.add(Object.assign(new THREE.Mesh(own(onHead(strapGeometries(h))), strapMaterial), { name: "strap" }));
+  if (look.helmetStyle !== "cap") bones.head.add(Object.assign(new THREE.Mesh(own(onHead(strapGeometries(h))), strapMaterial), { name: "strap" }));
+  if (look.hairStyle === "ponytail" || look.moustache) {
+    const hairMaterial = own(lit(new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.9 })));
+    if (look.hairStyle === "ponytail") bones.head.add(Object.assign(new THREE.Mesh(own(onHead([ponytailGeometry(h)])), hairMaterial), { name: "ponytail", castShadow: true }));
+    if (look.moustache) bones.head.add(Object.assign(new THREE.Mesh(own(onHead([moustacheGeometry(h)])), hairMaterial), { name: "moustache" }));
+  }
   if (look.glasses) {
     const lensMaterial = new THREE.MeshStandardMaterial({ color: "#1b2430", roughness: 0.12, metalness: 0.85, side: THREE.DoubleSide });
     bones.head.add(Object.assign(new THREE.Mesh(own(onHead(glassesGeometries(h))), own(lit(lensMaterial))), { name: "glasses" }));

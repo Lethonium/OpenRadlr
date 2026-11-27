@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { BIKE_TYPES_FOR_LOOKS, RIDER_KITS, RIDER_PATTERNS, RIDER_SKINS, lookOf } from "../public/js/view3d/assets/riders/look.js";
+import { BIKE_TYPES_FOR_LOOKS, HAIR_STYLES, HELMET_STYLES, RIDER_KITS, RIDER_PATTERNS, RIDER_SKINS, SOCK_HEIGHTS, lookOf } from "../public/js/view3d/assets/riders/look.js";
 
 const SAMPLE_IDS = Array.from({ length: 200 }, (_, index) => index + 1);
 const EXTREME_IDS = [0, -1, 1, 2 ** 31 - 1, -(2 ** 31), 123456789];
@@ -54,4 +54,29 @@ test("most riders ride road bikes", () => {
 test("casual kits are rare", () => {
   const kits = countBy(looks(SAMPLE_IDS), (look) => look.kit);
   assert.ok((kits.casual ?? 0) < 0.15 * SAMPLE_IDS.length, JSON.stringify(kits));
+});
+
+test("the pieces added for rider looks leave every earlier field as it was", () => {
+  const text = Array.from({ length: 50 }, (_, i) => {
+    const l = lookOf(i + 1);
+    return [l.kit, l.pattern, l.primary, l.helmet, l.glasses ? 1 : 0, l.bike, l.frame, l.frameAccent, l.height.toFixed(4)].join("|");
+  }).join(";");
+  let hash = 0;
+  for (const char of text) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) | 0;
+  assert.equal(hash, 88756916);
+});
+
+test("looks roll the new pieces too: sock heights, hair styles, a rare moustache and aero helmet", () => {
+  const all = looks(SAMPLE_IDS);
+  for (const look of all) {
+    assert.ok(SOCK_HEIGHTS.includes(look.sockHeight), look.sockHeight);
+    assert.ok(HAIR_STYLES.includes(look.hairStyle), look.hairStyle);
+    assert.ok(HELMET_STYLES.includes(look.helmetStyle), look.helmetStyle);
+    assert.equal(typeof look.moustache, "boolean");
+  }
+  assert.ok(new Set(all.map((look) => look.sockHeight)).size >= 3);
+  assert.ok(new Set(all.map((look) => look.hairStyle)).size >= 2);
+  const moustaches = all.filter((look) => look.moustache).length;
+  assert.ok(moustaches > 0 && moustaches < 0.15 * all.length, `${moustaches} moustaches`);
+  assert.ok(all.every((look) => look.sockHeight !== "knee" && !["cap", "lemon"].includes(look.helmetStyle)), "the silly pieces are earned, never rolled");
 });

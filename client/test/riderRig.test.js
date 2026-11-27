@@ -253,3 +253,57 @@ test("every UV stays a texel inside its atlas region, so no neighbour bleeds int
     assert.ok(inside, `uv ${u.toFixed(4)}, ${w.toFixed(4)} sits on a region edge`);
   }
 });
+
+test("socks reach the chosen height", () => {
+  const sockAt = (sockHeight, v) => pixelAt(paintKit(look({ kit: "road", socks: "#00ff00", sockHeight }), SIZE), KIT_ATLAS.leg, 0.25, v);
+  const green = [0, 255, 0, 255];
+  assert.notDeepEqual(sockAt("low", 0.9), green);
+  assert.deepEqual(sockAt("low", 0.98), green);
+  assert.deepEqual(sockAt("crew", 0.88), green);
+  assert.notDeepEqual(sockAt("crew", 0.8), green);
+  assert.deepEqual(sockAt("tall", 0.78), green);
+  assert.deepEqual(sockAt("knee", 0.57), green);
+});
+
+test("long hair reaches the neck at the back", () => {
+  const pixels = paintKit(look({ hair: "#00ff00", hairStyle: "long" }), SIZE);
+  assert.deepEqual(pixelAt(pixels, KIT_ATLAS.head, 0.75, 0.2), [0, 255, 0, 255]);
+});
+
+test("the rainbow paints five bands across the chest", () => {
+  const pixels = paintKit(look({ pattern: "rainbow", primary: "#ffffff" }), SIZE);
+  const colours = new Set(Array.from({ length: 40 }, (_, i) => pixelAt(pixels, KIT_ATLAS.torso, 0.3, 0.5 + i * 0.008).slice(0, 3).join(",")));
+  assert.ok(colours.size >= 6, `${colours.size} colours`);
+});
+
+/** Bounds of the head-bone extra `name` relative to the head bone, standing. */
+function extraBounds(rig, name) {
+  const head = rig.boneWorld("head", v(0, 0, 0));
+  const points = headExtra(rig, name).map((point) => point.sub(head));
+  const of = (axis) => points.map((point) => point[axis]);
+  return { minX: Math.min(...of("x")), maxX: Math.max(...of("x")), minY: Math.min(...of("y")) };
+}
+
+test("a ponytail and a moustache are drawn only when chosen", () => {
+  const none = build(look({ hairStyle: "short", moustache: false }));
+  const named = [];
+  none.object.traverse((one) => named.push(one.name));
+  assert.ok(!named.includes("ponytail") && !named.includes("moustache"));
+  const rig = build(look({ hairStyle: "ponytail", moustache: true }));
+  assert.ok(extraBounds(rig, "ponytail").minX < -0.08 * STAND_HEIGHT, "the ponytail hangs out at the back");
+  assert.ok(extraBounds(rig, "moustache").maxX > 0.05 * STAND_HEIGHT, "the moustache sits on the face");
+});
+
+test("helmet styles change the helmet's shape and colour", () => {
+  const road = extraBounds(build(look({ helmetStyle: "road" })), "helmet");
+  const aero = extraBounds(build(look({ helmetStyle: "aero" })), "helmet");
+  assert.ok(aero.minX < road.minX - 0.03 * STAND_HEIGHT, "the aero tail reaches back");
+  const cap = extraBounds(build(look({ helmetStyle: "cap" })), "helmet");
+  assert.ok(cap.maxX > 0.078 * STAND_HEIGHT, "the cap's brim sticks out past the nose");
+  const lemon = build(look({ helmetStyle: "lemon", helmet: "#0000ff" }));
+  let colours = null;
+  lemon.object.traverse((one) => one.name === "helmet" && (colours = one.geometry.attributes.color));
+  let yellow = 0;
+  for (let i = 0; i < colours.count; i += 1) if (colours.getX(i) > 0.6 && colours.getY(i) > 0.5 && colours.getZ(i) < 0.3) yellow += 1;
+  assert.ok(yellow > colours.count * 0.6, "a lemon helmet is lemon yellow whatever the helmet colour");
+});
