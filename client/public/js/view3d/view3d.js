@@ -24,14 +24,18 @@ import { StudioFloors } from "./studioLayer.js";
 import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
-import { buildWorld } from "./world.js";
-import { riderPosition } from "../world/roads.js";
+import { buildWorld, riddenSurface } from "./world.js";
+import { bikeOnRoad, riderPosition } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { groundHeight, labelInSight, plotBoxes } from "./labelSight.js";
 import { isRemote } from "../view/remoteRiders.js";
 import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
+import { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens } from "./lenses.js";
+import { isWebGl2Available } from "./webgl.js";
+
+export { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens, isWebGl2Available };
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -119,67 +123,6 @@ export function visibleLabels(candidates, myId, { charWidth = 7, padding = 22, h
     shown.push(candidate);
   }
   return shown;
-}
-
-/** True if WebGL 2 is available in this browser. */
-export function isWebGl2Available(doc = globalThis.document) {
-  try {
-    return Boolean(doc.createElement("canvas").getContext("webgl2"));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The ride's lens; the menu's drone view sees further (`haze` stretches fog
- * and draw distances). Depth precision far away grows with `near`, so it is
- * as large as the cameras allow: the closest ride camera sits 3 m behind the
- * rider, the drone at least 70 m above the ground.
- */
-export const RIDE_LENS = Object.freeze({ near: 1, far: 9000, haze: 1, shadows: true });
-export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 1.3, shadows: false });
-/** The drone's haze before it thickened: its draw reach (`reach`) is still what this clearer air gave. */
-const CLEAR_HAZE = 2.6;
-
-/**
- * The menu's gym orbit drops far below the drone (about 17 m up over the mat,
- * not 70), so `DRONE_LENS.near` would clip the ground in the foreground. This
- * lens keeps the haze and draw reach of the drone but pulls `near` in to the
- * closest the orbit gets to anything.
- */
-export const GYM_LENS = Object.freeze({ ...DRONE_LENS, near: 2 });
-
-/**
- * The drone's lens for an island of `overview.radius` metres: the haze grows
- * with a big island, so its far coast stays a silhouette in the haze rather than
- * being fogged out (the fixed DRONE_LENS was made for a 2.5 km island).
- */
-export function droneLens(overview) {
-  const radius = overview?.radius ?? 0;
-  const haze = Math.max(DRONE_LENS.haze, radius / 4500);
-  // Small things reach as far as the clearer air let them (`reach`): the thicker haze must not cost the view its depth.
-  return Object.freeze({ ...DRONE_LENS, haze, reach: Math.sqrt(CLEAR_HAZE), far: Math.max(DRONE_LENS.far, radius * 3.4) });
-}
-
-/**
- * The gym orbit's lens for an island of `overview.radius` metres: the drone
- * lens (same haze and draw reach) with a `near` plane the low orbit clears.
- * The orbit is `MENU_CAMERA.gymHeight` metres up at `gymDistance` out, so the
- * terrain in the foreground is never nearer than the height; 2 m leaves room
- * for the mat slipping below the eye.
- */
-export function gymLens(overview) {
-  return Object.freeze({ ...droneLens(overview), near: GYM_LENS.near });
-}
-
-/**
- * Smallest depth difference (metres) a `bits` depth buffer resolves at
- * `distance` with a `near`/`far` perspective lens. Surfaces closer than this
- * flicker against each other.
- */
-export function depthStep({ near, far }, distance, bits = 24) {
-  // Window depth is (1/near - 1/z) / (1/near - 1/far); one step of it in z.
-  return (distance * distance * (1 / near - 1 / far)) / 2 ** bits;
 }
 
 /**
@@ -345,10 +288,11 @@ export class View3D {
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
-   * @param {{engine?: object, weather?: object}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
-   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`)
+   * @param {{engine?: object, weather?: object, quality?: string}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
+   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`), `quality` the graphics level the
+   *   scene is built at (building at one level and switching costs the scene twice)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null } = {}) {
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null, quality = "high" } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -358,11 +302,14 @@ export class View3D {
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
+    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
     // One engine per canvas, shared with every other view on it and never disposed here.
-    this.engine = engine ?? engineFor(canvas);
+    this.engine = engine ?? engineFor(canvas, { settings: qualitySettings(this.quality) });
     this.engine.setQuality(qualitySettings(this.quality));
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
+    /** The quality level the world's plan was budgeted for (its trees, roadside and animals), or null if unknown. */
+    this.planDetail = world.detail ?? null;
     this.tracker = createTracker();
     this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.seed ?? world.terrain?.seed ?? 0 };
     /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
@@ -401,6 +348,18 @@ export class View3D {
     const settings = qualitySettings(quality);
     this.engine.setQuality(settings);
     this.worldScene.setQuality(settings);
+  }
+
+  /**
+   * Swaps in the world's plan made for another quality level (`detail`): the layers it populates are rebuilt.
+   * A quality change alone keeps the populations the old plan was budgeted for.
+   * @param {object} plan
+   * @param {string} detail
+   */
+  setPlan(plan, detail) {
+    this.planDetail = detail;
+    this.sight = { ...this.sight, boxes: plotBoxes(plan) };
+    this.worldScene.setSeason(this.season, plan);
   }
 
   /**
@@ -530,7 +489,8 @@ export class View3D {
   /** A rider on a route: mine, or another route of the map. */
   #onRoute(rider) {
     const route = !rider.route || rider.route === this.route.id ? this.route : this.routes?.get(rider.route);
-    return route ? { rider, ...riderPosition(route, rider.distance, rider.lane) } : null;
+    // Wheels on the drawn asphalt, which is lifted and cuts across changes of grade (#144 review).
+    return route ? { rider, ...bikeOnRoad(route, rider.distance, rider.lane, riddenSurface(this.route)) } : null;
   }
 
   /** A rider off every route, on a road of the network in either direction. */
@@ -541,7 +501,7 @@ export class View3D {
     const offset = Math.min(road.length, Math.max(0, rider.road.offset));
     // Lanes count from the left in riding direction.
     const lane = back ? road.lanes - 1 - rider.lane : rider.lane;
-    const at = riderPosition(road, back ? road.length - offset : offset, lane);
+    const at = bikeOnRoad(road, back ? road.length - offset : offset, lane, riddenSurface(this.route));
     return { rider, ...at, forward: back ? scale(at.forward, -1) : at.forward };
   }
 

@@ -1,6 +1,6 @@
 /**
- * The graphics level a device starts on, and the one step down when its first
- * ride runs slowly. Pure: the browser signals come in as arguments.
+ * The graphics level a device starts on, and the steps down when its rides
+ * run slowly. Pure: the browser signals and frame times come in as arguments.
  * Ultra is never picked automatically.
  */
 
@@ -57,4 +57,54 @@ export function firstRunQuality(storedQuality, signals, storedView) {
   const pick = chooseQuality(signals);
   if (pick === "2d") return { quality: "low", auto: false, view: storedView ? null : "map", notice: !storedView };
   return { quality: pick, auto: true, view: null, notice: false };
+}
+
+/**
+ * Watches the frame times of an automatically picked level during rides and
+ * asks for one level down whenever a window of `frames` frames runs slowly
+ * (`adjustQuality`), as often as needed. Long stalls of a visible page count;
+ * the time a page spends hidden does not (`pause` drops the frame baseline).
+ * After a step the probe waits `cooldownS` seconds for the new level to settle
+ * (its world is rebuilt) before it measures again.
+ */
+export class QualityProbe {
+  #frames;
+  #cooldownS;
+  #last = null;
+  #samples = [];
+  #quietUntil = -Infinity;
+
+  /** @param {{frames?: number, cooldownS?: number}} [options] */
+  constructor({ frames = 90, cooldownS = 20 } = {}) {
+    this.#frames = frames;
+    this.#cooldownS = cooldownS;
+  }
+
+  /**
+   * A frame shown at `time` (seconds) on `level`.
+   * @returns {string | null} the level to switch to ("2d" for the 2D view), or null to stay
+   */
+  frame(time, level) {
+    const last = this.#last;
+    this.#last = time;
+    if (last === null || last < this.#quietUntil) return null;
+    this.#samples.push((time - last) * 1000);
+    if (this.#samples.length < this.#frames) return null;
+    const next = adjustQuality(level, this.#samples);
+    this.#samples = [];
+    if (next === level) return null;
+    this.#quietUntil = time + this.#cooldownS;
+    return next;
+  }
+
+  /** The page was hidden or shown again: the next frame starts a new gap. */
+  pause() {
+    this.#last = null;
+  }
+
+  /** A new ride, the 2D view or leaving the ride: drops the partial window too. */
+  reset() {
+    this.#last = null;
+    this.#samples = [];
+  }
 }

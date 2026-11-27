@@ -159,6 +159,15 @@ test("pumpkins and bales only lie on the fields that carry them", async () => {
   assert.ok(at("stubble").bales.length > 0);
 });
 
+test("a ring square's roots land in one span, or two at the ring's opposite ends where the wrap cuts them", async () => {
+  const { wrappedSpans } = await import("../public/js/view3d/assets/nature/grass.js");
+  // A 40 m tile around a camera at x = 10 covers −10..30: roots 0..10 stay, roots 30..40 wrap to −10..0.
+  assert.deepEqual(wrappedSpans(0, 10, 10, 40), [[0, 10]]);
+  assert.deepEqual(wrappedSpans(30, 10, 10, 40), [[-10, 0]]);
+  // Roots 25..35 are cut at 30: 25..30 stay, 30..35 wrap to −10..−5.
+  assert.deepEqual(wrappedSpans(25, 10, 10, 40), [[25, 30], [-10, -5]]);
+});
+
 test("the grass field wraps blades around the camera and frees what it made", async () => {
   const { createGrassRing, ringSet } = await import("../public/js/view3d/assets/nature/grass.js");
   const tracker = createTracker();
@@ -167,9 +176,12 @@ test("the grass field wraps blades around the camera and frees what it made", as
   assert.deepEqual(rings[1].fadeIn, [8, 10]);
   const data = (Type, format, type) => new THREE.DataTexture(new Type(4), 2, 2, format, type);
   const ring = createGrassRing({ ring: rings[1], world: 400, res: 2, heightTex: data(Float32Array, THREE.RedFormat, THREE.FloatType), colorTex: data(Uint8Array, THREE.RGBAFormat), uniforms: createSharedUniforms(), random: () => 0.25, track: tracker.track });
-  assert.equal(ring.object.geometry.instanceCount, Math.round(0.5 * 60 * 60));
+  assert.equal(ring.count, Math.round(0.5 * 60 * 60));
   ring.update(new THREE.Vector3(5, 0, 6));
   assert.equal(ring.uniforms.uCam.value.x, 5);
+  assert.equal(ring.drawn(), ring.object.children.length, "without a test every square is drawn");
+  ring.update(new THREE.Vector3(5, 0, 6), () => false);
+  assert.equal(ring.drawn(), 0);
   ring.dispose();
   assert.equal(tracker.live(), 0);
 });

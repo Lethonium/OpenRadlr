@@ -41,6 +41,48 @@ export function riderPosition(route, distance, lane) {
   return { ...frame, position: add(frame.center, scale(frame.right, offset)) };
 }
 
+/** Metres from a bike's origin (its bottom bracket) back to the rear and on to the front tyre's contact patch. */
+export const BIKE_CONTACTS = Object.freeze({ rear: 0.41, front: 0.58 });
+
+/**
+ * Height of a road's drawn asphalt at `distance`: `roadStrips` joins its
+ * corners every `step` metres, lifted by `lift`, so between corners it cuts
+ * across a change of grade.
+ * @param {import("../route/geometry.js").RouteGeometry} route
+ * @param {number} distance
+ * @param {{step?: number, lift?: number}} [surface]
+ */
+export function roadSurfaceAt(route, distance, { step = 4, lift = ROAD_LIFT.ridden } = {}) {
+  const d = route.loop === false ? Math.min(route.length, Math.max(0, distance)) : ((distance % route.length) + route.length) % route.length;
+  const d0 = Math.min(route.length, Math.floor(d / step) * step);
+  const d1 = Math.min(route.length, d0 + step);
+  const h0 = route.elevationAt(d0);
+  const t = d1 > d0 ? (d - d0) / (d1 - d0) : 0;
+  return h0 + (route.elevationAt(d1) - h0) * t + lift;
+}
+
+/**
+ * A bike on the drawn asphalt: both tyres on it, the origin on the line
+ * between their contact patches and `forward` pitched along that line.
+ * @param {import("../route/geometry.js").RouteGeometry} route
+ * @param {number} distance
+ * @param {number} lane
+ * @param {{step?: number, lift?: number}} [surface]
+ */
+export function bikeOnRoad(route, distance, lane, surface = {}) {
+  const at = riderPosition(route, distance, lane);
+  const { rear, front } = BIKE_CONTACTS;
+  const behind = roadSurfaceAt(route, distance - rear, surface);
+  const rise = roadSurfaceAt(route, distance + front, surface) - behind;
+  const flat = normalize([at.forward[0], 0, at.forward[2]]);
+  const run = rear + front;
+  return {
+    ...at,
+    position: [at.position[0], behind + rise * (rear / run), at.position[2]],
+    forward: normalize([flat[0] * run, rise, flat[2] * run]),
+  };
+}
+
 /** Dense samples along one or more roads, bucketed for fast nearest-point lookups. */
 export class RoadIndex {
   constructor(routes, { step = 6, cell = 60 } = {}) {

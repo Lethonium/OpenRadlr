@@ -7,7 +7,7 @@ import { qualitySettings } from "../public/js/view3d/quality.js";
 import { fakeRenderer } from "./support/fakeRenderer.js";
 
 /** An engine on a fake renderer; `post` records what the chain was asked. */
-function make(canvas = {}) {
+function make(canvas = {}, settings = undefined) {
   const fake = fakeRenderer();
   const posts = [];
   const createPost = (renderer, target, settings) => {
@@ -15,9 +15,17 @@ function make(canvas = {}) {
     posts.push(post);
     return post;
   };
-  const engine = engineFor(canvas, { createRenderer: () => fake, createPost });
+  const engine = engineFor(canvas, { createRenderer: () => fake, createPost, ...(settings ? { settings } : {}) });
   return { engine, fake, posts };
 }
+
+test("an engine made for a quality level builds its chain at that level only", () => {
+  const low = qualitySettings("low");
+  const { engine, posts } = make({}, low);
+  assert.equal(engine.settings, low);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].settings, low);
+});
 
 test("one engine per canvas", () => {
   const a = {};

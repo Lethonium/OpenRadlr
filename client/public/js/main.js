@@ -94,7 +94,6 @@ import {
 import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawRideMap } from "./view/rideMapView.js";
-import { View2D } from "./view2d/view2d.js";
 import { nextViewMode } from "./view2d/viewMode.js";
 import { renderSplits } from "./view/splitsView.js";
 import { drawProfile, drawUpcoming } from "./view/profileView.js";
@@ -124,10 +123,12 @@ import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
-import { adjustQuality, firstRunQuality } from "./view3d/qualityPick.js";
-import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
-import { buildScene } from "./view3d/worldScene.js";
-import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
+import { CAMERA_MODES } from "./view3d/chaseCamera.js";
+import { TIME_MODES } from "./world/daylight.js";
+import { droneLens, gymLens } from "./view3d/lenses.js";
+import { isWebGl2Available } from "./view3d/webgl.js";
+import { INSTRUCTOR } from "./view3d/studioLayout.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
@@ -168,6 +169,32 @@ const QUALITY_KEY = "openride.quality";
 /** "1" while the stored quality was picked for the device and no ride has tested it yet. */
 const QUALITY_PROBE_FRAMES = 90;
 const QUALITY_AUTO_KEY = "openride.qualityAuto";
+
+/**
+ * The 3D renderer (Three.js) and the world builder, loaded on first use: the
+ * menu and its route list come up without them, and a 2D-only device never
+ * loads them. The 2D views come with them: their sprites are baked from the
+ * 3D assets. `View3D`, `StudioView3D` and `View2D` are set once `load3d` resolves.
+ */
+let View3D = null;
+let StudioView3D = null;
+let View2D = null;
+let loading3d = null;
+function load3d() {
+  loading3d ??= Promise.all([import("./view3d/view3d.js"), import("./view3d/studioScene.js"), import("./view3d/worldScene.js"), import("./view2d/view2d.js")]).then(([view, studio, world, view2d]) => {
+    View3D = view.View3D;
+    StudioView3D = studio.StudioView3D;
+    View2D = view2d.View2D;
+    return world;
+  });
+  return loading3d;
+}
+
+/** `buildScene` (view3d/worldScene.js) once the 3D modules are loaded, so a view can be made from its scene right away. */
+async function buildScene(...args) {
+  const world = await load3d();
+  return world.buildScene(...args);
+}
 /** Before seasons the look was a biome; a saved "winter" still opens in winter. */
 const BIOME_KEY = "openride.biome";
 const SEASON_KEY = "openride.season";
@@ -979,18 +1006,23 @@ function applyFirstRunQuality() {
 }
 
 /**
- * The first 3D ride on an automatically picked level: after 90 frames its median
- * frame time may step the level down (or to 2D). Runs once, then the pick is final.
+ * Rides on an automatically picked level: whenever 90 frames in a row run
+ * slowly the level steps down (at Low, to 2D), again after a cooldown if it is
+ * still too slow. Each ride and each return to 3D starts a fresh sample; a
+ * hidden page's time never counts. Picking a level by hand ends it.
  */
-function probeFirstRide(time) {
-  if (readSetting(QUALITY_AUTO_KEY) !== "1" || app.viewMode !== "3d") return;
-  const probe = (app.qualityProbe ??= { last: null, frameMs: [] });
-  if (probe.last !== null && time - probe.last < 1) probe.frameMs.push((time - probe.last) * 1000);
-  probe.last = time;
-  if (probe.frameMs.length < QUALITY_PROBE_FRAMES) return;
-  writeSetting(QUALITY_AUTO_KEY, "0");
-  const next = adjustQuality(qualityLevel(readSetting(QUALITY_KEY)), probe.frameMs);
+function probeRideQuality(time) {
+  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES }));
+  const active = readSetting(QUALITY_AUTO_KEY) === "1" && app.viewMode === "3d" && Boolean(app.view3d);
+  if (!active || app.qualityProbeRide !== app.ride) {
+    probe.reset();
+    app.qualityProbeRide = active ? app.ride : null;
+  }
+  if (!active) return;
+  const next = probe.frame(time, app.view3d.quality);
+  if (next === null) return;
   if (next === "2d") {
+    writeSetting(QUALITY_AUTO_KEY, "0");
     setViewMode("map");
     notify(t("quality.picked2d"));
   } else {
@@ -1050,9 +1082,9 @@ function initMenuStage() {
     season: () => app.season,
     createView: use3d
       ? (route, scene) => {
-          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday() });
+          // The menu's drone view is always Low, built so from the start.
+          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday(), quality: "low" });
           view.lens = droneLens(scene.overview);
-          view.setQuality("low");
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
         }
@@ -3071,7 +3103,7 @@ function buildStudioWorld() {
     .then((world) => {
       if (app.ride !== ride) return;
       if (!world) return studioRoomOnly();
-      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday() });
+      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
       view.routes = world.routes;
       view.network = world.network;
       view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
@@ -3090,6 +3122,16 @@ function buildStudioWorld() {
 /** The fallback: the training room alone, the glass a flat sky. */
 function studioRoomOnly() {
   $("view-note").textContent = "";
+  const ride = app.ride;
+  load3d().then(() => {
+    if (app.ride === ride) studioRoomView();
+  }, (error) => {
+    console.error(error);
+    notify(t("studio.unavailable3d"), "error");
+  });
+}
+
+function studioRoomView() {
   try {
     const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
@@ -4835,6 +4877,8 @@ function initRecovery() {
   window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
     deviceLog.info(`Page ${document.visibilityState}`);
+    // Time spent hidden is not a slow frame.
+    app.qualityProbe?.pause();
     if (document.visibilityState !== "hidden") {
       if (nativeRide?.active) { app.nativeSyncing = true; nativeRide.flush().catch((error) => { app.nativeSyncing = false; console.warn(error); }); }
       return;
@@ -5756,7 +5800,7 @@ async function fetchNetworkFile(mapId) {
 /** Shows the 3D view once its world is built (or takes the menu's view as it is). */
 function show3d(scene, view = null) {
   try {
-    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday() });
+    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
   } catch (error) {
     console.error(error);
     $("view-note").textContent = t("view.unavailable");
@@ -5851,6 +5895,31 @@ function setQuality(quality) {
   app.view3d.setQuality(quality);
   $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
+  replanRideWorld(quality);
+}
+
+/** The newest ride-world replan; a later request makes an earlier one's result stale. */
+let rideReplan = 0;
+
+/**
+ * The world's plan budgets its trees, roadside and animals for one quality
+ * level, so a quality change alone keeps the old level's populations. Plans
+ * the ride's world again for `quality` in the background and swaps the new
+ * plan into the same view.
+ */
+function replanRideWorld(quality) {
+  const view = app.view3d;
+  const { ride, routeFile, biome, season } = app;
+  if (!view?.planDetail || view.planDetail === quality || !ride || !routeFile || app.studio) return;
+  const build = ++rideReplan;
+  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season, detail: quality }))
+    .then((scene) => {
+      // A newer replan, another view or another season (which builds the whole world again) wins.
+      if (build !== rideReplan || app.view3d !== view || view.quality !== quality || scene.season !== view.season) return;
+      view.setPlan(scene.plan, quality);
+    })
+    .catch((error) => console.error(error));
 }
 
 function setTimeMode(mode) {
@@ -6170,7 +6239,7 @@ function frame() {
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
-  probeFirstRide(time);
+  probeRideQuality(time);
   // The sprite baker starts on the first 2D frame; where it cannot, the old map takes over.
   if (app.view2d && !app.view2d.available) dispose2d();
   if (app.viewMode === "3d") {

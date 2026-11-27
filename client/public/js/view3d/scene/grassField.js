@@ -96,3 +96,70 @@ export function bakeGroundTextures(near, weights) {
   }
   return { world, res, heights, colors };
 }
+
+/** Most texels per side of the grass clearance texture (WebGL 2 promises 2048; nearly every GPU has 4096). */
+export const MAX_CLEAR_TEXELS = 4096;
+
+/** Mask values grass never grows on, whatever the coarse weights say. */
+const NO_GRASS = new Set([MASK.road, MASK.river, MASK.built]);
+
+/**
+ * Where blade roots may stand, at the plan mask's resolution (4 m cells, which
+ * cover the asphalt with its verge): 255 where grass may grow, 0 on roads,
+ * rivers and built ground. The near grid's weights are 16 m apart and would
+ * let blades onto a road that runs between two vertices. A mask wider than
+ * `maxTexels` is shrunk by whole blocks, a block cleared if any cell in it is.
+ * @param {import("../../world/plan/masks.js").Masks} masks
+ * @param {number} [maxTexels]
+ * @returns {{x0: number, z0: number, width: number, depth: number, columns: number, rows: number, data: Uint8Array}}
+ */
+export function bakeGrassClear(masks, maxTexels = MAX_CLEAR_TEXELS) {
+  const block = Math.max(1, Math.ceil(Math.max(masks.columns, masks.rows) / maxTexels));
+  const columns = Math.ceil(masks.columns / block);
+  const rows = Math.ceil(masks.rows / block);
+  const data = new Uint8Array(columns * rows).fill(255);
+  for (let j = 0; j < masks.rows; j += 1) {
+    for (let i = 0; i < masks.columns; i += 1) {
+      if (NO_GRASS.has(masks.data[j * masks.columns + i])) data[Math.floor(j / block) * columns + Math.floor(i / block)] = 0;
+    }
+  }
+  const size = masks.cell * block;
+  return { x0: masks.x0, z0: masks.z0, width: columns * size, depth: rows * size, columns, rows, data };
+}
+
+/**
+ * The clearance at a world point, 0 or 1, as the grass shader reads it
+ * (nearest texel, clamped at the edge).
+ * @param {ReturnType<typeof bakeGrassClear>} clear
+ */
+export function grassClearAt(clear, x, z) {
+  const i = Math.min(clear.columns - 1, Math.max(0, Math.floor(((x - clear.x0) / clear.width) * clear.columns)));
+  const j = Math.min(clear.rows - 1, Math.max(0, Math.floor(((z - clear.z0) / clear.depth) * clear.rows)));
+  return clear.data[j * clear.columns + i] / 255;
+}
+
+/**
+ * The ground under a world rectangle, from the baked grass textures: its
+ * lowest and highest point, or null where no grass grows on any texel the
+ * shader could read for it (the rings skip that square).
+ * @param {ReturnType<typeof bakeGroundTextures>} baked
+ * @returns {(x0: number, z0: number, x1: number, z1: number) => {low: number, high: number} | null}
+ */
+export function groundRange({ world, res, heights, colors }) {
+  const step = world / (res - 1);
+  const index = (v, round) => Math.min(res - 1, Math.max(0, round((v + world / 2) / step)));
+  return (x0, z0, x1, z1) => {
+    let low = Infinity;
+    let high = -Infinity;
+    let grass = false;
+    for (let j = index(z0, Math.floor); j <= index(z1, Math.ceil); j += 1) {
+      for (let i = index(x0, Math.floor); i <= index(x1, Math.ceil); i += 1) {
+        const t = j * res + i;
+        low = Math.min(low, heights[t]);
+        high = Math.max(high, heights[t]);
+        if (colors[t * 4 + 3] > 0) grass = true;
+      }
+    }
+    return grass ? { low, high } : null;
+  };
+}

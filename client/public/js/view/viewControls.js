@@ -3,7 +3,7 @@
 import { t } from "../i18n/i18n.js";
 import { CAMERA_MODES } from "../view3d/chaseCamera.js";
 import { TIME_MODES } from "../world/daylight.js";
-import { STUDIO_CAMERAS } from "../view3d/studioScene.js";
+import { STUDIO_CAMERAS } from "../view3d/studioCamera.js";
 import { LAYOUT_CHOICES, LAYOUT_LABELS } from "./hud.js";
 
 const CAMERA_KEYS = {

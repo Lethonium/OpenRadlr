@@ -194,6 +194,11 @@ const onStretches = (stretches, d) => stretches.some((s) => d >= s.from - 1e-6 &
  * detail, roads and far terrain get this much thinner instead.
  */
 export const LONG_ROUTE_M = 60_000;
+
+/** The ridden road's drawn asphalt, as `roadSurfaceAt` takes it: the strip step this route is built with, and its lift. */
+export function riddenSurface(route) {
+  return { step: route.length > LONG_ROUTE_M ? LONG.roadStep : 4, lift: ROAD_LIFT.ridden };
+}
 const DEFAULT_RIVER = Object.freeze([0.22, 0.45, 0.6]);
 /** The look of each café of the valley map; any other café is a valley café. */
 const CAFE_STYLE = Object.freeze({ "valley-cafe": "valley", "forge-hut": "hut", "hill-cafe": "hilltop", "beach-cafe": "beach" });
@@ -345,6 +350,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The view needs the biome to resolve its sky and lighting at render time.
     biome: biome.id,
     season,
+    // The level the plan's populations (trees, roadside, animals) were budgeted for.
+    detail,
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,

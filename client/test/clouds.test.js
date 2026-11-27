@@ -100,3 +100,7 @@ test("the world's scene carries the map's seed across the worker, for its weathe
   assert.equal(sceneOf(world).seed, world.terrain.seed);
   assert.equal(sceneOf({}).seed, 0);
 });
+
+test("the scene says which detail level its plan was built at", () => {
+  assert.equal(sceneOf({ detail: "low" }).detail, "low");
+});
