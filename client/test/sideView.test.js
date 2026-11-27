@@ -396,6 +396,21 @@ test("setRoute remakes the scenery and the profile strip for the new route", () 
   assert.ok(lines.every((c) => c.args[0] <= RIDER_AT * W + 1e-6 || c.args[1] >= H), "the road ends where the open route does");
 });
 
+test("setRoute rebuilds nothing until the side view is next drawn, and then once", () => {
+  let queries = 0;
+  const index = { query: () => (queries += 1, []) };
+  const view = createSideView({ scene: buildSceneNow(tinyLoopFile(), [], tinyNetworkFile()), route: loop, sampler: flat(), createCanvas: canvases().createCanvas, index, store: null });
+  const base = queries;
+  view.setRoute(open);
+  view.setRoute(open);
+  assert.equal(queries, base, "a route set while the side view is hidden costs nothing");
+  view.draw(fakeCanvas(W, H).canvas.getContext("2d"), { width: W, height: H, me: { d: 100 }, riders: [], look: DAY, t: 0 });
+  const once = queries - base;
+  assert.ok(once > 0, "rebuilt on the next draw");
+  view.draw(fakeCanvas(W, H).canvas.getContext("2d"), { width: W, height: H, me: { d: 100 }, riders: [], look: DAY, t: 0 });
+  assert.equal(queries, base + once, "and only once");
+});
+
 test("only the scenery near the camera is looked at, in the same drawing order", () => {
   const trees = Array.from({ length: 1000 }, (_, k) => treeAt(k * 0.8, k % 2 ? -20 : -45, { id: k % 2 ? "pine" : "olive" }));
   let gaps = 0;

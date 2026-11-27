@@ -153,6 +153,8 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     strip = profileStrip(route);
   }
   useRoute(route);
+  // A route set while the side view is hidden is only kept; the next draw rebuilds for it.
+  let pendingRoute = null;
 
   /** `d` as the camera sees it: the copy of this distance on the loop nearest the rider. */
   const nearTo = (me, d) => me.d + route.signedGap(me.d, d);
@@ -431,6 +433,11 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
   }
 
   function draw(ctx, { width, height, ratio = 1, me, riders = [], lemons = [], look, t = 0 }) {
+    if (pendingRoute) {
+      const next = pendingRoute;
+      pendingRoute = null;
+      useRoute(next);
+    }
     const camera = sideCamera({ width, height, me, route, ratio });
     const onScreen = nearScenery(camera).filter((entry) => {
       const x = camera.x(nearTo(me, entry.d), entry.lateral);
@@ -466,8 +473,10 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
 
   return {
     draw,
-    /** My road changed (a junction turn): the land, the scenery and the profile strip are remade for it. */
-    setRoute: useRoute,
+    /** My road changed (a junction turn): the land, the scenery and the profile strip are remade for it, on the next draw. */
+    setRoute: (next) => {
+      pendingRoute = next;
+    },
     resize: () => bands.resize(),
     dispose: () => bands.resize(),
   };
