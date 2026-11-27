@@ -287,15 +287,6 @@ test("at night the lamps, windows and bike lights glow", () => {
   assert.equal(glowing(NIGHT), 4, "lamp, window, headlight and tail light");
 });
 
-test("resize drops the tiles, which are remade at the new size", () => {
-  const { view, made } = make();
-  frame(view);
-  const count = made.length;
-  view.resize();
-  frame(view);
-  assert.equal(made.length, count * 2);
-});
-
 test("it draws on the real ground sampler without a rider sprite or a store hit", () => {
   const { view } = make({ store: fakeStore([]), sampler: groundSampler(scene.ground) });
   const screen = frame(view, { riders: [rider("a", 0, 0)] });
@@ -336,4 +327,28 @@ test("farms, cafes and landmarks are turned as the world places them", () => {
   assert.ok(near(turnsOf({ layer: "cafe", id: "x", yaw: 0.4 }), -0.4 - Math.PI), "cafe: yaw + pi");
   assert.ok(near(turnsOf({ layer: "landmark", id: "turbine", yaw: 0.4 }), -0.4 - Math.PI / 2), "turbine: yaw + pi/2");
   assert.ok(near(turnsOf({ layer: "landmark", id: "windmill", yaw: 0.4 }), -0.4), "landmark: yaw");
+});
+
+test("lemons and the draft band lie under the riders", () => {
+  const order = [];
+  const base = fakeCanvas(800, 600).canvas.getContext("2d");
+  const ctx = new Proxy(base, {
+    get: (target, name) => (name === "drawImage" ? (image, ...args) => (order.push(`image:${image.name}`), target.drawImage(image, ...args)) : target[name]),
+    set: (target, name, value) => (name === "fillStyle" && order.push(`fill:${value}`), Reflect.set(target, name, value)),
+  });
+  const { view } = make();
+  view.draw(ctx, { width: 800, height: 600, me, riders: [rider("a", 0, 0)], look: DAY, t: 0, lemons: [{ distance: 10, lane: 1, collected: false }] });
+  const lemon = order.lastIndexOf("fill:#ffcc14");
+  const riderAt = order.indexOf("image:rider");
+  assert.ok(lemon >= 0 && riderAt >= 0);
+  assert.ok(lemon < riderAt, "the lemon is drawn before the rider");
+});
+
+test("resize keeps the tiles, which do not depend on the canvas size", () => {
+  const { view, made } = make();
+  frame(view);
+  const count = made.length;
+  view.resize();
+  frame(view);
+  assert.equal(made.length, count);
 });

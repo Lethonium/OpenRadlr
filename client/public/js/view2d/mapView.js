@@ -181,6 +181,16 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     const reach = drawTiles(ctx, { me, width, height, scale, look });
     const view = index.query(me.x - reach, me.z - reach, me.x + reach, me.z + reach);
     drawMovers(ctx, view, me);
+    ctx.restore();
+
+    // The old map's helpers work in screen pixels; they lie over the tiles, under the riders.
+    drawDraft(ctx, { route, me, draft, camera, colors });
+    drawLemons(ctx, { route, lemons, camera, width, height });
+    ctx.save();
+    ctx.translate(anchorX, anchorY);
+    ctx.scale(scale, scale);
+    ctx.rotate(-me.heading);
+    ctx.translate(-me.x, -me.z);
     const solo = soloRiders(riders);
     const vehicles = vehicleMarkers(riders, me.id);
     for (const rider of solo) drawRiderMark(ctx, rider, me, Math.hypot(rider.x - me.x, rider.z - me.z));
@@ -191,9 +201,6 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     }
     ctx.restore();
 
-    // The old map's helpers work in screen pixels.
-    drawDraft(ctx, { route, me, draft, camera, colors });
-    drawLemons(ctx, { route, lemons, camera, width, height });
     drawTint(ctx, look, { x: 0, y: 0, width, height });
     if (look.lights > 0) {
       ctx.save();
@@ -212,8 +219,8 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     draw,
     /** My road changed (a junction turn): the draft band and lemons follow the new one; the tiles are the world's, kept. */
     setRoute: (next) => (route = next),
-    /** The canvas changed size or pixel ratio: the tiles go and are remade as the view needs them. */
-    resize: () => tiles.clear(),
+    /** The canvas changed size or pixel ratio: the tiles are the world's, at a fixed scale, and stay. */
+    resize() {},
     dispose: () => tiles.clear(),
   };
 }
