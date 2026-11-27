@@ -7,9 +7,9 @@ import { createSharedUniforms } from "./assets/materials.js";
 import { createOwner } from "./assets/owner.js";
 import { createClassicCyclist } from "./assets/riders/classicCyclist.js";
 import { createCyclist } from "./assets/riders/cyclist.js";
+import { Turntable } from "./lookTurntable.js";
 
-/** How the stand turns (radians per second) and how the rider pedals. */
-const TURN = 0.45;
+/** How the rider pedals. */
 const RIDE = Object.freeze({ cadence: 82, speed: 7 });
 const MAX_PIXEL_RATIO = 2;
 
@@ -25,7 +25,10 @@ export class LookPreview {
   #last = 0;
   #time = 0;
   #reducedMotion;
-  #floor;
+  #turntable;
+  /** Geometries and materials of the little scene, freed with the preview. */
+  #props = [];
+  #removeDrag;
 
   /**
    * @param {HTMLCanvasElement} canvas
@@ -33,17 +36,74 @@ export class LookPreview {
    */
   constructor(canvas, { reducedMotion = false } = {}) {
     this.#reducedMotion = reducedMotion;
+    this.#turntable = new Turntable({ still: reducedMotion });
     this.#renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.#scene.add(new THREE.HemisphereLight("#e4f0ff", "#6f6a55", 1.5));
-    const sun = new THREE.DirectionalLight("#fff3e0", 2.4);
-    sun.position.set(3, 6, 4);
-    this.#scene.add(sun);
-    const floor = (this.#floor = new THREE.Mesh(new THREE.CircleGeometry(1.4, 40), new THREE.MeshStandardMaterial({ color: "#c9c3b4", roughness: 0.9 })));
-    floor.rotation.x = -Math.PI / 2;
-    this.#scene.add(floor, this.#stand);
-    this.#stand.rotation.y = 0.7;
-    this.#camera.position.set(0.2, 1.35, 4.4);
-    this.#camera.lookAt(0.1, 0.85, 0);
+    this.#renderer.shadowMap.enabled = true;
+    this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.#scene.add(new THREE.HemisphereLight("#e4f0ff", "#5f6b45", 1.4));
+    const sun = new THREE.DirectionalLight("#fff3e0", 2.6);
+    sun.position.set(2.5, 6, 3);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 2, bottom: -2, near: 1, far: 15 });
+    sun.shadow.radius = 4;
+    this.#scene.add(sun, this.#stand);
+    this.#buildGround();
+    this.#camera.position.set(0.2, 1.45, 4.6);
+    this.#camera.lookAt(0.1, 0.8, 0);
+    this.#removeDrag = this.#listenForDrags(canvas);
+  }
+
+  /** A round patch of meadow with a stretch of road on the stand, the bike on its lane. */
+  #buildGround() {
+    const own = (resource) => (this.#props.push(resource), resource);
+    const flat = (geometry, colour, y) => {
+      const mesh = new THREE.Mesh(own(geometry), own(new THREE.MeshStandardMaterial({ color: colour, roughness: 0.95 })));
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = y;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
+    this.#stand.add(
+      flat(new THREE.CircleGeometry(1.6, 48), "#6f8f4a", 0),
+      flat(new THREE.PlaneGeometry(3.2, 1.3), "#4a4e55", 0.004),
+      ...[-1.2, -0.4, 0.4, 1.2].map((x) => {
+        const dash = flat(new THREE.PlaneGeometry(0.42, 0.05), "#e9e6dc", 0.006);
+        dash.position.set(x, 0.006, -0.45);
+        return dash;
+      }),
+    );
+  }
+
+  /** Dragging across the preview turns the stand; vertical moves still scroll the page (CSS touch-action). */
+  #listenForDrags(canvas) {
+    let lastX = null;
+    const down = (event) => {
+      lastX = event.clientX;
+      this.#turntable.grab();
+      canvas.setPointerCapture?.(event.pointerId);
+    };
+    const move = (event) => {
+      if (lastX === null) return;
+      this.#turntable.drag(event.clientX - lastX);
+      lastX = event.clientX;
+      if (!this.#frame) this.#draw();
+    };
+    const up = () => {
+      if (lastX === null) return;
+      lastX = null;
+      this.#turntable.release();
+    };
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    return () => {
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+    };
   }
 
   /** Shows `look`; `classic` draws the classic rider and bike. */
@@ -54,6 +114,8 @@ export class LookPreview {
     this.#owner?.disposeAll();
     this.#cyclist = cyclist;
     this.#owner = owner;
+    cyclist.object.traverse((child) => child.isMesh && (child.castShadow = true));
+    cyclist.object.position.z = 0.15;
     this.#stand.add(cyclist.object);
     cyclist.ride(0, this.#rideState());
     this.#draw();
@@ -80,6 +142,7 @@ export class LookPreview {
   }
 
   #draw() {
+    this.#stand.rotation.y = this.#turntable.angle;
     if (this.#fit()) this.#renderer.render(this.#scene, this.#camera);
   }
 
@@ -91,7 +154,7 @@ export class LookPreview {
       const dt = Math.min(0.1, (now - this.#last) / 1000);
       this.#last = now;
       this.#time += dt;
-      if (!this.#reducedMotion) this.#stand.rotation.y += dt * TURN;
+      this.#turntable.update(dt);
       this.#cyclist?.ride(dt, this.#rideState());
       this.#draw();
       this.#frame = requestAnimationFrame(step);
@@ -107,8 +170,8 @@ export class LookPreview {
   dispose() {
     this.stop();
     this.#owner?.disposeAll();
-    this.#floor.geometry.dispose();
-    this.#floor.material.dispose();
+    this.#removeDrag();
+    for (const resource of this.#props) resource.dispose();
     this.#renderer.dispose();
   }
 }

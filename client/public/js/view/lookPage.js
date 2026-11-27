@@ -98,6 +98,10 @@ export function renderLookPage(container, model, onPick) {
         row.append(input, output);
       } else {
         const options = el("div", slot.kind === "colour" ? "look-swatches" : "look-chips");
+        // A tap on a locked piece says what unlocks it, here under the row (touch has no tooltips).
+        const note = el("p", "look-note");
+        note.setAttribute("aria-live", "polite");
+        note.hidden = true;
         options.setAttribute("role", "group");
         options.setAttribute("aria-labelledby", name.id);
         for (const option of slot.options) {
@@ -110,15 +114,18 @@ export function renderLookPage(container, model, onPick) {
             button.setAttribute("aria-label", option.label);
           }
           if (option.locked) {
-            button.disabled = true;
+            button.setAttribute("aria-disabled", "true");
             button.classList.add("locked");
             button.title = option.hint;
-            if (slot.kind === "colour") button.setAttribute("aria-label", `${option.label}: ${option.hint}`);
-            else button.append(el("span", "look-lock", ` · ${option.hint}`));
+            button.setAttribute("aria-label", `${option.label}: ${option.hint}`);
+            button.addEventListener("click", () => {
+              note.textContent = `${option.label}: ${option.hint}`;
+              note.hidden = false;
+            });
           } else button.addEventListener("click", () => onPick(slot.id, option.id));
           options.append(button);
         }
-        row.append(options);
+        row.append(options, note);
       }
       section.append(row);
     }
