@@ -7665,6 +7665,55 @@ body.working-out #paddles {
   margin-top: 16px;
 }
 
+/* --- profile · my boards (roadside boards) ----------------------------- */
+
+.board-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-item {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.board-form {
+  display: grid;
+  gap: 12px;
+}
+
+.board-crop-row {
+  display: grid;
+  gap: 8px;
+}
+
+.board-crop {
+  max-width: 512px;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.board-canvas {
+  display: block;
+  width: 100%;
+  max-width: 512px;
+  aspect-ratio: 2 / 1;
+  background: #333;
+}
+
+.board-item .board-canvas {
+  max-width: none;
+}
+
 /* The PIN card reuses the delete card's layout, without its red warning border. */
 .pin-dialog .delete-card {
   border-color: var(--border);

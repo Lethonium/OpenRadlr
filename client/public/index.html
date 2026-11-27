@@ -46,6 +46,7 @@
     <link rel="modulepreload" href="js/profile/backup.js" />
     <link rel="modulepreload" href="js/profile/level.js" />
     <link rel="modulepreload" href="js/profile/localData.js" />
+    <link rel="modulepreload" href="js/profile/myBoards.js" />
     <link rel="modulepreload" href="js/profile/pinFlows.js" />
     <link rel="modulepreload" href="js/profile/pinLock.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
@@ -92,6 +93,7 @@
     <link rel="modulepreload" href="js/view/accountView.js" />
     <link rel="modulepreload" href="js/view/achievementsView.js" />
     <link rel="modulepreload" href="js/view/badges.js" />
+    <link rel="modulepreload" href="js/view/boardCrop.js" />
     <link rel="modulepreload" href="js/view/canvas.js" />
     <link rel="modulepreload" href="js/view/deleteConfirm.js" />
     <link rel="modulepreload" href="js/view/deviceSetup.js" />
@@ -107,6 +109,7 @@
     <link rel="modulepreload" href="js/view/menuPages.js" />
     <link rel="modulepreload" href="js/view/menuStage.js" />
     <link rel="modulepreload" href="js/view/minimapView.js" />
+    <link rel="modulepreload" href="js/view/myBoardsView.js" />
     <link rel="modulepreload" href="js/view/overviewView.js" />
     <link rel="modulepreload" href="js/view/paddleView.js" />
     <link rel="modulepreload" href="js/view/panels.js" />
@@ -163,7 +166,6 @@
     <link rel="modulepreload" href="js/ble/zwiftProtocol.js" />
     <link rel="modulepreload" href="js/i18n/de.js" />
     <link rel="modulepreload" href="js/i18n/en.js" />
-    <link rel="modulepreload" href="js/profile/myBoards.js" />
     <link rel="modulepreload" href="js/profile/pin.js" />
     <link rel="modulepreload" href="js/ride/fitFile.js" />
     <link rel="modulepreload" href="js/ride/ftpTest.js" />
@@ -522,6 +524,7 @@
                 <button type="button" id="profile-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span class="menu-nav-title" data-i18n="goals.page">Goals</span></button>
                 <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
                 <button type="button" id="profile-nav-achievements" class="menu-nav-item" data-menu-nav="achievements"><span class="menu-nav-title" data-i18n="profilePage.achievements">Achievements</span></button>
+                <button type="button" id="profile-nav-boards" class="menu-nav-item" data-menu-nav="boards"><span class="menu-nav-title" data-i18n="profilePage.tab.boards">My boards</span></button>
                 <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
                 <button type="button" id="profile-nav-account" class="menu-nav-item" data-menu-nav="account" hidden><span class="menu-nav-title" data-i18n="account.title">Account</span></button>
                 <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
@@ -603,6 +606,28 @@
                     <p id="profile-achievements-count" class="muted"></p>
                     <ul id="profile-achievements" class="achievement-grid"></ul>
                   </div>
+                </div>
+                <div class="menu-page" data-menu-page="boards" role="region" aria-labelledby="profile-nav-boards" hidden>
+                  <div class="panel">
+                    <h2 data-i18n="profilePage.tab.boards">My boards</h2>
+                    <p class="field-hint" data-i18n="boards.page.intro">Put your own pictures and lines on the billboards by the road. They stay on this device and only you see them.</p>
+                    <p id="boards-count" class="field-hint"></p>
+                    <p id="boards-empty" class="field-hint" hidden></p>
+                    <ul id="boards-list" class="board-list"></ul>
+                  </div>
+                  <form id="boards-form" class="panel board-form" novalidate>
+                    <label><span data-i18n="boards.page.picture">Picture</span> <input id="boards-file" type="file" accept="image/*" /></label>
+                    <div id="boards-crop-row" class="board-crop-row" hidden>
+                      <div id="boards-crop" class="board-crop" aria-label="Drag the picture to move it" data-i18n-attr="aria-label:boards.page.drag">
+                        <canvas id="boards-crop-canvas" class="board-canvas"></canvas>
+                      </div>
+                      <label><span data-i18n="boards.page.zoom">Zoom</span> <input id="boards-zoom" type="range" min="1" max="8" step="0.05" value="1" /></label>
+                    </div>
+                    <label><span data-i18n="boards.page.text">Line of text</span> <input id="boards-text" type="text" maxlength="80" autocomplete="off" /></label>
+                    <canvas id="boards-preview" class="board-canvas" role="img" aria-label="Preview of the board" data-i18n-attr="aria-label:boards.page.preview"></canvas>
+                    <p id="boards-error" class="error" role="alert" hidden></p>
+                    <button type="submit" id="boards-add" data-i18n="boards.page.add">Add</button>
+                  </form>
                 </div>
                 <div class="menu-page" data-menu-page="rides" role="region" aria-labelledby="profile-nav-rides" hidden>
                   <div class="panel">

@@ -6,8 +6,8 @@ const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftp
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
 const noRides = { week: zero, month: zero, all: zero };
 
-test("the profile has five pages, goals first", () => {
-  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "achievements", "rides", "account", "data"]);
+test("the profile has seven pages, goals first", () => {
+  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "achievements", "boards", "rides", "account", "data"]);
 });
 
 test("routeName: server name, Studio for null, id when unknown", () => {

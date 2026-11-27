@@ -34,7 +34,10 @@ import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
 import { planGoalBoards } from "./ride/goalBoards.js";
 import { createGoalSheet } from "./view3d/posters/goalSheet.js";
-import { createCanvas } from "./view3d/posters/paint.js";
+import { createCanvas, paintPoster } from "./view3d/posters/paint.js";
+import { MAX_BOARDS, cropWindow, prepareImage } from "./profile/myBoards.js";
+import { dragCrop, initialCrop, zoomCrop } from "./view/boardCrop.js";
+import { boardErrorKey, myBoardsLines } from "./view/myBoardsView.js";
 import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
@@ -3576,6 +3579,7 @@ function initProfile() {
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
+  initBoardsForm();
   initGoalForm();
   $("profile-goals-link").addEventListener("click", () => app.profileDialog.open("goals"));
   $("profile-rides-more").addEventListener("click", () => {
@@ -3585,6 +3589,171 @@ function initProfile() {
   relocaliseHooks.push(() => {
     if (app.profileDialog.isOpen) renderProfile();
   });
+}
+
+// ------------------------------------------------------- my boards page ---
+
+const BOARD_TEXT_MAX = 80;
+const BOARD_PREVIEW = { width: 512, height: 256 };
+const BOARD_THUMB = { width: 192, height: 96 };
+
+/** The picture being added: the chosen file, its decoded image and the crop (profile/myBoards.js's model). */
+let boardDraft = null;
+
+function showBoardError(reason) {
+  const error = $("boards-error");
+  error.hidden = !reason;
+  error.textContent = reason ? t(boardErrorKey(reason), { max: reason === "tooLong" ? BOARD_TEXT_MAX : MAX_BOARDS }) : "";
+}
+
+/** The part of the draft picture the crop shows, on a canvas of `size`. */
+function croppedDraft(size) {
+  const canvas = createCanvas(size.width, size.height);
+  const { image, crop } = boardDraft;
+  const { sx, sy, sw, sh } = cropWindow(image.width, image.height, crop);
+  canvas.getContext("2d").drawImage(image, sx, sy, sw, sh, 0, 0, size.width, size.height);
+  return canvas;
+}
+
+/** Redraws the crop frame and the board preview (the poster as the ride paints it) from the draft and the text. */
+function renderBoardPreview() {
+  const preview = $("boards-preview");
+  preview.width = BOARD_PREVIEW.width;
+  preview.height = BOARD_PREVIEW.height;
+  const text = $("boards-text").value.trim();
+  const image = boardDraft ? croppedDraft(BOARD_PREVIEW) : null;
+  paintPoster(preview.getContext("2d"), { type: "upload", image: image ?? undefined, text }, BOARD_PREVIEW);
+  if (!image) return;
+  const frame = $("boards-crop-canvas");
+  frame.width = BOARD_PREVIEW.width;
+  frame.height = BOARD_PREVIEW.height;
+  frame.getContext("2d").drawImage(image, 0, 0);
+}
+
+function clearBoardDraft() {
+  boardDraft?.image.close?.();
+  boardDraft = null;
+  $("boards-file").value = "";
+  $("boards-text").value = "";
+  $("boards-zoom").value = "1";
+  $("boards-crop-row").hidden = true;
+  renderBoardPreview();
+}
+
+async function chooseBoardPicture() {
+  const file = $("boards-file").files[0];
+  boardDraft?.image.close?.();
+  boardDraft = null;
+  $("boards-crop-row").hidden = true;
+  showBoardError(null);
+  if (file) {
+    try {
+      const image = await createImageBitmap(file);
+      boardDraft = { file, image, crop: initialCrop() };
+      $("boards-zoom").value = "1";
+      $("boards-crop-row").hidden = false;
+    } catch {
+      $("boards-file").value = "";
+      showBoardError("unreadable");
+    }
+  }
+  renderBoardPreview();
+}
+
+function initBoardsForm() {
+  $("boards-file").addEventListener("change", chooseBoardPicture);
+  $("boards-text").addEventListener("input", renderBoardPreview);
+  $("boards-zoom").addEventListener("input", () => {
+    if (!boardDraft) return;
+    boardDraft.crop = zoomCrop(boardDraft.crop, Number($("boards-zoom").value), { imageW: boardDraft.image.width, imageH: boardDraft.image.height });
+    renderBoardPreview();
+  });
+  const frame = $("boards-crop");
+  let last = null;
+  frame.addEventListener("pointerdown", (event) => {
+    last = { x: event.clientX, y: event.clientY };
+    frame.setPointerCapture?.(event.pointerId);
+  });
+  frame.addEventListener("pointermove", (event) => {
+    if (!last || !boardDraft) return;
+    const { image } = boardDraft;
+    boardDraft.crop = dragCrop(boardDraft.crop, event.clientX - last.x, event.clientY - last.y, { imageW: image.width, imageH: image.height, frameW: frame.clientWidth || BOARD_PREVIEW.width });
+    last = { x: event.clientX, y: event.clientY };
+    renderBoardPreview();
+  });
+  for (const type of ["pointerup", "pointercancel"]) frame.addEventListener(type, () => (last = null));
+  $("boards-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitBoardsForm();
+  });
+  renderBoardPreview();
+}
+
+async function submitBoardsForm() {
+  const generation = app.riderGeneration;
+  const button = $("boards-add");
+  button.disabled = true;
+  showBoardError(null);
+  try {
+    let blob = null;
+    if (boardDraft) {
+      const prepared = await prepareImage(boardDraft.file, boardDraft.crop);
+      if (!prepared.ok) return showBoardError(prepared.reason);
+      blob = prepared.blob;
+    }
+    const added = await app.boards.add({ blob, text: $("boards-text").value, crop: boardDraft?.crop ?? null });
+    if (generation !== app.riderGeneration) return;
+    if (!added.ok) return showBoardError(added.reason);
+    clearBoardDraft();
+  } finally {
+    button.disabled = false;
+    await renderProfileBoards();
+  }
+}
+
+/** The list of the rider's own boards, each as the poster the ride shows, with a remove button. */
+async function renderProfileBoards() {
+  const generation = app.riderGeneration;
+  const entries = await app.boards.list();
+  if (generation !== app.riderGeneration) return;
+  const lines = myBoardsLines(entries, { max: MAX_BOARDS });
+  $("boards-count").textContent = lines.count;
+  $("boards-empty").hidden = !lines.empty;
+  $("boards-empty").textContent = lines.empty ?? "";
+  $("boards-add").disabled = !lines.canAdd;
+  if (!lines.canAdd) showBoardError("full");
+  else if ($("boards-error").textContent === t(boardErrorKey("full"), { max: MAX_BOARDS })) showBoardError(null);
+  const items = await Promise.all(entries.map((entry) => boardItem(entry)));
+  if (generation !== app.riderGeneration) return;
+  $("boards-list").replaceChildren(...items);
+}
+
+async function boardItem(entry) {
+  const item = document.createElement("li");
+  item.className = "board-item";
+  const canvas = document.createElement("canvas");
+  canvas.className = "board-canvas";
+  canvas.width = BOARD_THUMB.width;
+  canvas.height = BOARD_THUMB.height;
+  let image;
+  if (entry.blob) {
+    try {
+      image = await createImageBitmap(entry.blob);
+    } catch {
+      image = undefined;
+    }
+  }
+  paintPoster(canvas.getContext("2d"), { type: "upload", image, text: entry.text }, BOARD_THUMB);
+  image?.close?.();
+  const remove = textElement("button", t("boards.page.remove"));
+  remove.type = "button";
+  remove.className = "secondary small";
+  remove.addEventListener("click", async () => {
+    await app.boards.remove(entry.id);
+    await renderProfileBoards();
+  });
+  item.append(canvas, textElement("span", entry.text), remove);
+  return item;
 }
 
 /** Opens the profile on `page` and fills it from fresh reads of the stores. */
@@ -3615,6 +3784,7 @@ async function loadProfile(keep) {
 function renderProfile() {
   if (!app.profileData) return;
   renderProfileGoals();
+  renderProfileBoards();
   renderProfileOverview();
   renderProfileAchievements();
   renderProfileFtp();
