@@ -12,6 +12,7 @@
  * World axes: X = route x (east), Y = up, Z = −route y (north is −Z).
  */
 import { ARCH_HEIGHT, BANNERS, archSpots, bannerPlacements } from "./banners.js";
+import { boardClearings, boardSites, placeBoards } from "./boards.js";
 import {
   Occupancy,
   buildBikeCafe,
@@ -250,7 +251,9 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
         return road ? [{ road, cafeId: cafe.id }] : [];
       })
     : ordered.map((road) => ({ road, cafeId: null }));
-  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: cafeRoads.flatMap(({ road, cafeId }) => [cafeClearing(road), gymClearing(road), ...(cafeId === "valley-cafe" ? [studioClearing(road)] : [])]), routes, seed, season, detail, bounds: ground.bounds });
+  // The roadside boards' sites on the ridden route; their ground is kept clear like the cafés'.
+  const boardSitesOnRoute = boardSites(route, { villages: zonesOf.get(route).villages });
+  const plan = planWorld({ terrain, roads: terrain.index, rivers, regions, forests: forestPoints(routes, zonesOf), settlements: network?.settlements ?? [], landmarks: network?.landmarks ?? [], clearings: [...cafeRoads.flatMap(({ road, cafeId }) => [cafeClearing(road), gymClearing(road), ...(cafeId === "valley-cafe" ? [studioClearing(road)] : [])]), ...boardClearings(route, boardSitesOnRoute)], routes, seed, season, detail, bounds: ground.bounds });
   const grids = buildGroundGrids(terrain, ground, { season, long, regions, landUse: plan.landUse });
 
   // Ploughed banks flatten out near a fork or corner, so no road's snow
@@ -320,6 +323,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
   }
+  const boards = placeBoards(route, terrain, boardSitesOnRoute, { occupancy, avoid });
   const { people, barriers } = buildSpectators(route, terrain, { seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // Rails, signs and the crowd's barriers are placement data for the furniture layer; the people are the crowd layer's.
   const furniture = { rails: [], signs: [], flammeRouge: null, barriers };
@@ -358,6 +362,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     cafeSites,
     gyms,
     studio,
+    boards,
     waterLevel: ground.water,
     ground: grids,
     plan,

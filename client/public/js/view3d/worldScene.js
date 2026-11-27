@@ -11,8 +11,8 @@ import { buildWorld } from "./world.js";
 
 /** What the view draws (and the detail level its plan was built at): the placements for the arches, furniture, crowd and cafés, the animated objects and the gyms' spots and the studio's site (no functions), and the map's seed (its weather). */
 export function sceneOf(world) {
-  const { biome, season, detail, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan, clouds } = world;
-  return { biome, season, detail, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, ground, plan, clouds, seed: world.terrain?.seed ?? 0 };
+  const { biome, season, detail, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, boards, ground, plan, clouds } = world;
+  return { biome, season, detail, roads, rivers, arches, furniture, crowd, overview, cafeSites, gyms, studio, boards, ground, plan, clouds, seed: world.terrain?.seed ?? 0 };
 }
 
 /** Every typed array buffer in `value`, for a zero-copy postMessage. */
