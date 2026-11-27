@@ -1380,4 +1380,5 @@ export default {
   "boards.line.legsKnow": "Ziel voraus. Beine, ihr wisst Bescheid.",
   "boards.line.lastDrop": "Den letzten Tropfen rauspressen!",
   "boards.line.lastOrders": "Letzte Runde: Vollgas!",
+  "boards.yourUpload": "Dein Upload",
 };

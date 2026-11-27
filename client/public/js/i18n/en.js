@@ -1380,4 +1380,5 @@ export default {
   "boards.line.legsKnow": "Finish ahead. Legs, you know what to do.",
   "boards.line.lastDrop": "Squeeze out the last drop!",
   "boards.line.lastOrders": "Last orders: full gas!",
+  "boards.yourUpload": "Your upload",
 };
