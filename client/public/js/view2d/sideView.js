@@ -6,7 +6,7 @@
  */
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { laneOffset } from "../view/rideMapView.js";
-import { drawGlows, drawTint, drawWeather } from "./overlays.js";
+import { drawBeams, drawGlows, drawTint, drawWeather } from "./overlays.js";
 import { css, mix, toSrgb } from "./look2d.js";
 import { drawProfileStrip, profileStrip } from "./profileStrip.js";
 import { MIDDLE_LATERALS, createSideBands } from "./sideBands.js";
@@ -74,7 +74,7 @@ const GLOW_REACH_M = SPAN_M * 2;
 const LAMP_GLOW = Object.freeze({ r: 5, rgb: [1, 0.77, 0.47], a: 0.45 });
 const WINDOW_GLOW = Object.freeze({ r: 0.9, rgb: [1, 0.82, 0.51], a: 0.55 });
 const CAFE_GLOW = Object.freeze({ r: 7, rgb: [1, 0.75, 0.43], a: 0.5 });
-const HEADLIGHT = Object.freeze({ r: 0.55, rgb: [1, 0.98, 0.88], a: 0.5 });
+const HEADLIGHT = Object.freeze({ length: 9, spread: 0.18, tilt: 0.08, rgb: [1, 0.97, 0.86], a: 0.28 });
 /** Where on a lit sprite the glows sit: the lamp's head as a share of its height; windows as [across (share of the width), up (share of the height)]. */
 const LAMP_HEAD = 0.93;
 const WINDOW_SPREAD = 0.2;
@@ -377,9 +377,10 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     ctx.restore();
   }
 
-  /** What glows after dark, in screen pixels. */
-  function glowsOf(camera, entries, placed) {
+  /** What glows after dark, in screen pixels, and the beams the riders' headlights throw (forward is to the right, a little down). */
+  function lightsOf(camera, entries, placed) {
     const glows = [];
+    const beams = [];
     const add = (glow, x, y, pxm) => glows.push({ rgb: glow.rgb, a: glow.a, r: glow.r * pxm, x, y });
     for (const entry of entries) {
       const { layer, seed } = entry.item;
@@ -396,10 +397,10 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
       else for (const [k, row] of WINDOWS) add(WINDOW_GLOW, centre + (WINDOW_SHIFT + k * WINDOW_SPREAD) * wide * pxm, y - high * row * pxm, pxm);
     }
     for (const { x, y, pxm } of placed) {
-      add(HEADLIGHT, x + 1.1 * pxm, y - 1.0 * pxm, pxm);
+      beams.push({ x: x + 1.1 * pxm, y: y - 1.0 * pxm, angle: HEADLIGHT.tilt, length: HEADLIGHT.length * pxm, spread: HEADLIGHT.spread, rgb: HEADLIGHT.rgb, a: HEADLIGHT.a });
       add(TAILLIGHT, x - 0.95 * pxm, y - 0.9 * pxm, pxm);
     }
-    return glows;
+    return { glows, beams };
   }
 
   /** The first of `byDistance` at or after the distance `d`. */
@@ -464,7 +465,11 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     const riderDs = placed.map((mark) => nearTo(me, mark.rider.d));
     for (const entry of things) if (entry.lateral >= 0) drawThing(ctx, camera, entry, t, riderDs);
     drawTint(ctx, look, { x: 0, y: 0, width, height });
-    if (look.lights > 0) drawGlows(ctx, look, glowsOf(camera, things, placed));
+    if (look.lights > 0) {
+      const { glows, beams } = lightsOf(camera, things, placed);
+      drawGlows(ctx, look, glows);
+      drawBeams(ctx, look, beams);
+    }
     drawLabels(ctx, placed);
     drawWeather(ctx, look, { width, height, t });
     const rect = { x: STRIP_SIDE_PX, y: height - STRIP_H_PX - STRIP_BOTTOM_PX, width: width - 2 * STRIP_SIDE_PX, height: STRIP_H_PX };

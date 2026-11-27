@@ -33,6 +33,30 @@ export function drawGlows(ctx, look, glows) {
   ctx.restore();
 }
 
+/**
+ * Light beams after dark: each a wedge from (x, y) toward `angle` (radians, canvas convention), `spread` either side,
+ * `length` long, brightest (`a`) at the lamp and fading to nothing at its end. Added over the scene like the glows
+ * (scaled by `look.lights`, so none by day).
+ * @param {{x: number, y: number, angle: number, length: number, spread: number, rgb: number[], a: number}[]} beams
+ */
+export function drawBeams(ctx, look, beams) {
+  if (look.lights <= 0 || beams.length === 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (const { x, y, angle, length, spread, rgb, a } of beams) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, length);
+    g.addColorStop(0, css(rgb, a * look.lights));
+    g.addColorStop(1, css(rgb, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y, length, angle - spread, angle + spread);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 const RAIN_DROPS = 260;
 const SNOW_FLAKES = 220;
 

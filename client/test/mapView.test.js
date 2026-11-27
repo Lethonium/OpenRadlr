@@ -287,6 +287,21 @@ test("at night the lamps, windows and bike lights glow", () => {
   assert.equal(glowing(NIGHT), 4, "lamp, window, headlight and tail light");
 });
 
+test("at night each rider's headlight is a beam pointing the way that rider faces", () => {
+  const beamAngles = (headings) => {
+    const { view } = make({ indexOf: { query: () => [] } });
+    const riders = headings.map((heading, k) => rider(`r${k}`, 3 * k, 0, { heading }));
+    // The beam is the only wedge: an arc of radius 18 m, from angle - spread to angle + spread.
+    const { arcs } = frame(view, { look: NIGHT, riders, me: { ...me, heading: 0.9 } });
+    return arcs.filter((arc) => arc[2] === 18).map(([, , , from, to]) => ({ angle: (from + to) / 2, spread: (to - from) / 2 }));
+  };
+  const beams = beamAngles([0, Math.PI / 2, Math.PI]);
+  // Heading 0 faces -z (up the map), a quarter turn faces +x, a half turn faces +z; the map's own rotation is not in the angle.
+  assert.deepEqual(beams.map((b) => +b.angle.toFixed(3) + 0), [-1.571, 0, 1.571]);
+  assert.ok(beams.every((b) => Math.abs(b.spread - 0.35) < 1e-9));
+  assert.equal(frame(make({ indexOf: { query: () => [] } }).view, { look: DAY, riders: [rider("a", 0, 0)] }).arcs.filter((arc) => arc[2] === 18).length, 0);
+});
+
 test("it draws on the real ground sampler without a rider sprite or a store hit", () => {
   const { view } = make({ store: fakeStore([]), sampler: groundSampler(scene.ground) });
   const screen = frame(view, { riders: [rider("a", 0, 0)] });

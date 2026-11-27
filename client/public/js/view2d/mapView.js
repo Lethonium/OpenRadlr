@@ -8,7 +8,7 @@
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { drawDraft, drawLemons } from "../view/rideMapView.js";
 import { MAP_TILES_PER_FRAME, MAP_TILE_M, createMapTiles } from "./mapTiles.js";
-import { drawGlows, drawTint, drawWeather } from "./overlays.js";
+import { drawBeams, drawGlows, drawTint, drawWeather } from "./overlays.js";
 import { drawSprite } from "./drawSprite.js";
 import { spriteJobs } from "./sprites/catalog.js";
 
@@ -27,7 +27,7 @@ const VEHICLE_JOBS = Object.freeze({ tandem: "tandem", beer_bike: "beer-bike" })
 const LAMP_GLOW = Object.freeze({ r: 9, rgb: [1, 0.77, 0.47], a: 0.45 });
 const WINDOW_GLOW = Object.freeze({ r: 3.2, rgb: [1, 0.82, 0.51], a: 0.55 });
 const CAFE_GLOW = Object.freeze({ r: 14, rgb: [1, 0.75, 0.43], a: 0.5 });
-const HEADLIGHT = Object.freeze({ r: 6, rgb: [1, 0.98, 0.88], a: 0.5 });
+const HEADLIGHT = Object.freeze({ length: 18, spread: 0.35, rgb: [1, 0.97, 0.86], a: 0.3 });
 const TAILLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.16, 0.16], a: 0.35 });
 const PRIORITY_PER_M = 1;
 
@@ -149,9 +149,10 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     ctx.restore();
   }
 
-  /** What glows after dark, in world coordinates. */
-  function glowsOf(items, riders) {
+  /** What glows after dark, in world coordinates, and the beams the riders' headlights throw. */
+  function lightsOf(items, riders) {
     const glows = [];
+    const beams = [];
     for (const item of items) {
       if (item.layer === "lamp") glows.push({ ...LAMP_GLOW, x: item.x, y: item.z });
       else if (item.layer === "cafe") glows.push({ ...CAFE_GLOW, x: item.x, y: item.z });
@@ -159,9 +160,10 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     }
     for (const r of riders) {
       const [fx, fz] = [Math.sin(r.heading), -Math.cos(r.heading)];
-      glows.push({ ...HEADLIGHT, x: r.x + fx * 4, y: r.z + fz * 4 }, { ...TAILLIGHT, x: r.x - fx * 1.1, y: r.z - fz * 1.1 });
+      beams.push({ ...HEADLIGHT, x: r.x + fx * 1.1, y: r.z + fz * 1.1, angle: Math.atan2(fz, fx) });
+      glows.push({ ...TAILLIGHT, x: r.x - fx * 1.1, y: r.z - fz * 1.1 });
     }
-    return glows;
+    return { glows, beams };
   }
 
   function draw(ctx, { width, height, me, riders = [], draft = null, lemons = [], look, t = 0, colors = DEFAULT_COLORS }) {
@@ -214,7 +216,9 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
       ctx.scale(scale, scale);
       ctx.rotate(-me.heading);
       ctx.translate(-me.x, -me.z);
-      drawGlows(ctx, look, glowsOf(view, [...solo, ...vehicles.map((m) => m.rider)]));
+      const { glows, beams } = lightsOf(view, [...solo, ...vehicles.map((m) => m.rider)]);
+      drawGlows(ctx, look, glows);
+      drawBeams(ctx, look, beams);
       ctx.restore();
     }
     drawLabels(ctx, [...solo.map((r) => ({ x: r.x, z: r.z, label: r.name, mine: r.mine })), ...vehicles.map((m) => ({ x: m.rider.x, z: m.rider.z, label: m.label, mine: m.mine }))], camera);
