@@ -73,7 +73,8 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {number[]} position road point under the middle of the wheelbase, world metres
  * @property {number[]} forward unit direction of travel (may climb)
  * @property {number} speed m/s
- * @property {({id: number, me: boolean, cadence: number, tint: number[]} | null)[]} seats one per layout seat
+ * @property {({id: number, me: boolean, cadence: number, tint: number[], look?: object, lookKey?: string} | null)[]} seats one per
+ *   layout seat; `look` is the rider's own (#25)
  */
 
 /** A rider's own pedal phase, so a cheap group does not pedal in lockstep. */
@@ -225,19 +226,38 @@ export function createRiderLayer({ settings, uniforms, track }) {
   const freeSeated = new Map();
   const heads = new Map();
 
-  const createSeatedRider = (id, tint) => {
-    const record = { id, lookId: id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
+  const createSeatedRider = (occupant) => {
+    const { id, tint } = occupant;
+    const look = occupant.look ?? null;
+    const record = { id, lookId: id, look, lookKey: occupant.lookKey ?? "", owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
     paint(record, tint);
-    record.rig = createRider({ ...lookOf(id), primary: hexOf(tint) }, { own: record.owner.own, uniforms, texture: record.texture });
+    record.rig = createRider({ ...(look ?? lookOf(id)), primary: hexOf(tint) }, { own: record.owner.own, uniforms, texture: record.texture });
     return record;
   };
 
+  const disposeSeated = (record) => {
+    record.rig.object.removeFromParent();
+    record.owner.disposeAll();
+    record.kit?.disposeAll();
+  };
+
   const acquireSeated = (occupant) => {
+    const lookKey = occupant.lookKey ?? "";
     let record = seated.get(occupant.id);
+    // A changed look (#25) builds the seated rider anew.
+    if (record && record.lookKey !== lookKey) {
+      seated.delete(occupant.id);
+      disposeSeated(record);
+      record = null;
+    }
     if (!record) {
       record = freeSeated.get(occupant.id);
       if (record) freeSeated.delete(occupant.id);
-      else record = createSeatedRider(occupant.id, occupant.tint);
+      if (record && record.lookKey !== lookKey) {
+        disposeSeated(record);
+        record = null;
+      }
+      record ??= createSeatedRider(occupant);
       seated.set(occupant.id, record);
     }
     paint(record, occupant.tint);
@@ -253,8 +273,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
       const [oldest] = freeSeated.keys();
       const gone = freeSeated.get(oldest);
       freeSeated.delete(oldest);
-      gone.owner.disposeAll();
-      gone.kit.disposeAll();
+      disposeSeated(gone);
     }
   };
 
@@ -334,7 +353,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
       const fitKey = `${record.key}|${i}`;
       if (rider.rig.object.parent !== frameOfSeat || rider.fitKey !== fitKey) {
         frameOfSeat.add(rider.rig.object);
-        const look = { ...lookOf(occupant.id), primary: hexOf(occupant.tint) };
+        const look = { ...(occupant.look ?? lookOf(occupant.id)), primary: hexOf(occupant.tint) };
         rider.fit = seatFit(seat, look, rider.rig.saddleFor(seatFit(seat, look)));
         rider.fitKey = fitKey;
       }

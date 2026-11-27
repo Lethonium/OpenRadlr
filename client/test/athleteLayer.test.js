@@ -157,3 +157,15 @@ test("isolating one athlete hides the others and their bikes until it is lifted"
   layer.isolate(null);
   assert.deepEqual(shown(), [1, 2]);
 });
+
+test("an athlete wears its chosen look, and a new look builds it anew", () => {
+  const { layer } = make();
+  const look = { ...lookOf(1), bike: "city" };
+  layer.update(frame([entry(1, [0, 0, 0], { look, lookKey: "a" })]));
+  const first = layer.rigOf(1);
+  assert.ok(first);
+  layer.update(frame([entry(1, [0, 0, 0], { look: { ...look, height: 1.95 }, lookKey: "b" })]));
+  const second = layer.rigOf(1);
+  assert.notEqual(second, first);
+  assert.equal(second.height, 1.95);
+});

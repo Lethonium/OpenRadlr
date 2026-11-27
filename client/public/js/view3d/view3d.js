@@ -637,7 +637,7 @@ export class View3D {
         position: gym.spot.position,
         yaw: gym.spot.yaw,
         ...this.#workoutPose(rider, timeS),
-        tint: linearOf(tint),
+        ...this.#dressed(rider, rider.id === myId, tint, colourCode),
         figure: this.biome.workoutFigure ?? "rider",
         bike: this.#rackBike(gym.gym, gym.slot),
       });
@@ -655,7 +655,8 @@ export class View3D {
       const seats = vehicle.seats.map((rider) => {
         if (!rider) return null;
         const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-        return { id: rider.id, me: rider.id === myId, cadence: rider.id === myId ? (myCadence ?? seatCadence(rider)) : seatCadence(rider), tint: linearOf(tint) };
+        const { look, lookKey, tint: jersey } = this.#dressed(rider, rider.id === myId, tint, colourCode);
+        return { id: rider.id, me: rider.id === myId, cadence: rider.id === myId ? (myCadence ?? seatCadence(rider)) : seatCadence(rider), tint: jersey, look, lookKey };
       });
       vehicles.push({ id: vehicle.id, kind: vehicle.kind, layout, position, forward, speed: vehicle.at.rider.speed ?? 0, seats });
     }

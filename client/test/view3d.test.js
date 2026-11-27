@@ -1104,6 +1104,19 @@ test("riders wear the looks they chose; races and events dress everyone in the c
   assert.equal(byId(8).lookKey, theirs, "the rest of the look stays");
 });
 
+test("at the gym my athlete wears my look", () => {
+  const gym = testGym();
+  const { view } = gymView([gym], "temperate");
+  view.workoutMode(gym, { reducedMotion: true });
+  const frames = recordFrames(view);
+  const code = lookCode({ primary: "#f28c17" });
+  view.setMyLook(code);
+  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  const [entry] = frames.at(-1).athletes;
+  assert.equal(entry.lookKey, code);
+  assert.equal(entry.look.primary, "#f28c17");
+});
+
 test("my studio entry wears my look, the coach never", () => {
   const { view } = gymView([], "temperate", studioSite);
   const frames = recordFrames(view);
