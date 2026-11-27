@@ -74,7 +74,7 @@ const GLOW_REACH_M = SPAN_M * 2;
 const LAMP_GLOW = Object.freeze({ r: 5, rgb: [1, 0.77, 0.47], a: 0.45 });
 const WINDOW_GLOW = Object.freeze({ r: 0.9, rgb: [1, 0.82, 0.51], a: 0.55 });
 const CAFE_GLOW = Object.freeze({ r: 7, rgb: [1, 0.75, 0.43], a: 0.5 });
-const HEADLIGHT = Object.freeze({ length: 9, spread: 0.18, tilt: 0.08, rgb: [1, 0.97, 0.86], a: 0.28 });
+const HEADLIGHT = Object.freeze({ length: 9, spread: 0.1, tilt: 0.05, rgb: [1, 0.97, 0.86], a: 0.28 });
 /** Where on a lit sprite the glows sit: the lamp's head as a share of its height; windows as [across (share of the width), up (share of the height)]. */
 const LAMP_HEAD = 0.93;
 const WINDOW_SPREAD = 0.2;
@@ -348,13 +348,14 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
       const pxm = camera.scale * RIDER_PX_PER_M * camera.f(lateral);
       const metres = Math.abs(d - me.d);
       const image = mark.kind ? sprite(JOBS.byId.get(VEHICLE_JOBS[mark.kind]), metres) : store?.rider(rider.look, "side", metres * PRIORITY_PER_M);
-      placed.push({ ...mark, x, y, pxm });
+      const lean = -Math.atan((route.gradeAt(d) / 100) * VEX);
+      placed.push({ ...mark, x, y, pxm, lean });
       if (!image) continue;
       const frames = image.frames.length;
       const frame = Math.floor(((t * (rider.cadence ?? 0)) / 60 + (rider.phase ?? 0)) * frames);
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(-Math.atan((route.gradeAt(d) / 100) * VEX));
+      ctx.rotate(lean);
       drawSprite(ctx, image, 0, 0, pxm, { frame, alpha: rider.ghost ? GHOST_ALPHA : 1 });
       ctx.restore();
     }
@@ -396,9 +397,14 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
       else if (layer === "cafe") add(CAFE_GLOW, centre, y - high * 0.3 * pxm, pxm);
       else for (const [k, row] of WINDOWS) add(WINDOW_GLOW, centre + (WINDOW_SHIFT + k * WINDOW_SPREAD) * wide * pxm, y - high * row * pxm, pxm);
     }
-    for (const { x, y, pxm } of placed) {
-      beams.push({ x: x + 1.1 * pxm, y: y - 1.0 * pxm, angle: HEADLIGHT.tilt, length: HEADLIGHT.length * pxm, spread: HEADLIGHT.spread, rgb: HEADLIGHT.rgb, a: HEADLIGHT.a });
-      add(TAILLIGHT, x - 0.95 * pxm, y - 0.9 * pxm, pxm);
+    for (const { x, y, pxm, lean = 0 } of placed) {
+      // The lamps sit on the leaning bike, and the beam follows the road's slope down to it.
+      const [cos, sin] = [Math.cos(lean), Math.sin(lean)];
+      const at = (ax, ay) => [x + (ax * cos - ay * sin) * pxm, y + (ax * sin + ay * cos) * pxm];
+      const [hx, hy] = at(1.1, -1.0);
+      beams.push({ x: hx, y: hy, angle: lean + HEADLIGHT.tilt, length: HEADLIGHT.length * pxm, spread: HEADLIGHT.spread, rgb: HEADLIGHT.rgb, a: HEADLIGHT.a });
+      const [tx, ty] = at(-0.95, -0.9);
+      add(TAILLIGHT, tx, ty, pxm);
     }
     return { glows, beams };
   }
