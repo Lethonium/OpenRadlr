@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { LOOK_GROUPS, heightLabel, lookPageModel } from "../public/js/view/lookPage.js";
+import { LOOK_GROUPS, heightLabel, lookPageModel, unlockLine } from "../public/js/view/lookPage.js";
 import { LOOK_SLOTS, rolledChoice } from "../public/js/profile/riderLook.js";
 import en from "../public/js/i18n/en.js";
 import de from "../public/js/i18n/de.js";
@@ -52,4 +52,8 @@ test("every group, slot and option has English and German text", () => {
     assert.ok(en[key], `en ${key}`);
     assert.ok(de[key], `de ${key}`);
   }
+});
+
+test("the gold frame has its own name in the unlock line", () => {
+  assert.equal(unlockLine("km1000"), "Unlocks for your look: Gold frame");
 });

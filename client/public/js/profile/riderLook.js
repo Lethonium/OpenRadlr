@@ -70,6 +70,10 @@ const SLOT_NAMES = Object.keys(LOOK_SLOTS);
 const VERSION = "1";
 const CODE = /^[0-9a-z]{1,48}$/;
 
+/** The look pieces an achievement unlocks, as `{slot, id}`, in catalogue order. */
+export const piecesOf = (achievementId) =>
+  Object.entries(LOOK_SLOTS).flatMap(([slot, { options }]) => options.filter((option) => option.unlock === achievementId).map((option) => ({ slot, id: option.id })));
+
 /** Whether an option is open to a rider with these earned achievements (`{id: ms}`). */
 export const isUnlocked = (option, earnedIds = {}) => !option.unlock || Boolean(earnedIds?.[option.unlock]);
 

@@ -5,6 +5,7 @@
 
 import { t } from "../i18n/i18n.js";
 import { ACHIEVEMENTS } from "../profile/achievements.js";
+import { unlockLine } from "./lookPage.js";
 
 function earnedDate(ms, locale) {
   const format = { day: "numeric", month: "short", year: "numeric" };
@@ -21,9 +22,9 @@ function earnedDate(ms, locale) {
 export function achievementCards(state, { locale }) {
   const card = (a) => {
     const at = state.earned[a.id];
-    if (at !== undefined) return { id: a.id, state: "earned", name: t(`achievement.${a.id}.name`), hint: t(`achievement.${a.id}.hint`), date: earnedDate(at, locale) };
-    if (a.secret) return { id: a.id, state: "secret", name: "???", hint: "", date: null };
-    return { id: a.id, state: "locked", name: t(`achievement.${a.id}.name`), hint: t(`achievement.${a.id}.hint`), date: null };
+    if (at !== undefined) return { id: a.id, state: "earned", name: t(`achievement.${a.id}.name`), hint: t(`achievement.${a.id}.hint`), date: earnedDate(at, locale), unlocks: unlockLine(a.id) };
+    if (a.secret) return { id: a.id, state: "secret", name: "???", hint: "", date: null, unlocks: "" };
+    return { id: a.id, state: "locked", name: t(`achievement.${a.id}.name`), hint: t(`achievement.${a.id}.hint`), date: null, unlocks: unlockLine(a.id) };
   };
   const earned = ACHIEVEMENTS.filter((a) => a.id in state.earned).sort((a, b) => state.earned[b.id] - state.earned[a.id]);
   const locked = ACHIEVEMENTS.filter((a) => !(a.id in state.earned));

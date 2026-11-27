@@ -1422,10 +1422,12 @@ export default {
   "look.option.helmetStyle.road": "Road helmet",
   "look.option.helmetStyle.aero": "Aero helmet",
   "look.option.helmetStyle.cap": "Cycling cap",
-  "look.option.helmetStyle.lemon": "Lemon",
+  "look.option.helmetStyle.lemon": "Lemon helmet",
   "look.option.glasses.off": "Off",
   "look.option.glasses.on": "On",
   "look.option.bike.road": "Road",
   "look.option.bike.city": "City",
   "look.option.bike.gravel": "Gravel",
+  "look.unlocks": "Unlocks for your look: {pieces}",
+  "look.option.frame.gold": "Gold frame",
 };

@@ -21,7 +21,7 @@ import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFi
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { carriedClassic, encodeLook, loadLook, lookFromChoice, randomChoice, rolledChoice, sanitizeLook, saveLook } from "./profile/riderLook.js";
-import { lookPageModel, renderLookPage } from "./view/lookPage.js";
+import { lookPageModel, renderLookPage, unlockLine } from "./view/lookPage.js";
 import { lookOf } from "./view3d/assets/riders/look.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
@@ -3712,6 +3712,7 @@ function renderProfileAchievements() {
       item.dataset.state = card.state;
       item.append(achievementBadge(card.id, { hidden: card.state === "secret" }), textElement("strong", card.name));
       if (card.hint) item.append(textElement("span", card.hint));
+      if (card.unlocks) item.append(Object.assign(textElement("span", card.unlocks), { className: "achievement-unlocks" }));
       if (card.date) item.append(textElement("small", card.date));
       return item;
     }),
@@ -4383,7 +4384,8 @@ function showMilestone(text, achievementIds = []) {
   banner.textContent = text;
   for (const id of achievementIds) {
     if (banner.childNodes.length) banner.append(" · ");
-    const entry = textElement("span", t("achievement.banner", { name: t(`achievement.${id}.name`) }));
+    const unlocks = unlockLine(id);
+    const entry = textElement("span", [t("achievement.banner", { name: t(`achievement.${id}.name`) }), unlocks].filter(Boolean).join(" · "));
     entry.className = "achievement-entry";
     entry.prepend(achievementBadge(id));
     banner.append(entry);

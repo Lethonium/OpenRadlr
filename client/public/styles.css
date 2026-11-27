@@ -8311,3 +8311,7 @@ body.working-out #paddles {
   color: var(--muted);
 }
 
+.achievement-unlocks {
+  color: var(--lemon);
+  font-size: 12px;
+}

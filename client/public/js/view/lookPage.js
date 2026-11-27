@@ -4,7 +4,7 @@
  */
 import { t } from "../i18n/i18n.js";
 import { ACHIEVEMENTS } from "../profile/achievements.js";
-import { LOOK_SLOTS, isUnlocked } from "../profile/riderLook.js";
+import { GOLD, LOOK_SLOTS, isUnlocked, piecesOf } from "../profile/riderLook.js";
 import { RIDER_SKINS } from "../view3d/assets/riders/look.js";
 
 export const LOOK_GROUPS = ["body", "kit", "head", "bike"];
@@ -16,6 +16,15 @@ export function heightLabel(cm, units = "metric") {
   if (units !== "imperial") return `${(cm / 100).toFixed(2)} m`;
   const inches = Math.round(cm / CM_PER_INCH);
   return `${Math.floor(inches / 12)}′${inches % 12}″`;
+}
+
+/** A piece's name, as the Look page shows it (the one earned colour, gold, has its own). */
+export const pieceName = (slot, id) => (id === GOLD ? t("look.option.frame.gold") : t(`look.option.${slot}.${id}`));
+
+/** "Unlocks for your look: Lemon helmet", or "" for an achievement that unlocks no piece. */
+export function unlockLine(achievementId) {
+  const pieces = piecesOf(achievementId);
+  return pieces.length ? t("look.unlocks", { pieces: pieces.map(({ slot, id }) => pieceName(slot, id)).join(", ") }) : "";
 }
 
 /** What a locked piece says: the achievement that unlocks it, or that it is a secret one. */

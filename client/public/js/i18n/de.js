@@ -1422,10 +1422,12 @@ export default {
   "look.option.helmetStyle.road": "Rennradhelm",
   "look.option.helmetStyle.aero": "Zeitfahrhelm",
   "look.option.helmetStyle.cap": "Radmütze",
-  "look.option.helmetStyle.lemon": "Zitrone",
+  "look.option.helmetStyle.lemon": "Zitronenhelm",
   "look.option.glasses.off": "Aus",
   "look.option.glasses.on": "An",
   "look.option.bike.road": "Rennrad",
   "look.option.bike.city": "Stadtrad",
   "look.option.bike.gravel": "Gravel",
+  "look.unlocks": "Neu fürs Aussehen: {pieces}",
+  "look.option.frame.gold": "Goldrahmen",
 };
