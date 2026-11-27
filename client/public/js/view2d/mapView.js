@@ -7,7 +7,7 @@
  */
 import { soloRiders, vehicleMarkers } from "../ride/vehicle.js";
 import { drawDraft, drawLemons } from "../view/rideMapView.js";
-import { MAP_TILE_M, createMapTiles } from "./mapTiles.js";
+import { MAP_TILES_PER_FRAME, MAP_TILE_M, createMapTiles } from "./mapTiles.js";
 import { drawGlows, drawTint, drawWeather } from "./overlays.js";
 import { drawSprite } from "./drawSprite.js";
 import { spriteJobs } from "./sprites/catalog.js";
@@ -35,10 +35,10 @@ const PRIORITY_PER_M = 1;
 const topJobs = new Map(spriteJobs({ view: "top" }).map((job) => [job.id, job]));
 
 /**
- * @param {{scene: object, route: object, index: {query: Function}, sampler: object, store: object, createCanvas: (w: number, h: number) => object}} deps
+ * @param {{scene: object, route: object, index: {query: Function}, sampler: object, store: object, createCanvas: (w: number, h: number) => object, tileBudget?: number}} deps (`tileBudget`: how many tiles' ground a frame may paint)
  * @returns {{draw: Function, setRoute: (route: object) => void, resize: () => void, dispose: () => void}}
  */
-export function createMapView({ scene, route, index, sampler, store, createCanvas }) {
+export function createMapView({ scene, route, index, sampler, store, createCanvas, tileBudget = MAP_TILES_PER_FRAME }) {
   const tiles = createMapTiles({ scene, index, sampler, store, createCanvas });
 
   /** A top sprite for a catalog job, asked for at `priority` (metres from the rider). */
@@ -61,6 +61,7 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
       const spans = corners.map(([cx, cz]) => cx * ax + cz * az);
       return [Math.min(...spans), Math.max(...spans)];
     });
+    const visible = [];
     for (let tx = Math.floor((me.x + x0) / MAP_TILE_M); tx <= Math.floor((me.x + x1) / MAP_TILE_M); tx += 1) {
       for (let tz = Math.floor((me.z + z0) / MAP_TILE_M); tz <= Math.floor((me.z + z1) / MAP_TILE_M); tz += 1) {
         const square = [0, 1].flatMap((i) => [0, 1].map((j) => [(tx + i) * MAP_TILE_M - me.x, (tz + j) * MAP_TILE_M - me.z]));
@@ -69,9 +70,14 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
           return Math.max(...spans) <= view[k][0] || Math.min(...spans) >= view[k][1];
         });
         if (apart) continue;
-        const canvas = tiles.tile(tx, tz, look, Math.hypot((tx + 0.5) * MAP_TILE_M - me.x, (tz + 0.5) * MAP_TILE_M - me.z));
-        ctx.drawImage(canvas, tx * MAP_TILE_M - 0.04, tz * MAP_TILE_M - 0.04, MAP_TILE_M + 0.08, MAP_TILE_M + 0.08);
+        visible.push({ tx, tz, distance: Math.hypot((tx + 0.5) * MAP_TILE_M - me.x, (tz + 0.5) * MAP_TILE_M - me.z) });
       }
+    }
+    // The nearest tiles get the frame's painting budget first; a tile still without ground is left out (the sea shows).
+    tiles.beginFrame(tileBudget);
+    for (const spot of [...visible].sort((a, b) => a.distance - b.distance)) spot.canvas = tiles.tile(spot.tx, spot.tz, look, spot.distance);
+    for (const { tx, tz, canvas } of visible) {
+      if (canvas) ctx.drawImage(canvas, tx * MAP_TILE_M - 0.04, tz * MAP_TILE_M - 0.04, MAP_TILE_M + 0.08, MAP_TILE_M + 0.08);
     }
     return Math.max(...corners.map(([cx, cz]) => Math.hypot(cx, cz)));
   }

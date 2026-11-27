@@ -13,6 +13,8 @@ import { HOUSE_YAWS, BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
 export const MAP_TILE_M = 64;
 export const MAP_TILE_PPM = 6;
 export const MAP_TILE_CACHE = 32;
+/** How many tiles' ground one frame may paint; the rest wait for the next frames. */
+export const MAP_TILES_PER_FRAME = 3;
 /** Ground pixels are worked out every this many pixels, then filled square. */
 const STEP = 2;
 /** Scenery this far outside a tile is still drawn into it, so crowns reach over the seams. */
@@ -161,6 +163,7 @@ function spriteIndex() {
  * @param {{scene: object, index: {query: Function}, sampler: {color: Function, water: number}, store: {want: Function, get: Function}, createCanvas: (w: number, h: number) => object}} deps
  */
 export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
+  let budget = Infinity; // ground paintings left in this frame
   const tiles = new Map(); // key -> {canvas, ground, used: Map<jobKey, sprite|null>, signature}
   const sprites = spriteIndex();
   const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices, roadTriangles(scene.roads.strips));
@@ -325,7 +328,11 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
   });
 
   return {
-    /** The tile's canvas, made if needed (its ground remade when the look changed, its scenery redrawn when a sprite it lacked has been baked). `priority`: its distance from the rider, metres. */
+    /** A new frame: at most `paints` tiles' ground may be painted before the next call. */
+    beginFrame(paints = Infinity) {
+      budget = paints;
+    },
+    /** The tile's canvas, made if needed (its ground remade when the look changed, its scenery redrawn when a sprite it lacked has been baked). `priority`: its distance from the rider, metres. Null while its ground waits for the frame budget and it has no canvas yet. */
     tile(tx, tz, look, priority = 0) {
       const key = `${tx},${tz}`;
       let tile = tiles.get(key);
@@ -335,6 +342,8 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
         tiles.set(key, tile); // most recent last
         return tile.canvas;
       }
+      if (budget <= 0) return tile ? tile.canvas : null; // out of budget: the old ground, or none yet
+      budget -= 1;
       tile = make(tx, tz, look, priority);
       tiles.delete(key);
       tiles.set(key, tile);

@@ -42,14 +42,14 @@ function fakeStore(have = null) {
 /** A tile is two canvases: the ground, and the scenery over it. */
 const tilesOf = (made) => made.length / 2;
 
-function make({ store = fakeStore(), indexOf = index, sampler = flat } = {}) {
+function make({ store = fakeStore(), indexOf = index, sampler = flat, tileBudget = Infinity } = {}) {
   const made = [];
   const createCanvas = (w, h) => {
     const canvas = fakeCanvas(w, h);
     made.push(canvas);
     return canvas.canvas;
   };
-  const view = createMapView({ scene, route, index: indexOf, sampler, store, createCanvas });
+  const view = createMapView({ scene, route, index: indexOf, sampler, store, createCanvas, tileBudget });
   return { view, made, store };
 }
 
@@ -316,7 +316,7 @@ function turnsOf(item) {
   };
   const placed = { x: (Math.floor(start.x / MAP_TILE_M) + 0.5) * MAP_TILE_M, y: 0, z: (Math.floor(-start.y / MAP_TILE_M) + 0.5) * MAP_TILE_M, ...item };
   const indexOf = { query: (x0, z0, x1, z1) => (placed.x >= x0 && placed.x <= x1 && placed.z >= z0 && placed.z <= z1 ? [placed] : []) };
-  const view = createMapView({ scene, route, index: indexOf, sampler: flat, store: fakeStore(), createCanvas });
+  const view = createMapView({ scene, route, index: indexOf, sampler: flat, store: fakeStore(), createCanvas, tileBudget: Infinity });
   frame(view);
   return turns;
 }
@@ -351,4 +351,28 @@ test("resize keeps the tiles, which do not depend on the canvas size", () => {
   view.resize();
   frame(view);
   assert.equal(made.length, count);
+});
+
+test("a frame paints the ground of at most its budget of tiles, nearest first, and the next frames finish the rest", () => {
+  const all = make();
+  frame(all.view);
+  const total = tilesOf(all.made);
+  assert.ok(total > 3);
+  const { view, made } = make({ tileBudget: 2 });
+  frame(view);
+  assert.equal(tilesOf(made), 2, "two tiles in the first frame");
+  frame(view);
+  assert.equal(tilesOf(made), 4);
+  for (let i = 0; i < total; i += 1) frame(view);
+  assert.equal(tilesOf(made), total, "all of them in the end, none twice");
+});
+
+test("a tile whose look changed keeps its old canvas until its new ground is painted", () => {
+  const { view, made } = make({ tileBudget: 2 });
+  for (let i = 0; i < 20; i += 1) frame(view);
+  const count = made.length;
+  const screen = frame(view, { look: NIGHT });
+  assert.equal(made.length, count + 4, "only two tiles remade");
+  const total = tilesOf(made.slice(0, count));
+  assert.equal(screen.images.filter((entry) => made.some((m) => m.canvas === entry.image)).length, total, "every tile is still drawn, the old ones as they were");
 });
