@@ -30,6 +30,7 @@ export function createBoardLayer(world, { settings, uniforms, track }) {
   const hook = (material) => (uniforms ? addHook(addHook(material, cloudShadows(uniforms)), heightFog(uniforms)) : material);
   const matrix = new THREE.Matrix4();
   const at = new THREE.Vector3();
+  const facing = new THREE.Vector3();
   const size = new THREE.Vector3(1, 1, 1);
   const turn = new THREE.Quaternion();
   const angles = new THREE.Euler(0, 0, 0, "YXZ");
@@ -67,18 +68,24 @@ export function createBoardLayer(world, { settings, uniforms, track }) {
     const quad = posterQuad(uv);
     const position = geometry.getAttribute("position");
     const uvs = geometry.getAttribute("uv");
+    const normals = geometry.getAttribute("normal");
+    // The quad's front is its board's +z, turned by the board's rotation (lit materials need it).
+    const front = facing.set(0, 0, 1).transformDirection(matrixOf);
     for (let k = 0; k < 4; k += 1) {
       at.fromArray(quad.positions, k * 3).applyMatrix4(matrixOf);
       position.setXYZ(index * 4 + k, at.x, at.y, at.z);
       uvs.setXY(index * 4 + k, quad.uvs[k * 2], quad.uvs[k * 2 + 1]);
+      normals.setXYZ(index * 4 + k, front.x, front.y, front.z);
     }
     position.needsUpdate = true;
+    normals.needsUpdate = true;
     uvs.needsUpdate = true;
   };
   const quadGeometry = (count) => {
     const geometry = own(new THREE.BufferGeometry());
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 12), 3));
     geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(count * 8), 2));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 12), 3));
     const index = [];
     for (let i = 0; i < count; i += 1) index.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
     geometry.setIndex(index);

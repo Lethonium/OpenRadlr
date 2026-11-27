@@ -111,3 +111,12 @@ test("dispose frees everything", () => {
   layer.dispose();
   assert.equal(tracker.live(), 0);
 });
+
+test("poster quads carry normals along their board's front, so lit materials show them", () => {
+  const { layer } = make();
+  const normals = layer.object.getObjectByName("board-posters").geometry.getAttribute("normal");
+  assert.ok(normals, "posters have a normal attribute");
+  // Board 1 has yaw pi/2: its +z front turns to +x.
+  for (let k = 4; k < 8; k += 1) assert.deepEqual([normals.getX(k), normals.getY(k), normals.getZ(k)].map((n) => Math.round(n * 1e5) / 1e5 + 0), [1, 0, 0]);
+  assert.ok(layer.object.getObjectByName("goal-posters").geometry.getAttribute("normal"), "goal posters have normals too");
+});
