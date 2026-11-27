@@ -56,6 +56,10 @@ export function parseShotList(json) {
       if (!Number.isFinite(entry.at) || entry.at < 0) throw new Error(`shot "${shot.name}" needs at as metres >= 0`);
       shot.at = entry.at;
     }
+    if (entry.storage !== undefined) {
+      if (!entry.storage || typeof entry.storage !== "object" || Array.isArray(entry.storage)) throw new Error(`shot "${shot.name}" needs storage as an object`);
+      shot.storage = entry.storage;
+    }
     if (entry.wait !== undefined) {
       if (!Number.isFinite(entry.wait) || entry.wait < 0) throw new Error(`shot "${shot.name}" needs wait as ms >= 0`);
       shot.wait = entry.wait;
@@ -105,6 +109,8 @@ export function settingsFor(shot) {
   ]) {
     if (shot[key]) settings[setting] = shot[key];
   }
+  // Any other stored state the shot needs (a rider look, earned achievements), as strings.
+  for (const [key, value] of Object.entries(shot.storage ?? {})) settings[key] = typeof value === "string" ? value : JSON.stringify(value);
   return settings;
 }
 

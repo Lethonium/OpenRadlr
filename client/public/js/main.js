@@ -23,7 +23,6 @@ import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from 
 import { carriedClassic, encodeLook, loadLook, lookFromChoice, randomChoice, rolledChoice, sanitizeLook, saveLook } from "./profile/riderLook.js";
 import { lookPageModel, renderLookPage } from "./view/lookPage.js";
 import { lookOf } from "./view3d/assets/riders/look.js";
-import { wearsColourCode } from "./view3d/riderLooks.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
@@ -95,7 +94,7 @@ import {
   splitLabel,
   splitLine,
 } from "./view/hud.js";
-import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
+import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections, wearsColourCode } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
@@ -6272,7 +6271,7 @@ function frame() {
   const draft = me ? draftInfo(me, riders, app.route) : null;
   probeRideQuality(time);
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors, colourCode: wearsColourCode(app.state) });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors, colourCode: wearsColourCode(app.state, me, app.riderId) });
   } else {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }

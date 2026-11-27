@@ -8,14 +8,6 @@ import { lookOf } from "./assets/riders/look.js";
 /** How many decoded looks are kept. */
 const CACHE_SIZE = 256;
 
-/**
- * Whether the jerseys follow the colour code: while a race on my route counts down or runs, or an event runs, so
- * the field can be told apart. Otherwise riders wear the looks they chose.
- * @param {{race?: {phase?: string}, event?: {phase?: string}} | null} state the server's last `state`
- */
-export const wearsColourCode = (state) =>
-  ["countdown", "running"].includes(state?.race?.phase) || state?.event?.phase === "running";
-
 export class RiderLooks {
   /** My own look code (none: the rolled look). */
   #mine = null;

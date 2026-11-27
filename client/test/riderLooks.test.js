@@ -1,18 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { RiderLooks, wearsColourCode } from "../public/js/view3d/riderLooks.js";
+import { RiderLooks } from "../public/js/view3d/riderLooks.js";
 import { encodeLook, rolledChoice } from "../public/js/profile/riderLook.js";
-
-test("the colour code is worn in races and events only", () => {
-  assert.equal(wearsColourCode(null), false);
-  assert.equal(wearsColourCode({ race: { phase: "idle" } }), false);
-  assert.equal(wearsColourCode({ race: { phase: "countdown" } }), true);
-  assert.equal(wearsColourCode({ race: { phase: "running" } }), true);
-  assert.equal(wearsColourCode({ race: { phase: "finished" } }), false);
-  assert.equal(wearsColourCode({ race: { phase: "idle" }, event: { phase: "lobby" } }), false);
-  assert.equal(wearsColourCode({ race: { phase: "idle" }, event: { phase: "running" } }), true);
-});
 
 test("bots, riders without a look and unreadable codes keep the rolled look", () => {
   const looks = new RiderLooks();
