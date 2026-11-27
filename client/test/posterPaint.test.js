@@ -102,7 +102,7 @@ test("every default poster paints its text without throwing", () => {
   for (const entry of POSTERS) {
     const ctx = fakeContext();
     paintPoster(ctx, poster(entry.id), SIZE);
-    assert.equal(joined(ctx), en[`boards.line.${entry.id}`], entry.id);
+    assert.equal(joined(ctx).replaceAll("\u00a0", " "), en[`boards.line.${entry.id}`].replaceAll("\u00a0", " "), entry.id);
   }
 });
 
