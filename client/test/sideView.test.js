@@ -275,22 +275,23 @@ test("name labels are drawn after the night tint, so it does not darken them", (
 });
 
 test("at night a rider's headlight throws a beam forward and slightly down, none by day", () => {
-  const beamsOf = (look) => {
+  const beamsOf = (look, d) => {
     const { view } = sideSetup([]);
     const screen = fakeCanvas(W, H);
-    const riders = [{ id: "mara", d: 604, lane: 0, look: { name: "mara" }, name: "Mara", cadence: 90, phase: 0.1 }];
-    view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: 600, id: "me" }, riders, look, t: 0 });
+    const riders = [{ id: "mara", d, lane: 0, look: { name: "mara" }, name: "Mara", cadence: 90, phase: 0.1 }];
+    view.draw(screen.canvas.getContext("2d"), { width: W, height: H, me: { d: d - 4, id: "me" }, riders, look, t: 0 });
     // The beam is the only wedge: an arc from angle - spread to angle + spread.
     return screen.arcs.filter(([, , , from, to]) => to - from < 1).map(([x, y, length, from, to]) => ({ x, y, length, angle: (from + to) / 2, spread: (to - from) / 2 }));
   };
-  assert.deepEqual(beamsOf(DAY), []);
-  const beams = beamsOf(NIGHT);
-  assert.equal(beams.length, 1, "Mara's");
-  for (const beam of beams) {
-    assert.ok(Math.cos(beam.angle) > 0.99, "forward is to the right");
-    assert.ok(beam.angle > 0 && beam.angle < 0.2, "a little down toward the road");
-    assert.ok(Math.abs(beam.spread - 0.18) < 1e-9);
-  }
+  assert.deepEqual(beamsOf(DAY, 204), []);
+  const [flatBeam, ...more] = beamsOf(NIGHT, 204);
+  assert.equal(more.length, 0, "only Mara's");
+  assert.ok(Math.cos(flatBeam.angle) > 0.99, "forward is to the right");
+  assert.ok(flatBeam.angle > 0 && flatBeam.angle < 0.2, "a little down toward the road");
+  assert.ok(Math.abs(flatBeam.spread - 0.1) < 1e-9);
+  // On the 5 % climb (drawn 1.6 times as steep) the beam turns up with the road.
+  const [climbBeam] = beamsOf(NIGHT, 604);
+  assert.ok(Math.abs(flatBeam.angle - climbBeam.angle - Math.atan(0.05 * 1.6)) < 1e-6);
 });
 
 test("riders in the far lane are drawn before the near lane", () => {
