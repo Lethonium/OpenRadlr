@@ -121,10 +121,14 @@ export function visibleLabels(candidates, myId, { charWidth = 7, padding = 22, h
   return shown;
 }
 
-/** True if WebGL 2 is available in this browser. */
+/**
+ * True if this browser can run the 3D world: WebGL 2 that can render into
+ * the engine's half-float scene target (WebGL 2 alone does not promise it).
+ */
 export function isWebGl2Available(doc = globalThis.document) {
   try {
-    return Boolean(doc.createElement("canvas").getContext("webgl2"));
+    const gl = doc.createElement("canvas").getContext("webgl2");
+    return Boolean(gl?.getExtension("EXT_color_buffer_float"));
   } catch {
     return false;
   }
