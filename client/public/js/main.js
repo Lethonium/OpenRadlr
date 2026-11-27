@@ -6171,11 +6171,14 @@ function frame() {
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
   probeFirstRide(time);
+  // The sprite baker starts on the first 2D frame; where it cannot, the old map takes over.
+  if (app.view2d && !app.view2d.available) dispose2d();
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else if (app.view2d) {
     app.view2d.render({ riders, myId: app.riderId, me, myCadence: app.session.latest.cadence, draft, lemons: app.lemonHunt?.lemons, ghost, timeS: time, utcSeconds: Date.now() / 1000, colors });
-  } else {
+  }
+  if (app.viewMode !== "3d" && !app.view2d?.available) {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }
   // Read the canvas now: a WebGL buffer is cleared once the frame is shown.
