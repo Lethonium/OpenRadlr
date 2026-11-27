@@ -20,7 +20,9 @@ import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpCha
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
 import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
-import { carriedClassic, encodeLook, loadLook, sanitizeLook, saveLook } from "./profile/riderLook.js";
+import { carriedClassic, encodeLook, loadLook, lookFromChoice, randomChoice, rolledChoice, sanitizeLook, saveLook } from "./profile/riderLook.js";
+import { lookPageModel, renderLookPage } from "./view/lookPage.js";
+import { lookOf } from "./view3d/assets/riders/look.js";
 import { wearsColourCode } from "./view3d/riderLooks.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
@@ -202,7 +204,6 @@ const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
-/** "on" when Old School riders ride the classic rider and bike on their own screen (per rider, like the other settings). */
 /** The old "Classic rider" setting, carried into the rider look once (#25). */
 const CLASSIC_RIDER_KEY = "openride.classicRider";
 /** How many golden lemons this browser's rider has collected, all rides together. */
@@ -758,6 +759,49 @@ function myLookCode() {
   }
   const kept = loadLook(storage);
   return kept ? encodeLook(sanitizeLook(kept, earned, lookSeed())) : null;
+}
+
+/** The active rider's look as the Look page shows it: the kept one, else the one rolled for them, only unlocked pieces. */
+function currentLook() {
+  const storage = browserStorage();
+  return sanitizeLook(loadLook(storage) ?? rolledChoice(lookSeed()), loadAchievements(storage).earned, lookSeed());
+}
+
+/** Draws the Look page and its preview. */
+function renderLook() {
+  const choice = currentLook();
+  renderLookPage($("look-choices"), lookPageModel(choice, loadAchievements(browserStorage()).earned, app.profile.units), pickLook);
+  showLookPreview(choice);
+}
+
+/** Keeps a new look, hands it on, redraws the page and keeps the focus on the piece picked. */
+function keepLook(choice, focus = null) {
+  saveLook(browserStorage(), choice);
+  applyMyLook();
+  renderLook();
+  if (focus) $("look-choices").querySelector(`[data-slot="${focus.slot}"][data-option="${focus.value}"]`)?.focus();
+}
+
+function pickLook(slot, value) {
+  keepLook({ ...currentLook(), [slot]: value }, { slot, value });
+}
+
+/** The turning cyclist on the Look page, loaded with the 3D code; a note instead where WebGL 2 is missing. */
+function showLookPreview(choice) {
+  const available = isWebGl2Available();
+  $("look-preview").hidden = !available;
+  $("look-no-preview").hidden = available;
+  if (!available) return;
+  import("./view3d/lookPreview.js")
+    .then(({ LookPreview }) => {
+      if (app.profileDialog?.page !== "look") return;
+      const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+      app.lookPreview ??= new LookPreview($("look-preview"), { reducedMotion });
+      const look = lookFromChoice(choice, lookOf(1));
+      app.lookPreview.setLook(look, look.classic);
+      app.lookPreview.start();
+    })
+    .catch((error) => console.error(error));
 }
 
 /** Gives the views and the server the active rider's look. */
@@ -3562,6 +3606,8 @@ function initProfile() {
       for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
       // A canvas on a hidden page has no size: draw the chart when its page shows.
       if (page === "overview") renderProfileFtp();
+      if (page === "look") renderLook();
+      else app.lookPreview?.stop();
     },
   });
   app.deleteConfirm = createDeleteConfirm({
@@ -3590,6 +3636,8 @@ function initProfile() {
   $("pin-set").addEventListener("click", () => changeRiderPin(setPinFlow));
   $("pin-change").addEventListener("click", () => changeRiderPin(changePinFlow));
   $("pin-remove").addEventListener("click", () => changeRiderPin(removePinFlow));
+  $("look-surprise").addEventListener("click", () => keepLook(randomChoice(loadAchievements(browserStorage()).earned, Math.random)));
+  relocaliseHooks.push(() => app.profileDialog?.page === "look" && renderLook());
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());

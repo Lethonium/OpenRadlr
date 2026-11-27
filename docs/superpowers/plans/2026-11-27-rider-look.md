@@ -61,7 +61,7 @@ game (another client's `state` carries it).
 **Files:** `view3d/scene/riderLayer.js`, `view3d/view3d.js`, `view3d/studioScene.js`, `main.js`, tests `riderLayer.test.js`, `view3d.test.js`.
 
 Rider entries carry `look` (decoded); `ownKits` decides whether its primary beats the tint; classic comes from the look's
-style; pool key includes the code. `View3D.setLooks({mine, ownKits})`. Setting `openradlr.kitColours` (`own|code`).
+style; pool key includes the code. `View3D.setMyLook(code)`, `render({colourCode})` from `wearsColourCode(state)` (races and events).
 
 ### Task 5: Look page with preview
 

@@ -55,9 +55,10 @@ something back. Nothing changes how the ride feels (no physics, no bonuses). The
   `joined` and on every change while riding. The server keeps it per client and passes it on as `riders[].look`,
   without reading it. Additive: old clients ignore it, no protocol version bump. A code from a newer client that
   this client cannot read falls back to the rolled look field by field.
-- **Colour code:** a setting "Kit colours: riders' own kits (default) / colour code". With own kits, riders with a
-  look wear it (me too); riders without one keep the colour code, bots keep their team kits. With the colour code,
-  everyone's jersey colour follows the code as today, the rest of the look still shows.
+- **Colour code (owner, 2026-11-27): no setting.** On a normal ride everyone wears the look they chose. While a race
+  on my route counts down or runs, or an event runs, every jersey follows the colour code again (me / humans / bot
+  teams), so the field can be told apart; the rest of the look stays. Riders without a look keep the colour code
+  always, bots their team kits.
 - **Preview:** a "Look" page in the Profile dialog: a turning, pedalling cyclist on a small canvas of its own
   (lazy-loaded with the 3D code), then the choices as chips and swatches by group (Body, Kit, Head, Bike). Every
   change saves and redraws. "Surprise me" rolls a look from the unlocked pieces. Without WebGL 2 the page shows no
