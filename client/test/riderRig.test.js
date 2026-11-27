@@ -189,3 +189,67 @@ test("the workbench pair describes and builds the rider", () => {
   built.dispose();
   assert.equal(tracker.live(), 0);
 });
+
+/** World positions of the vertices of the head-bone extra called `name`, in the standing pose. */
+function headExtra(rig, name) {
+  rig.poseStand(0);
+  rig.object.updateMatrixWorld(true);
+  const meshes = [];
+  rig.object.traverse((one) => one.name === name && meshes.push(one));
+  assert.ok(meshes.length > 0, `no ${name}`);
+  return meshes.flatMap((mesh) => {
+    const position = mesh.geometry.attributes.position;
+    return Array.from({ length: position.count }, (_, i) => v(position.getX(i), position.getY(i), position.getZ(i)).applyMatrix4(mesh.matrixWorld));
+  });
+}
+
+test("the chin straps run from the helmet to under the chin", () => {
+  const rig = build();
+  const points = headExtra(rig, "strap");
+  const head = rig.boneWorld("head", v(0, 0, 0));
+  const lowest = Math.min(...points.map((point) => point.y));
+  assert.ok(lowest > head.y - 0.02 * STAND_HEIGHT, `straps hang ${(head.y - lowest).toFixed(3)} m below the jaw`);
+  const low = points.filter((point) => point.y < lowest + 0.005);
+  assert.ok(low.every((point) => Math.abs(point.z - head.z) < 0.03 * STAND_HEIGHT), "the straps meet under the chin");
+  assert.ok(low.every((point) => point.x > head.x), "the buckle sits under the chin, in front of the neck");
+});
+
+test("the sunglasses are no wider than the head", () => {
+  const rig = build(look({ glasses: true }));
+  const head = rig.boneWorld("head", v(0, 0, 0));
+  const widest = Math.max(...headExtra(rig, "glasses").map((point) => Math.abs(point.z - head.z)));
+  assert.ok(widest < 0.056 * STAND_HEIGHT, `glasses reach ${widest.toFixed(3)} m to the side`);
+});
+
+test("hair shows below the helmet at the back of the head", () => {
+  const pixels = paintKit(look({ hair: "#00ff00", skin: "light" }), SIZE);
+  assert.deepEqual(pixelAt(pixels, KIT_ATLAS.head, 0.75, 0.45), [0, 255, 0, 255]);
+  assert.notDeepEqual(pixelAt(pixels, KIT_ATLAS.head, 0.25, 0.45), [0, 255, 0, 255], "the face stays bare");
+});
+
+test("a heavier rider grows a belly, not a hump", () => {
+  const depth = (weight) => {
+    const rig = build(look({ weight }));
+    rig.poseStand(0);
+    const chestY = 0.66 * STAND_HEIGHT;
+    const xs = skinnedPoints(rig, 1).filter((point) => Math.abs(point.y - chestY) < 0.02 && Math.abs(point.z) < 0.05).map((point) => point.x);
+    return { front: Math.max(...xs), back: Math.min(...xs) };
+  };
+  const light = depth(70);
+  const heavy = depth(120);
+  const forward = heavy.front - light.front;
+  const backward = light.back - heavy.back;
+  assert.ok(forward > 0.02, `belly grows ${forward.toFixed(3)} m`);
+  assert.ok(backward < forward * 0.5, `back grows ${backward.toFixed(3)} m, belly ${forward.toFixed(3)} m`);
+});
+
+test("every UV stays a texel inside its atlas region, so no neighbour bleeds into a seam", () => {
+  const uv = build().mesh.geometry.attributes.uv;
+  const texel = 1 / SIZE;
+  const regions = Object.values(KIT_ATLAS);
+  for (let i = 0; i < uv.count; i += 1) {
+    const [u, w] = [uv.getX(i), uv.getY(i)];
+    const inside = regions.some(([u0, u1, v0, v1]) => u >= u0 + texel - 1e-6 && u <= u1 - texel + 1e-6 && w >= v0 + texel - 1e-6 && w <= v1 - texel + 1e-6);
+    assert.ok(inside, `uv ${u.toFixed(4)}, ${w.toFixed(4)} sits on a region edge`);
+  }
+});

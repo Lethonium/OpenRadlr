@@ -9,7 +9,7 @@
  * Ported from the reference's `creatures/rider.js` without its exercise poses (part 2 retargets our own clips).
  */
 import * as THREE from "../../../three.js";
-import { colour } from "../geom.js";
+import { colour, merge } from "../geom.js";
 import { addHook, cloudShadows, createSharedUniforms, heightFog } from "../materials.js";
 import { createOwner } from "../owner.js";
 import { bikeGeometry } from "./bicycle.js";
@@ -143,6 +143,10 @@ function pushWeights(acc, weights) {
   acc.skinWeight.push(...four.map(([, weight]) => weight / total));
 }
 
+/** UVs stay this far inside their atlas region, so filtering never reaches the neighbouring part (no seam lines). */
+const UV_INSET = 1.5 / 256;
+const inset = ([u0, u1, v0, v1]) => [u0 + UV_INSET, u1 - UV_INSET, v0 + UV_INSET, v1 - UV_INSET];
+
 /**
  * A tube through `rings` (each `{c: centre, t: tangent, a: first axis, rx, ry, w: [bone, weight][], v, u?}`) with `segments`
  * around, UVs into `region`, optionally capped.
@@ -151,7 +155,7 @@ function loft(acc, rings, segments, region, { capStart = false, capEnd = false }
   const base = acc.position.length / 3;
   const side = vec();
   const point = vec();
-  const [u0, u1, v0, v1] = region;
+  const [u0, u1, v0, v1] = inset(region);
   for (const ring of rings) {
     side.crossVectors(ring.t, ring.a);
     for (let j = 0; j <= segments; j += 1) {
@@ -222,13 +226,18 @@ function torsoWeights(y) {
   return [["neck", 1]];
 }
 
+/** How much of a heavier rider's extra torso depth goes to the front, by ring height: belly and chest, not a hump; the pelvis stays between the thighs. */
+const frontShare = (y) => (y < 0.52 ? 0.15 : y < 0.72 ? 0.7 : y < 0.8 ? 0.45 : 0.2);
+
 function addTorso(acc, h, widthScale, depthScale, belly) {
   const rings = TORSO_RINGS.map(([y, width, depth, forward]) => {
     // the belly swells the waist rings (0.62 and 0.665)
     const swell = y === 0.62 ? [belly, belly * 0.6] : y === 0.665 ? [belly * 0.6, belly * 0.3] : [0, 0];
+    const halfDepth = (depth + swell[0]) * h * depthScale;
+    const grown = Math.max(0, halfDepth - depth * h) * frontShare(y);
     return {
-      c: vec((forward + swell[1] - 0.004) * h, y * h, 0), t: vec(0, 1, 0), a: vec(0, 0, 1),
-      rx: width * h * widthScale, ry: (depth + swell[0]) * h * depthScale, w: torsoWeights(y), v: (y - 0.452) / 0.394,
+      c: vec((forward + swell[1] - 0.004) * h + grown, y * h, 0), t: vec(0, 1, 0), a: vec(0, 0, 1),
+      rx: width * h * widthScale, ry: halfDepth, w: torsoWeights(y), v: (y - 0.452) / 0.394,
     };
   });
   loft(acc, rings, 20, KIT_ATLAS.torso, { capStart: true });
@@ -379,11 +388,33 @@ function helmetGeometry(joints, h, shell, trim) {
   return geometry.translate(joints.head.x - 0.004 * h, 0.957 * h, 0);
 }
 
-function glassesGeometry(h) {
-  const geometry = new THREE.CylinderGeometry(0.063 * h, 0.06 * h, 0.024 * h, 24, 1, true, Math.PI / 2 - 1.2, 2.4);
+/** A thin rod from `from` to `to` (bind-pose model space). */
+function rod(from, to, radius) {
+  const direction = to.clone().sub(from);
+  const geometry = new THREE.CylinderGeometry(radius, radius, direction.length(), 5);
   geometry.deleteAttribute("uv");
-  geometry.scale(1, 1, 0.86);
-  return geometry.translate(0.01 * h, 0.931 * h, 0);
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(vec(0, 1, 0), direction.normalize()));
+  return geometry.translate(...from.clone().add(to).multiplyScalar(0.5).toArray());
+}
+
+/** Chin straps: from under the helmet in front of each ear, down the jaw to a buckle under the chin. */
+function strapGeometries(h) {
+  const buckle = vec(0.036 * h, 0.871 * h, 0);
+  return [-1, 1].flatMap((sign) => {
+    const top = vec(0.008 * h, 0.946 * h, sign * 0.053 * h);
+    const jaw = vec(0.014 * h, 0.893 * h, sign * 0.038 * h);
+    return [rod(top, jaw, 0.0022 * h), rod(jaw, buckle, 0.0022 * h)];
+  });
+}
+
+/** Wraparound sunglasses: a lens band across the eyes and thin arms back to the ears. */
+const LENS_ARC = 0.85;
+function glassesGeometries(h) {
+  const lens = new THREE.CylinderGeometry(0.06 * h, 0.058 * h, 0.019 * h, 20, 1, true, Math.PI / 2 - LENS_ARC, 2 * LENS_ARC);
+  lens.deleteAttribute("uv");
+  lens.scale(1, 1, 0.9).translate(0.01 * h, 0.934 * h, 0);
+  const end = (sign) => vec(0.01 * h + Math.cos(LENS_ARC) * 0.06 * h, 0.938 * h, sign * Math.sin(LENS_ARC) * 0.054 * h);
+  return [lens, ...[-1, 1].map((sign) => rod(end(sign), vec(-0.004 * h, 0.936 * h, sign * 0.0515 * h), 0.0016 * h))];
 }
 
 // ---------- IK and poses
@@ -526,14 +557,13 @@ export function createRider(look, { own = (resource) => resource, uniforms = cre
   );
   helmet.castShadow = true;
   bones.head.add(helmet);
+  helmet.name = "helmet";
   const strapMaterial = own(lit(new THREE.MeshStandardMaterial({ color: "#1d1f24", roughness: 0.8 })));
-  for (const sign of [-1, 1]) {
-    const strap = new THREE.CylinderGeometry(0.0025 * h, 0.0025 * h, 0.08 * h, 4).translate(0.022 * h, 0.91 * h, sign * 0.05 * h).applyMatrix4(headInverse);
-    bones.head.add(new THREE.Mesh(own(strap), strapMaterial));
-  }
+  const onHead = (geometries) => merge(geometries.map((geometry) => geometry.applyMatrix4(headInverse)));
+  bones.head.add(Object.assign(new THREE.Mesh(own(onHead(strapGeometries(h))), strapMaterial), { name: "strap" }));
   if (look.glasses) {
     const lensMaterial = new THREE.MeshStandardMaterial({ color: "#1b2430", roughness: 0.12, metalness: 0.85, side: THREE.DoubleSide });
-    bones.head.add(new THREE.Mesh(own(glassesGeometry(h).applyMatrix4(headInverse)), own(lit(lensMaterial))));
+    bones.head.add(Object.assign(new THREE.Mesh(own(onHead(glassesGeometries(h))), own(lit(lensMaterial))), { name: "glasses" }));
   }
 
   const length = (a, b) => joints[a].distanceTo(joints[b]);

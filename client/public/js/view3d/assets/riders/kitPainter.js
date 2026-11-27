@@ -222,8 +222,12 @@ function paintPattern(s, pattern, look) {
 /** Hair, eyes, brows and lips on the head region. */
 function paintFace(s, hair) {
   const { head } = KIT_ATLAS;
+  // u 0.25 is the face, 0.75 the back; the hair reaches down to the nape so it shows under the helmet
   s.rect(head, 0.45, 1, 0.62, 1, hair);
   s.rect(head, 0, 0.05, 0.62, 1, hair);
+  s.rect(head, 0.58, 0.92, 0.36, 0.62, hair);
+  s.rect(head, 0.5, 0.58, 0.5, 0.62, hair);
+  s.rect(head, 0.92, 1, 0.5, 0.62, hair);
   s.rect(head, 0, 1, 0.9, 1, hair);
   const k = s.scale;
   for (const du of [-0.035, 0.035]) {
