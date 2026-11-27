@@ -117,6 +117,22 @@ test("spriteStore: a job wanted while it is night also asks for its night varian
   assert.ok(baked.some((key) => key.startsWith("side-night:")));
 });
 
+test("spriteStore: setNight(true) again changes nothing, so a frame's call costs no night asks", () => {
+  const { store, baked } = rig({ budgetMs: 100, bytes: 100, maxBytes: 150 });
+  const house = dayJobs.find((job) => job.id === "house");
+  const plant = dayJobs.find((job) => job.id === "pine");
+  store.want(house, 1);
+  store.pump();
+  store.setNight(true);
+  store.pump(); // the house's night variant; the cap drops the day house
+  store.want(plant, 1);
+  store.pump(); // the plant has no night variant; the cap drops the least recently used, the house's night variant
+  const count = baked.length;
+  store.setNight(true);
+  assert.equal(store.pump(), 0, "the dropped night variant is not asked for again");
+  assert.equal(baked.length, count);
+});
+
 test("spriteStore: past maxBytes the least recently used riders go first, scenery last", () => {
   const { store } = rig({ bytes: 100, budgetMs: 1000, maxBytes: 850 });
   const scenery = dayJobs.slice(0, 2);

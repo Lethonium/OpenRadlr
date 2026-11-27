@@ -85,6 +85,7 @@ export function createSpriteStore({ bake, now, budgetMs = 6, maxBytes = 40e6 }) 
   }
 
   function setNight(on) {
+    if (on === night) return;
     night = on;
     if (!on) return;
     for (const { job, priority } of dayJobs.values()) {
