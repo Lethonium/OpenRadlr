@@ -1108,3 +1108,54 @@ test("my studio entry is classic when the classic rider is on, the coach never",
   assert.ok(!entries.find((r) => r.id === 5).classic);
   assert.ok(!entries.find((r) => r.id === coachId(0)).classic);
 });
+
+// --- goal boards -----------------------------------------------------------------
+
+function goalView() {
+  const { view } = gymView([], "temperate");
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  return { view, me, frames: recordFrames(view) };
+}
+const goalRide = (rideM) => ({ rideM, durationS: 60, elevationGainM: 0, speedMps: 8 });
+
+test("a goal board in reach stands beside the road with a poster slot, and its text is asked for once", () => {
+  const { view, me, frames } = goalView();
+  const painted = [];
+  view.onGoalPoster = (slot, text) => painted.push([slot, text]);
+  view.setGoalPlan([{ id: "a", text: "Week done!", at: { rideM: 300 } }]);
+  view.setGoalRide(goalRide(0));
+  view.render({ riders: [me], myId: 1, timeS: 1, colors });
+  view.render({ riders: [me], myId: 1, timeS: 2, colors });
+  const [board] = frames.at(-1).goalBoards;
+  assert.equal(board.slot, 0);
+  assert.equal(board.position.length, 3);
+  assert.deepEqual(painted, [[0, "Week done!"]]);
+});
+
+test("a rider on another route sees no goal boards", () => {
+  const { view, me, frames } = goalView();
+  view.setGoalPlan([{ id: "a", text: "x", at: { rideM: 300 } }]);
+  view.setGoalRide(goalRide(0));
+  view.render({ riders: [me], myId: 1, timeS: 0, colors });
+  assert.equal(frames.at(-1).goalBoards.length, 1);
+  view.render({ riders: [{ ...me, route: "somewhere-else" }], myId: 1, timeS: 1, colors });
+  assert.equal(frames.at(-1).goalBoards.length, 0);
+});
+
+test("a stopped rider gets no board for a time goal", () => {
+  const { view, me, frames } = goalView();
+  view.setGoalPlan([{ id: "t", text: "x", at: { pending: { metric: "time", remaining: 100 } } }]);
+  view.setGoalRide({ ...goalRide(0), speedMps: 0.2 });
+  view.render({ riders: [me], myId: 1, timeS: 1, colors });
+  assert.equal(frames.at(-1).goalBoards.length, 0);
+});
+
+test("an empty plan takes the goal boards down", () => {
+  const { view, me, frames } = goalView();
+  view.setGoalPlan([{ id: "a", text: "x", at: { rideM: 300 } }]);
+  view.setGoalRide(goalRide(0));
+  view.render({ riders: [me], myId: 1, timeS: 1, colors });
+  view.setGoalPlan([]);
+  view.render({ riders: [me], myId: 1, timeS: 2, colors });
+  assert.equal(frames.at(-1).goalBoards.length, 0);
+});

@@ -1380,5 +1380,10 @@ export default {
   "boards.line.legsKnow": "Ziel voraus. Beine, ihr wisst Bescheid.",
   "boards.line.lastDrop": "Den letzten Tropfen rauspressen!",
   "boards.line.lastOrders": "Letzte Runde: Vollgas!",
+  "boards.goal.weekDone": "Woche geschafft! {amount} \u2713",
+  "boards.goal.weekSoon": "Noch {left} bis zu deinen {amount} der Woche",
+  "boards.goal.longSoon": "Noch {left} bis zur langen Ausfahrt",
+  "boards.goal.longDone": "Lange Ausfahrt geschafft \u2713",
+  "boards.goal.lap": "Schlag {time} in dieser Runde",
   "boards.yourUpload": "Dein Upload",
 };

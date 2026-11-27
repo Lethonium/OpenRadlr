@@ -39,7 +39,7 @@ function bare(metric, value, round = Math.round) {
 const unit = (metric) => (metric === "distance" ? distanceUnit() : metric === "climb" ? elevationUnit() : "h");
 
 /** "50 km", "20,000 m", "100 h" or "2:30 h". */
-function amount(metric, value) {
+export function amount(metric, value) {
   if (metric === "time" && Math.round(value / 60) % 60 === 0) return `${whole(value / 3600)} h`;
   return `${bare(metric, value)} ${unit(metric)}`;
 }

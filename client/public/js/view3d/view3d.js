@@ -25,8 +25,10 @@ import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { buildWorld, riddenSurface } from "./world.js";
-import { bikeOnRoad, riderPosition } from "../world/roads.js";
+import { bikeOnRoad, riderPosition, roadFrame } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
+import { boardSpot } from "./boards.js";
+import { anchorGoalBoards, resolvePending } from "../ride/goalBoards.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { groundHeight, labelInSight, plotBoxes } from "./labelSight.js";
@@ -421,6 +423,55 @@ export class View3D {
     this.goalBoards = boards ?? [];
   }
 
+  /** The goal boards of this ride (ride/goalBoards.js planGoalBoards), anchored ahead of my rider as they come into reach; `[]` takes them all down. */
+  setGoalPlan(planned) {
+    this.#goalPlan = planned ?? [];
+    this.#goalAnchors.clear();
+    if (!this.#goalPlan.length) this.goalBoards = [];
+  }
+
+  /** How the ride stands, `{rideM, durationS, elevationGainM, speedMps}`, for placing the boards of a time or climb goal. */
+  setGoalRide(ride) {
+    this.#goalRide = ride;
+  }
+
+  #goalPlan = [];
+  #goalAnchors = new Map();
+  #goalRide = null;
+  #goalSlots = [null, null];
+
+  /** Called with `(slot, text)` when a goal poster needs painting into the sheet that `setGoalPosters` takes. */
+  onGoalPoster = null;
+
+  /** The goal boards now in reach of my rider, standing beside the road like the other boards: `{position, yaw, slot}`. */
+  #goalFrames(me) {
+    const ride = this.#goalRide;
+    if (!ride || (me.route && me.route !== this.route.id)) return [];
+    const planned = [];
+    for (const board of this.#goalPlan) {
+      if (!board.at.pending) planned.push(board);
+      else if (this.#goalAnchors.get(board.id)) planned.push({ ...board, at: { rideM: 0 } });
+      else {
+        const rideM = resolvePending(board, { distanceM: ride.rideM, ...ride });
+        if (rideM !== null) planned.push({ ...board, at: { rideM } });
+      }
+    }
+    const anchored = anchorGoalBoards(planned, this.#goalAnchors, { rideM: ride.rideM, routeId: this.route.id, routeDistance: me.distance, routeLength: this.route.length, loop: Boolean(this.route.loop) });
+    const taken = new Set();
+    return anchored.map(({ text, distance }) => {
+      let slot = this.#goalSlots.findIndex((shown, i) => shown === text && !taken.has(i));
+      if (slot < 0) {
+        slot = [0, 1].find((i) => !taken.has(i));
+        this.#goalSlots[slot] = text;
+        this.onGoalPoster?.(slot, text);
+      }
+      taken.add(slot);
+      const { x, z, yaw } = boardSpot(this.route, distance);
+      const road = roadFrame(this.route, distance).center;
+      return { position: [x, road[1], z], yaw, slot };
+    });
+  }
+
   /**
    * The gyms' statue rows (#77), replacing the previous ones.
    * @param {{gym: object, figures: string[], material: string}[]} rows from `statueRows`
@@ -705,6 +756,7 @@ export class View3D {
     });
 
     const lemons = me && !me.gym ? this.#lemonFrames(me.rider, timeS) : [];
+    if (this.#goalPlan.length) this.goalBoards = me && !me.gym ? this.#goalFrames(me.rider) : [];
 
     // The Three.js scene into the engine's target (ground, sea, sky, riders, features), then the post chain presents it.
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);

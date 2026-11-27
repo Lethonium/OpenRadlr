@@ -80,7 +80,7 @@ export function boardSites(route, { villages = [] } = {}) {
 }
 
 /** Where a board at `distance` stands (x, z), the yaw that turns its front (+z) to riders coming along the road, and the road's frame. */
-function spot(route, distance) {
+export function boardSpot(route, distance) {
   const frame = roadFrame(route, distance);
   const off = roadHalfWidth(route.lanes) + VERGE + BOARD.setback;
   const x = frame.center[0] + frame.right[0] * off;
@@ -97,7 +97,7 @@ function spot(route, distance) {
 /** The ground the boards at `sites` take, `{x, z, radius}` each: the world plan keeps plants and houses off it. */
 export function boardClearings(route, sites) {
   return sites.map(({ distance }) => {
-    const { x, z } = spot(route, distance);
+    const { x, z } = boardSpot(route, distance);
     return { x, z, radius: BOARD.clearing };
   });
 }
@@ -109,7 +109,7 @@ export function boardClearings(route, sites) {
 export function placeBoards(route, terrain, sites, { occupancy, avoid = () => false }) {
   const boards = [];
   for (const { kind, distance } of sites) {
-    const { x, z, yaw } = spot(route, distance);
+    const { x, z, yaw } = boardSpot(route, distance);
     if (avoid(x, z, BOARD.width / 2) || occupancy?.blocked(x, z, BOARD.width / 2)) continue;
     occupancy?.add(x, z, BOARD.clearing);
     boards.push({ kind, distance, position: [x, terrain.height(x, z), z], yaw });

@@ -32,6 +32,9 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { planGoalBoards } from "./ride/goalBoards.js";
+import { createGoalSheet } from "./view3d/posters/goalSheet.js";
+import { createCanvas } from "./view3d/posters/paint.js";
 import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
@@ -3871,6 +3874,9 @@ function startGoals() {
   app.goalData = null;
   app.goalLive = null;
   app.goalLaps = new Map();
+  app.goalBoardsPlanned = false;
+  app.goalRideAt = 0;
+  app.view3d?.setGoalPlan([]);
   app.goalLapSaves = [];
   app.historySave = null;
   const ride = app.ride;
@@ -3907,6 +3913,37 @@ function renderGoalLine() {
   const line = rotatingGoal(hudGoalLines(liveGoals(), { routeId: app.route?.id ?? null, racing }), Date.now());
   app.hud.set("goal", line ?? "");
   for (const element of document.querySelectorAll(".hud-goal")) element.hidden = line === null;
+  updateGoalBoards(me, racing);
+}
+
+/**
+ * The goal boards in the world (ride/goalBoards.js): planned once from this week's goals once they are read, taken
+ * down in a race or event; the ride's pace goes to the view once a second.
+ */
+function updateGoalBoards(me, racing) {
+  const view = app.view3d;
+  if (!view) return;
+  if (racing || !app.route?.length) {
+    if (app.goalBoardsPlanned) view.setGoalPlan([]);
+    app.goalBoardsPlanned = false;
+    return;
+  }
+  if (!app.goalBoardsPlanned) {
+    if (!app.goalData || !app.recorder) return;
+    const entries = goalEntries().filter(({ week }) => !week.finished);
+    const planned = planGoalBoards(entries, { routeId: app.route.id ?? null, routeLength: app.route.length });
+    app.goalSheet ??= createGoalSheet(createCanvas);
+    view.onGoalPoster = (slot, text) => {
+      if (app.goalSheet.paint(slot, text)) view.setGoalPosters(app.goalSheet.canvas);
+    };
+    view.setGoalPlan(planned);
+    app.goalBoardsPlanned = true;
+  }
+  const at = Date.now();
+  if (app.goalRideAt && at - app.goalRideAt < 1000) return;
+  app.goalRideAt = at;
+  const { distanceM, durationS, elevationGainM } = app.recorder.summary();
+  view.setGoalRide({ rideM: distanceM, durationS, elevationGainM, speedMps: me?.speed ?? 0 });
 }
 
 /**

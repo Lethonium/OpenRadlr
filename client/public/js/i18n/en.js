@@ -1380,5 +1380,10 @@ export default {
   "boards.line.legsKnow": "Finish ahead. Legs, you know what to do.",
   "boards.line.lastDrop": "Squeeze out the last drop!",
   "boards.line.lastOrders": "Last orders: full gas!",
+  "boards.goal.weekDone": "Week done! {amount} \u2713",
+  "boards.goal.weekSoon": "{left} to your weekly {amount}",
+  "boards.goal.longSoon": "{left} to your long ride",
+  "boards.goal.longDone": "Long ride done \u2713",
+  "boards.goal.lap": "Beat {time} this lap",
   "boards.yourUpload": "Your upload",
 };
