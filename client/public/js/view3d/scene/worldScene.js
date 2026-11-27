@@ -15,6 +15,7 @@ import { createFaunaLayer } from "./faunaLayer.js";
 import { resolveBiome } from "../biomes/index.js";
 import { createArchLayer } from "./archLayer.js";
 import { createCrowdLayer } from "./crowdLayer.js";
+import { createBoardLayer } from "./boardLayer.js";
 import { createFurnitureLayer } from "./furnitureLayer.js";
 import { createAthleteLayer } from "./athleteLayer.js";
 import { createLemonLayer } from "./lemonLayer.js";
@@ -66,6 +67,7 @@ const LIGHTNING = 3;
  * @property {import("./riderLayer.js").VehicleEntry[]} [vehicles] the shared vehicles with their seated riders (none when missing)
  * @property {{index: number, yaw: number, lift: number, pose: boolean, flagSwing: number}[]} [crowd] the spectators out, `index` into `world.crowd.people` (none when missing)
  * @property {{position: number[], yaw: number}[]} [lemons] the golden lemons to draw, `position` their centre (none when missing)
+ * @property {{position: number[], yaw: number, slot: 0|1}[]} [goalBoards] the goal boards out, at most two, `position` the base of the board (none when missing)
  * @property {{floors: number, open: number}} [studio] the spin studio's storeys and how many are lit (none when missing: the building stays as it was)
  * @property {{gym: object, index: number} | null} [statueGlow] the statue plinth to light (none when missing)
  */
@@ -91,6 +93,9 @@ export function createWorldScene(world, { settings, track }) {
   let statueRows = [];
   /** The last highlight bands, sent again to a rebuilt layer. */
   let highlightBands = [];
+  /** The last board posters (`{atlas, slotOf, slotCount}`) and goal canvas, sent again to a rebuilt layer. */
+  let boardPosters = null;
+  let goalPosters = null;
   const plants = () => ({ settings: current, season, uniforms, track });
   /** How each rebuildable layer is made, by the name of its object. */
   const makers = {
@@ -109,6 +114,7 @@ export function createWorldScene(world, { settings, track }) {
     fauna: () => createFaunaLayer(plan, { ...plants(), ground: world.ground }),
     arches: () => createArchLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     furniture: () => createFurnitureLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
+    boards: () => createBoardLayer(world, plants()),
     venues: () => createVenueLayer(world, { ...plants(), biome: resolveBiome(world.biome) }),
     studio: () => createStudioBuildingLayer(world.studio, plants()),
     riders: () => createRiderLayer(plants()),
@@ -129,7 +135,7 @@ export function createWorldScene(world, { settings, track }) {
   }
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
-  layers.push(makers.arches(), makers.furniture(), makers.venues(), ...(world.studio ? [makers.studio()] : []), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
+  layers.push(makers.arches(), makers.furniture(), makers.boards(), makers.venues(), ...(world.studio ? [makers.studio()] : []), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
   for (const layer of layers) scene.add(layer.object);
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
@@ -142,6 +148,10 @@ export function createWorldScene(world, { settings, track }) {
       layers[at] = makers[name]();
       if (name === "statues" && statueRows.length) layers[at].setRows(statueRows);
       if (name === "highlight" && highlightBands.length) layers[at].setBands(highlightBands);
+      if (name === "boards") {
+        if (boardPosters) layers[at].setPosters(boardPosters.atlas, boardPosters.slotOf, boardPosters.slotCount);
+        if (goalPosters) layers[at].setGoalPosters(goalPosters);
+      }
       scene.add(layers[at].object);
       if (environment) layers[at].setEnvironment(environment);
     }
@@ -180,7 +190,7 @@ export function createWorldScene(world, { settings, track }) {
     sun.castShadow = size > 0 && shadowsOn;
     if (!changed) return;
     for (const layer of layers) layer.setQuality?.(next);
-    rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "venues", "studio", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
+    rebuild("islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "grass", "settlements", "farms", "landmarks", "fauna", "arches", "furniture", "boards", "venues", "studio", "riders", "athletes", "statues", "crowd", "lemons", "highlight", "clouds", "weather", "nightLights");
   };
   setQuality(settings);
 
@@ -245,6 +255,16 @@ export function createWorldScene(world, { settings, track }) {
     setHighlights(bands) {
       highlightBands = bands;
       layers.find((layer) => layer.object.name === "highlight").setBands(bands);
+    },
+    /** The poster atlas canvas and, per board of `world.boards`, its slot in it. */
+    setBoardPosters(atlas, slotOf, slotCount) {
+      boardPosters = { atlas, slotOf, slotCount };
+      named("boards").setPosters(atlas, slotOf, slotCount);
+    },
+    /** The canvas with the two goal posters side by side (slot 0 left, slot 1 right). */
+    setGoalPosters(canvas) {
+      goalPosters = canvas;
+      named("boards").setGoalPosters(canvas);
     },
     /** World points above each seated rider's head after the last update, for the view's name labels. */
     seatHeads: () => named("riders").seatHeads(),

@@ -324,6 +324,8 @@ export class View3D {
     this.#studio = world.studio ? new StudioFloors(world.studio) : null;
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
+    /** Goal boards on my route for the scene: `{position, yaw, slot}`, set by the ride (ride/goalBoards.js). */
+    this.goalBoards = [];
     this.crowd = world.crowd ?? { people: [], figure: "person" };
     /** What hides a label: the ground and the plots' boxes, built once per world. */
     this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
@@ -402,6 +404,21 @@ export class View3D {
    */
   setHighlights(bands) {
     this.worldScene.setHighlights(bands.map(({ band, glow = 1 }) => ({ band, glow })));
+  }
+
+  /** The poster atlas canvas and each world board's slot in it (posters/choose.js, posters/paint.js). */
+  setBoardPosters(atlas, slotOf, slotCount) {
+    this.worldScene.setBoardPosters(atlas, slotOf, slotCount);
+  }
+
+  /** The canvas with the two goal posters side by side; `setGoalBoards` says where they stand. */
+  setGoalPosters(canvas) {
+    this.worldScene.setGoalPosters(canvas);
+  }
+
+  /** The goal boards to draw now, `{position, yaw, slot: 0|1}[]` (at most two; none by default). */
+  setGoalBoards(boards) {
+    this.goalBoards = boards ?? [];
   }
 
   /**
@@ -693,7 +710,7 @@ export class View3D {
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
     this.engine.beginFrame();
     this.#aim(this.worldCamera, view, projection, lens, width / height);
-    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, goalBoards: this.goalBoards, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
