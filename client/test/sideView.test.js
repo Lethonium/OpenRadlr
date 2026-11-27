@@ -263,6 +263,17 @@ test("a rider pedals by cadence and phase, tilted along the grade, labelled unle
   assert.deepEqual(calls.filter((c) => c.name === "fillText").map((c) => c.args[0]), ["Mara"]);
 });
 
+test("name labels are drawn after the night tint, so it does not darken them", () => {
+  const { view } = sideSetup([]);
+  const { ctx, calls } = recorder();
+  const riders = [{ id: "mara", d: 604, lane: 0, look: { name: "mara" }, name: "Mara", cadence: 90, phase: 0.1 }];
+  view.draw(ctx, { width: W, height: H, me: { d: 600, id: "me" }, riders, look: NIGHT, t: 0 });
+  const tint = calls.findLastIndex((c) => c.name === "fillRect" && c.args.join() === `0,0,${W},${H}`);
+  const label = calls.findIndex((c) => c.name === "fillText");
+  assert.ok(tint >= 0 && label >= 0);
+  assert.ok(label > tint);
+});
+
 test("riders in the far lane are drawn before the near lane", () => {
   const { view } = sideSetup([]);
   const screen = fakeCanvas(W, H);

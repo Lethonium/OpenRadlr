@@ -456,9 +456,9 @@ export function createSideView({ scene, route, sampler, createCanvas, index = nu
     const placed = drawRiders(ctx, camera, me, riders, t);
     const riderDs = placed.map((mark) => nearTo(me, mark.rider.d));
     for (const entry of things) if (entry.lateral >= 0) drawThing(ctx, camera, entry, t, riderDs);
-    drawLabels(ctx, placed);
     drawTint(ctx, look, { x: 0, y: 0, width, height });
     if (look.lights > 0) drawGlows(ctx, look, glowsOf(camera, things, placed));
+    drawLabels(ctx, placed);
     drawWeather(ctx, look, { width, height, t });
     const rect = { x: STRIP_SIDE_PX, y: height - STRIP_H_PX - STRIP_BOTTOM_PX, width: width - 2 * STRIP_SIDE_PX, height: STRIP_H_PX };
     drawProfileStrip(ctx, strip, { rect, me, riders: riders.map((r) => ({ d: r.d, mine: r.mine, look: r.look })), viewM: SPAN_M });
