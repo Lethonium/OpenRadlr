@@ -33,6 +33,7 @@ something back. Nothing changes how the ride feels (no physics, no bonuses). The
   | Piece | Achievement |
   |---|---|
   | Sash pattern | First ride |
+  | Panels pattern | Century |
   | Skinsuit | Marathon |
   | Chevron pattern | 1000 m climbed |
   | Polka dots | 4000 m climbed |
