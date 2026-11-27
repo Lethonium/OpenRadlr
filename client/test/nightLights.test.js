@@ -5,7 +5,8 @@ import * as THREE from "../public/js/three.js";
 import { createSharedUniforms } from "../public/js/view3d/assets/materials.js";
 import { QUALITY_LEVELS, qualitySettings } from "../public/js/view3d/quality.js";
 import { createLandmarkLayer } from "../public/js/view3d/scene/landmarkLayer.js";
-import { createNightLights } from "../public/js/view3d/scene/nightLights.js";
+import { HEADLIGHT_MOUNT, createNightLights } from "../public/js/view3d/scene/nightLights.js";
+import { BIKE_TYPES, bikeGeometry } from "../public/js/view3d/assets/riders/bicycle.js";
 import { createSettlementLayer } from "../public/js/view3d/scene/settlementLayer.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
@@ -59,12 +60,23 @@ test("the headlight is on at night at every level and off by day", () => {
   }
 });
 
+test("the headlight is ahead of every bike's bars and front hub, so my own bike casts no shadow from it", () => {
+  for (const type of Object.keys(BIKE_TYPES)) {
+    for (const scale of [0.9, 1, 1.1]) {
+      const fit = bikeGeometry(type, { scale });
+      const bars = [fit.clamp, ...Object.values(fit.grips).flat()].map((p) => p.x);
+      assert.ok(Math.max(...bars, fit.front.x) < HEADLIGHT_MOUNT.ahead, `${type} at ${scale}`);
+    }
+  }
+});
+
 test("the headlight points along the heading", () => {
   const layer = make();
   layer.setEnvironment(night);
   layer.update(frameAt(10, 20, { focus: [10, 5, 20], heading: [0, 1] }));
   const { headlight } = layer;
-  assert.deepEqual(headlight.position.toArray(), [10, 5 + 1.1, 20], "1.1 m above the focus");
+  const [x, y, z] = headlight.position.toArray();
+  assert.ok(Math.abs(x - 10) < 1e-6 && Math.abs(y - (5 + HEADLIGHT_MOUNT.height)) < 1e-6 && Math.abs(z - (20 + HEADLIGHT_MOUNT.ahead)) < 1e-6, "on the front of the bike");
   assert.ok(Math.abs(headlight.target.position.x - 10) < 1e-6 && Math.abs(headlight.target.position.z - 45) < 1e-6, "25 m ahead");
   assert.equal(headlight.angle, 0.5);
   assert.equal(headlight.penumbra, 0.6);

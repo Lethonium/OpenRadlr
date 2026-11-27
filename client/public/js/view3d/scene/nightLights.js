@@ -1,6 +1,6 @@
 /**
  * Light for the night: a soft pool on the ground under every planned street lamp (one merged additive mesh), the
- * nearest `settings.lampLights` lamps as warm point lights, and the rider's headlight, a spot 1.1 m above the focus
+ * nearest `settings.lampLights` lamps as warm point lights, and the rider's headlight, a spot on the front of the bike
  * aimed along the heading, on at every level so the road stays readable. All strengths follow `env.night`; lights
  * are dimmed to 0 rather than hidden so the shaders stay the same from day to night.
  */
@@ -14,8 +14,15 @@ const POOL = Object.freeze({ size: 11, opacity: 0.6, lift: 0.12 });
 const WARM = Object.freeze([1, 0.78, 0.45]);
 /** The lamp lights: how high above the ground, strength, reach in metres. */
 const LAMP = Object.freeze({ height: 4.2, intensity: 60, distance: 22 });
-/** The headlight: height above the focus, metres ahead it aims, cone, strength, reach. */
-const HEAD = Object.freeze({ height: 1.1, ahead: 25, angle: 0.5, penumbra: 0.6, intensity: 900, distance: 80, shadowMap: 1024 });
+/**
+ * Where the headlight sits, from the focus (my bike's bottom bracket): `ahead` metres along the heading and `height`
+ * up. A lamp on the bars shines forward from in front of them, so nothing of the bike may be inside its cone: the
+ * light sits just ahead of the furthest bars (time-trial extensions) and front hub of any bike, or its shadow map
+ * would throw the bars and hands onto the road.
+ */
+export const HEADLIGHT_MOUNT = Object.freeze({ ahead: 0.95, height: 1 });
+/** The headlight: metres ahead of the focus it aims, cone, strength, reach. */
+const HEAD = Object.freeze({ aim: 25, angle: 0.5, penumbra: 0.6, intensity: 900, distance: 80, shadowMap: 1024 });
 
 /** A soft round falloff as a data texture, for the pools. */
 function poolTexture(size = 32) {
@@ -99,8 +106,8 @@ export function createNightLights(plan, { settings, track, ground }) {
     update(frame) {
       const [fx, fy, fz] = frame.focus;
       const [hx, hz] = frame.heading ?? [0, -1];
-      headlight.position.set(fx, fy + HEAD.height, fz);
-      headlight.target.position.set(fx + hx * HEAD.ahead, fy, fz + hz * HEAD.ahead);
+      headlight.position.set(fx + hx * HEADLIGHT_MOUNT.ahead, fy + HEADLIGHT_MOUNT.height, fz + hz * HEADLIGHT_MOUNT.ahead);
+      headlight.target.position.set(fx + hx * HEAD.aim, fy, fz + hz * HEAD.aim);
       headlight.target.updateMatrixWorld();
       if (!lights.length || night <= 0) return;
       // The `lights.length` lamps nearest the camera: a short sorted insertion list over every lamp.
