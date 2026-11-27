@@ -6,83 +6,12 @@
  * rider is shifted along Z by `root.z` so the body stays centred on its spot.
  *
  * In a clip, `root.y` is not the root's height but how far the lowest point of
- * the body is off the ground: 0, but in the air of a jump. `settle` turns it
- * into the height `bodyTransforms` wants, every frame, so whatever the joints
- * do between two keys the body stands, lies or rests on the ground.
+ * the body is off the ground: 0, but in the air of a jump. The rigged rider's
+ * `settleOnRig` (assets/riders/retarget.js) turns it into the height the rig
+ * wants, every frame, so whatever the joints do between two keys the body
+ * stands, lies or rests on the ground.
  */
-import { buildForearm, buildHead, buildPelvis, buildShin, buildShoe, buildThigh, buildTorso, buildUpperArm, variantLook } from "./riderModel.js";
-import { transformPoint } from "./math.js";
-import { JOINTS, bodyTransforms, poseAt } from "./riderPose.js";
-
-const look = variantLook(0);
-/** The corners of each body part's mesh (the same for every look), to find the lowest point of a pose. */
-const SHAPES = new Map(
-  Object.entries({
-    pelvis: buildPelvis(look),
-    torso: buildTorso(look),
-    head: buildHead(look),
-    upperArmL: buildUpperArm(look, -1),
-    upperArmR: buildUpperArm(look, 1),
-    forearmL: buildForearm(look, -1),
-    forearmR: buildForearm(look, 1),
-    thighL: buildThigh(look),
-    thighR: buildThigh(look),
-    shinL: buildShin(look),
-    shinR: buildShin(look),
-    footL: buildShoe(),
-    footR: buildShoe(),
-  }).map(([name, mesh]) => [name, corners(mesh.positions)]),
-);
-
-function corners(positions) {
-  const seen = new Map();
-  for (let i = 0; i < positions.length; i += 3) {
-    const p = [positions[i], positions[i + 1], positions[i + 2]];
-    seen.set(p.map((v) => v.toFixed(4)).join(","), p);
-  }
-  return [...seen.values()];
-}
-
-/** Corner caches of biome rigs, keyed by the rig's map of built parts. */
-const RIG_SHAPES = new WeakMap();
-/** The corners of every part in `parts` (a Map of name → built mesh), cached per map. */
-function shapesOf(parts) {
-  let shapes = RIG_SHAPES.get(parts);
-  if (!shapes) {
-    shapes = new Map([...parts].map(([name, mesh]) => [name, corners(mesh.positions)]));
-    RIG_SHAPES.set(parts, shapes);
-  }
-  return shapes;
-}
-
-/** Lowest point of the body over the ground and the Z of a body point (`{mesh, at}`), for a pose as `bodyTransforms` takes it. */
-function measure(pose, plant, shapes = SHAPES) {
-  let lowest = Infinity;
-  let z = 0;
-  for (const { mesh, model: m } of bodyTransforms(pose)) {
-    const part = shapes.get(mesh);
-    if (part) for (const [x, y, w] of part) lowest = Math.min(lowest, m[1] * x + m[5] * y + m[9] * w + m[13]);
-    if (plant?.mesh === mesh) z = transformPoint(m, plant.at)[2];
-  }
-  return { lowest, z };
-}
-
-/**
- * A clip pose (`root.y` = height off the ground) as a pose for `bodyTransforms`:
- * lifted or lowered so its lowest point is that high, and with a clip's
- * `plant` (a body point that holds still, such as the feet in a squat) moved
- * back along Z to where the clip's first key has it.
- *
- * `parts` is a biome's rig (a Map of the same part names → built meshes); the
- * default measures the human rider's shapes.
- */
-export function settle(pose, plant = null, parts = null) {
-  const at = { ...pose, root: { ...pose.root, y: 0 } };
-  const { lowest, z } = measure(at, plant, parts ? shapesOf(parts) : SHAPES);
-  const root = { ...pose.root, y: pose.root.y - lowest };
-  if (plant) root.z = (pose.root.z ?? 0) + plant.z - z;
-  return { ...pose, root };
-}
+import { JOINTS } from "./riderPose.js";
 
 const OTHER_SIDE = (joint) => joint.replace(/^(.*)([LR])(z?)$/, (_, base, side, z) => `${base}${side === "L" ? "R" : "L"}${z}`);
 
@@ -96,22 +25,16 @@ export function mirrorPose(pose) {
   return { root: { ...pose.root }, joints: Object.fromEntries(JOINTS.map((joint) => [joint, pose.joints[OTHER_SIDE(joint)]])) };
 }
 
-/** A clip's `plant` for the mirrored pose: the other foot (or its mesh's partner), the same Z; `null` stays `null`. */
+/** A clip's `plant` for the mirrored pose: the other foot (or its mesh's partner); `null` stays `null`. */
 export function mirrorPlant(plant) {
   if (!plant) return plant;
-  const mesh = OTHER_SIDE(plant.mesh);
-  return Object.freeze({ ...plant, mesh, at: [-plant.at[0], plant.at[1], plant.at[2]] });
+  return Object.freeze({ ...plant, mesh: OTHER_SIDE(plant.mesh) });
 }
 
-/** `clip` whose `plant` point stays where its first key puts it. */
-function planted(clip, mesh, at) {
-  const first = { ...poseAt(clip, 0), root: { ...poseAt(clip, 0).root, y: 0 } };
-  return { ...clip, plant: Object.freeze({ mesh, at, z: measure(first, { mesh, at }).z }) };
+/** `clip` whose `plant` mesh (a foot) holds still; the rig measures where from its first key. */
+function planted(clip, mesh) {
+  return { ...clip, plant: Object.freeze({ mesh }) };
 }
-
-/** The ankle, and the tip of the shoe (the toes of a plank). */
-const ANKLE = [0, 0, 0];
-const TOES = [0, -0.06, -0.2];
 
 /** Both sides at once: `{ "hip#": 1 }` → `{ hipL: 1, hipR: 1 }`. */
 function both(angles) {
@@ -275,19 +198,19 @@ const pigeon = hold(
 /** Every exercise's clip, plus `idle` (rest, get-ready, paused). */
 export const CLIPS = Object.freeze({
   idle,
-  squats: planted(squats, "footR", ANKLE),
-  situps: planted(situps, "footR", ANKLE),
-  pushups: planted(pushups, "footR", TOES),
+  squats: planted(squats, "footR"),
+  situps: planted(situps, "footR"),
+  pushups: planted(pushups, "footR"),
   jumping_jacks: jumpingJacks,
-  plank: planted(plank, "footR", TOES),
+  plank: planted(plank, "footR"),
   burpees,
-  sun_salutation: planted(sunSalutation, "footR", TOES),
-  forward_fold: planted(forwardFold, "footR", ANKLE),
-  downward_dog: planted(downwardDog, "footR", ANKLE),
-  cobra: planted(cobra, "footR", TOES),
-  child_pose: planted(childPose, "footR", ANKLE),
-  low_lunge: planted(lowLunge, "footR", ANKLE),
-  pigeon: planted(pigeon, "footR", ANKLE),
+  sun_salutation: planted(sunSalutation, "footR"),
+  forward_fold: planted(forwardFold, "footR"),
+  downward_dog: planted(downwardDog, "footR"),
+  cobra: planted(cobra, "footR"),
+  child_pose: planted(childPose, "footR"),
+  low_lunge: planted(lowLunge, "footR"),
+  pigeon: planted(pigeon, "footR"),
 });
 
 /** The clip for an exercise; no or an unknown exercise stands idle. */

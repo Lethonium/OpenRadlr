@@ -3,34 +3,26 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { identity, lookAt, multiply, perspective, placement, rotationXAbout, transformPoint, yawFor } from "../public/js/view3d/math.js";
-import { fbm, seededRandom, valueNoise } from "../public/js/view3d/noise.js";
-import { RIDER_GEOMETRY, buildBike, buildCrankset, buildFoot, buildShin, buildThigh, legPose } from "../public/js/view3d/riderModel.js";
-import {
-  LANE_WIDTH,
-  RoadIndex,
-  buildArches,
-  buildClouds,
-  buildGroundDetail,
-  buildFarIslands,
-  buildRoad,
-  buildScenery,
-  roadFrame,
-  roadHalfWidth,
-  riderPosition,
-  terrainModel,
-  waterLevel,
-} from "../public/js/view3d/world.js";
+import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
+import { roadStrips } from "../public/js/world/plan/roadStrips.js";
+import { archPlacements } from "../public/js/view3d/world.js";
+import { LANE_WIDTH, RoadIndex, bikeOnRoad, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
-import { CLIPS, settle } from "../public/js/view3d/clips.js";
-import { riderLook } from "../public/js/view3d/riderModel.js";
-import { bodyTransforms, poseAt } from "../public/js/view3d/riderPose.js";
-import { buildStatues } from "../public/js/view3d/statues.js";
-import { resolveBiome } from "../public/js/view3d/biomes/index.js";
+import { CLIPS, mirrorPose } from "../public/js/view3d/clips.js";
+import { poseAt } from "../public/js/view3d/riderPose.js";
+import { PLINTHS } from "../public/js/view3d/statues.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
-import { GYM_CAMERA, GymCamera, SIDE_CAMERA, View3D, bodyAhead, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
-import { WEATHER_VERTEX } from "../public/js/view3d/renderer.js";
+import { fakeEngine } from "./support/fakeEngine.js";
+import { qualitySettings } from "../public/js/view3d/quality.js";
+import { groundFixture } from "./support/groundFixture.js";
+import { GYM_CAMERA, GymCamera, RIDE_LENS, projectToScreen, SIDE_CAMERA, View3D, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
+import { coachWorld, seatWorld } from "../public/js/view3d/studioLayer.js";
+import { COACH_KIT, INSTRUCTOR, coachId, isCoach } from "../public/js/view3d/studioLayout.js";
+
+const hexRgb = (hex) => [1, 3, 5].map((k) => Number.parseInt(hex.slice(k, k + 2), 16) / 255);
+const linear = (rgb) => rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 
 const close = (a, b, eps = 1e-5) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const closeVec = (a, b, eps = 1e-5) => a.forEach((v, i) => close(v, b[i], eps));
@@ -124,54 +116,11 @@ test("road index finds the nearest sample", () => {
 
 test("road, arches and riders produce geometry", () => {
   const route = squareRoute();
-  const road = buildRoad(route);
-  assert.ok(road.vertexCount > 1000);
-  assert.equal(road.positions.length, road.vertexCount * 3);
-  assert.equal(road.colors.length, road.vertexCount * 4);
-  assert.ok(buildArches(route).vertexCount >= 108, "start arch: two posts and a beam");
-  assert.ok(buildBike().vertexCount > 100);
-  for (const part of [buildThigh(), buildShin(), buildFoot(), buildCrankset()]) assert.ok(part.vertexCount > 0);
-});
-
-test("pedalling legs stay attached: hip → knee → ankle → pedal on the crank circle", () => {
-  const { hip, bottomBracket, crankLength, thigh, shin, ball } = RIDER_GEOMETRY;
-  const at = (point, angle) => multiply(placement(point), rotationXAbout([0, 0, 0], angle));
-  for (let i = 0; i < 24; i += 1) {
-    const pose = legPose((i / 24) * Math.PI * 2);
-    closeVec(transformPoint(at(hip, pose.thighAngle), [0, -thigh, 0]).slice(0, 3), pose.knee, 1e-4);
-    closeVec(transformPoint(at(pose.knee, pose.shinAngle), [0, -shin, 0]).slice(0, 3), pose.ankle, 1e-4);
-    closeVec(transformPoint(at(pose.ankle, pose.footAngle), ball).slice(0, 3), pose.pedal, 1e-4);
-    closeVec(transformPoint(at(bottomBracket, pose.crankAngle), [0, -crankLength, 0]).slice(0, 3), pose.pedal, 1e-4);
-    // The knee bends forward (−Z) of the straight hip–ankle line, never backwards.
-    const along = [pose.ankle[1] - hip[1], pose.ankle[2] - hip[2]];
-    const toKnee = [pose.knee[1] - hip[1], pose.knee[2] - hip[2]];
-    assert.ok(along[0] * toKnee[1] - along[1] * toKnee[0] > 0, `knee bends forward at step ${i}`);
-  }
-});
-
-test("cranks turn forward and the leg extends at the bottom of the stroke", () => {
-  const bottom = legPose(0);
-  const later = legPose(0.3);
-  assert.ok(later.pedal[2] > bottom.pedal[2], "after the bottom the pedal moves back (+Z)");
-  assert.ok(legPose(Math.PI / 2).pedal[2] > legPose(-Math.PI / 2).pedal[2], "back of the stroke behind the front");
-  const kneeAngle = (pose) => {
-    const a = [RIDER_GEOMETRY.hip[1] - pose.knee[1], RIDER_GEOMETRY.hip[2] - pose.knee[2]];
-    const b = [pose.ankle[1] - pose.knee[1], pose.ankle[2] - pose.knee[2]];
-    return Math.acos((a[0] * b[0] + a[1] * b[1]) / Math.hypot(...a) / Math.hypot(...b));
-  };
-  assert.ok(kneeAngle(bottom) > (125 * Math.PI) / 180, "almost straight at the bottom");
-  assert.ok(kneeAngle(legPose(Math.PI)) < (80 * Math.PI) / 180, "well bent at the top");
-});
-
-test("scenery is deterministic and never on the road", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const bounds = { x0: -200, z0: -450, x1: 450, z1: 200 };
-  const a = buildScenery(route, terrain, bounds, { count: 150 });
-  const b = buildScenery(route, terrain, bounds, { count: 150 });
-  assert.equal(a.count, 150);
-  assert.deepEqual(a.positions, b.positions);
-  for (const [x, , z] of a.positions) assert.ok(terrain.distanceToRoad(x, z) >= roadHalfWidth(route.lanes) + 4);
+  const road = roadStrips(route);
+  assert.ok(road.kinds.length > 1000);
+  assert.equal(road.positions.length, road.kinds.length * 3);
+  assert.equal(road.indices.length, (road.kinds.length / 4) * 6);
+  assert.ok(archPlacements(route).some((a) => a.kind === "start_finish" && !a.banner), "the start arch is placed");
 });
 
 // --- view helpers -----------------------------------------------------------
@@ -219,33 +168,10 @@ test("the sea level stays below the road", () => {
   assert.ok(waterLevel(index) <= index.minElevation - 4);
 });
 
-test("far islands stand out at sea and clouds float high", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const islands = buildFarIslands(route, terrain, { count: 8 });
-  for (let i = 0; i < islands.vertexCount; i += 3) {
-    const x = islands.positions[i * 3];
-    const z = islands.positions[i * 3 + 2];
-    if (islands.positions[i * 3 + 1] > terrain.seaLevel) continue;
-    assert.ok(terrain.island.inland(x, z) < -500, "far islands stand well off the coast");
-  }
-  const clouds = buildClouds(route, terrain, { count: 4 });
-  for (let i = 0; i < clouds.vertexCount; i += 1) assert.ok(clouds.positions[i * 3 + 1] > terrain.index.meanElevation + 200);
-});
-
-test("scenery avoids the lake", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const bounds = { x0: -200, z0: -450, x1: 450, z1: 200 };
-  const water = 95;
-  const scenery = buildScenery(route, terrain, bounds, { count: 120, water });
-  for (const [x, , z] of scenery.positions) assert.ok(terrain.height(x, z) >= water + 1);
-});
-
 // --- round 2: lighting, cameras, riders, ground detail ----------------------
 
 test("time-of-day presets are complete and auto follows the clock", async () => {
-  const { TIME_PRESETS, presetForHour, resolvePreset } = await import("../public/js/view3d/lighting.js");
+  const { TIME_PRESETS, presetForHour, resolvePreset } = await import("../public/js/world/daylight.js");
   for (const preset of Object.values(TIME_PRESETS)) {
     close(Math.hypot(...preset.sun), 1);
     assert.ok(preset.sun[1] > 0, "the sun is above the horizon");
@@ -254,30 +180,9 @@ test("time-of-day presets are complete and auto follows the clock", async () => 
   assert.equal(presetForHour(12), "day");
   assert.equal(presetForHour(7), "golden");
   assert.equal(presetForHour(18.5), "golden");
-  assert.equal(presetForHour(22), "dusk");
+  assert.equal(presetForHour(22), "night");
   assert.equal(resolvePreset("auto", new Date(2026, 0, 1, 13, 0)).key, "day");
   assert.equal(resolvePreset("bogus").label, "Day");
-});
-
-test("the shadow frustum contains the focus and is stable to small moves", async () => {
-  const { sunShadowMatrix, TIME_PRESETS } = await import("../public/js/view3d/lighting.js");
-  const sun = TIME_PRESETS.golden.sun;
-  const m = sunShadowMatrix(sun, [100, 50, -20], { halfSize: 60, mapSize: 2048 });
-  const p = transformPoint(m, [100, 50, -20]);
-  for (const v of p.slice(0, 3)) assert.ok(v > -1 && v < 1);
-  const nearby = transformPoint(m, [140, 52, -20]);
-  assert.ok(Math.abs(nearby[0]) < 1 && Math.abs(nearby[1]) < 1, "40 m away is still inside");
-  const a = sunShadowMatrix(sun, [100.001, 50, -20]);
-  assert.deepEqual(Array.from(a), Array.from(m), "sub-texel moves snap to the same matrix");
-  const overhead = sunShadowMatrix([0, 1, 0], [0, 0, 0]);
-  assert.ok(overhead.every(Number.isFinite), "a sun straight above is handled");
-});
-
-test("orthographic maps its box to clip space", async () => {
-  const { orthographic } = await import("../public/js/view3d/math.js");
-  const m = orthographic(-10, 10, -5, 5, 1, 101);
-  closeVec(transformPoint(m, [10, 5, -1]).slice(0, 3), [1, 1, -1]);
-  closeVec(transformPoint(m, [-10, -5, -101]).slice(0, 3), [-1, -1, 1]);
 });
 
 test("camera modes: drone is high, side looks at the rider from the road side", async () => {
@@ -300,184 +205,120 @@ test("camera modes: drone is high, side looks at the rider from the road side", 
   assert.equal(camera.mode, "close", "cycling wraps around");
 });
 
-test("riders get a stable look from their id", async () => {
-  const { riderLook, variantLook, VARIANT_COUNT, buildWheel } = await import("../public/js/view3d/riderModel.js");
-  assert.deepEqual(riderLook(42), riderLook(42));
-  const looks = Array.from({ length: 50 }, (_, i) => riderLook(i));
-  assert.ok(new Set(looks.map((l) => l.variant)).size > 5, "riders look different");
-  for (const look of looks) {
-    assert.ok(look.variant >= 0 && look.variant < VARIANT_COUNT);
-    assert.ok(look.scale >= 0.93 && look.scale <= 1.07);
-  }
-  assert.equal(variantLook(3).skin.length, 3);
-  assert.ok(buildWheel().vertexCount > 200);
-});
-
-test("grass and flowers grow beside the road, not on it", () => {
-  const route = squareRoute();
-  const terrain = terrainModel(route);
-  const detail = buildGroundDetail(route, terrain, { tufts: 300, flowers: 50 });
-  assert.ok(detail.count > 250, "most spots are usable even on a tight test loop");
-  const half = roadHalfWidth(route.lanes);
-  for (let i = 0; i < detail.mesh.vertexCount; i += 9) {
-    const x = detail.mesh.positions[i * 3];
-    const z = detail.mesh.positions[i * 3 + 2];
-    assert.ok(terrain.distanceToRoad(x, z) > half, "outside the asphalt");
-    assert.ok(terrain.distanceToRoad(x, z) < half + 40, "close to the road where the camera sees it");
-  }
-});
-
 // --- workout riders at the gym (#77) ------------------------------------------
 
-/** A renderer that draws nothing and remembers every draw call. */
-class StubRenderer {
-  draws = [];
-  upload(mesh) {
-    return { mesh };
-  }
-  dispose() {}
-  createShadowMap() {
-    return false;
-  }
-  resize() {}
-  /** The scissored viewport of the pass being drawn, null for the whole canvas. */
-  viewport(rect) {
-    this.pass = rect;
-    this.viewports.push(rect);
-  }
-  viewports = [];
-  pass = null;
-  begins = 0;
-  begin() {
-    this.begins += 1;
-  }
-  draw(handle, model, tint) {
-    this.draws.push({ handle, model, tint, pass: this.pass });
-  }
-  drawBright() {}
-  drawCloudLayer() {}
-  drawTransparent() {}
-  uploadWeather(data) {
-    return { data };
-  }
-  drawWeather(handle, options) {
-    this.weather = { handle, options };
-  }
-}
-
-const emptyMesh = () => ({ positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), vertexCount: 0 });
 /** A gym 30 m off the square route's first side, facing the road (−Z). */
 function testGym() {
   const center = [100, 100.4, 30];
   const spots = [];
   for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k += 1) spots.push({ position: [center[0] + (k - 1.5) * 1.8, center[1], center[2] + z], yaw: 0 });
-  return { center, yaw: 0, spots };
+  return { center, yaw: 0, spots, position: [center[0], center[1] - 0.08, center[2]], base: center[1] - 0.08, drop: 0.4, signLift: 0 };
 }
-function gymView(gyms, biome = "temperate", weather = null, renderer = new StubRenderer(), studio = undefined) {
+function gymView(gyms, biome = "temperate", studio = undefined, engine = fakeEngine()) {
   const route = squareRoute();
   const world = {
     biome,
-    meshes: { horizon: emptyMesh(), islands: emptyMesh(), arches: emptyMesh() },
-    chunks: { scenery: [], structures: [] },
-    clouds: emptyMesh(),
-    weather,
-    water: emptyMesh(),
-    rivers: emptyMesh(),
-    rotors: [],
-    spectators: [],
+    crowd: { people: [], figure: "person" },
     gyms,
     studio,
   };
-  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { renderer });
-  return { view, renderer };
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, route, world, { engine });
+  return { view, engine };
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("a view made at a quality level never builds the high level first", () => {
+  const engine = fakeEngine();
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), { biome: "temperate", crowd: { people: [], figure: "person" } }, { engine, quality: "low" });
+  assert.equal(view.quality, "low");
+  assert.deepEqual(engine.qualities, [qualitySettings("low")]);
+});
+
+test("a new plan for another quality level rebuilds the plan's layers in the view's season", () => {
+  const engine = fakeEngine();
+  const world = { biome: "temperate", season: "autumn", detail: "high", crowd: { people: [], figure: "person" } };
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), world, { engine });
+  assert.equal(view.planDetail, "high");
+  const rebuilt = [];
+  view.worldScene.setSeason = (season, plan) => rebuilt.push([season, plan]);
+  const plan = { settlements: [], farms: [], landmarks: [] };
+  view.setPlan(plan, "low");
+  assert.equal(view.planDetail, "low");
+  assert.deepEqual(rebuilt, [["autumn", plan]]);
+});
 
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");
   assert.equal(gymView([], "winter").view.biome.id, "winter");
 });
 
-test("the view draws the biome's weather around the camera", () => {
-  const weather = { kind: "snow", count: 2, data: new Float32Array(2 * 6 * 6) };
-  const { view, renderer } = gymView([], "winter", weather);
-  view.camera.update(100, 1, 0);
-  view.render({ riders: [], myId: null, timeS: 12, colors });
-  assert.ok(renderer.weather, "snow is drawn");
-  assert.equal(renderer.weather.options.style.kind, "snow");
-  assert.equal(renderer.weather.handle.data, weather.data);
-});
-
-/** Evaluates the weather shader's vertical placement, with GLSL's mod semantics. */
-function weatherFlakeY({ seedY, timeS, speed, cameraY, boxY }) {
-  const expression = WEATHER_VERTEX.match(/world\.y = ([^;]+);/)?.[1];
-  assert.ok(expression, "the vertex shader places the weather");
-  const mod = (x, y) => x - y * Math.floor(x / y);
-  return new Function("seed", "u_time", "speed", "u_cameraPosition", "u_box", "mod", `return ${expression};`)({ y: seedY }, timeS, speed, { y: cameraY }, { y: boxY }, mod);
-}
-
-test("snow falls past the camera instead of rising with it", () => {
-  const boxY = 100;
-  const seedY = 60;
-  const speed = 8;
-  const first = weatherFlakeY({ seedY, timeS: 0, speed, cameraY: 30, boxY });
-  const later = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 30, boxY });
-  assert.ok(later < first, "the flake falls as time passes");
-  assert.ok(Math.abs(first - later - speed) < 1e-9, "at its fall speed");
-  // The field is wrapped around the camera: climbing must not drag it along.
-  const climbed = weatherFlakeY({ seedY, timeS: 1, speed, cameraY: 40, boxY });
-  assert.ok(Math.abs(climbed - later) < 1e-9, "climbing leaves the flake where it is");
-});
-
-test("a workout rider is drawn at its gym spot, not on the road", () => {
+test("a workout rider reaches the athlete layer", () => {
   const gym = testGym();
-  const { view, renderer } = gymView([gym]);
+  const { view } = gymView([gym], "temperate");
   view.workoutMode(gym, { reducedMotion: true });
+  const frames = recordFrames(view);
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  const pelvis = view.bodyParts[riderLook(7).variant].get("pelvis");
-  const drawn = renderer.draws.find((d) => d.handle === pelvis).model;
-  // The pelvis as the clip poses it in the rider's own frame; what is left of the drawn model is the spot.
-  const local = bodyTransforms(settle(poseAt(CLIPS.idle, 2))).find((p) => p.mesh === "pelvis").model;
-  const placed = multiply(drawn, invert(local));
-  closeVec([placed[12], placed[13], placed[14]], assignSpots([7], gym).get(7).position, 0.01);
-});
-
-test("a workout rider's bike stands at the gym's bike rack", () => {
-  const gym = testGym();
-  const { view, renderer } = gymView([gym]);
-  view.workoutMode(gym, { reducedMotion: true });
-  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  const bike = renderer.draws.find((d) => d.handle === view.bodies[riderLook(7).variant]).model;
+  const { athletes, riders } = frames.at(-1);
+  assert.equal(athletes.length, 1);
+  assert.equal(riders.length, 0, "not a road rider");
+  const [entry] = athletes;
+  const spot = assignSpots([7], gym).get(7);
+  assert.equal(entry.id, 7);
+  closeVec(entry.position, spot.position, 0.01);
+  assert.equal(entry.yaw, spot.yaw);
+  assert.deepEqual(entry.pose, poseAt(CLIPS.idle, 2));
+  assert.equal(entry.plantMesh, null);
+  assert.deepEqual(entry.tint, [1, 0, 0]);
+  assert.equal(entry.figure, "rider");
   // By the mat's road edge (3 m towards the road, −Z here), beside the mat, on the gravel just below it.
-  closeVec([bike[12], bike[13], bike[14]], [104.6, 100.34, 27], 0.01);
+  closeVec(entry.bike.position, [104.6, 100.34, 27], 0.01);
+  assert.equal(entry.bike.yaw, 0);
 });
 
-test("in winter a workout rider is a penguin, and its bike still waits at the rack", () => {
+test("a workout clip's planted foot reaches the athlete layer", () => {
   const gym = testGym();
-  const { view, renderer } = gymView([gym], "winter");
+  const { view } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true });
-  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  const penguin = view.workoutParts.get("pelvis");
-  assert.ok(renderer.draws.some((d) => d.handle === penguin), "the penguin is drawn");
-  const human = view.bodyParts[riderLook(7).variant].get("pelvis");
-  assert.ok(!renderer.draws.some((d) => d.handle === human), "the human rider is not");
-  assert.ok(renderer.draws.some((d) => d.handle === view.bodies[riderLook(7).variant]), "the bike is parked");
+  const frames = recordFrames(view);
+  view.render({ riders: [{ ...workoutRider, exercise: "squats" }], myId: 7, timeS: 12, colors });
+  assert.equal(frames.at(-1).athletes[0].plantMesh, "footR");
+  view.render({ riders: [{ ...workoutRider, exercise: "squats", side: "left" }], myId: 7, timeS: 12.1, colors });
+  assert.equal(frames.at(-1).athletes[0].plantMesh, "footL");
 });
 
-test("disposing a winter view frees the penguin rig", () => {
-  const { view, renderer } = gymView([], "winter", null, new RecordingRenderer());
-  const handles = [...view.workoutParts.values()];
-  view.dispose();
-  for (const handle of handles) assert.ok(renderer.disposed.includes(handle));
+test("a winter gym's athletes are penguins", () => {
+  const gym = testGym();
+  const { view } = gymView([gym], "winter");
+  view.workoutMode(gym, { reducedMotion: true });
+  const frames = recordFrames(view);
+  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  assert.equal(frames.at(-1).athletes[0].figure, "penguin");
 });
 
-test("a workout rider with no gym in reach stays on its bike on the road", () => {
-  const { view, renderer } = gymView([]);
+test("riding away from a gym and back leaves nothing behind", () => {
+  const gym = testGym();
+  const { view } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true });
+  const frames = recordFrames(view);
+  const cycle = () => {
+    view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+    assert.equal(frames.at(-1).athletes.length, 1);
+    view.render({ riders: [], myId: 7, timeS: 13, colors });
+    assert.equal(frames.at(-1).athletes?.length ?? 0, 0);
+  };
+  cycle();
+  const baseline = view.tracker.live();
+  for (let i = 0; i < 5; i += 1) cycle();
+  assert.equal(view.tracker.live(), baseline);
+});
+
+test("a workout rider with no gym in reach rides the road in the world scene", () => {
+  const { view } = gymView([]);
+  const frames = recordFrames(view);
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  const bike = renderer.draws.find((d) => d.handle === view.bodies[riderLook(7).variant]).model;
-  const road = riderPosition(squareRoute(), 100, 1).position;
-  closeVec([bike[12], bike[13], bike[14]], road, 0.01);
+  const [entry] = frames.at(-1).riders;
+  closeVec(entry.position, bikeOnRoad(squareRoute(), 100, 1).position, 0.01);
 });
 
 test("the gym camera looks at the mat centre from its road side", () => {
@@ -559,104 +400,56 @@ test("with reduced motion the gym camera is there at once", () => {
   assert.deepEqual(view.camera.eye, gymCameraPose(gym).eye);
 });
 
-/** Records shadow casters, bright draws and disposals on top of the stub. */
-class RecordingRenderer extends StubRenderer {
-  casters = [];
-  brights = [];
-  disposed = [];
-  upload(mesh) {
-    return { mesh };
-  }
-  dispose(handle) {
-    this.disposed.push(handle);
-  }
-  createShadowMap() {
-    return true;
-  }
-  beginShadows() {}
-  endShadows() {}
-  drawShadowCaster(handle, model) {
-    this.casters.push({ handle, model });
-  }
-  drawBright(handle, model, glow) {
-    this.brights.push({ handle, model, glow });
-  }
-}
-
 function statueView() {
   const gym = { ...testGym(), cafeId: "valley-cafe", statueRow: { position: [100, 100.4, 38], yaw: 0 } };
-  const { view, renderer } = gymView([gym], "temperate", null, new RecordingRenderer());
+  const { view } = gymView([gym], "temperate");
   view.camera.update(100, 1, 0);
   gym.statueRow.position = [view.camera.target[0], view.camera.target[1], view.camera.target[2]];
-  return { view, renderer, gym };
+  return { view, gym };
 }
 const renderStatues = (view) => view.render({ riders: [], myId: null, timeS: 12, colors });
 
-test("a statue row is drawn lit and casts a shadow", () => {
-  const { view, renderer, gym } = statueView();
+test("statue rows go to the statue layer, as riders on a temperate map", () => {
+  const { view, gym } = statueView();
+  const sent = [];
+  view.worldScene.setStatues = (rows) => sent.push(rows);
   view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
-  renderStatues(view);
-  const mesh = buildStatues(["squats", "plank"], "marble").mesh;
-  const drawn = renderer.draws.filter((d) => d.handle.mesh.vertexCount === mesh.vertexCount);
-  assert.equal(drawn.length, 1);
-  const cast = renderer.casters.filter((d) => d.handle === drawn[0].handle);
-  assert.equal(cast.length, 1);
-  assert.deepEqual([...drawn[0].model], [...placement(gym.statueRow.position, gym.statueRow.yaw)]);
+  assert.deepEqual(sent, [[{ gym, figures: ["squats", "plank"], material: "marble", figure: "rider" }]]);
 });
 
-test("a winter view casts its statue rows as penguins", () => {
+test("a winter view sends its statue rows as penguins", () => {
   const gym = { ...testGym(), cafeId: "valley-cafe", statueRow: { position: [100, 100.4, 38], yaw: 0 } };
-  const { view, renderer } = gymView([gym], "winter", null, new RecordingRenderer());
-  view.camera.update(100, 1, 0);
-  gym.statueRow.position = [view.camera.target[0], view.camera.target[1], view.camera.target[2]];
+  const { view } = gymView([gym], "winter");
+  const sent = [];
+  view.worldScene.setStatues = (rows) => sent.push(rows);
   view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
-  renderStatues(view);
-  const winter = buildStatues(["squats", "plank"], "marble", resolveBiome("winter").workout).mesh;
-  const human = buildStatues(["squats", "plank"], "marble").mesh;
-  assert.notEqual(winter.vertexCount, human.vertexCount, "the figures differ from the human row");
-  const drawn = renderer.draws.filter((d) => d.handle.mesh?.vertexCount === winter.vertexCount);
-  assert.equal(drawn.length, 1, "the penguin row is drawn");
-  assert.deepEqual([...drawn[0].handle.mesh.positions], [...winter.positions]);
+  assert.equal(sent[0][0].figure, "penguin");
 });
 
-test("no glow is drawn until one is set, then exactly that ring", () => {
-  const { view, renderer, gym } = statueView();
+test("the statue glow reaches the frame, and goes out", () => {
+  const { view, gym } = statueView();
+  const frames = recordFrames(view);
   view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
-  const ring = buildStatues(["squats", "plank"], "marble").glows[1];
-  const glows = () => renderer.brights.filter((b) => b.handle !== view.meshes.arches);
   renderStatues(view);
-  assert.equal(glows().length, 0);
+  assert.equal(frames.at(-1).statueGlow ?? null, null);
   view.setStatueGlow(gym, 1);
-  renderer.brights.length = 0;
   renderStatues(view);
-  assert.equal(glows().length, 1);
-  assert.equal(glows()[0].glow, 0.9);
-  assert.deepEqual([...glows()[0].handle.mesh.positions], [...ring.positions]);
+  assert.deepEqual(frames.at(-1).statueGlow, { gym, index: 1 });
   view.setStatueGlow(null, null);
-  renderer.brights.length = 0;
   renderStatues(view);
-  assert.equal(glows().length, 0);
+  assert.equal(frames.at(-1).statueGlow ?? null, null);
 });
 
-test("replacing the statues disposes the previous handles", () => {
-  const { view, renderer, gym } = statueView();
-  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
-  renderer.disposed.length = 0;
+test("replacing the statues does not leak", () => {
+  const { view, gym } = statueView();
+  const rows = [{ gym, figures: ["squats", "plank"], material: "marble" }];
+  view.setStatues(rows);
+  const baseline = view.tracker.live();
+  for (let i = 0; i < 4; i += 1) view.setStatues(rows);
+  assert.equal(view.tracker.live(), baseline);
   view.setStatues([]);
-  assert.equal(renderer.disposed.length, 3, "one mesh and two rings");
   renderStatues(view);
   assert.equal(view.statueTargets(gym).length, 0);
-});
-
-test("disposing the view disposes the statue handles too", () => {
-  const { view, renderer, gym } = statueView();
-  view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
-  const uploaded = buildStatues(["squats", "plank"], "marble");
-  renderer.disposed.length = 0;
-  view.dispose();
-  const sizes = renderer.disposed.filter((h) => h.mesh).map((h) => h.mesh.positions.length);
-  assert.ok(sizes.includes(uploaded.mesh.positions.length), "the statue mesh");
-  assert.ok(sizes.filter((n) => n === uploaded.glows[0].positions.length).length >= 2, "both rings");
 });
 
 test("statue targets are the world-space plinth tops of the row", () => {
@@ -665,7 +458,7 @@ test("statue targets are the world-space plinth tops of the row", () => {
   view.setStatues([{ gym, figures: ["squats", "plank"], material: "marble" }]);
   const targets = view.statueTargets(gym);
   assert.equal(targets.length, 2);
-  const tops = buildStatues(["squats", "plank"], "marble").tops;
+  const tops = [PLINTHS.upright[1], PLINTHS.lying[1]];
   closeVec(targets[0].position, [100 - 1.5, 100.4 + tops[0], 38]);
   closeVec(targets[1].position, [100 + 1.5, 100.4 + tops[1], 38]);
   assert.equal(targets[0].yaw, 0);
@@ -685,47 +478,51 @@ test("statue targets follow the row's yaw", () => {
 // --- a workout rider's side (yoga) ----------------------------------------------
 const lungeRider = { ...workoutRider, exercise: "low_lunge", exerciseSince: 10 };
 
-/** The thigh and pelvis models drawn for `rider` at `timeS`, on a view that has already drawn `before`. */
-function drawnThighs(view, renderer, rider, timeS) {
-  renderer.draws.length = 0;
+/** The athlete entry the view hands the world scene for `rider` at `timeS`, on a view that has already shown `before`. */
+function athleteAt(view, rider, timeS) {
+  const frames = recordFrames(view);
   view.render({ riders: [rider], myId: 7, timeS, colors });
-  const thigh = view.thighs[riderLook(7).variant];
-  const pelvis = view.bodyParts[riderLook(7).variant].get("pelvis");
-  const body = invert(renderer.draws.find((d) => d.handle === pelvis).model);
-  // [left, right] points along each thigh in the rider's frame (pelvis-relative, which the mirror leaves alone).
-  return renderer.draws.filter((d) => d.handle === thigh).map((d) => transformPoint(multiply(body, d.model), [0, -0.3, 0]).slice(0, 3));
+  return frames.at(-1).athletes[0];
 }
 
 function sideView() {
   const gym = testGym();
-  const { view, renderer } = gymView([gym]);
+  const { view } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true });
-  return { view, renderer };
+  return { view };
 }
 
 test("a rider on their left side is mirrored", () => {
-  const right = sideView();
-  const left = sideView();
-  const [rightL, rightR] = drawnThighs(right.view, right.renderer, { ...lungeRider, side: "right" }, 12);
-  const [leftL, leftR] = drawnThighs(left.view, left.renderer, { ...lungeRider, side: "left" }, 12);
-  closeVec(leftL, [-rightR[0], rightR[1], rightR[2]], 1e-4);
-  closeVec(leftR, [-rightL[0], rightL[1], rightL[2]], 1e-4);
-  assert.ok(Math.abs(rightL[2] - rightR[2]) > 0.05, "the lunge puts one thigh ahead of the other");
+  const right = athleteAt(sideView().view, { ...lungeRider, side: "right" }, 12);
+  const left = athleteAt(sideView().view, { ...lungeRider, side: "left" }, 12);
+  assert.deepEqual(left.pose, mirrorPose(right.pose));
+  assert.notDeepEqual(left.pose.joints, right.pose.joints, "the lunge is one-sided, so the mirror shows");
 });
 
 test("a side change keeps the clip time", () => {
   // No exerciseSince: the view's own first sighting of the clip is its start, which a side change must not reset.
   const rider = { ...lungeRider, exerciseSince: undefined };
-  const { view, renderer } = sideView();
-  drawnThighs(view, renderer, { ...rider, side: "right" }, 10);
-  drawnThighs(view, renderer, { ...rider, side: "left" }, 20.1); // the switch: a fade starts, the clip plays on
-  const faded = drawnThighs(view, renderer, { ...rider, side: "left" }, 20.5);
+  const { view } = sideView();
+  athleteAt(view, { ...rider, side: "right" }, 10);
+  athleteAt(view, { ...rider, side: "left" }, 20.1); // the switch: a fade starts, the clip plays on
+  const faded = athleteAt(view, { ...rider, side: "left" }, 20.5);
   // A rider who was on the left all along, 10.5 s into the same clip.
-  const steady = sideView();
-  drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 10);
-  const reference = drawnThighs(steady.view, steady.renderer, { ...rider, side: "left" }, 20.5);
-  closeVec(faded[0], reference[0], 1e-4);
-  closeVec(faded[1], reference[1], 1e-4);
+  const steady = sideView().view;
+  athleteAt(steady, { ...rider, side: "left" }, 10);
+  const reference = athleteAt(steady, { ...rider, side: "left" }, 20.5);
+  assert.deepEqual(faded.pose, reference.pose);
+});
+
+test("a new exercise fades in from the last pose", () => {
+  const { view } = sideView();
+  const before = athleteAt(view, { ...workoutRider, exercise: "squats", exerciseSince: 10 }, 12);
+  const pushups = { ...workoutRider, exercise: "pushups", exerciseSince: 12.05 };
+  athleteAt(view, pushups, 12.1);
+  const during = athleteAt(view, pushups, 12.2);
+  const after = athleteAt(view, pushups, 12.6);
+  assert.notDeepEqual(during.pose, poseAt(CLIPS.pushups, 12.2 - 12.05), "still blending");
+  assert.notDeepEqual(during.pose, before.pose);
+  assert.deepEqual(after.pose, poseAt(CLIPS.pushups, 12.6 - 12.05));
 });
 
 // --- the workout's side view ------------------------------------------------------
@@ -750,14 +547,6 @@ test("the side camera turns with the spot", () => {
   closeVec(eye, [0, SIDE_CAMERA.up, SIDE_CAMERA.distance], 1e-9);
 });
 
-test("a body's reach ahead of its spot is where its parts lie on average, along the way it faces", () => {
-  const at = (x, z) => Object.assign(new Float32Array(16), { 12: x, 14: z });
-  const spot = { position: [10, 0, 5], yaw: 0 };
-  // Facing −Z: parts 0.4, 1.2 and 0.8 m ahead; the last one's metre to the side does not count.
-  assert.ok(Math.abs(bodyAhead([at(10, 4.6), at(10, 3.8), at(11, 4.2)], spot) - 0.8) < 1e-6);
-  assert.equal(bodyAhead([], spot), 0);
-});
-
 test("the inset's viewport is the box on the canvas in device pixels, counted from the bottom", () => {
   const box = { left: 900, top: 500, width: 300, height: 200 };
   const canvas = { left: 0, top: 0, width: 1280, height: 800 };
@@ -776,11 +565,10 @@ const sideBox = { getBoundingClientRect: () => ({ left: 220, top: 120, width: 90
 
 test("with a side view the workout draws a second pass into the inset", () => {
   const gym = testGym();
-  const { view, renderer } = gymView([gym]);
+  const { view, engine } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
-  assert.equal(renderer.begins, 2);
-  assert.deepEqual(renderer.viewports, [{ x: 220, y: 10, width: 90, height: 70 }, null]);
+  assert.deepEqual(engine.rects, [null, { x: 220, y: 10, width: 90, height: 70 }]);
 });
 
 test("the inset shows my rider and not the riders on the next spots", (t) => {
@@ -790,97 +578,126 @@ test("the inset shows my rider and not the riders on the next spots", (t) => {
   globalThis.document = { createElement: element };
   t.after(() => (globalThis.document = saved));
   const gym = testGym();
-  const { view, renderer } = gymView([gym]);
+  const { view, engine } = gymView([gym]);
   view.labelLayer = { append() {} };
   view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
-  const other = { ...workoutRider, id: 9 };
-  view.render({ riders: [workoutRider, other], myId: 7, timeS: 12, colors });
-  const inset = renderer.draws.filter((d) => d.pass);
-  const pelvis = (id) => view.bodyParts[riderLook(id).variant].get("pelvis");
-  const pelvisAt = (id) => assignSpots([7, 9], gym).get(id).position;
-  const drawnAt = (draw) => [draw.model[12], draw.model[14]];
-  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[2]) < 0.5;
-  assert.ok(inset.some((d) => d.handle === pelvis(7) && near(drawnAt(d), pelvisAt(7))), "mine is drawn");
-  assert.ok(!inset.some((d) => d.handle === pelvis(9) && near(drawnAt(d), pelvisAt(9))), "the neighbour is not");
+  // What the athlete layer shows at the moment the engine draws a scene.
+  const shown = [];
+  const render = engine.renderScene.bind(engine);
+  engine.renderScene = (scene, camera, rect) => {
+    const athletes = scene.getObjectByName("athletes");
+    shown.push({ rect, ids: [...new Set(athletes.children.filter((c) => c.visible && c.userData.athlete !== undefined).map((c) => c.userData.athlete))] });
+    return render(scene, camera, rect);
+  };
+  view.render({ riders: [workoutRider, { ...workoutRider, id: 9 }], myId: 7, timeS: 12, colors });
+  const [full, inset] = shown;
+  assert.deepEqual(full.ids.sort(), [7, 9], "the screen shows both");
+  assert.deepEqual(inset.ids, [7], "the inset only mine");
+  assert.ok(inset.rect);
+  const after = [];
+  engine.renderScene = (scene, camera, rect) => {
+    after.push([...new Set(scene.getObjectByName("athletes").children.filter((c) => c.visible && c.userData.athlete !== undefined).map((c) => c.userData.athlete))]);
+    return render(scene, camera, rect);
+  };
+  view.render({ riders: [workoutRider, { ...workoutRider, id: 9 }], myId: 7, timeS: 12.1, colors });
+  assert.deepEqual(after[0].sort(), [7, 9], "the next frame is whole again");
+});
+
+test("the inset follows my body along the mat", () => {
+  const gym = testGym();
+  const { view } = gymView([gym]);
+  view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
+  const frames = recordFrames(view);
+  view.render({ riders: [{ ...workoutRider, exercise: "plank", exerciseSince: 10 }], myId: 7, timeS: 12, colors });
+  assert.ok(frames.length > 0);
+  const spot = assignSpots([7], gym).get(7);
+  const ahead = view.worldScene.athleteAhead(7);
+  assert.ok(Math.abs(ahead) > 0.02, "the body lies off the spot");
+  closeVec(view.sideCamera.position.toArray(), sideCameraPose(spot, ahead).eye, 1e-3);
 });
 
 test("riding has no side view", () => {
   const gym = testGym();
-  const { view, renderer } = gymView([gym]);
+  const { view, engine } = gymView([gym]);
   view.workoutMode(gym, { reducedMotion: true, sideView: sideBox });
   view.rideMode();
   view.camera.update(100, 1, 0);
   view.render({ riders: [], myId: null, timeS: 12, colors });
-  assert.equal(renderer.begins, 1);
+  assert.deepEqual(engine.rects, [null]);
 });
 
 // --- golden lemons -------------------------------------------------------------
 
 function lemonView() {
-  const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
-  return { view, renderer, me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
+  const { view } = gymView([], "temperate");
+  return { view, frames: recordFrames(view), me: { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 } };
 }
 
-test("a lemon ahead of my rider floats over its lane, drawn bright", () => {
-  const { view, renderer, me } = lemonView();
+test("lemons near my rider go to the frame, collected ones and other routes' never", () => {
+  const { view, frames, me } = lemonView();
+  const lemons = [
+    { id: "a", distance: 50, lane: 0, collected: false },
+    { id: "b", distance: 60, lane: 0, collected: true },
+  ];
+  const mine = { ...me, distance: 0 };
+  view.setLemons(lemons);
+  view.render({ riders: [mine], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 1);
+  view.render({ riders: [{ ...mine, route: "somewhere-else" }], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 0);
+  lemons[0].collected = true;
+  view.render({ riders: [mine], myId: 1, timeS: 3, colors });
+  assert.equal(frames.at(-1).lemons.length, 0);
+});
+
+test("a lemon ahead of my rider floats over its lane at handlebar height", () => {
+  const { view, frames, me } = lemonView();
   view.setLemons([{ id: "a", distance: 130, lane: 2, collected: false }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const lemons = renderer.brights.filter((d) => d.handle === view.lemonMesh);
-  assert.equal(lemons.length, 1);
+  const [lemon] = frames.at(-1).lemons;
   const road = riderPosition(squareRoute(), 130, 2).position;
-  const model = lemons[0].model;
-  close(model[12], road[0], 0.01);
-  close(model[14], road[2], 0.01);
-  assert.ok(model[13] > road[1] + 0.9 && model[13] < road[1] + 1.6, "about handlebar height over the road");
+  close(lemon.position[0], road[0], 0.01);
+  close(lemon.position[2], road[2], 0.01);
+  assert.ok(lemon.position[1] > road[1] + 0.9 && lemon.position[1] < road[1] + 1.6, "about handlebar height over the road");
 });
 
-test("collected and far-off lemons are not drawn", () => {
-  const { view, renderer, me } = lemonView();
-  view.setLemons([
-    { id: "a", distance: 130, lane: 2, collected: true },
-    { id: "b", distance: 700, lane: 2, collected: false },
-  ]);
+test("far-off lemons are not in the frame", () => {
+  const { view, frames, me } = lemonView();
+  view.setLemons([{ id: "b", distance: 700, lane: 2, collected: false }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
+  assert.equal(frames.at(-1).lemons.length, 0);
 });
 
-test("without lemons none are drawn", () => {
-  const { view, renderer, me } = lemonView();
+test("without lemons none are in the frame", () => {
+  const { view, frames, me } = lemonView();
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(renderer.brights.filter((d) => d.handle === view.lemonMesh).length, 0);
-});
-
-test("disposing the view frees the lemon mesh", () => {
-  const { view, renderer } = lemonView();
-  const handle = view.lemonMesh;
-  view.dispose();
-  assert.ok(renderer.disposed.includes(handle));
+  assert.equal(frames.at(-1).lemons.length, 0);
 });
 
 // --- ghost lap -------------------------------------------------------------------
 
-class TransparentRecorder extends RecordingRenderer {
-  transparent = [];
-  drawTransparent(handle, model, options) {
-    this.transparent.push({ handle, model, options });
-  }
+/** Records what the view hands the world scene each frame, then runs the real update. */
+function recordFrames(view) {
+  const frames = [];
+  const update = view.worldScene.update;
+  view.worldScene.update = (frame) => {
+    frames.push(frame);
+    return update(frame);
+  };
+  return frames;
 }
 
-test("my best lap's ghost is drawn see-through, casting no shadow, never solid", () => {
-  const { view, renderer } = gymView([], "temperate", null, new TransparentRecorder());
+test("my best lap's ghost goes to the world scene as a see-through rider", () => {
+  const { view } = gymView([], "temperate");
+  const frames = recordFrames(view);
   const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
   const ghost = { id: -1, name: "Best lap", distance: 200, lane: 2, speed: 8, power: 0, ghost: true };
   // 100 m ahead: past label range, so no DOM is needed.
   view.render({ riders: [me, ghost], myId: 1, timeS: 3, colors });
-  const bike = view.bodies[riderLook(-1).variant];
-  const seeThrough = renderer.transparent.filter((d) => d.handle === bike);
-  assert.equal(seeThrough.length, 1, "the ghost's bike is see-through");
-  assert.ok(seeThrough[0].options.alpha < 0.6);
-  const road = riderPosition(squareRoute(), 200, 2).position;
-  close(seeThrough[0].model[12], road[0], 0.01);
-  const solidAtGhost = (list) => list.filter((d) => d.handle === bike && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
-  assert.equal(solidAtGhost(renderer.draws).length, 0, "not drawn solid");
-  assert.equal(solidAtGhost(renderer.casters).length, 0, "no shadow");
+  const entry = frames.at(-1).riders.find((r) => r.id === -1);
+  assert.equal(entry.ghost, true);
+  closeVec(entry.position, bikeOnRoad(squareRoute(), 200, 2).position);
+  assert.equal(frames.at(-1).riders.find((r) => r.id === 1).ghost, false);
 });
 
 test("past the ends of a route that isn't a loop the road keeps its direction", () => {
@@ -894,119 +711,400 @@ test("past the ends of a route that isn't a loop the road keeps its direction", 
 
 // --- crowds ------------------------------------------------------------------------
 
-/** A view with one spectator 12 m along the square route's first side, beside the road. */
-function crowdView(person, biome = "temperate") {
-  const { view, renderer } = gymView([], biome, null, new RecordingRenderer());
+/** A view whose crowd is `people` (the square route's first side runs along x, the road's centre at z = 0), recording its frames. */
+function crowdView(people, biome = "temperate") {
+  const { view } = gymView([], biome);
   const base = { yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, rank: 0, flag: null };
-  view.spectators = [{ ...base, position: [112, 100, 8], ...person }];
-  return { view, renderer };
+  view.crowd.people = people.map((person) => ({ ...base, position: [112, 100, 8], ...person }));
+  return { view, frames: recordFrames(view) };
 }
-const spectatorDraws = (view, renderer) => renderer.draws.filter((d) => view.spectatorMeshes.includes(d.handle));
+const rider = (id, extra = {}) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, ...extra });
+const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
 
 test("a lining spectator comes out once enough riders are online", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const friends = [2, 3, 4, 5, 6].map((id) => ({ id, name: `R${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200 }));
-  const alone = crowdView({ rank: 0.7 });
+  const friends = [2, 3, 4, 5, 6].map((id) => rider(id));
+  const alone = crowdView([{ rank: 0.7 }]);
   alone.view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(alone.view, alone.renderer).length, 0, "not out for one rider");
-  const busy = crowdView({ rank: 0.7 });
+  assert.equal(alone.frames.at(-1).crowd.length, 0, "not out for one rider");
+  const busy = crowdView([{ rank: 0.7 }]);
   busy.view.render({ riders: [me, ...friends], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(busy.view, busy.renderer).length, 1, "out for six");
+  assert.equal(busy.frames.at(-1).crowd.length, 1, "out for six");
 });
 
 test("bots don't bring out the crowd", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const bots = [2, 3, 4, 5, 6].map((id) => ({ id, name: `B${id}`, distance: 400 + id * 10, lane: 1, speed: 8, power: 200, is_bot: true }));
-  const { view, renderer } = crowdView({ rank: 0.7 });
+  const bots = [2, 3, 4, 5, 6].map((id) => rider(id, { is_bot: true }));
+  const { view, frames } = crowdView([{ rank: 0.7 }]);
   view.render({ riders: [me, ...bots], myId: 1, timeS: 3, colors });
-  assert.equal(spectatorDraws(view, renderer).length, 0);
+  assert.equal(frames.at(-1).crowd.length, 0);
 });
 
-test("a spectator with a flag waves it in its colour, beside its head", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9] });
+test("the crowd thins out when I ride alone and keeps clear of the camera", () => {
+  // A ring of lining spectators round the eye, at every rank, from point blank to 100 m.
+  const ring = (eye) => Array.from({ length: 40 }, (_, i) => ({ rank: (i % 10) / 10, position: [eye[0] + (i % 4) * 1.2 + (i % 5) * 20, 100, eye[2] + i * 0.5] }));
+  const { view, frames } = crowdView([]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const flags = renderer.draws.filter((d) => d.handle === view.flagMesh);
-  assert.equal(flags.length, 1);
-  assert.deepEqual(flags[0].tint, [0.1, 0.2, 0.9]);
-  assert.ok(Math.hypot(flags[0].model[12] - 112, flags[0].model[14] - 8) < 1, "at the spectator");
-  assert.ok(flags[0].model[13] > 101.5, "held up high");
+  const eye = view.camera.eye;
+  view.crowd.people = ring(eye).map((person) => ({ yaw: 0, shirt: [1, 0, 0], armsUp: false, motion: "jump", phase: 0, scale: 1, flag: null, ...person }));
+  view.render({ riders: [me], myId: 1, timeS: 3, colors });
+  const alone = frames.at(-1).crowd;
+  view.render({ riders: [me, ...Array.from({ length: 9 }, (_, i) => rider(i + 2))], myId: 1, timeS: 3, colors });
+  const busy = frames.at(-1).crowd;
+  assert.ok(alone.length > 0 && alone.length < busy.length, `${alone.length} alone, ${busy.length} with ten`);
+  for (const entry of busy) {
+    const at = view.crowd.people[entry.index].position;
+    assert.ok(Math.hypot(at[0] - eye[0], at[2] - eye[2]) > 4, "none within the near-camera cut");
+  }
 });
 
-test("a penguin holds its flag lower, in its flipper", () => {
-  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
-  const { view, renderer } = crowdView({ flag: [0.1, 0.2, 0.9], motion: "clap" }, "winter");
+test("a flag waver's entry carries the swing and a rider nearby makes the crowd hop", () => {
+  const { view, frames } = crowdView([{ flag: [0.1, 0.2, 0.9], phase: 0.5 }]);
   view.render({ riders: [me], myId: 1, timeS: 3, colors });
-  const flag = renderer.draws.find((d) => d.handle === view.flagMesh);
-  assert.ok(flag.model[13] < 101.2, `at ${flag.model[13]}`);
+  const [entry] = frames.at(-1).crowd;
+  assert.equal(entry.index, 0);
+  assert.ok(Math.abs(entry.flagSwing - Math.sin(3 * 2.6 + 0.5) * 0.5) < 1e-9);
+  assert.equal(typeof entry.pose, "boolean");
+  assert.ok(entry.lift >= 0);
 });
 
 // --- bot kits (#64) ------------------------------------------------------------------
 
 test("a bot rides in its team's kit; one without a known team in the bot colour", () => {
-  const { view, renderer } = gymView([], "temperate", null, new RecordingRenderer());
+  const { view } = gymView([], "temperate");
+  const frames = recordFrames(view);
   const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
   // Past label range, so no DOM is needed.
   const teamed = { id: 41, name: "Gus Tailwind", is_bot: true, team: "moos", distance: 200, lane: 0, speed: 8, power: 150 };
   const plain = { id: 42, name: "Sally Sprocket", is_bot: true, distance: 205, lane: 3, speed: 8, power: 150 };
   view.render({ riders: [me, teamed, plain], myId: 1, timeS: 3, colors });
-  const tintAt = (rider) => {
-    const road = riderPosition(squareRoute(), rider.distance, rider.lane).position;
-    const body = view.bodies[riderLook(rider.id).variant];
-    const draw = renderer.draws.find((d) => d.handle === body && Math.abs(d.model[12] - road[0]) < 0.01 && Math.abs(d.model[14] - road[2]) < 0.01);
-    return draw.tint.map((c) => Math.round(c * 255));
-  };
-  assert.deepEqual(tintAt(teamed), [0x4f, 0x8f, 0x3a]);
-  assert.deepEqual(tintAt(plain), [0, 0, 255]);
+  // The layer takes linear colours; the colour code is in sRGB.
+  const srgb = (rider) => frames.at(-1).riders.find((r) => r.id === rider.id).tint.map((c) => Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055) * 255));
+  assert.deepEqual(srgb(teamed), [0x4f, 0x8f, 0x3a]);
+  assert.deepEqual(srgb(plain), [0, 0, 255]);
+});
+
+test("road riders reach the world scene", () => {
+  const { view } = gymView([], "temperate");
+  const frames = recordFrames(view);
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const human = { id: 2, name: "Ann", distance: 300, lane: 2, speed: 6, power: 100 };
+  const bot = { id: 3, name: "Bo", is_bot: true, distance: 310, lane: 0, speed: 7, power: 0 };
+  view.render({ riders: [me, human, bot], myId: 1, myCadence: 77, timeS: 3, colors });
+  const riders = frames.at(-1).riders;
+  assert.equal(riders.length, 3);
+  assert.deepEqual(riders.map((r) => [r.id, r.me, r.ghost]), [[1, true, false], [2, false, false], [3, false, false]]);
+  assert.deepEqual(riders.map((r) => r.tint), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+  assert.deepEqual(riders.map((r) => r.cadence), [77, 85, 0]);
+  assert.deepEqual(riders.map((r) => r.speed), [8, 6, 7]);
+  const first = bikeOnRoad(squareRoute(), 100, 1);
+  closeVec(riders[0].position, first.position);
+  closeVec(riders[0].forward, first.forward);
+  assert.equal(riders[0].grade, squareRoute().gradeAt(100));
+});
+
+/** Two riders on a tandem, me in the captain's seat. */
+const onTandem = [
+  { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200, vehicle: { id: 5, kind: "tandem", seat: 0, seats: 2, captain: true } },
+  { id: 2, name: "Ann", distance: 100, lane: 1, speed: 8, power: 100, vehicle: { id: 5, kind: "tandem", seat: 1, seats: 2 } },
+];
+
+test("a vehicle reaches the rider layer, with me on it once", (t) => {
+  const { view } = gymView([], "temperate");
+  view.labelLayer = labelDom(t).layer;
+  const frames = recordFrames(view);
+  view.render({ riders: onTandem, myId: 1, myCadence: 70, timeS: 3, colors });
+  const frame = frames.at(-1);
+  assert.deepEqual(frame.riders, [], "nobody is also drawn on the road");
+  assert.equal(frame.vehicles.length, 1);
+  const [vehicle] = frame.vehicles;
+  assert.deepEqual([vehicle.id, vehicle.kind, vehicle.speed], [5, "tandem", 8]);
+  assert.equal(vehicle.layout.seats.length, 2);
+  assert.deepEqual(vehicle.seats.map((seat) => [seat.id, seat.me]), [[1, true], [2, false]]);
+  assert.deepEqual(vehicle.seats[0].tint, [1, 0, 0]);
+  assert.equal(vehicle.seats[0].cadence, 70);
+  const first = bikeOnRoad(squareRoute(), 100, 1);
+  closeVec(vehicle.position, first.position);
+  closeVec(vehicle.forward, first.forward);
+});
+
+test("a beer bike with empty seats sends null for them", (t) => {
+  const { view } = gymView([]);
+  view.labelLayer = labelDom(t).layer;
+  const frames = recordFrames(view);
+  const seat = (id, at) => ({ id, name: `R${id}`, distance: 100, lane: 1, speed: 6, power: 50, vehicle: { id: 9, kind: "beer_bike", seat: at, seats: 7, captain: at === 0 } });
+  view.render({ riders: [seat(1, 0), seat(2, 2), seat(3, 5)], myId: 1, timeS: 3, colors });
+  const [vehicle] = frames.at(-1).vehicles;
+  assert.deepEqual(vehicle.seats.map((s) => s?.id ?? null), [1, null, 2, null, null, 3, null]);
+});
+
+test("seated riders' labels sit above their heads", (t) => {
+  const { layer, labels } = labelDom(t);
+  const { view } = gymView([]);
+  view.labelLayer = layer;
+  view.render({ riders: onTandem, myId: 1, timeS: 3, colors });
+  const head = view.worldScene.seatHeads().get(2);
+  assert.ok(head, "the layer reports the stoker's head");
+  const viewProjection = multiply(perspective((58 * Math.PI) / 180, 320 / 200, RIDE_LENS.near, RIDE_LENS.far), lookAt(view.camera.eye, view.camera.target));
+  const at = projectToScreen(viewProjection, head, 320, 200);
+  assert.equal(labels.length, 1);
+  assert.ok(labels[0].style.transform.startsWith(`translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px)`), labels[0].style.transform);
+});
+
+/** A bare stand-in for the DOM a label is made of. */
+function labelDom(t) {
+  const labels = [];
+  const element = () => ({ style: {}, classList: { toggle() {} }, hidden: false, append() {}, remove() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+  return { layer: { append: (el) => labels.push(el) }, labels };
+}
+
+test("a label behind a house is hidden once its rider has been out of sight a moment", (t) => {
+  const { layer, labels } = labelDom(t);
+  const { view } = gymView([]);
+  view.labelLayer = layer;
+  const me = { id: 1, name: "Me", distance: 100, lane: 1, speed: 8, power: 200 };
+  const other = { id: 2, name: "Ann", distance: 125, lane: 1, speed: 8, power: 100 };
+  view.render({ riders: [me, other], myId: 1, timeS: 3, colors });
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0].hidden, false, "in sight on the open road");
+  const head = [...riderPosition(squareRoute(), 125, 1).position];
+  const eye = view.camera.eye;
+  view.sight.boxes = [{ x: (eye[0] + head[0]) / 2, z: (eye[2] + head[2]) / 2, halfX: 6, halfZ: 6, yaw: 0, top: head[1] + 40 }];
+  view.render({ riders: [me, other], myId: 1, timeS: 3.05, colors });
+  assert.equal(labels[0].hidden, false, "not at once");
+  view.render({ riders: [me, other], myId: 1, timeS: 4, colors });
+  assert.equal(labels[0].hidden, true);
 });
 
 test("a world without a studio site has no studio and ignores studio riders", () => {
-  const { view, renderer } = gymView([]);
+  const { view } = gymView([]);
+  const frames = recordFrames(view);
   view.camera.update(100, 1, 0);
   view.render({ riders: [{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }], myId: null, timeS: 1, colors });
   assert.equal(view.studioSite, null);
-  assert.equal(renderer.draws.length > 0, true);
+  assert.equal(frames.at(-1).riders.length, 0, "a studio rider adds nothing without a studio");
+  assert.equal(frames.at(-1).studio, undefined);
 });
 
-test("a world with a studio site draws the building and its riders", () => {
-  const studio = { position: [100, 100, 80], yaw: 0 };
-  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
-  assert.deepEqual(view.studioSite, studio);
+const studioSite = { position: [100, 100, 80], yaw: 0 };
+const studioRider = (id, seat, extra = {}) => ({ id, route: null, studio: { room: 0, seat }, power: 100, cadence: 80, ...extra });
+/** A camera that stays where it is, standing in for the studio camera (which needs my seat). */
+const fixedCamera = (eye, mode = "seat") => ({ eye, target: [eye[0], eye[1], eye[2] - 10], mode, update() {}, setMode() {} });
+
+test("studio riders ride the rider layer, with a coach on the open floor", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
   view.camera.update(100, 1, 0);
-  const frame = (riders) => {
-    renderer.draws.length = 0;
-    view.render({ riders, myId: null, timeS: 1, colors });
-    return renderer.draws.length;
-  };
-  const empty = frame([]);
-  const seated = frame([{ id: 9, route: null, studio: { room: 0, seat: 0 }, power: 100, cadence: 80 }]);
-  assert.ok(empty > 0, "the building is drawn");
-  assert.ok(seated > empty, "the seated rider adds meshes");
+  view.render({ riders: [studioRider(5, 3)], myId: null, timeS: 1, colors });
+  const frame = frames.at(-1);
+  const seated = frame.riders.find((r) => r.id === 5);
+  closeVec(seated.position, seatWorld(studioSite, 0, 3).position);
+  assert.equal(seated.cadence, 80);
+  assert.equal(seated.hideBody ?? false, false);
+  const coach = frame.riders.find((r) => r.id === coachId(0));
+  assert.ok(coach, "the coach of floor 0");
+  assert.equal(coach.lookId, INSTRUCTOR.id);
+  closeVec(coach.position, coachWorld(studioSite, 0).position);
+  assert.deepEqual(frame.studio, { floors: 2, open: 1 });
+  assert.deepEqual(coach.tint, linear(hexRgb(COACH_KIT)), "lemon yellow, whatever the colours");
+  view.render({ riders: [studioRider(5, 3)], myId: null, timeS: 1.1, colors: { ...colors, accent: "#ff7a1a" } });
+  assert.deepEqual(frames.at(-1).riders.find((r) => r.id === coachId(0)).tint, linear(hexRgb("#f5d000")), "not the theme's accent");
 });
 
-test("my own body is hidden in the point of view, the bike stays", () => {
-  const studio = { position: [100, 100, 80], yaw: 0 };
-  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
-  const me = { id: 9, route: null, studio: { room: 0, seat: 3 }, power: 100, cadence: 80 };
-  const drawn = (mode) => {
-    view.camera = new StudioCamera(studio, 0, 3, mode);
-    renderer.draws.length = 0;
+test("a rider above the studio's rooms grows the building and lights the floor", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
+  view.setStudioRooms(1);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [studioRider(5, 0, { studio: { room: 2, seat: 0 } })], myId: null, timeS: 1, colors });
+  assert.deepEqual(frames.at(-1).studio, { floors: 3, open: 3 });
+  assert.equal(frames.at(-1).riders.filter((r) => isCoach(r.id)).length, 3, "a coach per open floor, each its own id");
+});
+
+test("my body is hidden in my own point of view, my bike stays", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
+  const me = studioRider(9, 3);
+  const mine = (mode) => {
+    view.camera = new StudioCamera(studioSite, 0, 3, mode);
     view.render({ riders: [me], myId: 9, myCadence: 80, timeS: 1, colors });
-    return renderer.draws.filter((d) => d.model[12] > 99 && d.model[12] < 101 && d.model[14] > 79 && d.model[14] < 82);
+    return frames.at(-1).riders.find((r) => r.id === 9);
   };
-  const seat = drawn("seat");
-  const pov = drawn("pov");
-  assert.ok(pov.length > 0, "the bike and its front wheel are drawn");
-  assert.ok(pov.length < seat.length, "no torso or legs in the point of view");
+  assert.equal(mine("pov").hideBody, true);
+  assert.equal(mine("seat").hideBody ?? false, false);
+});
+
+test("riders next to the studio camera are left out, the coach and I never", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
+  const at = seatWorld(studioSite, 0, 3).position;
+  view.camera = fixedCamera([at[0], at[1] + 1.5, at[2]]);
+  view.render({ riders: [studioRider(10, 3), studioRider(11, 0), studioRider(12, 3)], myId: 12, timeS: 1, colors });
+  const ids = frames.at(-1).riders.map((r) => r.id);
+  assert.ok(!ids.includes(10), "right at the camera");
+  assert.ok(ids.includes(11), "a seat away");
+  assert.ok(ids.includes(12), "me, even at the camera");
+  const coach = coachWorld(studioSite, 0).position;
+  view.camera = fixedCamera([coach[0], coach[1] + 1.5, coach[2]]);
+  view.render({ riders: [studioRider(11, 0)], myId: null, timeS: 1.1, colors });
+  assert.ok(frames.at(-1).riders.some((r) => r.id === coachId(0)), "the coach stays in view");
 });
 
 test("a studio camera follows my seat in the studio, without a road rider of mine", () => {
-  const studio = { position: [100, 100, 80], yaw: 0 };
-  const { view, renderer } = gymView([], "temperate", null, new StubRenderer(), studio);
-  view.camera = new StudioCamera(studio, 0, 0, "seat");
+  const { view } = gymView([], "temperate", studioSite);
+  view.camera = new StudioCamera(studioSite, 0, 0, "seat");
   const before = [...view.camera.eye];
-  renderer.draws.length = 0;
   view.render({ riders: [{ id: 9, route: null, studio: { room: 1, seat: 7 }, power: 100 }], myId: 9, timeS: 1, colors });
   assert.ok(view.camera.eye[1] > before[1] + 4, "moved up a floor");
-  assert.ok(renderer.draws.length > 0);
+});
+
+test("the view draws without any adapter", () => {
+  const { view, engine } = gymView([]);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  assert.equal(view.renderer, undefined);
+  assert.equal(engine.presented.length, 1);
+});
+
+test("the world camera is the view's camera", () => {
+  const { view, engine } = gymView([]);
+  view.camera.update(100, 1, 0);
+  view.render({ riders: [], myId: null, timeS: 12, colors });
+  closeVec(engine.scenes[0].camera.position.toArray(), view.camera.eye, 1e-3);
+});
+
+test("every graphics level but low renders the shadow map", () => {
+  const rendered = {};
+  for (const level of ["low", "medium", "high", "ultra"]) {
+    const { view } = gymView([]);
+    const frames = recordFrames(view);
+    view.camera.update(100, 1, 0);
+    view.setQuality(level);
+    view.render({ riders: [], myId: null, timeS: 12, colors });
+    rendered[level] = frames.at(-1).shadows;
+  }
+  assert.deepEqual(rendered, { low: false, medium: true, high: true, ultra: true });
+});
+
+// --- the world scene and the engine (new world, part 1) ----------------------
+
+/** A view over a world with real ground, logging its engine's calls. */
+function worldView({ timeMode = "day", sideView = null } = {}) {
+  const log = [];
+  const engine = fakeEngine(log);
+  const gym = testGym();
+  const world = { biome: "temperate", season: "summer", ground: groundFixture(), chunks: { scenery: [], structures: [] }, crowd: { people: [], figure: "person" }, gyms: [gym] };
+  const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
+  const view = new View3D(canvas, null, squareRoute(), world, { engine });
+  view.setTimeMode(timeMode);
+  view.workoutMode(gym, { reducedMotion: true, sideView });
+  const render = () => view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  return { view, engine, log, render };
+}
+
+test("a frame draws the world and presents last", () => {
+  const { log, render } = worldView();
+  render();
+  assert.equal(log[0], "beginFrame");
+  assert.equal(log[1], "renderScene");
+  assert.equal(log.at(-1), "present");
+});
+
+test("the world is the Three.js scene of the view", () => {
+  const { view, engine, render } = worldView();
+  render();
+  assert.equal(engine.scenes[0].scene, view.worldScene.scene);
+  assert.ok(view.worldScene.scene.getObjectByName("terrain"));
+});
+
+test("night darkens the frame", () => {
+  const night = worldView({ timeMode: "night" });
+  night.render();
+  assert.equal(night.engine.presented.at(-1).env.night, 1);
+  const day = worldView();
+  day.render();
+  assert.equal(day.engine.presented.at(-1).env.night, 0);
+});
+
+test("a season change reaches the frame's environment", () => {
+  const { view, engine, render } = worldView();
+  view.setSeason("winter");
+  render();
+  assert.equal(engine.presented.at(-1).env.snow, 1);
+});
+
+test("view3d no longer draws the old terrain, sea or clouds", () => {
+  const { view, render } = worldView();
+  render();
+  assert.equal(view.clouds, undefined);
+  assert.equal(view.water, undefined);
+});
+
+test("disposing a view frees its world scene and does not touch the engine", () => {
+  const { view, engine, render } = worldView();
+  render();
+  const before = engine.calls.length;
+  view.dispose();
+  assert.equal(view.worldScene.scene.children.length, 0);
+  assert.equal(engine.calls.length, before);
+});
+
+test("a workout's side view draws the world into the inset first", () => {
+  const side = { getBoundingClientRect: () => ({ left: 200, top: 100, width: 100, height: 80 }) };
+  const { engine, log, render } = worldView({ sideView: side });
+  render();
+  assert.equal(engine.rects.filter(Boolean).length, 1, "one scissored world pass for the inset");
+  assert.equal(log.at(-1), "present");
+});
+
+test("the quality reaches the engine and the world scene", () => {
+  const { view, engine } = worldView();
+  view.setQuality("low");
+  assert.equal(engine.qualities.at(-1).shadowMapSize, 0);
+  assert.equal(view.worldScene.sun.castShadow, false);
+});
+
+test("the view keeps no chunk list", () => {
+  const { view } = gymView([]);
+  view.render({ riders: [], myId: null, timeS: 1, colors });
+  assert.equal("chunks" in view, false);
+});
+
+test("a view with a studio disposes without throwing", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  assert.doesNotThrow(() => view.dispose());
+});
+
+test("only my road entry is classic, and only once the classic rider is on", (t) => {
+  const element = () => ({ style: {}, classList: { toggle() {} }, append() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
+  const saved = globalThis.document;
+  globalThis.document = { createElement: element };
+  t.after(() => (globalThis.document = saved));
+  const { view } = gymView([]);
+  view.labelLayer = { append() {} };
+  const frames = recordFrames(view);
+  const riders = [{ ...workoutRider, id: 7 }, { ...workoutRider, id: 8, distance: 110 }];
+  view.render({ riders, myId: 7, timeS: 12, colors });
+  assert.ok(frames.at(-1).riders.every((r) => !r.classic), "off by default");
+  view.setClassicRider(true);
+  view.render({ riders, myId: 7, timeS: 12.1, colors });
+  const [mine, other] = [7, 8].map((id) => frames.at(-1).riders.find((r) => r.id === id));
+  assert.equal(mine.classic, true);
+  assert.ok(!other.classic, "the others keep the new look");
+  view.setClassicRider(false);
+  view.render({ riders, myId: 7, timeS: 12.2, colors });
+  assert.ok(frames.at(-1).riders.every((r) => !r.classic));
+});
+
+test("my studio entry is classic when the classic rider is on, the coach never", () => {
+  const { view } = gymView([], "temperate", studioSite);
+  const frames = recordFrames(view);
+  view.setClassicRider(true);
+  view.camera = fixedCamera([100, 101.5, 90]);
+  view.render({ riders: [studioRider(9, 3), studioRider(5, 4)], myId: 9, timeS: 1, colors });
+  const entries = frames.at(-1).riders;
+  assert.equal(entries.find((r) => r.id === 9).classic, true);
+  assert.ok(!entries.find((r) => r.id === 5).classic);
+  assert.ok(!entries.find((r) => r.id === coachId(0)).classic);
 });

@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
+import { NEW_WORLD_AT, classicRiderChoice, hasClassicRider, ACHIEVEMENTS, ACHIEVEMENTS_KEY, AchievementWatch, achievementFacts, backdate, earnedNow, latch, loadAchievements, reconcile, saveAchievements } from "../public/js/profile/achievements.js";
 
-// Tuesday 10 Nov 2026, 18:00 local: hits none of the time-based ones.
+// Wednesday 10 Nov 2027, 18:00 local: after the new world, and hits none of the time-based ones.
 const at = (y, m, d, h = 18, min = 0) => new Date(y, m - 1, d, h, min).getTime();
-const BASE = at(2026, 11, 10);
+const BASE = at(2027, 11, 10);
 const DAY = 86_400_000;
 
 const ride = (overrides = {}) => ({
@@ -32,7 +32,7 @@ const weekly = (offsets) => offsets.map((w) => ride({ startedAt: BASE + w * 7 * 
 test("the list has the spec's ids in order", () => {
   assert.deepEqual(
     ACHIEVEMENTS.map((a) => a.id),
-    ["firstRide", "marathon", "century", "climb1000", "climb4000", "everest", "km1000", "croissants", "weeks4", "weeks12", "tourist", "local", "bothWays", "lavaFeet", "lemons10", "summits10", "knowThyself", "stronger", "watts1000", "nightOwl", "earlyBird", "lunchBreak", "cookieBurner", "newYear", "thumbWarrior", "bendy", "crossTrainer"],
+    ["firstRide", "marathon", "century", "climb1000", "climb4000", "everest", "km1000", "croissants", "weeks4", "weeks12", "tourist", "local", "bothWays", "lavaFeet", "lemons10", "summits10", "knowThyself", "stronger", "watts1000", "nightOwl", "earlyBird", "lunchBreak", "cookieBurner", "newYear", "thumbWarrior", "bendy", "crossTrainer", "classicRider"],
   );
 });
 
@@ -104,23 +104,23 @@ test("stronger: measured from the oldest ride with a known FTP", () => no("stron
 test("watts1000: a measured 1,000 W earns it", () => yes("watts1000", [ride({ maxPower: 1000 })]));
 test("watts1000: an unmeasured 1,200 W doesn't", () => no("watts1000", [ride({ maxPower: 1200, measured: false })]));
 
-test("nightOwl: a 22:00 start earns it", () => yes("nightOwl", [ride({ startedAt: at(2026, 11, 10, 22) })]));
-test("nightOwl: a 03:59 start earns it", () => yes("nightOwl", [ride({ startedAt: at(2026, 11, 10, 3, 59) })]));
-test("nightOwl: a 21:59 start doesn't", () => no("nightOwl", [ride({ startedAt: at(2026, 11, 10, 21, 59) })]));
-test("earlyBird: a 04:00 start earns it", () => yes("earlyBird", [ride({ startedAt: at(2026, 11, 10, 4) })]));
-test("earlyBird: a 06:00 start doesn't", () => no("earlyBird", [ride({ startedAt: at(2026, 11, 10, 6) })]));
+test("nightOwl: a 22:00 start earns it", () => yes("nightOwl", [ride({ startedAt: at(2027, 11, 10, 22) })]));
+test("nightOwl: a 03:59 start earns it", () => yes("nightOwl", [ride({ startedAt: at(2027, 11, 10, 3, 59) })]));
+test("nightOwl: a 21:59 start doesn't", () => no("nightOwl", [ride({ startedAt: at(2027, 11, 10, 21, 59) })]));
+test("earlyBird: a 04:00 start earns it", () => yes("earlyBird", [ride({ startedAt: at(2027, 11, 10, 4) })]));
+test("earlyBird: a 06:00 start doesn't", () => no("earlyBird", [ride({ startedAt: at(2027, 11, 10, 6) })]));
 
 const lunch = (startedAt, durationS = 1800) => [ride({ startedAt, durationS })];
-test("lunchBreak: a weekday 12:30 half hour earns it", () => yes("lunchBreak", lunch(at(2026, 11, 10, 12, 30))));
-test("lunchBreak: on a Saturday it doesn't", () => no("lunchBreak", lunch(at(2026, 11, 14, 12, 30))));
-test("lunchBreak: a full hour doesn't", () => no("lunchBreak", lunch(at(2026, 11, 10, 12, 30), 3600)));
-test("lunchBreak: under 15 minutes doesn't", () => no("lunchBreak", lunch(at(2026, 11, 10, 12, 30), 899)));
-test("lunchBreak: a 13:00 start doesn't", () => no("lunchBreak", lunch(at(2026, 11, 10, 13))));
+test("lunchBreak: a weekday 12:30 half hour earns it", () => yes("lunchBreak", lunch(at(2027, 11, 10, 12, 30))));
+test("lunchBreak: on a Saturday it doesn't", () => no("lunchBreak", lunch(at(2027, 11, 14, 12, 30))));
+test("lunchBreak: a full hour doesn't", () => no("lunchBreak", lunch(at(2027, 11, 10, 12, 30), 3600)));
+test("lunchBreak: under 15 minutes doesn't", () => no("lunchBreak", lunch(at(2027, 11, 10, 12, 30), 899)));
+test("lunchBreak: a 13:00 start doesn't", () => no("lunchBreak", lunch(at(2027, 11, 10, 13))));
 
-test("cookieBurner: 26 December earns it", () => yes("cookieBurner", [ride({ startedAt: at(2026, 12, 26) })]));
-test("cookieBurner: 23 December doesn't", () => no("cookieBurner", [ride({ startedAt: at(2026, 12, 23) })]));
-test("newYear: 1 January earns it", () => yes("newYear", [ride({ startedAt: at(2027, 1, 1) })]));
-test("newYear: 2 January doesn't", () => no("newYear", [ride({ startedAt: at(2027, 1, 2) })]));
+test("cookieBurner: 26 December earns it", () => yes("cookieBurner", [ride({ startedAt: at(2027, 12, 26) })]));
+test("cookieBurner: 23 December doesn't", () => no("cookieBurner", [ride({ startedAt: at(2027, 12, 23) })]));
+test("newYear: 1 January earns it", () => yes("newYear", [ride({ startedAt: at(2028, 1, 1) })]));
+test("newYear: 2 January doesn't", () => no("newYear", [ride({ startedAt: at(2028, 1, 2) })]));
 
 test("thumbWarrior: a paddle ride earns it", () => yes("thumbWarrior", [ride({ device: "paddle", measured: false })]));
 test("thumbWarrior: a trainer ride doesn't", () => no("thumbWarrior", [ride()]));
@@ -132,7 +132,7 @@ test("crossTrainer: a ride and a workout in the same week earn it", () => yes("c
 test("crossTrainer: in different weeks they don't", () => no("crossTrainer", [ride(), workout("tabata", BASE + 7 * DAY)]));
 
 test("records without the newer fields earn nothing they can't prove", () => {
-  assert.deepEqual(earnedNow({ records: [{ startedAt: BASE, distanceM: 10_000 }], summits: [], lemons: 0, routes: null }), ["firstRide"]);
+  assert.deepEqual(earnedNow({ records: [{ startedAt: BASE, distanceM: 10_000}], summits: [], lemons: 0, routes: null }), ["firstRide"]);
 });
 
 test("facts sort the records oldest first", () => {
@@ -145,7 +145,7 @@ const memory = (initial = {}) => {
   return { getItem: (k) => data[k] ?? null, setItem: (k, v) => { data[k] = String(v); }, data };
 };
 const refusing = () => ({ getItem: () => null, setItem: () => { throw new Error("quota"); } });
-const NOW = at(2026, 11, 15, 9);
+const NOW = at(2027, 11, 15, 9);
 
 test("load: nothing stored is empty", () => assert.deepEqual(loadAchievements(memory()), { earned: {} }));
 test("load: garbage is empty", () => assert.deepEqual(loadAchievements(memory({ [ACHIEVEMENTS_KEY]: "{nope" })), { earned: {} }));
@@ -225,7 +225,7 @@ test("a refused save still shows the banner only once", () => {
 
 test("lunchBreak is never earned live: the ride may still run past the hour", () => {
   const watch = watchWith([ride()]);
-  assert.deepEqual(watch.update(live({ startedAt: at(2026, 11, 10, 12, 10), durationS: 900 }), NOW), []);
+  assert.deepEqual(watch.update(live({ startedAt: at(2027, 11, 10, 12, 10), durationS: 900 }), NOW), []);
 });
 
 test("backdate dates only the ids it is asked about", () => {
@@ -237,4 +237,30 @@ test("backdate on a long history stays well under a frame budget per ride", () =
   const start = performance.now();
   backdate({ records, lemons: 10, summits: [] }, NOW);
   assert.ok(performance.now() - start < 250, "2,000 rides backdate in under 250 ms");
+});
+
+test("classicRider: a ride before the new world earns it", () => yes("classicRider", [ride({ startedAt: NEW_WORLD_AT - 1 })]));
+test("classicRider: a ride since the new world doesn't", () => no("classicRider", [ride({ startedAt: NEW_WORLD_AT })]));
+test("classicRider: an old workout alone doesn't", () => no("classicRider", [workout("tabata", NEW_WORLD_AT - DAY)]));
+test("classicRider: one old ride among new ones is enough", () => yes("classicRider", [ride({ startedAt: NEW_WORLD_AT + DAY }), ride({ startedAt: NEW_WORLD_AT - DAY })]));
+test("classicRider: a ride without a start time doesn't", () => no("classicRider", [ride({ startedAt: undefined })]));
+test("classicRider: no records don't", () => no("classicRider", []));
+test("the new world landed on 1 Dec 2026 (UTC)", () => assert.equal(new Date(NEW_WORLD_AT).toISOString(), "2026-12-01T00:00:00.000Z"));
+test("hasClassicRider: true once earned, false without or without state", () => {
+  assert.equal(hasClassicRider({ earned: { classicRider: 5 } }), true);
+  assert.equal(hasClassicRider({ earned: {} }), false);
+  assert.equal(hasClassicRider(null), false);
+  assert.equal(hasClassicRider(undefined), false);
+});
+
+test("classicRiderChoice: offered once earned, on only when chosen", () => {
+  const earned = { earned: { classicRider: 5 } };
+  assert.deepEqual(classicRiderChoice(earned, "on"), { available: true, on: true });
+  assert.deepEqual(classicRiderChoice(earned, "off"), { available: true, on: false });
+  assert.deepEqual(classicRiderChoice(earned, null), { available: true, on: false });
+});
+
+test("classicRiderChoice: a stored on without the achievement stays off and hidden", () => {
+  assert.deepEqual(classicRiderChoice({ earned: {} }, "on"), { available: false, on: false });
+  assert.deepEqual(classicRiderChoice(null, "on"), { available: false, on: false });
 });

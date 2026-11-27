@@ -3158,6 +3158,31 @@
       ]
     }
   ],
+  "regions": [
+    { "id": "south-coast-west", "kind": "pineCoast", "x": -1500, "y": -3300, "radius": 1300 },
+    { "id": "south-coast-east", "kind": "pineCoast", "x": 2600, "y": -3600, "radius": 1300 },
+    { "id": "east-coast", "kind": "pineCoast", "x": 4300, "y": -1500, "radius": 1000 },
+    { "id": "north-terraces", "kind": "oliveTerraces", "x": -1300, "y": 1300, "radius": 900 },
+    { "id": "east-terraces", "kind": "oliveTerraces", "x": 1900, "y": 1800, "radius": 800 },
+    { "id": "almond-valley", "kind": "almondValley", "x": -200, "y": -800, "radius": 850 },
+    { "id": "lavender-meadow", "kind": "lavenderFields", "x": 1450, "y": -340, "radius": 650 },
+    { "id": "west-farms", "kind": "farmBelt", "x": -1130, "y": -1540, "radius": 700 },
+    { "id": "north-wood", "kind": "deepWood", "x": 710, "y": 1420, "radius": 650 },
+    { "id": "wetland", "kind": "wetland", "x": 990, "y": -2850, "radius": 420 },
+    { "id": "high-country", "kind": "highCountry", "x": 390, "y": 2380, "radius": 1100 }
+  ],
+  "landmarks": [
+    { "id": "cape-light", "kind": "lighthouse", "x": 4920, "y": -3190, "yaw": 0, "apron": 60 },
+    { "id": "sw-ruin", "kind": "castle", "x": -210, "y": -1820, "yaw": 0, "apron": 70 },
+    { "id": "south-arch", "kind": "seaArch", "x": 1550, "y": -4200, "yaw": 0, "apron": 40 },
+    { "id": "farm-mills", "kind": "windmills", "x": -1170, "y": -2000, "yaw": 0, "apron": 16, "count": 5 },
+    { "id": "valley-balloons", "kind": "balloons", "x": 600, "y": -300, "yaw": 0, "apron": 0, "count": 4 }
+  ],
+  "settlements": [
+    { "id": "hilltop", "kind": "city", "x": 2400, "y": 950, "radius": 420, "seed": 7101 },
+    { "id": "southwest", "kind": "village", "x": -350, "y": -2190, "radius": 260, "seed": 7102 },
+    { "id": "harbour", "kind": "harbour", "x": 4450, "y": -4125, "radius": 220, "seed": 7103 }
+  ],
   "routes": [
     {
       "id": "riverside-flats",

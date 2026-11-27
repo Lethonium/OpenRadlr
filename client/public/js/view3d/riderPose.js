@@ -15,7 +15,7 @@
  * helmet out of the ground; face down (`−π/2`) the toes need about 0.08.
  */
 import { multiply, placement, rotationXAbout, transformPoint } from "./math.js";
-import { BODY_ATTITUDE, BODY_JOINTS, BODY_PARENTS, RIDER_GEOMETRY } from "./riderModel.js";
+import { BODY_ATTITUDE, BODY_JOINTS, BODY_PARENTS, RIDER_GEOMETRY } from "./riderGeometry.js";
 
 export const JOINTS = Object.freeze([
   "spine",

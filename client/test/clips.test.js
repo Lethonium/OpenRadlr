@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { invert, transformPoint } from "../public/js/view3d/math.js";
-import * as model from "../public/js/view3d/riderModel.js";
-import { CLIPS, STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose, settle } from "../public/js/view3d/clips.js";
+import * as model from "./support/riderMeshes.js";
+import { CLIPS, STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "../public/js/view3d/clips.js";
 import { EXERCISES } from "../public/js/workout/plan.js";
 import { bodyTransforms, poseAt, validClip } from "../public/js/view3d/riderPose.js";
 
@@ -27,8 +27,14 @@ const vertices = (mesh) => {
   for (let i = 0; i < mesh.positions.length; i += 3) out.push([mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]]);
   return out;
 };
-/** Every body part of `clip` at `t`, posed as the view poses it. */
-const posed = (clip, t) => new Map(bodyTransforms(settle(poseAt(clip, t), clip.plant), look).map(({ mesh, model: m }) => [mesh, m]));
+/** A clip pose (`root.y` = height off the ground) lifted or lowered so its lowest point is that high, for the human rider's shapes. */
+function settle(pose) {
+  const flat = { ...pose, root: { ...pose.root, y: 0 } };
+  const low = Math.min(...bodyTransforms(flat).flatMap(({ mesh, model: m }) => vertices(MESHES[mesh]).map((p) => transformPoint(m, p)[1])));
+  return { ...pose, root: { ...pose.root, y: pose.root.y - low } };
+}
+/** Every body part of `clip` at `t`, posed and settled. */
+const posed = (clip, t) => new Map(bodyTransforms(settle(poseAt(clip, t)), look).map(({ mesh, model: m }) => [mesh, m]));
 const lowest = (parts) => Math.min(...[...parts].flatMap(([mesh, m]) => vertices(MESHES[mesh]).map((p) => transformPoint(m, p)[1])));
 /** Clip times every 20 ms through the loop, and the keys. */
 const samples = (clip) => [...Array.from({ length: Math.round(clip.loopS / 0.02) }, (_, i) => i * 0.02), ...clip.keys.map((k) => k.t)];
@@ -127,17 +133,12 @@ test("the arms keep clear of the head", () => {
   assert.deepEqual(through, []);
 });
 
-test("a planted point holds still through the clip", () => {
-  // The squat's feet and the push-up's toes do not slide along the mat.
-  const drift = ["squats", "pushups"].map((name) => {
-    const clip = CLIPS[name];
-    const z = samples(clip).map((t) => transformPoint(posed(clip, t).get(clip.plant.mesh), clip.plant.at)[2]);
-    return [name, Math.max(...z) - Math.min(...z) < 0.005];
-  });
-  assert.deepEqual(drift, [
-    ["squats", true],
-    ["pushups", true],
-  ]);
+test("the clips that keep a foot planted name it", () => {
+  assert.deepEqual(
+    Object.entries(CLIPS).filter(([, clip]) => clip.plant).map(([name, clip]) => [name, clip.plant.mesh]).slice(0, 2),
+    [["squats", "footR"], ["situps", "footR"]],
+  );
+  assert.equal(CLIPS.idle.plant, undefined);
 });
 
 test("every exercise has a statue moment inside its clip", () => {
@@ -165,7 +166,7 @@ test("mirroring twice gives the pose back", () => {
 });
 
 test("a mirrored plant names the other foot", () => {
-  assert.deepEqual(mirrorPlant({ mesh: "footR", at: [0.1, -0.06, -0.2], z: 0.3 }), { mesh: "footL", at: [-0.1, -0.06, -0.2], z: 0.3 });
+  assert.deepEqual(mirrorPlant({ mesh: "footR" }), { mesh: "footL" });
   assert.equal(mirrorPlant(null), null);
 });
 

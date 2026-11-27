@@ -1,12 +1,11 @@
 /**
  * The picked route in the start menu: a glowing band on top of its road,
  * coloured where it climbs or sprints, and a beacon at the start. Other
- * routes of the map get a faint band. Separate small meshes, so the pick can
- * change without rebuilding the world.
+ * routes of the map get a faint band. Plain band data (triangles and tints), so the
+ * pick can change without rebuilding the world.
  */
-import { MeshBuilder } from "./meshBuilder.js";
-import { add, scale } from "./math.js";
-import { roadFrame } from "./world.js";
+import { add, cross, scale, sub } from "./math.js";
+import { roadFrame } from "../world/roads.js";
 
 const UP = [0, 1, 0];
 
@@ -36,14 +35,40 @@ export function highlightColor(route, distance, colors = HIGHLIGHT) {
   return colors.route;
 }
 
+/** Pushes the triangle a-b-c, wound so that its front faces along `direction`, with one tint on all three corners. */
+function triangleFacing(band, a, b, c, tint, direction) {
+  const n = cross(sub(b, a), sub(c, a));
+  const flip = n[0] * direction[0] + n[1] * direction[1] + n[2] * direction[2] < 0;
+  for (const p of flip ? [a, c, b] : [a, b, c]) band.positions.push(...p), band.colors.push(...tint);
+}
+
+/** An axis-aligned box of `size` round `center`, faces out. */
+function box(band, center, [sx, sy, sz], tint) {
+  const corner = (i, j, k) => [center[0] + (i * sx) / 2, center[1] + (j * sy) / 2, center[2] + (k * sz) / 2];
+  const faces = [
+    [[1, 0, 0], (u, v) => corner(1, u, v)],
+    [[-1, 0, 0], (u, v) => corner(-1, u, v)],
+    [[0, 1, 0], (u, v) => corner(u, 1, v)],
+    [[0, -1, 0], (u, v) => corner(u, -1, v)],
+    [[0, 0, 1], (u, v) => corner(u, v, 1)],
+    [[0, 0, -1], (u, v) => corner(u, v, -1)],
+  ];
+  for (const [normal, at] of faces) {
+    const [a, b, c, d] = [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1)];
+    triangleFacing(band, a, b, c, tint, normal);
+    triangleFacing(band, a, c, d, tint, normal);
+  }
+}
+
 /**
  * Band along `route`: `width` metres wide, `lift` above the road. With
  * `color` the whole band has that colour (other routes, lower); otherwise it
  * shows the markers and a beacon stands at the start.
+ * @returns {{positions: Float32Array, colors: Float32Array}} non-indexed triangles, xyz and rgb (0-1) per vertex
  */
 export function buildHighlight(route, { width = 12, lift = null, step = 8, color = null, beacon = 60 } = {}) {
   lift ??= color ? HIGHLIGHT_LIFT.other : HIGHLIGHT_LIFT.picked;
-  const mesh = new MeshBuilder();
+  const band = { positions: [], colors: [] };
   const half = width / 2;
   const edge = (frame, side) => add(add(frame.center, scale(frame.right, side * half)), [0, lift, 0]);
   const steps = Math.ceil(route.length / step);
@@ -52,14 +77,14 @@ export function buildHighlight(route, { width = 12, lift = null, step = 8, color
     const f1 = roadFrame(route, Math.min(route.length, (i + 1) * step));
     const tint = color ?? highlightColor(route, (i + 0.5) * step);
     const [a, b, c, d] = [edge(f0, -1), edge(f1, -1), edge(f1, 1), edge(f0, 1)];
-    mesh.triangleFacing(a, b, c, tint, UP);
-    mesh.triangleFacing(a, c, d, tint, UP);
+    triangleFacing(band, a, b, c, tint, UP);
+    triangleFacing(band, a, c, d, tint, UP);
     f0 = f1;
   }
   if (!color && beacon > 0) {
     const start = roadFrame(route, 0).center;
-    mesh.box(add(start, [0, beacon / 2, 0]), [3, beacon, 3], HIGHLIGHT.beacon);
-    mesh.box(add(start, [0, beacon, 0]), [7, 7, 7], HIGHLIGHT.beacon);
+    box(band, add(start, [0, beacon / 2, 0]), [3, beacon, 3], HIGHLIGHT.beacon);
+    box(band, add(start, [0, beacon, 0]), [7, 7, 7], HIGHLIGHT.beacon);
   }
-  return mesh.build();
+  return { positions: new Float32Array(band.positions), colors: new Float32Array(band.colors) };
 }

@@ -3,10 +3,7 @@
  * heights and road geometry are the terrain's; this module only supplies the
  * season's colours, shapes and ground rules.
  */
-import { winterModels } from "./buildings.js";
-import { plantFlower, plantTree, plantTuft } from "./flora.js";
 import { ICE, PINE, SNOW, STONE, TIMBER, WINTER_PALETTE } from "./palette.js";
-import { buildPenguin, penguinWorkoutParts } from "./people.js";
 import { terrainColor } from "./terrain.js";
 
 /** Muted winter coats; the crowd and the penguins' scarves take these colours. */
@@ -36,6 +33,8 @@ export const winter = Object.freeze({
     bank: Object.freeze({ color: SNOW, height: 0.3 }),
     rut: Object.freeze({ color: Object.freeze([0.55, 0.58, 0.64]), width: 0.36 }),
     postCap: Object.freeze({ color: SNOW }),
+    /** The roadside markers are snowmen (assets/props/roadPost.js) instead of reflector posts. */
+    marker: "snowman",
     /** Frosted event barriers with an icy blue stripe. */
     barrier: Object.freeze({
       post: WINTER_PALETTE.metal,
@@ -61,15 +60,6 @@ export const winter = Object.freeze({
     ground: SNOW,
     accent: Object.freeze([0.3, 0.47, 0.68]),
   }),
-  weather: Object.freeze({
-    kind: "snow",
-    count: 900,
-    box: Object.freeze([74, 26, 74]),
-    fall: Object.freeze([4, 8]),
-    drift: Object.freeze([1.1, 0.35]),
-    size: Object.freeze([0.012, 0.035]),
-    color: Object.freeze([0.98, 0.99, 1, 0.9]),
-  }),
   sky: Object.freeze({
     clouds: Object.freeze({
       color: Object.freeze([0.9, 0.92, 0.96, 1]),
@@ -85,8 +75,6 @@ export const winter = Object.freeze({
       segments: Object.freeze([5, 10]),
     }),
   }),
-  farIsland: Object.freeze([0.6, 0.65, 0.7]),
-  farIslandDark: Object.freeze([0.48, 0.53, 0.58]),
   rock: Object.freeze([0.45, 0.47, 0.5]),
   sand: Object.freeze([0.8, 0.86, 0.92]),
   seaFloor: Object.freeze([0.18, 0.26, 0.32]),
@@ -120,11 +108,10 @@ export const winter = Object.freeze({
     }),
   }),
   palette: WINTER_PALETTE,
-  models: winterModels,
   /** The roadside crowd becomes clapping penguins; the scarf takes the per-person tint. */
-  people: Object.freeze({ model: buildPenguin, motion: "clap", tint: true, shirts: SHIRTS, flagHand: [0.5, 0.8, -0.1] }),
-  /** Workout riders and their statues become penguins too, on the same exercise skeleton. */
-  workout: Object.freeze({ parts: penguinWorkoutParts, scale: 0.78 }),
+  people: Object.freeze({ motion: "clap", tint: true, shirts: SHIRTS }),
+  /** Workout riders and their statues become penguins too: the rigged rider in a penguin outfit. */
+  workoutFigure: "penguin",
   /** Winter air: a pale, cool sky, snow bounce and a shorter haze. */
   light: Object.freeze({
     day: Object.freeze({
@@ -154,14 +141,18 @@ export const winter = Object.freeze({
       fog: Object.freeze([190, 2700]),
       shadowStrength: 0.45,
     }),
+    night: Object.freeze({
+      sunColor: Object.freeze([0.36, 0.44, 0.66]),
+      zenith: Object.freeze([0.03, 0.05, 0.14]),
+      horizon: Object.freeze([0.09, 0.12, 0.22]),
+      ground: Object.freeze([0.1, 0.12, 0.18]),
+      cloudTint: Object.freeze([0.2, 0.24, 0.36]),
+      fog: Object.freeze([110, 2200]),
+      shadowStrength: 0.3,
+    }),
   }),
   terrainColor,
   flora: Object.freeze({
-    /** Sparse under the snow: fewer trees than summer, no flowers at all. */
-    density: Object.freeze({ trees: 230, tufts: 700, flowers: 0, elsewhere: 0.4 }),
-    tree: plantTree,
-    tuft: plantTuft,
-    flower: plantFlower,
     /** Dark pines and snow-laden branches for the 2D map's tree dots. */
     mapColors: Object.freeze([PINE, ICE]),
   }),

@@ -155,6 +155,10 @@ lint-client: client/node_modules ## ESLint for the browser client
 screenshot: client/node_modules ## Screenshot of the running client (start it first, e.g. `make dev`; pass ARGS="--out shot.png")
 	$(NPM) run screenshot -- $(ARGS)
 
+.PHONY: world-shots
+world-shots: client/node_modules ## Shoot the world shot list against the running client (start it first, e.g. `make dev`; pass ARGS="--out dir")
+	$(NPM) run world-shots -- $(ARGS)
+
 client/node_modules: client/package.json
 	$(NPM) install --no-audit --no-fund
 	@touch $@

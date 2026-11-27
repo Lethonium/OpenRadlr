@@ -4,8 +4,8 @@
  * of the building where the room is.
  */
 import { transformPoint } from "./math.js";
-import { RIDER_GEOMETRY } from "./riderModel.js";
-import { SLAB } from "./studioBuilding.js";
+import { RIDER_GEOMETRY } from "./riderGeometry.js";
+import { SLAB } from "./studioLayout.js";
 import { INSTRUCTOR, ROOM, ROW_GAP, STAGE, seatPosition } from "./studioLayout.js";
 import { floorTransform } from "./studioLayer.js";
 

@@ -10,7 +10,7 @@
  * test can agree on exactly what a winter dusk looks like.
  */
 import { resolveBiome } from "../view3d/biomes/index.js";
-import { TIME_MODES, resolvePreset, resolvedLight } from "../view3d/lighting.js";
+import { TIME_MODES, resolvePreset, resolvedLight } from "../world/daylight.js";
 
 /** The start menu's map palette, kept from the original top-down map. */
 export const MAP_COLORS = Object.freeze({
@@ -70,7 +70,9 @@ export function rideMapTheme({ biome = "temperate", timeMode = "day", date, colo
   const season = resolveBiome(biome);
   const map = season.map ?? {};
   const mode = TIME_MODES.includes(timeMode) ? timeMode : "day";
-  const preset = resolvePreset(mode, date);
+  // The 2D map has no night look: it draws night as dusk.
+  const resolved = resolvePreset(mode, date);
+  const preset = resolved.key === "night" ? resolvePreset("dusk") : resolved;
   const light = resolvedLight(preset, season);
   const tint = preset.key === "dusk" ? light.horizon : light.sunColor;
   const tinting = TIME_TINT[preset.key] ?? { amount: 0, dim: 1 };

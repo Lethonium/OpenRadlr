@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
+  { ignores: ["public/vendor/**"] },
   js.configs.recommended,
   {
     files: ["public/js/**/*.js"],
@@ -20,7 +21,16 @@ export default [
     },
   },
   {
-    files: ["test/**/*.js", "screenshot.mjs", "screenshotArgs.mjs", "preload.mjs", "eslint.config.js"],
+    files: [
+      "test/**/*.js",
+      "screenshot.mjs",
+      "screenshotArgs.mjs",
+      "preload.mjs",
+      "worldShots.mjs",
+      "worldShotList.mjs",
+      "vendor.mjs",
+      "eslint.config.js",
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

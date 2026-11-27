@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../../public/js/route/geometry.js";
 import { RoadNetwork } from "../../public/js/route/network.js";
 import { CAFE_DISTANCE, Occupancy, STUDIO_DISTANCE, STUDIO_FOOTPRINT, studioSite } from "../../public/js/view3d/features.js";
-import { buildWorld, roadFrame, roadHalfWidth } from "../../public/js/view3d/world.js";
+import { buildWorld } from "../../public/js/view3d/world.js";
+import { roadFrame, roadHalfWidth } from "../../public/js/world/roads.js";
 import { sceneOf } from "../../public/js/view3d/worldScene.js";
 
 const loadRoute = (id) => new RouteGeometry(JSON.parse(readFileSync(new URL(`../../../routes/${id}.json`, import.meta.url))));

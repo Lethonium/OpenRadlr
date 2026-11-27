@@ -76,12 +76,13 @@ export class MenuStage {
    * @param {object} deps
    * @param {(id: string) => Promise<object>} deps.fetchRouteFile
    * @param {(mapId: string) => Promise<object>} [deps.fetchNetwork] a map's road network file (#26)
-   * @param {(file: object, others: object[], options: {network: object | null, biome?: string}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
+   * @param {(file: object, others: object[], options: {network: object | null, biome?: string, season?: string}) => Promise<object>} [deps.buildScene] without it, no 3D (map only)
    * @param {() => string} [deps.biome] the rider's biome, when the world is built
+   * @param {() => string} [deps.season] the rider's season, when the world is built
    * @param {(route: RouteGeometry, scene: object) => object} [deps.createView] a View3D on the menu canvas
    * @param {(viewKind: "island" | "route" | "gym" | "studio", overview: object) => object} [deps.lensFor] the lens for each camera view (the gym orbit flies low and needs a nearer plane)
    * @param {(overview: object) => object} [deps.createCamera] a MenuCamera
-   * @param {(route: RouteGeometry, others: RouteGeometry[]) => object[]} [deps.highlights] bands for `setHighlights`
+   * @param {(route: RouteGeometry, others: RouteGeometry[]) => object[]} [deps.highlights] `{band, glow}` bands for `setHighlights`
    * @param {(stage: {route: RouteGeometry | null, routes: RouteGeometry[], network?: object | null}) => void} deps.onRoute map and profile of the pick
    * @param {() => void} [deps.onCafes] café names became known
    * @param {(ready: boolean) => void} [deps.onWorld] the island is (no longer) on screen
@@ -108,6 +109,11 @@ export class MenuStage {
   }
 
   /** The route the 3D view on screen was built for (null while building). */
+  /** The menu view's last frame stats (`?stats` readout), or null. */
+  get frameStats() {
+    return this.#view?.frameStats ?? null;
+  }
+
   get viewRouteId() {
     return this.#viewRouteId;
   }
@@ -115,6 +121,11 @@ export class MenuStage {
   /** The biome the next world is built in (the rider's pick). */
   #biome() {
     return this.deps.biome?.() ?? DEFAULT_BIOME;
+  }
+
+  /** What the next world looks like: biome and season, as one key. */
+  #look() {
+    return `${this.#biome()}/${this.deps.season?.() ?? ""}`;
   }
 
   /**
@@ -272,7 +283,7 @@ export class MenuStage {
     let file;
     let others;
     let network;
-    const biome = this.#biome();
+    const biome = this.#look();
     try {
       file = await this.#file(id);
       [others, network] = await Promise.all([
@@ -305,17 +316,17 @@ export class MenuStage {
 
   async #build(id, biome, file, others, network) {
     const key = buildKey(id, biome);
-    if (this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome) return;
+    if (this.#stopped || this.#selectedOrFirst() !== id || this.#look() !== biome) return;
     this.#buildingKey = key;
     let scene;
     try {
-      scene = await this.deps.buildScene(file, others, { network, biome });
+      scene = await this.deps.buildScene(file, others, { network, biome: this.#biome(), season: this.deps.season?.() });
     } catch (error) {
       console.warn("Menu world unavailable:", error);
       scene = null;
     }
     if (this.#buildingKey === key) this.#buildingKey = null;
-    if (!scene || this.#stopped || this.#selectedOrFirst() !== id || this.#biome() !== biome) return;
+    if (!scene || this.#stopped || this.#selectedOrFirst() !== id || this.#look() !== biome) return;
     const route = this.#geometry(file);
     let view;
     try {
@@ -495,7 +506,7 @@ export class MenuStage {
     if (!view) return null;
     view.setHighlights([]);
     const sameWorld = this.#viewRouteId === routeId || (map !== null && map === this.#viewMap);
-    if (sameWorld && this.#viewBiome === this.#biome()) return view;
+    if (sameWorld && this.#viewBiome === this.#look()) return view;
     view.dispose();
     return null;
   }

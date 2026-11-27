@@ -19,7 +19,7 @@ import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
-import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
+import { AchievementWatch, classicRiderChoice, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
@@ -32,6 +32,7 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
 import { StravaClient, appLoginResult, stravaMessage } from "./net/strava.js";
@@ -109,17 +110,24 @@ import { PRESETS } from "./workout/presets.js";
 import { renderWorkoutCards } from "./view/workoutCards.js";
 import { WorkoutSession, endAfterAsking } from "./workout/workoutSession.js";
 import { startKeepalive } from "./workout/keepalive.js";
+import { ownAvatar } from "./workout/ownAvatar.js";
 import { createCue } from "./workout/cue.js";
 import { gymOfRoute } from "./workout/gymSpots.js";
 import { statueRows } from "./workout/venues.js";
 import { WorkoutStudioView, blockProgress, highlightedFigure, resyncWorkout, startingViewMode, summaryText, workoutHudText } from "./view/workoutStudioView.js";
 import { drawWorkout, drawWorkoutPreview } from "./view/workoutView.js";
 import { HIGHLIGHT, buildHighlight } from "./view3d/highlight.js";
-import { DEFAULT_BIOME, biomeChoices, resolveBiome } from "./view3d/biomes/index.js";
+import { seasonChoices } from "./view/seasonPicker.js";
+import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
+import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
-import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
-import { buildScene } from "./view3d/worldScene.js";
-import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { nextQuality, qualityLevel } from "./view3d/quality.js";
+import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
+import { CAMERA_MODES } from "./view3d/chaseCamera.js";
+import { TIME_MODES } from "./world/daylight.js";
+import { droneLens, gymLens } from "./view3d/lenses.js";
+import { isWebGl2Available } from "./view3d/webgl.js";
+import { INSTRUCTOR } from "./view3d/studioLayout.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
@@ -157,12 +165,43 @@ const VIEW_KEY = "openride.view";
 const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
+/** "1" while the stored quality was picked for the device and no ride has tested it yet. */
+const QUALITY_PROBE_FRAMES = 90;
+const QUALITY_AUTO_KEY = "openride.qualityAuto";
+
+/**
+ * The 3D renderer (Three.js) and the world builder, loaded on first use: the
+ * menu and its route list come up without them, and a 2D-only device never
+ * loads them. `View3D` and `StudioView3D` are set once `load3d` resolves.
+ */
+let View3D = null;
+let StudioView3D = null;
+let loading3d = null;
+function load3d() {
+  loading3d ??= Promise.all([import("./view3d/view3d.js"), import("./view3d/studioScene.js"), import("./view3d/worldScene.js")]).then(([view, studio, world]) => {
+    View3D = view.View3D;
+    StudioView3D = studio.StudioView3D;
+    return world;
+  });
+  return loading3d;
+}
+
+/** `buildScene` (view3d/worldScene.js) once the 3D modules are loaded, so a view can be made from its scene right away. */
+async function buildScene(...args) {
+  const world = await load3d();
+  return world.buildScene(...args);
+}
+/** Before seasons the look was a biome; a saved "winter" still opens in winter. */
 const BIOME_KEY = "openride.biome";
+const SEASON_KEY = "openride.season";
+const SEASON_PICKERS = ["biome-mode", "start-biome", "menu-biome"];
 const LAYOUT_KEY = "openride.layout";
 const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
+/** "on" when Old School riders ride the classic rider and bike on their own screen (per rider, like the other settings). */
+const CLASSIC_RIDER_KEY = "openride.classicRider";
 /** How many golden lemons this browser's rider has collected, all rides together. */
 const LEMONS_KEY = "openradlr.lemons";
 /** The climbs' tops this browser's rider has been over ("routeId:metres"), for the first-time banner. */
@@ -186,45 +225,36 @@ const writeSetting = (key, value) => {
 };
 
 /**
- * The biome to draw: `?biome=winter` previews one (not saved), else the
- * rider's saved pick, else the default.
+ * The season to draw: `?season=autumn` (or the old `?biome=winter`) previews
+ * one (not saved), else the rider's saved pick, else the calendar's.
  */
-function biomeSetting() {
-  const param = new URLSearchParams(location.search).get("biome");
-  if (param) return resolveBiome(param).id;
-  const saved = readSetting(BIOME_KEY);
-  return saved && resolveBiome(saved).id === saved ? saved : DEFAULT_BIOME;
+function seasonState() {
+  return seasonFromLocation(location.search, { season: readSetting(SEASON_KEY), biome: readSetting(BIOME_KEY) }, new Date());
 }
 
-/** Adds the three swatches that preview a season next to its picker. */
-function paintBiomePreview(select, id) {
-  let preview = select.biomePreview;
-  if (!preview) {
-    preview = document.createElement("span");
-    preview.className = "biome-preview";
-    preview.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < 3; i += 1) preview.append(document.createElement("i"));
-    select.after(preview);
-    select.biomePreview = preview;
-  }
-  const { sky, ground, accent } = resolveBiome(id).preview;
-  [sky, ground, accent].forEach((color, i) => {
-    preview.children[i].style.backgroundColor = `rgb(${color.map((c) => Math.round(c * 255)).join(" ")})`;
-  });
+/** The sky's weather for a view: today's roll for the map's season, or `?weather=storm` as a preview. */
+function weatherToday() {
+  return { date: new Date(), override: weatherFromLocation(location.search, null) };
 }
 
-/** Fills the season pickers from the biome registry and binds them once. */
-function initBiomePicker() {
-  for (const id of ["biome-mode", "start-biome", "menu-biome"]) {
+/** Applies a season state to the app: the mode, the resolved season and the biome that goes with it. */
+function applySeason({ mode, season }) {
+  app.seasonMode = mode;
+  app.season = season;
+  app.biome = biomeForSeason(season);
+}
+
+/** Fills the season pickers and binds them once. */
+function initSeasonPicker() {
+  for (const id of SEASON_PICKERS) {
     const select = $(id);
     if (!select) continue;
-    select.replaceChildren(...biomeChoices().map((choice) => new Option(t(choice.label), choice.id)));
-    select.value = app.biome;
-    paintBiomePreview(select, app.biome);
+    select.replaceChildren(...seasonChoices().map((choice) => new Option(t(choice.label), choice.id)));
+    select.value = app.seasonMode;
     // The menu picker stays on the page between rides, so bind it only once.
-    if (!select.biomeListening) {
-      select.addEventListener("change", (event) => setBiome(event.target.value));
-      select.biomeListening = true;
+    if (!select.seasonListening) {
+      select.addEventListener("change", (event) => setSeason(event.target.value));
+      select.seasonListening = true;
     }
   }
 }
@@ -234,16 +264,13 @@ function initBiomePicker() {
  * menu, or the ride's world rebuilt in the background. Only the look changes,
  * never the road, the café or where anything stands.
  */
-function setBiome(id) {
-  const biome = resolveBiome(id);
-  app.biome = biome.id;
-  writeSetting(BIOME_KEY, biome.id);
-  for (const picker of ["biome-mode", "start-biome", "menu-biome"]) {
+function setSeason(mode) {
+  const state = seasonFromLocation("", { season: mode }, new Date());
+  applySeason(state);
+  writeSetting(SEASON_KEY, state.mode);
+  for (const picker of SEASON_PICKERS) {
     const select = $(picker);
-    if (select) {
-      select.value = biome.id;
-      paintBiomePreview(select, biome.id);
-    }
+    if (select) select.value = state.mode;
   }
   if (app.studio) return;
   if (app.view3d) buildRideWorld();
@@ -262,15 +289,16 @@ function buildRideWorld() {
   const ride = app.ride;
   const routeFile = app.routeFile;
   const biome = app.biome;
+  const season = app.season;
   if (!ride || !routeFile) return;
   const build = ++rideWorldBuild;
   $("view-note").textContent = t("view.building");
   Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
-    .then(([others, network]) => buildScene(routeFile, others, { network, biome }))
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season, detail: qualityLevel(readSetting(QUALITY_KEY)) }))
     .then((scene) => {
       if (app.ride !== ride || build !== rideWorldBuild) return;
       // The season changed while this was building: build the picked one instead.
-      if (app.biome !== biome) return buildRideWorld();
+      if (app.season !== season) return buildRideWorld();
       // Drop the old world's buffers before the new one is uploaded: two full
       // maps at once are too much for a low-end GPU.
       app.view3d?.dispose();
@@ -492,8 +520,10 @@ const app = {
   /** Text lines of an event's results, kept in the results list. */
   eventResults: null,
   routeId: readSetting(ROUTE_KEY),
-  /** The biome this rider sees; every client may pick its own (cosmetic only). */
-  biome: biomeSetting(),
+  /** The season picker's choice (auto or a season), the season it shows now and the biome that goes with it; every client may pick its own (cosmetic only). */
+  seasonMode: seasonState().mode,
+  season: seasonState().season,
+  biome: biomeForSeason(seasonState().season),
   /** The start menu's tab ("ride", "studio", "workout", "events"); null: the picked card's. */
   activity: null,
   /** The route the Ride tab goes back to. */
@@ -702,10 +732,34 @@ function fillSetupFields() {
   $("chainring").value = app.profile.chainring;
   $("cog").value = app.profile.cog;
   fillWorkoutSetup();
+  applyClassicRider();
+  refreshClassicRider();
+}
+
+/** Shows the Classic rider checkbox when the rider has Old School, and gives the views the setting (a stale "on" does nothing without it). */
+function applyClassicRider() {
+  const { available, on } = classicRiderChoice(loadAchievements(browserStorage()), readSetting(CLASSIC_RIDER_KEY));
+  $("classic-rider-row").hidden = !available;
+  $("classic-rider").checked = on;
+  app.view3d?.setClassicRider(on);
+  app.studioView?.setClassicRider(on);
+}
+
+/** Latches the achievements from the kept rides (Old School may be earned by rides never opened in the profile), then shows the setting. */
+function refreshClassicRider() {
+  const generation = app.riderGeneration;
+  app.history
+    .list()
+    .then((records) => {
+      if (generation !== app.riderGeneration) return;
+      reconcileAchievements(records);
+      applyClassicRider();
+    })
+    .catch(() => {});
 }
 
 function initSetup() {
-  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initBiomePicker);
+  relocaliseHooks.push(renderUnits, showLevel, renderFtpSource, renderDeviceLines, renderWorkoutPick, renderStartMenu, initSeasonPicker);
   $("lang-select").addEventListener("change", (event) => changeLanguage(event.target.value));
   fillSetupFields();
   // Delegated: the ride screen (and its Units buttons) is rebuilt for every ride.
@@ -729,6 +783,10 @@ function initSetup() {
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", showShiftingSettings);
+  $("classic-rider").addEventListener("change", (event) => {
+    writeSetting(CLASSIC_RIDER_KEY, event.target.checked ? "on" : "off");
+    applyClassicRider();
+  });
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
   for (const card of document.querySelectorAll(".mode-card")) {
@@ -863,6 +921,15 @@ function initStartMenu() {
     Promise.resolve(app.trainer?.retryControl?.()).catch(() => {});
   }, 1000);
   window.addEventListener("resize", () => app.menu && app.drawMenuStage());
+  // Dev readout for draw-call budgets: `?stats` puts the last frame's draw calls and triangles on <body>.
+  if (new URLSearchParams(location.search).has("stats")) {
+    setInterval(() => {
+      const stats = app.view3d?.frameStats ?? app.menu?.frameStats;
+      if (!stats) return;
+      document.body.dataset.drawCalls = String(stats.calls);
+      document.body.dataset.triangles = String(stats.triangles);
+    }, 1000);
+  }
 
   // Coming back from Strava: show what happened, then tidy the address bar.
   const params = new URLSearchParams(location.search);
@@ -911,13 +978,58 @@ function openStartMenu() {
   app.infoTimer = setInterval(refresh, INFO_REFRESH_MS);
 }
 
+/** First run only: store a graphics level (or the 2D view) that suits this device; a stored choice stays. */
+function applyFirstRunQuality() {
+  const pick = firstRunQuality(
+    readSetting(QUALITY_KEY),
+    {
+      webgl2: isWebGl2Available(),
+      deviceMemory: globalThis.navigator?.deviceMemory,
+      saveData: Boolean(globalThis.navigator?.connection?.saveData),
+      coarsePointer: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches),
+    },
+    readSetting(VIEW_KEY),
+  );
+  if (!pick) return;
+  writeSetting(QUALITY_KEY, pick.quality);
+  if (pick.auto) writeSetting(QUALITY_AUTO_KEY, "1");
+  if (pick.view) writeSetting(VIEW_KEY, pick.view);
+  if (pick.notice) notify(t("quality.picked2d"));
+}
+
+/**
+ * Rides on an automatically picked level: whenever 90 frames in a row run
+ * slowly the level steps down (at Low, to 2D), again after a cooldown if it is
+ * still too slow. Each ride and each return to 3D starts a fresh sample; a
+ * hidden page's time never counts. Picking a level by hand ends it.
+ */
+function probeRideQuality(time) {
+  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES }));
+  const active = readSetting(QUALITY_AUTO_KEY) === "1" && app.viewMode === "3d" && Boolean(app.view3d);
+  if (!active || app.qualityProbeRide !== app.ride) {
+    probe.reset();
+    app.qualityProbeRide = active ? app.ride : null;
+  }
+  if (!active) return;
+  const next = probe.frame(time, app.view3d.quality);
+  if (next === null) return;
+  if (next === "2d") {
+    writeSetting(QUALITY_AUTO_KEY, "0");
+    setViewMode("2d");
+    notify(t("quality.picked2d"));
+  } else {
+    setQuality(next);
+  }
+}
+
 /**
  * The menu's stage: map and profile of the picked route and, where the device
  * can afford it, the 3D island behind the menu. The ride's 3D canvas lives in
  * the menu's background until joining, so the built world carries over.
  */
 function initMenuStage() {
-  initBiomePicker();
+  initSeasonPicker();
+  applyFirstRunQuality();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
   const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -959,11 +1071,12 @@ function initMenuStage() {
     fetchNetwork: fetchNetworkFile,
     buildScene: use3d ? buildScene : null,
     biome: () => app.biome,
+    season: () => app.season,
     createView: use3d
       ? (route, scene) => {
-          const view = new View3D(canvas, $("labels3d"), route, scene);
+          // The menu's drone view is always Low, built so from the start.
+          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday(), quality: "low" });
           view.lens = droneLens(scene.overview);
-          view.setQuality("low");
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
         }
@@ -972,8 +1085,8 @@ function initMenuStage() {
     // The first world opens with a descent from high over the island.
     createCamera: (overview) => new MenuCamera(overview, { reducedMotion, intro: true }),
     highlights: (route, others) => [
-      ...others.map((other) => ({ mesh: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
-      { mesh: buildHighlight(route), glow: 1 },
+      ...others.map((other) => ({ band: buildHighlight(other, { color: HIGHLIGHT.other, width: 6, beacon: 0 }), glow: 0.35 })),
+      { band: buildHighlight(route), glow: 1 },
     ],
     onCafes: () => renderWorkoutPick(),
     onRoute: (stage) => {
@@ -1001,7 +1114,7 @@ function initMenuStage() {
       stageGoal ??= stageOffset($("menu-stage"));
       stageEased ??= { value: stageGoal.slice(), velocity: [0, 0] };
       view.viewOffset = reducedMotion ? stageGoal : springTo(stageEased, stageGoal, 0.35, dt).value.slice();
-      view.render({ riders: [], myId: null, timeS, colors: themeColors() });
+      view.render({ riders: [], myId: null, timeS, utcSeconds: Date.now() / 1000, colors: themeColors() });
     },
   });
   app.drawMenuStage = drawStage;
@@ -1176,15 +1289,15 @@ function applyRoster(roster) {
   app.rideRouteId = app.routeId;
   app.rideMode = readSetting(RIDE_MODE_KEY);
   app.coachVoice = readSetting(COACH_VOICE_KEY) === "on";
-  const biome = app.biome;
-  app.biome = biomeSetting();
+  const season = app.season;
+  applySeason(seasonState());
   // The rider's own language wins over the browser's; the text is drawn again like after changeLanguage.
   initLocale({ storage: browserStorage(), languages: navigator.languages });
   fillSetupFields();
   toggleRiderPicker(false);
   // The hooks draw the start menu, the pickers and the units; then the parts that read stores.
   relocalise();
-  if (app.biome !== biome) app.menu?.biomeChanged();
+  if (app.season !== season) app.menu?.biomeChanged();
   else app.redrawStage?.();
   renderRideModes();
   app.unfinished = null;
@@ -2182,6 +2295,7 @@ async function joinRide(restored = null) {
   wireConnection(connection);
   app.connection = connection;
   if (app.trainer instanceof PaddleTrainer) app.trainer.setFtp(app.profile.ftp);
+  const joinAt = joinAtMetres(location.search);
   app.riderId = await connection.join({
     ...app.profile,
     sign: signAsRider,
@@ -2192,7 +2306,14 @@ async function joinRide(restored = null) {
     screenKey: pairedScreenKey(),
     // Continuing an autosaved ride: the same rider if the server still holds them, else where it stopped.
     resumeToken: restored?.snapshot.resumeToken,
-    resume: restored && route?.kind !== "studio" ? restored.snapshot.resumePoint : null,
+    // `?at=<metres>` joins part-way along the route instead of pedalling there first, so a
+    // screenshot can be taken at a chosen spot in one page load. Studio routes never take one.
+    resume:
+      joinAt !== null && route?.kind !== "studio"
+        ? { routeId: app.route.id, distanceM: joinAt }
+        : restored && route?.kind !== "studio"
+          ? restored.snapshot.resumePoint
+          : null,
   });
   const studio = route?.kind === "studio";
   closeMenuStage(studio ? null : route?.id, studio ? null : (app.routeFile.map?.id ?? null));
@@ -2430,7 +2551,7 @@ function endRide() {
   for (const id of ["world3d", "labels3d"]) fresh.querySelector(`#${id}`).replaceWith($(id));
   $("ride").replaceWith(fresh);
   // The template predates the pickers being filled: build the fresh screen's options too.
-  initBiomePicker();
+  initSeasonPicker();
   document.body.classList.remove("riding");
   $("setup").hidden = false;
   setNativeImmersive(false);
@@ -2870,9 +2991,9 @@ function workoutFrame() {
     app.view3d?.setStatueGlow(null, null);
   }
   if (app.state && app.viewMode === "3d") {
-    // My avatar keeps step with my timer: its clip starts with the block, not when the server echoed it.
-    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId && blockStart !== null ? { ...rider, exerciseSince: blockStart, side: workout.currentSide() } : rider));
-    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, colors: themeColors() });
+    // My avatar keeps step with my timer: its exercise and clip start with the block, not when the server echoed it.
+    const riders = app.smoother.sample(time).map((rider) => (rider.id === app.riderId ? ownAvatar(rider, workout, blockStart) : rider));
+    app.view3d.render({ riders, myId: app.riderId, myCadence: 0, timeS: time, utcSeconds: Date.now() / 1000, colors: themeColors() });
   }
 }
 
@@ -2968,17 +3089,18 @@ function buildStudioWorld() {
   const ride = app.ride;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   $("view-note").textContent = t("view.building");
-  studioWorld({ routes: routesOf(app.info), biome: app.biome, fetchRouteFile, fetchNetwork: fetchNetworkFile, buildScene })
+  studioWorld({ routes: routesOf(app.info), biome: app.biome, season: app.season, fetchRouteFile, fetchNetwork: fetchNetworkFile, buildScene })
     .then((world) => {
       if (app.ride !== ride) return;
       if (!world) return studioRoomOnly();
-      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene);
+      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
       view.routes = world.routes;
       view.network = world.network;
       view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
-      view.setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+      view.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
       view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
       app.view3d = view;
+      applyClassicRider();
       $("view-note").textContent = "";
     })
     .catch((error) => {
@@ -2990,10 +3112,22 @@ function buildStudioWorld() {
 /** The fallback: the training room alone, the glass a flat sky. */
 function studioRoomOnly() {
   $("view-note").textContent = "";
+  const ride = app.ride;
+  load3d().then(() => {
+    if (app.ride === ride) studioRoomView();
+  }, (error) => {
+    console.error(error);
+    notify(t("studio.unavailable3d"), "error");
+  });
+}
+
+function studioRoomView() {
   try {
     const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
+    app.studioView.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
+    applyClassicRider();
   } catch (error) {
     console.error(error);
     notify(t("studio.unavailable3d"), "error");
@@ -3054,7 +3188,8 @@ function studioFrame() {
   const coachCadence = position?.cadence ? (position.cadence[0] + position.cadence[1]) / 2 : 75;
   if (app.view3d) {
     app.view3d.setStudioRooms(studio.state.rooms);
-    app.view3d.render({ riders: studioSceneRiders(studio.state), myId: app.riderId, myCadence: cadence, timeS: time, colors: themeColors() });
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+    app.view3d.render({ riders: studioSceneRiders(studio.state), myId: app.riderId, myCadence: cadence, timeS: time, colors: { ...themeColors(), accent } });
   } else if (app.studioView) {
     const colors = themeColors();
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
@@ -4732,6 +4867,8 @@ function initRecovery() {
   window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
     deviceLog.info(`Page ${document.visibilityState}`);
+    // Time spent hidden is not a slow frame.
+    app.qualityProbe?.pause();
     if (document.visibilityState !== "hidden") {
       if (nativeRide?.active) { app.nativeSyncing = true; nativeRide.flush().catch((error) => { app.nativeSyncing = false; console.warn(error); }); }
       return;
@@ -5603,7 +5740,10 @@ function initViews() {
   $("view-3d").addEventListener("click", () => setViewMode("3d"));
   $("view-2d").addEventListener("click", () => setViewMode("2d"));
   $("camera-mode").addEventListener("click", () => cycleCamera());
-  $("quality-mode").addEventListener("click", () => setQuality(app.view3d.quality === "high" ? "low" : "high"));
+  $("quality-mode").addEventListener("click", () => {
+    writeSetting(QUALITY_AUTO_KEY, "0");
+    setQuality(nextQuality(app.view3d.quality));
+  });
   $("time-mode").addEventListener("change", (e) => setTimeMode(e.target.value));
   $("view-3d").disabled = true;
   setViewMode("2d", { remember: false });
@@ -5648,7 +5788,7 @@ async function fetchNetworkFile(mapId) {
 /** Shows the 3D view once its world is built (or takes the menu's view as it is). */
 function show3d(scene, view = null) {
   try {
-    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene);
+    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
   } catch (error) {
     console.error(error);
     $("view-note").textContent = t("view.unavailable");
@@ -5662,6 +5802,7 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   app.view3d.setLemons(app.lemonHunt?.lemons);
+  applyClassicRider();
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
@@ -5670,7 +5811,7 @@ function show3d(scene, view = null) {
   if (CAMERA_MODES[camera]) app.view3d.setCameraMode(camera);
   renderCameraButton();
   setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
-  setQuality(readSetting(QUALITY_KEY) === "low" ? "low" : "high");
+  setQuality(qualityLevel(readSetting(QUALITY_KEY)));
   setViewMode(startingViewMode(readSetting(VIEW_KEY), { workout: Boolean(app.workout) }), { remember: false });
   // Each gym's statues (also on a view taken over from the menu, which had its own rows).
   // A workout whose café this route does not start at shows its figures at the gym here.
@@ -5735,10 +5876,37 @@ function renderCameraButton() {
   $("camera-mode").textContent = t("camera.label", { mode: cameraName(app.view3d.camera.mode) });
 }
 
+const GRAPHICS_LABELS = { low: "graphics.low", medium: "graphics.medium", high: "graphics.high", ultra: "graphics.ultra" };
+
 function setQuality(quality) {
   app.view3d.setQuality(quality);
-  $("quality-mode").textContent = t("graphics.label", { level: quality === "high" ? t("graphics.high") : t("graphics.low") });
+  $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
+  replanRideWorld(quality);
+}
+
+/** The newest ride-world replan; a later request makes an earlier one's result stale. */
+let rideReplan = 0;
+
+/**
+ * The world's plan budgets its trees, roadside and animals for one quality
+ * level, so a quality change alone keeps the old level's populations. Plans
+ * the ride's world again for `quality` in the background and swaps the new
+ * plan into the same view.
+ */
+function replanRideWorld(quality) {
+  const view = app.view3d;
+  const { ride, routeFile, biome, season } = app;
+  if (!view?.planDetail || view.planDetail === quality || !ride || !routeFile || app.studio) return;
+  const build = ++rideReplan;
+  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season, detail: quality }))
+    .then((scene) => {
+      // A newer replan, another view or another season (which builds the whole world again) wins.
+      if (build !== rideReplan || app.view3d !== view || view.quality !== quality || scene.season !== view.season) return;
+      view.setPlan(scene.plan, quality);
+    })
+    .catch((error) => console.error(error));
 }
 
 function setTimeMode(mode) {
@@ -6033,8 +6201,9 @@ function frame() {
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
+  probeRideQuality(time);
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, colors });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }

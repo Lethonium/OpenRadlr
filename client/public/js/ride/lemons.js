@@ -5,7 +5,7 @@
  * server, and they move every day. They grow back on every lap.
  * See docs/superpowers/specs/2026-11-10-golden-lemons-design.md.
  */
-import { seededRandom } from "../view3d/noise.js";
+import { seededRandom } from "../world/noise.js";
 
 export const LEMONS = Object.freeze({
   /** About one lemon per this many metres of route. */

@@ -4,13 +4,11 @@
  * the same in every language (numbers, units, "KOM", the brand), so the world
  * stays one world for everyone. See docs/superpowers/specs/2026-11-10-banners-design.md.
  */
-import { add, normalize, scale } from "./math.js";
-import { pixelText, textWidth } from "./pixelFont.js";
-import { temperate } from "./biomes/index.js";
-import { roadFrame, roadHalfWidth } from "./world.js";
-
 /** What each arch says, by marker type. */
 export const ARCH_TEXT = Object.freeze({ start_finish: "OPENRADLR", climb: "KOM", sprint: "SPRINT" });
+
+/** Metres over the road where an arch's beam is centred. */
+export const ARCH_HEIGHT = 5.2;
 
 export const BANNERS = Object.freeze({
   text: Object.freeze({ halfway: "1/2", climb1000: "1 KM ^", climb500: "500 M ^" }),
@@ -25,8 +23,6 @@ export const BANNERS = Object.freeze({
   height: 0.95,
   halfway: [1.0, 0.82, 0.1],
 });
-
-const INK = Object.freeze({ light: [1, 1, 1], dark: [0.12, 0.12, 0.14] });
 
 /**
  * Where banners hang on a route: `{distance, kind, text}` in riding order —
@@ -52,53 +48,12 @@ export function bannerSpots(route) {
 }
 
 /**
- * Letters `text` on both faces of a beam or banner across the road: the face
- * towards riders coming reads left to right for them, and so does the back.
- * @param {{center: number[], right: number[], forward: number[], width: number, height: number, depth: number}} beam
+ * Where the arches stand on a route: one per start/finish, climb and sprint marker, with the name each carries
+ * (`ARCH_TEXT`), as `{kind, text, distance}` in marker order.
  */
-export function letterBeam(mesh, beam, text, color) {
-  const pixel = Math.min(beam.height * 0.11, (beam.width * 0.88) / (textWidth(text, 1) || 1));
-  for (const side of [-1, 1]) {
-    const facing = scale(beam.forward, side);
-    pixelText(mesh, text, {
-      origin: add(beam.center, scale(beam.forward, side * (beam.depth / 2 + 0.015))),
-      right: scale(beam.right, -side),
-      up: [0, 1, 0],
-      facing,
-      pixel,
-      color,
-    });
-  }
+export function archSpots(route) {
+  return route.markers.filter((marker) => ARCH_TEXT[marker.type]).map((marker) => ({ kind: marker.type, text: ARCH_TEXT[marker.type], distance: marker.distance }));
 }
 
-/** The road's frame at `distance` with its level forward direction. */
-function levelFrame(route, distance) {
-  const frame = roadFrame(route, distance);
-  return { ...frame, level: normalize([frame.forward[0], 0, frame.forward[2]]) };
-}
-
-/** Banners on two thin posts over the road at every spot of `bannerSpots`. */
-export function buildBanners(mesh, route, { biome = temperate } = {}) {
-  const posts = biome.arch.post;
-  const halfWidth = roadHalfWidth(route.lanes) + 0.6;
-  for (const spot of bannerSpots(route)) {
-    const frame = levelFrame(route, spot.distance);
-    const top = BANNERS.bottom + BANNERS.height;
-    for (const side of [-1, 1]) {
-      const foot = add(frame.center, scale(frame.right, side * halfWidth));
-      mesh.orientedBox(add(foot, [0, top / 2, 0]), scale(frame.right, 0.14), [0, top, 0], scale(frame.level, 0.14), posts);
-    }
-    const color = spot.kind === "halfway" ? BANNERS.halfway : biome.arch.climb;
-    const beam = { center: add(frame.center, [0, BANNERS.bottom + BANNERS.height / 2, 0]), right: frame.right, forward: frame.level, width: 2 * halfWidth, height: BANNERS.height, depth: 0.06 };
-    mesh.orientedBox(beam.center, scale(frame.right, beam.width), [0, beam.height, 0], scale(frame.level, beam.depth), color);
-    letterBeam(mesh, beam, spot.text, spot.kind === "halfway" ? INK.dark : INK.light);
-  }
-}
-
-/** The name on an arch's beam (see `ARCH_TEXT`), white on its colour. */
-export function letterArch(mesh, route, marker, { height, halfWidth, depth }) {
-  const text = ARCH_TEXT[marker.type];
-  if (!text) return;
-  const frame = levelFrame(route, marker.distance);
-  letterBeam(mesh, { center: add(frame.center, [0, height, 0]), right: frame.right, forward: frame.level, width: 2 * halfWidth, height: 1.0, depth }, text, INK.light);
-}
+/** Where the banners hang: `{kind: "climb"|"halfway", text, distance}`, see `bannerSpots`. */
+export const bannerPlacements = (route) => bannerSpots(route);

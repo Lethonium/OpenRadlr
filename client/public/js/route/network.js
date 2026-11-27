@@ -71,6 +71,29 @@ export class RoadNetwork {
       geometry.edge = { id: e.id, from: e.from, to: e.to, type: e.type ?? "road", markers: e.markers ?? [] };
       this.edges.set(e.id, geometry);
     }
+    // Regions: hand-placed circles in the same coordinates as nodes (x east, y north).
+    this.regions = (file.regions ?? []).map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      center: [Number(r.x), -Number(r.y)],
+      radius: Number(r.radius),
+    }));
+    // Settlements and landmarks: hand-placed in the same coordinates as regions (`y` north becomes `z`).
+    this.settlements = (file.settlements ?? []).map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      center: [Number(s.x), -Number(s.y)],
+      radius: Number(s.radius),
+      seed: Number(s.seed),
+    }));
+    this.landmarks = (file.landmarks ?? []).map((l) => ({
+      id: l.id,
+      kind: l.kind,
+      center: [Number(l.x), -Number(l.y)],
+      yaw: Number(l.yaw ?? 0),
+      apron: Number(l.apron ?? 0),
+      count: Number(l.count ?? 0),
+    }));
     this.routes = (file.routes ?? []).map((r) => ({ id: r.id, name: r.name, walk: r.walk ?? [] }));
   }
 

@@ -1,0 +1,156 @@
+/**
+ * The road: asphalt, verges, banks and ruts in one material, lane lines in
+ * another drawn on top, the roadside posts and (with the rivers) the bridges.
+ * The quads from the worker are grouped by the square area (`CELL`) their
+ * centre lies in, one mesh per area and material, so a long route is
+ * frustum-culled piece by piece without many tiny pieces. The road receives the sun's
+ * shadows and the drifting clouds.
+ */
+import * as THREE from "../../three.js";
+import { addHook, cloudShadows, heightFog } from "../assets/materials.js";
+import { asphaltTexture, kindColors } from "../assets/road.js";
+import { roadPostGeometry } from "../assets/props/roadPost.js";
+import { ROAD_KIND } from "../../world/plan/roadStrips.js";
+import { createOwner } from "./tracker.js";
+
+/** Side (metres) of the square areas the road is cut into. */
+export const CELL = 500;
+const MARK_KINDS = new Set([ROAD_KIND.marking, ROAD_KIND.edge, ROAD_KIND.rut]);
+/** The surface sits just in front of the ground; marks and ruts in front of that. */
+const SURFACE_OFFSET = Object.freeze({ factor: -2, units: -4 });
+export const MARK_OFFSET = Object.freeze({ factor: -4, units: -8 });
+/** How much of its colour and roughness wet asphalt keeps, at full wetness. */
+const WET = Object.freeze({ shade: 0.6, markShade: 0.8, roughness: 0.45 });
+const DRY_ROUGHNESS = 0.95;
+
+/**
+ * The quads of `strips` for which `keep(kind)` holds, as one geometry per `CELL` square their centres fall in.
+ * @param {import("../../world/plan/strips.js").Strips} strips
+ * @param {(kind: number) => boolean} keep
+ * @param {number[][]} palette colour per kind
+ * @returns {import("../../three.js").BufferGeometry[]}
+ */
+export function areaGeometries(strips, keep, palette) {
+  const quads = strips.kinds.length / 4;
+  const areas = new Map();
+  for (let q = 0; q < quads; q += 1) {
+    if (!keep(strips.kinds[q * 4])) continue;
+    let x = 0;
+    let z = 0;
+    for (let k = 0; k < 4; k += 1) {
+      x += strips.positions[(q * 4 + k) * 3];
+      z += strips.positions[(q * 4 + k) * 3 + 2];
+    }
+    const key = `${Math.floor(x / 4 / CELL)},${Math.floor(z / 4 / CELL)}`;
+    if (!areas.has(key)) areas.set(key, []);
+    areas.get(key).push(q);
+  }
+  return [...areas.values()].map((list) => {
+    const positions = new Float32Array(list.length * 12);
+    const uvs = new Float32Array(list.length * 8);
+    const colors = new Float32Array(list.length * 12);
+    list.forEach((q, n) => {
+      positions.set(strips.positions.subarray(q * 12, q * 12 + 12), n * 12);
+      uvs.set(strips.uvs.subarray(q * 8, q * 8 + 8), n * 8);
+      const color = palette[strips.kinds[q * 4]];
+      for (let k = 0; k < 4; k += 1) {
+        const shade = strips.shades[q * 4 + k];
+        colors.set([color[0] * shade, color[1] * shade, color[2] * shade], n * 12 + k * 3);
+      }
+    });
+    // A busy area holds more than 65 535 vertices.
+    const indices = list.length * 4 > 65535 ? new Uint32Array(list.length * 6) : new Uint16Array(list.length * 6);
+    list.forEach((q, n) => {
+      for (let k = 0; k < 6; k += 1) indices[n * 6 + k] = strips.indices[q * 6 + k] - q * 4 + n * 4;
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+  });
+}
+
+/**
+ * The posts as instanced meshes, one per shape and `CELL` square so a long road is culled piece by piece; each shape
+ * is built once. Named `road-posts-<kind>`.
+ * @param {import("../roadPosts.js").PostPlacement[]} posts
+ * @param {import("../roadStyle.js").PostStyle} style
+ */
+function addPosts(posts, style, group, own) {
+  if (posts.length === 0) return;
+  const material = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 }));
+  const geometries = new Map();
+  const areas = new Map();
+  for (const post of posts) {
+    const shape = `${post.kind}${post.capped ? "+cap" : ""}`;
+    const key = `${shape}|${Math.floor(post.position[0] / CELL)},${Math.floor(post.position[2] / CELL)}`;
+    if (!areas.has(key)) areas.set(key, { shape, post, list: [] });
+    areas.get(key).list.push(post);
+  }
+  const matrix = new THREE.Matrix4();
+  const at = new THREE.Vector3();
+  const turn = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const size = new THREE.Vector3(1, 1, 1);
+  for (const { shape, post, list } of areas.values()) {
+    if (!geometries.has(shape)) geometries.set(shape, own(roadPostGeometry(post.kind, style, { capped: post.capped })));
+    const mesh = new THREE.InstancedMesh(geometries.get(shape), material, list.length);
+    mesh.name = `road-posts-${post.kind}`;
+    list.forEach((each, i) => mesh.setMatrixAt(i, matrix.compose(at.fromArray(each.position), turn.setFromAxisAngle(up, each.yaw), size)));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.castShadow = mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+}
+
+/**
+ * @param {{strips: import("../../world/plan/strips.js").Strips, style: import("../roadStyle.js").RoadStyle,
+ *   posts?: import("../roadPosts.js").PostPlacement[] | null}} roads
+ * @param {{uniforms: ReturnType<typeof import("../assets/materials.js").createSharedUniforms>, track: import("./tracker.js").Tracker["track"]}} options
+ */
+export function createRoadLayer(roads, { uniforms, track }) {
+  const { own, disposeAll } = createOwner(track);
+  const group = new THREE.Group();
+  group.name = "roads";
+  const palette = kindColors(roads.style);
+  const material = (offset, map) => {
+    const made = own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, polygonOffset: true, polygonOffsetFactor: offset.factor, polygonOffsetUnits: offset.units, ...(map ? { map } : {}) }));
+    addHook(made, cloudShadows(uniforms));
+    addHook(made, heightFog(uniforms));
+    return made;
+  };
+  const surface = material(SURFACE_OFFSET, own(asphaltTexture()));
+  const marks = material(MARK_OFFSET, null);
+  for (const [name, keep, made] of [
+    ["road-surface", (kind) => !MARK_KINDS.has(kind), surface],
+    ["road-marks", (kind) => MARK_KINDS.has(kind), marks],
+  ]) {
+    for (const geometry of areaGeometries(roads.strips, keep, palette)) {
+      const mesh = new THREE.Mesh(own(geometry), made);
+      mesh.name = name;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+  }
+  addPosts(roads.posts ?? [], roads.style.post, group, own);
+  return {
+    object: group,
+    update() {},
+    /** Wet roads are darker and glossier. */
+    setEnvironment(env) {
+      const wet = env.wetness ?? 0;
+      surface.color.setScalar(1 - (1 - WET.shade) * wet);
+      surface.roughness = DRY_ROUGHNESS - (DRY_ROUGHNESS - WET.roughness) * wet;
+      marks.color.setScalar(1 - (1 - WET.markShade) * wet);
+    },
+    dispose() {
+      group.clear();
+      disposeAll();
+    },
+  };
+}

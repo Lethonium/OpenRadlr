@@ -5,56 +5,43 @@
  */
 import { TEAM_KITS, botKit } from "../view/botKits.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
-import { clipFor, mirrorPlant, mirrorPose, settle } from "./clips.js";
-import { chunkNear, chunkVisible } from "./chunks.js";
-import { TIME_MODES, TIME_PRESETS, resolvedLight, resolvePreset, sunShadowMatrix } from "./lighting.js";
-import { cross, invert, lerp3, lookAt, multiply, normalize, perspective, placement, rotationXAbout, scale, scaling, sub, transformPoint, yawFor } from "./math.js";
-import { Renderer, createContext } from "./renderer.js";
-import {
-  RIDER_GEOMETRY,
-  VARIANT_COUNT,
-  WHEEL_HUBS,
-  buildBike,
-  buildCrankset,
-  buildFoot,
-  buildLabelProbe,
-  buildRiderShadow,
-  buildShin,
-  buildShoe,
-  buildThigh,
-  buildWheel,
-  legPose,
-  ridingBodyParts,
-  riderLook,
-  uploadBodyParts,
-  variantLook,
-} from "./riderModel.js";
-import { blend, bodyTransforms, poseAt } from "./riderPose.js";
+import { STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "./clips.js";
+import * as THREE from "../three.js";
+import { TIME_MODES, TIME_PRESETS, environmentAt, resolvePreset } from "../world/daylight.js";
+import { SEASONS } from "../world/seasons.js";
+import { precipitationAt, weatherFor } from "../world/weather.js";
+import { lerp3, lookAt, multiply, normalize, perspective, placement, scale, sub, transformPoint } from "./math.js";
+import { cameraFromMatrices } from "./engine/camera.js";
+import { engineFor } from "./engine/engine.js";
+import { createWorldScene } from "./scene/worldScene.js";
+import { createTracker } from "./scene/tracker.js";
+import { RIDER_GEOMETRY } from "./riderGeometry.js";
+import { blend, poseAt } from "./riderPose.js";
 import { CROWD, cheer, crowdShare } from "./crowd.js";
-import { buildLemon } from "./lemonModel.js";
-import { buildFlag, buildRotor, buildSpectator } from "./structures.js";
-import { buildStatues, statueSlots } from "./statues.js";
-import { INSTRUCTOR } from "./studioLayout.js";
-import { StudioLayer } from "./studioLayer.js";
+import { PLINTHS, statueSlots } from "./statues.js";
+import { COACH_KIT, isCoach } from "./studioLayout.js";
+import { StudioFloors } from "./studioLayer.js";
 import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
-import { VEHICLE_KINDS } from "../ride/vehicle.js";
-import { buildBeerBike, buildSeatedBody, buildTandemFrame } from "./vehicleModel.js";
-import { buildWorld, riderPosition } from "./world.js";
+import { buildWorld, riddenSurface } from "./world.js";
+import { bikeOnRoad, riderPosition } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
+import { groundHeight, labelInSight, plotBoxes } from "./labelSight.js";
 import { isRemote } from "../view/remoteRiders.js";
+import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
+import { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens } from "./lenses.js";
+import { isWebGl2Available } from "./webgl.js";
+
+export { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens, isWebGl2Available };
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
 const SCENE = Object.freeze({
   fovY: (58 * Math.PI) / 180,
   shadowRange: 65,
-  /** How far each chunk group is drawn (metres); fog hides the cut. */
-  drawDistance: { terrain: Infinity, road: Infinity, structures: 2600, scenery: 2000, bright: 1200, detail: 220 },
-  rotorDistance: 4000,
   spectatorDistance: 260,
   /** Golden lemons show from this far behind to this far ahead of my rider (metres along the road). */
   lemonReach: { behind: 30, ahead: 260 },
@@ -71,6 +58,11 @@ export function hexToRgb(hex) {
   const n = Number.parseInt(full, 16);
   if (!Number.isFinite(n) || full.length !== 6) return [0.6, 0.6, 0.6];
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/** A colour code's sRGB tint as the linear colour the world scene's rider layer takes. */
+export function linearOf(tint) {
+  return tint.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 }
 
 /** Bot teams' kit colours as tints (#64). */
@@ -133,65 +125,6 @@ export function visibleLabels(candidates, myId, { charWidth = 7, padding = 22, h
   return shown;
 }
 
-/** True if WebGL 2 is available in this browser. */
-export function isWebGl2Available(doc = globalThis.document) {
-  try {
-    return Boolean(doc.createElement("canvas").getContext("webgl2"));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The ride's lens; the menu's drone view sees further (`haze` stretches fog
- * and draw distances). Depth precision far away grows with `near`, so it is
- * as large as the cameras allow: the closest ride camera sits 3 m behind the
- * rider, the drone at least 70 m above the ground.
- */
-export const RIDE_LENS = Object.freeze({ near: 1, far: 9000, haze: 1, shadows: true });
-export const DRONE_LENS = Object.freeze({ near: 20, far: 16000, haze: 2.6, shadows: false });
-
-/**
- * The menu's gym orbit drops far below the drone (about 17 m up over the mat,
- * not 70), so `DRONE_LENS.near` would clip the ground in the foreground. This
- * lens keeps the haze and draw reach of the drone but pulls `near` in to the
- * closest the orbit gets to anything.
- */
-export const GYM_LENS = Object.freeze({ ...DRONE_LENS, near: 2 });
-
-/**
- * The drone's lens for an island of `overview.radius` metres: the haze grows
- * with the island, so the far coast stays clear from the orbit (the fixed
- * DRONE_LENS was made for a 2.5 km island and fogged a 6 km one over).
- */
-export function droneLens(overview) {
-  const radius = overview?.radius ?? 0;
-  const haze = Math.max(DRONE_LENS.haze, radius / 1500);
-  // Small things reach as far as before (`reach`): the clearer air must not cost frames.
-  return Object.freeze({ ...DRONE_LENS, haze, reach: Math.sqrt(DRONE_LENS.haze), far: Math.max(DRONE_LENS.far, radius * 3.4) });
-}
-
-/**
- * The gym orbit's lens for an island of `overview.radius` metres: the drone
- * lens (same haze and draw reach) with a `near` plane the low orbit clears.
- * The orbit is `MENU_CAMERA.gymHeight` metres up at `gymDistance` out, so the
- * terrain in the foreground is never nearer than the height; 2 m leaves room
- * for the mat slipping below the eye.
- */
-export function gymLens(overview) {
-  return Object.freeze({ ...droneLens(overview), near: GYM_LENS.near });
-}
-
-/**
- * Smallest depth difference (metres) a `bits` depth buffer resolves at
- * `distance` with a `near`/`far` perspective lens. Surfaces closer than this
- * flicker against each other.
- */
-export function depthStep({ near, far }, distance, bits = 24) {
-  // Window depth is (1/near - 1/z) / (1/near - 1/far); one step of it in z.
-  return (distance * distance * (1 / near - 1 / far)) / 2 ** bits;
-}
-
 /**
  * The gym camera (#77): metres from the framed spot towards the road, eye height
  * above it, how far above it the camera aims, how far the picture is shifted
@@ -229,15 +162,13 @@ export function gymCameraPose(gym, settings = GYM_CAMERA, focus = gym.center) {
 }
 
 /** The way a rider at `spot` faces: (−sin yaw, 0, −cos yaw). */
+/** The unit [x, z] of a forward vector on the ground (straight ahead of the world when it points up or down). */
+const groundHeading = ([x, , z]) => {
+  const length = Math.hypot(x, z);
+  return length > 1e-6 ? [x / length, z / length] : [0, -1];
+};
 const facingOf = (spot) => [-Math.sin(spot.yaw), 0, -Math.cos(spot.yaw)];
 
-/** How far ahead of `spot`, along the way it faces, the body parts (world model matrices) lie on average; 0 without parts. */
-export function bodyAhead(models, spot) {
-  if (models.length === 0) return 0;
-  const [fx, , fz] = facingOf(spot);
-  const sum = models.reduce((total, m) => total + (m[12] - spot.position[0]) * fx + (m[14] - spot.position[2]) * fz, 0);
-  return sum / models.length;
-}
 
 /** The side camera's pose for a rider at `spot`: from the rider's left, level with them, framing `ahead` metres in front of the feet. */
 export function sideCameraPose(spot, ahead = 0, settings = SIDE_CAMERA) {
@@ -324,22 +255,28 @@ const STUDIO_NEAR_HIDE = 1.2;
 export class View3D {
   /** The workout's side-view box (see `workoutMode`), null while riding. */
   sideView = null;
+  /** The last frame's draw calls and triangles before the post chain (the dev `?stats` readout); null before one. */
+  frameStats = null;
+  /** Whether my rider is drawn as the classic rider and bike (the Old School setting). */
+  #classicRider = false;
   /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
   #sideAhead = null;
   #labels = new Map();
   #labelVisibility = new LabelVisibility();
-  #highlights = [];
-  /** Statue rows by gym: `{ handle, glows, tops, xs, model, row }`. */
+  /** Statue rows by gym: `{ tops, xs, model, row }` (the layer draws them; this answers `statueTargets`). */
   #statues = new Map();
   #glow = { gym: null, index: null };
   /** The spin studio building of the valley, null where the world has no site for it. */
   #studio = null;
   #studioSite = null;
-  #pedalPhase = new Map();
-  #wheelPhase = new Map();
   /** Per workout rider: the exercise shown, the pose it fades from and when it changed. */
   #clips = new Map();
   #lastTime = null;
+  /** The environment last pushed to the world scene, with the inputs it was made from. */
+  #environment = null;
+  /** What the day's weather is rolled from (see the constructor's `weather` option). */
+  #weatherInput = { date: null, override: null, seed: 0 };
+  #weatherCache = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -351,11 +288,11 @@ export class View3D {
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
-   * @param {{renderer?: object}} [options] `renderer` replaces the WebGL one (tests)
+   * @param {{engine?: object, weather?: object, quality?: string}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
+   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`), `quality` the graphics level the
+   *   scene is built at (building at one level and switching costs the scene twice)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { renderer = null } = {}) {
-    const gl = renderer ? null : createContext(canvas);
-    if (!renderer && !gl) throw new Error("WebGL 2 is not available");
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null, quality = "high" } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -365,81 +302,106 @@ export class View3D {
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
-    this.renderer = renderer ?? new Renderer(gl);
-    // A biome's workout figure (winter: penguins): built meshes for `settle` and
-    // uploaded handles to draw. Temperate keeps the human rider rig.
-    const workout = this.biome.workout ?? null;
-    this.workoutMeshes = workout ? new Map(Object.entries(workout.parts).map(([name, build]) => [name, build()])) : null;
-    this.workoutParts = this.workoutMeshes ? new Map([...this.workoutMeshes].map(([name, mesh]) => [name, this.renderer.upload(mesh)])) : null;
+    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
+    // One engine per canvas, shared with every other view on it and never disposed here.
+    this.engine = engine ?? engineFor(canvas, { settings: qualitySettings(this.quality) });
+    this.engine.setQuality(qualitySettings(this.quality));
+    /** The season's look of the sky and light (the ground's colours were baked into the world). */
+    this.season = SEASONS.includes(world.season) ? world.season : "summer";
+    /** The quality level the world's plan was budgeted for (its trees, roadside and animals), or null if unknown. */
+    this.planDetail = world.detail ?? null;
+    this.tracker = createTracker();
+    this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.seed ?? world.terrain?.seed ?? 0 };
+    /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
+    this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
+    this.worldCamera = new THREE.PerspectiveCamera();
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
     this.camera = new ChaseCamera(route);
     this.overview = world.overview ?? null;
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];
     this.#studioSite = world.studio ?? null;
-    this.#studio = world.studio ? new StudioLayer(this.renderer, world.studio) : null;
-
-    this.shadowsEnabled = this.renderer.createShadowMap(SCENE.shadowMapSize);
-
-    this.meshes = Object.fromEntries(Object.entries(world.meshes).map(([name, mesh]) => [name, this.renderer.upload(mesh)]));
-    this.chunks = Object.fromEntries(
-      Object.entries(world.chunks).map(([name, list]) => [name, list.map((chunk) => ({ ...chunk, handle: this.renderer.upload(chunk.mesh), mesh: null }))]),
-    );
-    this.clouds = this.renderer.upload(world.clouds);
-    this.weather = world.weather && this.renderer.uploadWeather ? this.renderer.uploadWeather(world.weather.data) : null;
-    this.water = this.renderer.upload(world.water);
-    this.rivers = this.renderer.upload(world.rivers);
-    this.rotors = world.rotors;
-    this.rotor = this.renderer.upload(buildRotor());
-    this.lemonMesh = this.renderer.upload(buildLemon());
+    this.#studio = world.studio ? new StudioFloors(world.studio) : null;
     /** Golden lemons on my route: `{distance, lane, collected}` (ride/lemons.js). */
     this.lemons = [];
-    this.spectators = world.spectators;
-    this.spectatorMeshes = (world.spectatorMeshes ?? [buildSpectator(false), buildSpectator(true)]).map((mesh) => this.renderer.upload(mesh));
-    this.flagMesh = this.renderer.upload(buildFlag());
-    this.bodies = [];
-    this.bodyParts = [];
-    this.thighs = [];
-    this.shins = [];
-    for (let i = 0; i < VARIANT_COUNT; i += 1) {
-      const look = variantLook(i);
-      this.bodies.push(this.renderer.upload(buildBike(look)));
-      this.bodyParts.push(uploadBodyParts(this.renderer, look));
-      this.thighs.push(this.renderer.upload(buildThigh(look)));
-      this.shins.push(this.renderer.upload(buildShin(look)));
-    }
-    // Shared vehicles (#55): frames once per kind and seat count, bodies for the seats.
-    this.seatedBodies = Array.from({ length: VARIANT_COUNT }, (_, i) => this.renderer.upload(buildSeatedBody(variantLook(i))));
-    this.vehicleFrames = new Map([["tandem:2", this.renderer.upload(buildTandemFrame())]]);
-    for (const seats of VEHICLE_KINDS.find((k) => k.kind === "beer_bike").seats) {
-      this.vehicleFrames.set(`beer_bike:${seats}`, this.renderer.upload(buildBeerBike(seats)));
-    }
-    this.foot = this.renderer.upload(buildFoot());
-    this.shoe = this.renderer.upload(buildShoe());
-    this.crankset = this.renderer.upload(buildCrankset());
-    this.wheel = this.renderer.upload(buildWheel());
-    this.riderShadow = this.renderer.upload(buildRiderShadow());
-    this.labelProbe = this.renderer.upload(buildLabelProbe());
-    this.identity = placement([0, 0, 0]);
+    this.crowd = world.crowd ?? { people: [], figure: "person" };
+    /** What hides a label: the ground and the plots' boxes, built once per world. */
+    this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
   }
 
-  /** "auto" (by local clock), "day", "golden" or "dusk". */
+  /** Draws my own rider as the classic cyclist (the old rider and bike) on this screen; the others keep the new look. */
+  setClassicRider(on) {
+    this.#classicRider = Boolean(on);
+  }
+
+  /** "auto" (by local clock), "day", "golden", "dusk" or "night". */
   setTimeMode(mode) {
     if (TIME_MODES.includes(mode)) this.timeMode = mode;
   }
 
-  /** "high": shadow map, grass, sharp on high-DPI screens. "low": none of those, for weaker GPUs. */
+  /** A graphics level (see quality.js): "low" has no shadow map or grass and a 1x pixel ratio, for weaker GPUs. */
   setQuality(quality) {
-    if (quality === "high" || quality === "low") this.quality = quality;
+    if (!QUALITY_LEVELS.includes(quality)) return;
+    this.quality = quality;
+    const settings = qualitySettings(quality);
+    this.engine.setQuality(settings);
+    this.worldScene.setQuality(settings);
+  }
+
+  /**
+   * Swaps in the world's plan made for another quality level (`detail`): the layers it populates are rebuilt.
+   * A quality change alone keeps the populations the old plan was budgeted for.
+   * @param {object} plan
+   * @param {string} detail
+   */
+  setPlan(plan, detail) {
+    this.planDetail = detail;
+    this.sight = { ...this.sight, boxes: plotBoxes(plan) };
+    this.worldScene.setSeason(this.season, plan);
+  }
+
+  /**
+   * "spring", "summer", "autumn" or "winter": the light and snow of the world scene, and the woods, fields and verges
+   * (rebuilt from the world's plan, no new worker run). The ground's own colours come with the world.
+   */
+  setSeason(season) {
+    if (!SEASONS.includes(season)) return;
+    const changed = season !== this.season;
+    this.season = season;
+    if (changed) this.worldScene.setSeason(season);
+  }
+
+  /** The day's weather: the fixed one if given, else the season's roll for this map and UTC day, or none without a date. */
+  #weatherToday() {
+    const { date, override, seed } = this.#weatherInput;
+    if (override) return override;
+    if (!date) return null;
+    const key = `${this.season}|${seed}|${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
+    if (this.#weatherCache?.key !== key) this.#weatherCache = { key, weather: weatherFor({ season: this.season, seed, date }) };
+    return this.#weatherCache.weather;
+  }
+
+  /**
+   * The world scene's environment for a time preset in this season, weather and lens, pushed to the scene only when it
+   * changed (the rain's strength is compared to a hundredth).
+   */
+  #environmentFor(preset, haze, utcSeconds) {
+    const weather = this.#weatherToday();
+    const precipitation = weather ? Math.round(precipitationAt(weather, utcSeconds) * 100) / 100 : 0;
+    const key = `${preset.key}|${this.season}|${haze}|${weather?.kind}|${weather?.strength}|${precipitation}`;
+    if (this.#environment?.key !== key) {
+      this.#environment = { key, env: environmentAt(preset, this.season, { haze, weather: weather ?? undefined, precipitation }) };
+      this.worldScene.setEnvironment(this.#environment.env);
+    }
+    return this.#environment.env;
   }
 
   /**
    * Glowing bands drawn on top of the world (the menu's picked route).
-   * @param {{mesh: object, glow?: number}[]} bands meshes from `buildHighlight`
+   * @param {{band: {positions: Float32Array, colors: Float32Array}, glow?: number}[]} bands from `buildHighlight`
    */
   setHighlights(bands) {
-    for (const band of this.#highlights) this.renderer.dispose(band.handle);
-    this.#highlights = bands.map(({ mesh, glow = 1 }) => ({ handle: this.renderer.upload(mesh), glow }));
+    this.worldScene.setHighlights(bands.map(({ band, glow = 1 }) => ({ band, glow })));
   }
 
   /**
@@ -447,14 +409,13 @@ export class View3D {
    * @param {{gym: object, figures: string[], material: string}[]} rows from `statueRows`
    */
   setStatues(rows) {
-    this.#disposeStatues();
-    for (const { gym, figures, material } of rows) {
-      const { mesh, glows, tops } = buildStatues(figures, material, this.biome.workout ?? null);
+    const figure = this.biome.workoutFigure ?? "rider";
+    this.worldScene.setStatues(rows.map((row) => ({ ...row, figure })));
+    this.#statues.clear();
+    for (const { gym, figures } of rows) {
       const row = gym.statueRow;
       this.#statues.set(gym, {
-        handle: this.renderer.upload(mesh),
-        glows: glows.map((glow) => this.renderer.upload(glow)),
-        tops,
+        tops: figures.map((exercise) => PLINTHS[STATUE_MOMENT[exercise].plinth][1]),
         xs: statueSlots(figures.length).map((slot) => slot.x),
         row,
         model: placement(row.position, row.yaw),
@@ -484,10 +445,6 @@ export class View3D {
     return entry.xs.map((x, i) => ({ position: transformPoint(entry.model, [x, entry.tops[i], 0]).slice(0, 3), yaw: entry.row.yaw, top: entry.tops[i] }));
   }
 
-  #disposeStatues() {
-    for (const { handle, glows } of this.#statues.values()) for (const h of [handle, ...glows]) this.renderer.dispose(h);
-    this.#statues.clear();
-  }
 
   /** The golden lemons of my route (ride/lemons.js), or none: `{distance, lane, collected}[]`. */
   setLemons(lemons) {
@@ -530,7 +487,8 @@ export class View3D {
   /** A rider on a route: mine, or another route of the map. */
   #onRoute(rider) {
     const route = !rider.route || rider.route === this.route.id ? this.route : this.routes?.get(rider.route);
-    return route ? { rider, ...riderPosition(route, rider.distance, rider.lane) } : null;
+    // Wheels on the drawn asphalt, which is lifted and cuts across changes of grade (#144 review).
+    return route ? { rider, ...bikeOnRoad(route, rider.distance, rider.lane, riddenSurface(this.route)) } : null;
   }
 
   /** A rider off every route, on a road of the network in either direction. */
@@ -541,54 +499,15 @@ export class View3D {
     const offset = Math.min(road.length, Math.max(0, rider.road.offset));
     // Lanes count from the left in riding direction.
     const lane = back ? road.lanes - 1 - rider.lane : rider.lane;
-    const at = riderPosition(road, back ? road.length - offset : offset, lane);
+    const at = bikeOnRoad(road, back ? road.length - offset : offset, lane, riddenSurface(this.route));
     return { rider, ...at, forward: back ? scale(at.forward, -1) : at.forward };
   }
 
-  /** Advances a pedal phase (radians) by `cadence` rpm over `dt` seconds. */
-  #pedal(id, cadence, dt) {
-    const phase = ((this.#pedalPhase.get(id) ?? id) + (cadence / 60) * Math.PI * 2 * dt) % (Math.PI * 2);
-    this.#pedalPhase.set(id, phase);
-    return phase;
-  }
-
   /**
-   * Crankset and both pedalling legs of one rider, hanging off `model` (the
-   * solo rider's frame: forward −Z, `hip` and `bottomBracket` as in the solo
-   * geometry). A seat in a vehicle supplies a `model` that puts that frame's
-   * hip on the seat.
+   * A workout rider's pose: their exercise's clip, faded over from the last one, mirrored on the left side.
+   * `plantMesh` is the clip's planted mesh for that side, which the athlete layer holds still.
    */
-  #legs(model, look, phase, hip = RIDER_GEOMETRY.hip, bottomBracket = RIDER_GEOMETRY.bottomBracket) {
-    const joint = (at, angle) => multiply(model, multiply(placement(at), rotationXAbout([0, 0, 0], angle)));
-    const [, hy, hz] = hip;
-    const limbs = [];
-    // Right leg (+X, chainring side) on the crank arm that `buildCrankset` points down at phase 0.
-    for (const [side, offset] of [
-      [0.12, 0],
-      [-0.12, Math.PI],
-    ]) {
-      const pose = legPose(phase + offset);
-      if (offset === 0) limbs.push({ mesh: this.crankset, model: joint(bottomBracket, pose.crankAngle) });
-      limbs.push(
-        { mesh: this.thighs[look.variant], model: joint([side, hy, hz], pose.thighAngle) },
-        { mesh: this.shins[look.variant], model: joint([side, pose.knee[1], pose.knee[2]], pose.shinAngle) },
-        { mesh: this.foot, model: joint([side, pose.ankle[1], pose.ankle[2]], pose.footAngle) },
-      );
-    }
-    return limbs;
-  }
-
-  /** Upper-body parts of a rider in the riding pose, hung off `model` (the bike frame). */
-  #torso(model, look) {
-    return ridingBodyParts(look).map(({ mesh, model: local }) => ({ mesh: this.bodyParts[look.variant].get(mesh), model: multiply(model, local) }));
-  }
-
-  /**
-   * A workout rider at their gym spot: the body posed by their exercise's clip
-   * (faded over from the last one), the bike parked at the gym's rack.
-   */
-  #workoutParts(rider, { gym, spot, slot }, timeS) {
-    const look = riderLook(rider.id);
+  #workoutPose(rider, timeS) {
     const exercise = rider.exercise ?? null;
     const side = rider.side === "left" ? "left" : "right";
     let state = this.#clips.get(rider.id);
@@ -609,25 +528,16 @@ export class View3D {
     const w = Math.min(1, (timeS - state.fadeAt) / CLIP_FADE_S);
     const pose = state.from && w < 1 ? blend(state.from, current, w) : current;
     state.last = pose;
+    return { pose, plantMesh: plant?.mesh ?? null };
+  }
 
-    // The biome may replace the figure (winter: a penguin); the bike stays the rider's.
-    const rig = this.biome.workout ?? null;
-    const body = multiply(placement(spot.position, spot.yaw), scaling(look.scale * (rig?.scale ?? 1)));
-    const parts = rig ? this.workoutParts : this.bodyParts[look.variant];
-    const meshOf = rig
-      ? (name) => parts.get(name)
-      : (name) => parts.get(name) ?? (name.startsWith("thigh") ? this.thighs[look.variant] : name.startsWith("shin") ? this.shins[look.variant] : this.shoe);
-    const torso = bodyTransforms(settle(pose, plant, rig ? this.workoutMeshes : null), look).map(({ mesh, model }) => ({ mesh: meshOf(mesh), model: multiply(body, model) }));
-
-    // Bikes side by side at the rack, in the order of the mat's spots: right, left, right…
+  /** Where a gym's bike rack parks the bike of the rider in `slot`: side by side, in the order of the mat's spots (right, left, right...). */
+  #rackBike(gym, slot) {
     const across = [Math.cos(gym.yaw), 0, -Math.sin(gym.yaw)];
     const aside = (slot % 2 ? -1 : 1) * (BIKE_RACK.aside + Math.floor(slot / 2) * BIKE_RACK.gap);
     const rack = gym.center.map((v, k) => v + towardsRoad(gym)[k] * BIKE_RACK.back + across[k] * aside);
     rack[1] = gym.center[1] - BIKE_RACK.lift;
-    const model = multiply(placement(rack, gym.yaw), scaling(look.scale));
-    const limbs = [{ mesh: this.crankset, model: multiply(model, placement(RIDER_GEOMETRY.bottomBracket)) }];
-    const wheels = WHEEL_HUBS.map((hub) => multiply(model, placement(hub)));
-    return { model, limbs, torso, wheels, variant: look.variant };
+    return { position: rack, yaw: gym.yaw };
   }
 
   /** Workout riders by id at the gym nearest them: the spot each takes, its slot in the bike rack. */
@@ -648,73 +558,20 @@ export class View3D {
     return spots;
   }
 
-  #riderParts(rider, position, forward, cadence, dt) {
-    const look = riderLook(rider.id);
-    const pitch = Math.asin(Math.max(-1, Math.min(1, forward[1])));
-    const model = multiply(placement(position, yawFor(forward), pitch), scaling(look.scale));
-
-    const limbs = this.#legs(model, look, this.#pedal(rider.id, cadence, dt));
-
-    // Rolling forward (−Z) turns the wheel backwards around X.
-    const spin = (this.#wheelPhase.get(rider.id) ?? 0) - ((rider.speed ?? 0) * dt) / (RIDER_GEOMETRY.wheelRadius * look.scale);
-    this.#wheelPhase.set(rider.id, spin % (Math.PI * 2));
-    const wheels = WHEEL_HUBS.map((hub) => multiply(model, multiply(placement(hub), rotationXAbout([0, 0, 0], spin))));
-    return { model, limbs, torso: this.#torso(model, look), wheels, variant: look.variant };
-  }
-
-  /**
-   * One shared vehicle: its frame, wheels (the tandem's; a beer bike's are in
-   * its mesh) and every occupied seat as a seated body with pedalling legs.
-   * An empty seat is just the stool in the frame mesh. Also gives the world
-   * point above each seated rider's head, for the name labels.
-   */
-  #vehicleParts(vehicle, dt, tints, myId) {
-    const { at, kind, seats } = vehicle;
-    const layout = layoutOf(kind, seats.length);
-    if (!layout) return null;
-    const pitch = Math.asin(Math.max(-1, Math.min(1, at.forward[1])));
-    const base = placement(at.position, yawFor(at.forward), pitch);
-    const [, hy, hz] = RIDER_GEOMETRY.hip;
-
-    const bodies = [];
-    const limbs = [];
-    const heads = new Map();
-    layout.seats.forEach((seat, index) => {
-      const rider = seats[index];
-      if (!rider) return;
-      const look = riderLook(rider.id);
-      const seatModel = multiply(base, placement(seat.hip, seat.yaw));
-      // The hip stays put when the rider is scaled: scale about it, then bring the solo hip to the origin.
-      const legsModel = multiply(seatModel, multiply(scaling(look.scale), placement([0, -hy, -hz])));
-      const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-      bodies.push({ variant: look.variant, model: multiply(seatModel, scaling(look.scale)), tint });
-      limbs.push(...this.#legs(legsModel, look, this.#pedal(rider.id, seatCadence(rider), dt)));
-      heads.set(rider.id, transformPoint(seatModel, [0, 0.62 * look.scale + 0.55, 0]).slice(0, 3));
-    });
-
-    let wheels = [];
-    if (kind === "tandem") {
-      const key = `vehicle:${vehicle.id}`;
-      const spin = (this.#wheelPhase.get(key) ?? 0) - ((at.rider.speed ?? 0) * dt) / layout.wheelRadius;
-      this.#wheelPhase.set(key, spin % (Math.PI * 2));
-      wheels = layout.wheels.map((hub) => multiply(base, multiply(placement(hub), rotationXAbout([0, 0, 0], spin))));
-    }
-    return { frame: this.vehicleFrames.get(`${kind}:${seats.length}`), base, bodies, limbs, wheels, heads, position: at.position, layout };
-  }
-
   /**
    * Draws one frame.
-   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, colors: {me: string, human: string, bot: string}}} frame
+   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, utcSeconds?: number, colors: {me: string, human: string, bot: string}}} frame
+   *   `timeS` is the scene's clock; `utcSeconds` the wall clock (when the showers fall), read by the caller
    */
-  render({ riders, myId, myCadence, timeS, colors }) {
+  render({ riders, myId, myCadence, timeS, utcSeconds = 0, colors }) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
-    const high = this.quality === "high";
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, high ? 2 : 1);
+    const { pixelRatioMax, shadows } = qualitySettings(this.quality);
+    const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
-    this.renderer.resize(Math.round(width * ratio), Math.round(height * ratio));
+    this.engine.resize(width, height, ratio);
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
     const onRoads = riders.filter((rider) => !rider.studio).map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
@@ -740,280 +597,182 @@ export class View3D {
 
     const lens = this.lens;
     const preset = resolvePreset(this.timeMode);
-    const light = resolvedLight(preset, this.biome, lens.haze);
     const [ox, oy] = this.viewOffset;
     const lensProjection = perspective(SCENE.fovY, width / height, lens.near, lens.far);
     const projection = ox || oy ? multiply(placement([ox, oy, 0]), lensProjection) : lensProjection;
-    const viewProjection = multiply(projection, lookAt(this.camera.eye, this.camera.target));
-    const inverseViewProjection = invert(viewProjection);
+    const view = lookAt(this.camera.eye, this.camera.target);
+    const viewProjection = multiply(projection, view);
 
     const tints = { me: hexToRgb(colors.me), human: hexToRgb(colors.human), bot: hexToRgb(colors.bot), remote: hexToRgb(colors.remote ?? colors.human) };
-    const visible = [];
+    // The coach wears lemon yellow, whatever the theme.
+    const coachTint = hexToRgb(COACH_KIT);
+    // Road riders go to the world scene's rider layer, workout riders (at the gym) to its athlete layer.
+    const roadRiders = [];
+    const athletes = [];
     for (const { rider, position, forward, gym } of placed.filter((p) => !p.rider.vehicle)) {
       const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
       // Far riders are invisible anyway; riders right at the camera would block the view.
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && rider.id !== myId)) continue;
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
       const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-      const parts = gym ? this.#workoutParts(rider, gym, timeS) : this.#riderParts(rider, position, forward, cadence, dt);
-      visible.push({ rider, position, forward, fromCamera, tint, ghost: Boolean(rider.ghost), ...parts });
+      if (!gym) {
+        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), tint: linearOf(tint), ghost: Boolean(rider.ghost), classic: rider.id === myId && this.#classicRider });
+        continue;
+      }
+      athletes.push({
+        id: rider.id,
+        position: gym.spot.position,
+        yaw: gym.spot.yaw,
+        ...this.#workoutPose(rider, timeS),
+        tint: linearOf(tint),
+        figure: this.biome.workoutFigure ?? "rider",
+        bike: this.#rackBike(gym.gym, gym.slot),
+      });
     }
 
-    // Seated riders are drawn through their vehicle, once per vehicle.
+    // Seated riders are drawn through their vehicle, once per vehicle, by the world scene's rider layer.
     const vehicles = [];
-    const seatHeads = new Map();
     for (const vehicle of placedVehicles(placed)) {
-      const { position } = vehicle.at;
+      const { position, forward } = vehicle.at;
       const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
       const mine = vehicle.seats.some((r) => r?.id === myId);
       if (fromCamera > 600 || (fromCamera < SCENE.nearCameraHide && !mine)) continue;
-      const parts = this.#vehicleParts(vehicle, dt, tints, myId);
-      if (!parts) continue;
-      vehicles.push({ ...parts, fromCamera });
-      for (const [id, head] of parts.heads) seatHeads.set(id, head);
+      const layout = layoutOf(vehicle.kind, vehicle.seats.length);
+      if (!layout) continue;
+      const seats = vehicle.seats.map((rider) => {
+        if (!rider) return null;
+        const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
+        return { id: rider.id, me: rider.id === myId, cadence: rider.id === myId ? (myCadence ?? seatCadence(rider)) : seatCadence(rider), tint: linearOf(tint) };
+      });
+      vehicles.push({ id: vehicle.id, kind: vehicle.kind, layout, position, forward, speed: vehicle.at.rider.speed ?? 0, seats });
     }
 
-    // The spin studio's riders sit on their bikes in the building, with the coach on every open floor.
+    // The spin studio's riders sit on their bikes in the building, with the coach on every open floor: ordinary riders of the layer.
+    let studio;
     if (this.#studio) {
-      const seated = this.#studio.riders(riders);
-      for (const { rider, position, forward, yaw } of [...seated, ...this.#studio.coaches()]) {
+      for (const { rider, position, forward } of [...this.#studio.riders(riders), ...this.#studio.coaches()]) {
         const fromCamera = Math.hypot(position[0] - this.camera.eye[0], position[2] - this.camera.eye[2]);
         const mine = rider.id === myId;
-        if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && rider.id !== INSTRUCTOR.id)) continue;
-        const tint = rider.id === INSTRUCTOR.id ? tints.bot : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-        const parts = this.#riderParts(rider, position, forward, rider.cadence ?? (rider.power > 0 ? 85 : 0), dt);
-        // In my own point of view the camera sits in my head: the body is left out, the bike stays.
-        const hidden = mine && this.camera.mode === "pov" ? { torso: [], limbs: [] } : {};
-        visible.push({ rider, position, forward, fromCamera, tint, ghost: false, yaw, ...parts, ...hidden });
+        if (fromCamera > 600 || (fromCamera < STUDIO_NEAR_HIDE && !mine && !isCoach(rider.id))) continue;
+        const tint = isCoach(rider.id) ? coachTint : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
+        roadRiders.push({
+          id: rider.id,
+          lookId: rider.lookId,
+          me: mine,
+          position,
+          forward,
+          cadence: rider.cadence ?? (rider.power > 0 ? 85 : 0),
+          speed: rider.speed ?? 0,
+          grade: 0,
+          tint: linearOf(tint),
+          ghost: false,
+          classic: mine && this.#classicRider,
+          // In my own point of view the camera sits in my head: the body is left out, the bike stays.
+          hideBody: mine && this.camera.mode === "pov",
+        });
       }
+      studio = { floors: this.#studio.floors, open: this.#studio.open };
     }
 
     const eye = this.camera.eye;
     const forward = normalize(sub(this.camera.target, eye));
-    const rotorMatrices = this.rotors
-      .filter((r) => Math.hypot(r.hub[0] - eye[0], r.hub[2] - eye[2]) < SCENE.rotorDistance)
-      .map((r) => ({ hub: r.hub, model: multiply(placement(r.hub, r.yaw), rotationXAbout([0, 0, 0], r.phase + timeS * r.speed)) }));
     // More riders online, more of the crowd out; the ones near a rider cheer it on.
     const share = crowdShare(riders.filter((r) => !r.is_bot && !r.ghost).length);
     const fans = placed.filter((p) => !p.gym && Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]) < SCENE.spectatorDistance + CROWD.reachM).map((p) => p.position);
-    const crowd = this.spectators
-      .filter((p) => {
-        const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
-        return d < SCENE.spectatorDistance && d > SCENE.nearCameraHide && (p.rank ?? 0) < share;
-      })
-      .map((p) => {
-        const { yaw, lift, pose } = cheer(p, fans, timeS);
-        const position = [p.position[0], p.position[1] + lift, p.position[2]];
-        const model = multiply(placement(position, yaw), scaling(p.scale));
-        // The flag swings about its pole in the raised hand.
-        const flagModel = p.flag ? multiply(model, placement(this.biome.people?.flagHand ?? [0.36, 1.85, -0.05], Math.sin(timeS * 2.6 + p.phase) * 0.5)) : null;
-        return { ...p, pose, model, flagModel };
-      });
+    const crowd = [];
+    this.crowd.people.forEach((p, index) => {
+      const d = Math.hypot(p.position[0] - eye[0], p.position[2] - eye[2]);
+      if (d >= SCENE.spectatorDistance || d <= SCENE.nearCameraHide || (p.rank ?? 0) >= share) return;
+      const { yaw, lift, pose } = cheer(p, fans, timeS);
+      crowd.push({ index, yaw, lift, pose, flagSwing: Math.sin(timeS * 2.6 + p.phase) * 0.5 });
+    });
 
-    const lemons = me && !me.gym ? this.#lemonModels(me.rider, timeS) : [];
+    const lemons = me && !me.gym ? this.#lemonFrames(me.rider, timeS) : [];
 
-    // Pass 0: shadow map around my rider (or the camera target), nearby chunks only.
-    if (this.shadowsEnabled && high && lens.shadows) {
-      const focus = me ? me.position : this.camera.target;
-      const lightMatrix = sunShadowMatrix(light.sun, focus, { halfSize: SCENE.shadowRange, mapSize: SCENE.shadowMapSize });
-      this.renderer.beginShadows(lightMatrix);
-      for (const group of ["scenery", "structures"]) {
-        for (const chunk of this.chunks[group]) {
-          if (chunkNear(chunk, focus, SCENE.shadowRange * 1.6)) this.renderer.drawShadowCaster(chunk.handle, this.identity);
-        }
-      }
-      this.renderer.drawShadowCaster(this.meshes.arches, this.identity);
-      for (const part of visible) {
-        if (part.ghost || Math.hypot(part.position[0] - focus[0], part.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
-        this.renderer.drawShadowCaster(this.bodies[part.variant], part.model);
-        for (const piece of part.torso) this.renderer.drawShadowCaster(piece.mesh, piece.model);
-        for (const limb of part.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
-        for (const wheel of part.wheels) this.renderer.drawShadowCaster(this.wheel, wheel);
-      }
-      for (const v of vehicles) {
-        if (Math.hypot(v.position[0] - focus[0], v.position[2] - focus[2]) > SCENE.shadowRange * 1.2) continue;
-        this.renderer.drawShadowCaster(v.frame, v.base);
-        for (const body of v.bodies) this.renderer.drawShadowCaster(this.seatedBodies[body.variant], body.model);
-        for (const limb of v.limbs) this.renderer.drawShadowCaster(limb.mesh, limb.model);
-        for (const wheel of v.wheels) this.renderer.drawShadowCaster(this.wheel, wheel);
-      }
-      for (const p of crowd) {
-        if (Math.hypot(p.position[0] - focus[0], p.position[2] - focus[2]) < SCENE.shadowRange * 1.2) {
-          this.renderer.drawShadowCaster(this.spectatorMeshes[p.pose ? 1 : 0], p.model);
-          if (p.flagModel) this.renderer.drawShadowCaster(this.flagMesh, p.flagModel);
-        }
-      }
-      for (const { handle, model } of this.#statues.values()) {
-        if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(handle, model);
-      }
-      for (const model of lemons) {
-        if (Math.hypot(model[12] - focus[0], model[14] - focus[2]) <= SCENE.shadowRange * 1.2) this.renderer.drawShadowCaster(this.lemonMesh, model);
-      }
-      this.renderer.endShadows();
-    }
-
-    // Passes 1 to 3: sky, the lit world, then the sea and soft contact shadows.
-    const scene = { light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices };
-    this.#drawWorld(scene, { viewProjection, inverseViewProjection, eye, forward });
-
-    // Which riders that could get a label are in sight, for the next frames' labels.
-    const probes = this.#labelProbes(placed, myId, seatHeads);
-    if (this.renderer.queryOcclusion) {
-      for (const [id, at] of probes) this.renderer.queryOcclusion(id, this.labelProbe, placement(at));
-    }
-
-    if (this.weather && this.biome.weather && this.renderer.drawWeather) {
-      let right = cross(forward, [0, 1, 0]);
-      if (Math.hypot(...right) < 1e-4) right = [1, 0, 0];
-      right = normalize(right);
-      const up = normalize(cross(right, forward));
-      this.renderer.drawWeather(this.weather, { viewProjection, camera: eye, right, up, timeS, style: this.biome.weather });
-    }
+    // The Three.js scene into the engine's target (ground, sea, sky, riders, features), then the post chain presents it.
+    const env = this.#environmentFor(preset, lens.haze, utcSeconds);
+    this.engine.beginFrame();
+    this.#aim(this.worldCamera, view, projection, lens, width / height);
+    this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
+    this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
     // The workout's side view: my rider alone (the next spots would stand in the way), into the inset's box.
-    if (me?.gym && this.sideView && this.renderer.viewport) {
+    if (me?.gym && this.sideView) {
       const box = this.sideView.getBoundingClientRect();
       const canvasBox = this.canvas.getBoundingClientRect?.() ?? { left: 0, top: 0, width, height };
       const rect = insetViewport(box, canvasBox, ratio);
       if (rect) {
-        const mine = visible.filter((part) => part.rider.id === myId);
         // Ease towards where the body is, so a flow glides instead of jerking the picture.
-        const ahead = bodyAhead(mine.flatMap((part) => part.torso.map((piece) => piece.model)), me.gym.spot);
+        const ahead = this.worldScene.athleteAhead(myId);
         this.#sideAhead = this.#sideAhead === null ? ahead : this.#sideAhead + (ahead - this.#sideAhead) * Math.min(1, dt / SIDE_CAMERA.followS);
         const side = sideCameraPose(me.gym.spot, this.#sideAhead);
-        const sideViewProjection = multiply(perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far), lookAt(side.eye, side.target));
-        this.renderer.viewport(rect);
-        this.#drawWorld(
-          { ...scene, visible: mine, vehicles: [], crowd: [], lemons: [] },
-          { viewProjection: sideViewProjection, inverseViewProjection: invert(sideViewProjection), eye: side.eye, forward: normalize(sub(side.target, side.eye)) },
-        );
-        this.renderer.viewport(null);
+        const sideProjection = perspective(SIDE_CAMERA.fovY, rect.width / rect.height, lens.near, lens.far);
+        const sideView = lookAt(side.eye, side.target);
+        this.sideCamera ??= new THREE.PerspectiveCamera();
+        this.#aim(this.sideCamera, sideView, sideProjection, lens, rect.width / rect.height);
+        // My rider alone: the next spots would stand in the way.
+        this.worldScene.isolateAthlete(myId);
+        this.engine.renderScene(this.worldScene.scene, this.sideCamera, rect);
+        this.worldScene.isolateAthlete(null);
       }
     }
 
-    this.#updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS);
-    const vehicleIds = new Set(riders.filter((r) => r.vehicle).map((r) => `vehicle:${r.vehicle.id}`));
+    this.#updateLabels(placed, myId, viewProjection, width, height, this.worldScene.seatHeads(), timeS);
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
-    for (const phases of [this.#pedalPhase, this.#wheelPhase]) {
-      for (const id of phases.keys()) if (!riders.some((r) => r.id === id) && !vehicleIds.has(id) && !(this.#studio && id === INSTRUCTOR.id)) phases.delete(id);
-    }
+    this.frameStats = this.engine.frameStats?.() ?? null;
+    this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
   }
 
-  /**
-   * Sky, the lit world and the blended pass, as seen through `view`: drawn
-   * once for the screen and, in a workout, once more for the side view.
-   */
-  #drawWorld({ light, lens, high, visible, vehicles, crowd, lemons, rotorMatrices }, { viewProjection, inverseViewProjection, eye, forward }) {
-    this.renderer.begin({ viewProjection, inverseViewProjection, camera: eye, ...light, shadowStrength: high ? light.shadowStrength : 0 });
-    this.renderer.draw(this.meshes.horizon, this.identity);
-    this.renderer.draw(this.meshes.islands, this.identity);
-    for (const [group, chunks] of Object.entries(this.chunks)) {
-      if (group === "detail" && !high) continue;
-      // Seen from the drone, small things reach a little further, not as far as the haze.
-      const range = Math.min((SCENE.drawDistance[group] ?? Infinity) * (lens.reach ?? Math.sqrt(lens.haze)), light.fog[1] + 200);
-      for (const chunk of chunks) {
-        if (!chunkVisible(chunk, eye, forward, range)) continue;
-        if (group === "bright") this.renderer.drawBright(chunk.handle, this.identity, light.key === "dusk" ? 0.95 : 0.55);
-        else this.renderer.draw(chunk.handle, this.identity);
-      }
-    }
-    this.renderer.drawBright(this.meshes.arches, this.identity);
-    for (const band of this.#highlights) this.renderer.drawBright(band.handle, this.identity, band.glow);
-    this.renderer.drawCloudLayer(this.clouds, this.identity, light.cloudTint);
-    for (const rotor of rotorMatrices) this.renderer.draw(this.rotor, rotor.model);
-    for (const p of crowd) {
-      this.renderer.draw(this.spectatorMeshes[p.pose ? 1 : 0], p.model, p.shirt);
-      if (p.flagModel) this.renderer.draw(this.flagMesh, p.flagModel, p.flag);
-    }
-    for (const model of lemons) this.renderer.drawBright(this.lemonMesh, model, 0.5);
-    for (const part of visible) {
-      if (part.ghost) continue;
-      this.renderer.draw(this.bodies[part.variant], part.model, part.tint);
-      for (const piece of part.torso) this.renderer.draw(piece.mesh, piece.model, part.tint);
-      for (const limb of part.limbs) this.renderer.draw(limb.mesh, limb.model);
-      for (const wheel of part.wheels) this.renderer.draw(this.wheel, wheel);
-    }
-    for (const v of vehicles) {
-      this.renderer.draw(v.frame, v.base);
-      for (const body of v.bodies) this.renderer.draw(this.seatedBodies[body.variant], body.model, body.tint);
-      for (const limb of v.limbs) this.renderer.draw(limb.mesh, limb.model);
-      for (const wheel of v.wheels) this.renderer.draw(this.wheel, wheel);
-    }
-
-    for (const [gym, { handle, glows, model }] of this.#statues) {
-      this.renderer.draw(handle, model);
-      const glow = gym === this.#glow.gym ? glows[this.#glow.index] : null;
-      if (glow) this.renderer.drawBright(glow, model, 0.9);
-    }
-
-    this.#studio?.draw("opaque", eye);
-
-    // Pass 3: blended — sea and soft contact shadows under the bikes.
-    this.renderer.drawTransparent(this.water, this.identity, { alpha: this.biome.water?.alpha ?? 0.82 });
-    this.renderer.drawTransparent(this.rivers, this.identity, { alpha: this.biome.river?.alpha ?? 0.85 });
-    for (const part of visible) {
-      if (part.ghost || part.fromCamera > 150) continue;
-      this.renderer.drawTransparent(this.riderShadow, placement(part.position, yawFor(part.forward), 0), { alpha: 0.22, unlit: 1 });
-    }
-    this.#studio?.draw("glass", eye);
-    // Ghosts last, see-through over everything else.
-    for (const part of visible) {
-      if (!part.ghost) continue;
-      const look = { ...SCENE.ghost, tint: part.tint };
-      this.renderer.drawTransparent(this.bodies[part.variant], part.model, look);
-      for (const piece of part.torso) this.renderer.drawTransparent(piece.mesh, piece.model, look);
-      for (const limb of part.limbs) this.renderer.drawTransparent(limb.mesh, limb.model, look);
-      for (const wheel of part.wheels) this.renderer.drawTransparent(this.wheel, wheel, look);
-    }
+  /** The grade in percent under a rider on a route (0 on a road of the network or on an unknown route). */
+  #gradeOf(rider) {
+    if (rider.route === null) return 0;
+    const route = !rider.route || rider.route === this.route.id ? this.route : this.routes?.get(rider.route);
+    return route ? route.gradeAt(rider.distance) : 0;
   }
 
-  /** Model matrices of the lemons not yet collected near my rider on my route: spinning slowly, bobbing at handlebar height. */
-  #lemonModels(me, timeS) {
+  /** Points a Three.js camera where the view's matrices look, through the lens' near and far planes. */
+  #aim(camera, view, projection, lens, aspect) {
+    cameraFromMatrices(camera, view, projection);
+    camera.near = lens.near;
+    camera.far = lens.far;
+    camera.aspect = aspect;
+  }
+
+  /** The lemons not yet collected near my rider on my route for the scene: `{position, yaw}`, spinning slowly, bobbing at handlebar height. */
+  #lemonFrames(me, timeS) {
     if (!this.lemons.length || (me.route && me.route !== this.route.id)) return [];
     const { behind, ahead } = SCENE.lemonReach;
-    const models = [];
+    const frames = [];
     for (const lemon of this.lemons) {
       if (lemon.collected) continue;
       const gap = this.route.signedGap(me.distance, lemon.distance);
       if (gap < -behind || gap > ahead) continue;
       const { position } = riderPosition(this.route, lemon.distance, lemon.lane);
       const bob = Math.sin(timeS * 2.2 + lemon.distance) * 0.1;
-      models.push(placement([position[0], position[1] + 1.25 + bob, position[2]], timeS * 1.6 + lemon.distance, 0.35));
+      frames.push({ position: [position[0], position[1] + 1.25 + bob, position[2]], yaw: timeS * 1.6 + lemon.distance });
     }
-    return models;
-  }
-
-  /** Riders near enough for a label (not mine), with where their probe stands: at the bike, or below a seated rider's head. */
-  #labelProbes(placed, myId, seatHeads) {
-    const probes = new Map();
-    for (const { rider, position } of placed) {
-      if (rider.id === myId) continue;
-      if (Math.hypot(...position.map((v, i) => v - this.camera.eye[i])) > SCENE.labelDistance) continue;
-      const head = seatHeads.get(rider.id);
-      probes.set(rider.id, head ? [head[0], head[1] - 1.6, head[2]] : position);
-    }
-    return probes;
+    return frames;
   }
 
   /**
    * `seatHeads`: the point over each seated rider's head (riders in vehicles are labelled over their seat).
-   * A rider out of sight (behind a house or a hill) gets no label; without
-   * occlusion queries every rider counts as in sight.
+   * A rider out of sight (behind a house or a hill) gets no label once it has been hidden a moment.
    */
-  #updateLabels(placed, myId, viewProjection, width, height, seatHeads, probes, timeS) {
+  #updateLabels(placed, myId, viewProjection, width, height, seatHeads, timeS) {
+    const eye = this.camera.eye;
     const candidates = [];
+    const ids = new Set();
     for (const { rider, position } of placed) {
-      if (!probes.has(rider.id)) continue;
-      const seen = this.renderer.occlusion ? this.renderer.occlusion(rider.id) : true;
-      if (!this.#labelVisibility.update(rider.id, seen, timeS)) continue;
-      const distance = Math.hypot(...position.map((v, i) => v - this.camera.eye[i]));
+      if (rider.id === myId) continue;
+      const distance = Math.hypot(...position.map((v, i) => v - eye[i]));
+      if (distance > SCENE.labelDistance) continue;
+      ids.add(rider.id);
       const head = seatHeads.get(rider.id) ?? [position[0], position[1] + RIDER_GEOMETRY.headHeight + 0.55, position[2]];
+      if (!this.#labelVisibility.update(rider.id, labelInSight(eye, head, this.sight), timeS)) continue;
       const screen = projectToScreen(viewProjection, head, width, height);
       if (screen) candidates.push({ rider, distance, screen });
     }
-    const ids = new Set(probes.keys());
     this.#labelVisibility.keep(ids);
-    this.renderer.keepOcclusion?.(ids);
     const shown = visibleLabels(candidates, myId);
     for (const { rider, distance, screen } of shown) {
       const label = this.#label(rider, myId);
@@ -1050,17 +809,10 @@ export class View3D {
   }
 
   dispose() {
-    this.#studio?.dispose();
-    const chunkHandles = Object.values(this.chunks).flatMap((list) => list.map((chunk) => chunk.handle));
-    const handles = [...Object.values(this.meshes), ...chunkHandles, this.clouds, this.water, this.rivers, this.rotor, this.flagMesh, this.lemonMesh, ...this.spectatorMeshes, ...this.#highlights.map((band) => band.handle)];
-    if (this.weather) handles.push(this.weather);
-    this.#highlights = [];
-    this.#disposeStatues();
-    const workoutHandles = this.workoutParts ? [...this.workoutParts.values()] : [];
-    for (const handle of [...handles, ...this.bodies, ...this.bodyParts.flatMap((p) => [...p.values()]), ...this.thighs, ...this.shins, this.foot, this.shoe, ...workoutHandles, this.crankset, this.wheel, this.riderShadow, this.labelProbe, ...this.seatedBodies, ...this.vehicleFrames.values()]) {
-      this.renderer.dispose(handle);
-    }
     this.#labels.forEach((element) => element.remove());
     this.#labels.clear();
+    // The world scene is this view's; the engine stays for the next view on the canvas.
+    this.worldScene.dispose();
+    this.tracker.disposeAll();
   }
 }

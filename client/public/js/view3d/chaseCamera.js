@@ -5,7 +5,7 @@
  * Switching modes blends between the old and the new pose.
  */
 import { add, lerp3, scale } from "./math.js";
-import { LANE_WIDTH, roadFrame, roadHalfWidth } from "./world.js";
+import { LANE_WIDTH, roadFrame, roadHalfWidth } from "../world/roads.js";
 
 export const CAMERA_MODES = Object.freeze({
   chase: { label: "Chase", back: 5.5, up: 2.2, lookAhead: 9, lookUp: 1.1 }, // i18n-ok (English id label; the UI translates by mode)

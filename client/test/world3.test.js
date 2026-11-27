@@ -2,13 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { ChunkedMesh, chunkNear, chunkVisible } from "../public/js/view3d/chunks.js";
-import { BRIDGE_HALF_LENGTH, Occupancy, RIVER, buildRiverPath, buildRoadside } from "../public/js/view3d/features.js";
-import { MeshBuilder } from "../public/js/view3d/meshBuilder.js";
-import { placement } from "../public/js/view3d/math.js";
-import { buildChurch, buildHouse, buildRotor, buildSpectator, PALETTE } from "../public/js/view3d/structures.js";
-import { inStretch, resolveZones } from "../public/js/view3d/zones.js";
-import { RoadIndex, buildTerrain, buildWorld, JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, sharedStretches, terrainModel, VERGE } from "../public/js/view3d/world.js";
+import { GYM_SIGN } from "../public/js/world/venues.js";
+import { Occupancy, roadsideFurniture } from "../public/js/view3d/features.js";
+import { BRIDGE_HALF_LENGTH, RIVER, buildRiverPath } from "../public/js/world/rivers.js";
+import { inStretch, resolveZones } from "../public/js/world/zones.js";
+import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
+import { JUNCTION_BANK_CLEAR, JUNCTION_BANK_FADE, VERGE, junctionBankAt, junctionClearings, mapSeed, roadFrame, roadHalfWidth, terrainModel } from "../public/js/world/roads.js";
 import { squareRoute } from "./helpers.js";
 
 const flatsFile = () => JSON.parse(readFileSync(new URL("../../routes/riverside-flats.json", import.meta.url)));
@@ -82,32 +81,6 @@ test("stretches wrap around the start line", () => {
   assert.ok(!inStretch(r, [{ from: 100, to: 200 }], 300));
 });
 
-// --- chunks -------------------------------------------------------------------
-
-test("chunked meshes split by tile and keep every triangle", () => {
-  const chunked = new ChunkedMesh(100);
-  const plain = new MeshBuilder();
-  for (const target of [chunked, plain]) {
-    target.box([10, 0, 10], [2, 2, 2], [1, 0, 0]);
-    target.box([250, 0, 10], [2, 2, 2], [0, 1, 0]);
-    target.append(buildRotor(5), placement([450, 0, 40], 0.3));
-  }
-  const chunks = chunked.build();
-  assert.equal(chunks.length, 3);
-  assert.equal(chunks.reduce((sum, c) => sum + c.mesh.vertexCount, 0), plain.build().vertexCount);
-  for (const c of chunks) assert.equal(c.mesh.colors.length, c.mesh.vertexCount * 4);
-});
-
-test("chunk visibility: distance, behind the camera, inside the chunk", () => {
-  const chunk = { center: [100, 0, 0], radius: 20 };
-  assert.ok(chunkVisible(chunk, [0, 0, 0], [1, 0, 0], 500));
-  assert.ok(!chunkVisible(chunk, [0, 0, 0], [1, 0, 0], 50), "too far");
-  assert.ok(!chunkVisible(chunk, [0, 0, 0], [-1, 0, 0], 500), "behind");
-  assert.ok(chunkVisible(chunk, [100, 0, 5], [-1, 0, 0], 500), "camera inside");
-  assert.ok(chunkNear(chunk, [150, 0, 0], 40));
-  assert.ok(!chunkNear(chunk, [300, 0, 0], 40));
-});
-
 test("occupancy blocks overlapping circles only", () => {
   const occupancy = new Occupancy(50);
   occupancy.add(100, 100, 10);
@@ -115,31 +88,6 @@ test("occupancy blocks overlapping circles only", () => {
   assert.ok(occupancy.blocked(115, 100, 6));
   assert.ok(!occupancy.blocked(130, 100, 5));
 });
-
-// --- structures ---------------------------------------------------------------
-
-test("houses, churches and spectators produce sensible models", () => {
-  const house = buildHouse({ w: 8, d: 7, floors: 2, wall: PALETTE.walls[0], roof: PALETTE.roofs[0], chimney: true });
-  let top = -Infinity;
-  let bottom = Infinity;
-  for (let i = 1; i < house.positions.length; i += 3) {
-    top = Math.max(top, house.positions[i]);
-    bottom = Math.min(bottom, house.positions[i]);
-  }
-  assert.ok(top > 7 && top < 12, `roof height ${top}`);
-  close(bottom, -1.5, 1e-6);
-  const church = buildChurch();
-  let spire = -Infinity;
-  for (let i = 1; i < church.positions.length; i += 3) spire = Math.max(spire, church.positions[i]);
-  assert.ok(spire > 22, "the church tower is the village landmark");
-  const up = buildSpectator(true);
-  const down = buildSpectator(false);
-  assert.equal(up.vertexCount, down.vertexCount);
-});
-
-function close(a, b, eps) {
-  assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-}
 
 // --- the assembled world -----------------------------------------------------
 
@@ -160,17 +108,15 @@ test("the river crosses the road only at the bridge, below it and above the lake
   const valley = terrain.height(bridge[0], bridge[2]);
   assert.ok(bridge[1] - valley > 6, "the bridge spans a real valley");
   assert.ok(valley > world.waterLevel, "the river bed is above the sea");
-  assert.ok(world.rivers.vertexCount > 100);
+  assert.ok(world.rivers.strips.positions.length / 3 > 100);
+  assert.ok(world.rivers.bridges.boxes.length > 0, "a bridge carries the road");
 });
 
-test("the world has a village, farms, turbines and spectators off the road", () => {
+test("the world has village boards, lamps and spectators off the road", () => {
   const halfRoad = roadHalfWidth(route.lanes);
-  assert.ok(world.chunks.structures.length > 5);
-  assert.ok(world.chunks.bright.length > 0, "lamp heads and sign faces");
-  assert.ok(world.rotors.length >= 3, "a row of turbines");
-  for (const rotor of world.rotors) assert.ok(world.terrain.index.farDistance(rotor.hub[0], rotor.hub[2]) > 170);
-  assert.ok(world.spectators.length >= 32);
-  for (const person of world.spectators) {
+  assert.ok(world.furniture.signs.length > 0 && world.furniture.barriers.length > 0, "boards and the crowd barriers are placements");
+  assert.ok(world.crowd.people.length >= 32);
+  for (const person of world.crowd.people) {
     const d = world.terrain.distanceToRoad(person.position[0], person.position[2]);
     assert.ok(d > halfRoad + VERGE, "spectators stand behind the verge");
     assert.equal(person.shirt.length, 3);
@@ -179,27 +125,17 @@ test("the world has a village, farms, turbines and spectators off the road", () 
 
 test("the world is deterministic", () => {
   const again = buildWorld(riversideFlats());
-  assert.deepEqual(again.rotors.map((r) => r.hub), world.rotors.map((r) => r.hub));
-  assert.deepEqual(again.spectators.map((p) => p.position), world.spectators.map((p) => p.position));
-  assert.equal(again.chunks.structures.length, world.chunks.structures.length);
+  assert.deepEqual(again.plan.turbines, world.plan.turbines);
+  assert.deepEqual(again.crowd.people.map((p) => p.position), world.crowd.people.map((p) => p.position));
 });
 
 // --- bike café ------------------------------------------------------------------
 
 import { CAFE_DISTANCE, buildBikeCafe } from "../public/js/view3d/features.js";
-import { buildCafe } from "../public/js/view3d/structures.js";
-
-test("the café model has a terrace, bikes and a glowing sign", () => {
-  const cafe = buildCafe();
-  assert.ok(cafe.mesh.vertexCount > 1000);
-  assert.ok(cafe.bright.vertexCount > 0, "window glow and sign go into the bright mesh");
-});
 
 test("the café stands beside the road just after the start line and keeps trees away", () => {
-  const structures = new MeshBuilder();
-  const bright = new MeshBuilder();
   const occupancy = new Occupancy();
-  const cafe = buildBikeCafe(route, null, { structures, bright, occupancy });
+  const cafe = buildBikeCafe(route, null, { occupancy });
   assert.ok(cafe);
   assert.equal(cafe.distance, CAFE_DISTANCE);
   const frame = roadFrame(route, CAFE_DISTANCE);
@@ -207,7 +143,7 @@ test("the café stands beside the road just after the start line and keeps trees
   const lateral = offset[0] * frame.right[0] + offset[1] * frame.right[2];
   assert.ok(lateral > roadHalfWidth(route.lanes) + 8, `café is ${lateral.toFixed(1)} m to the right`);
   assert.ok(occupancy.blocked(cafe.position[0], cafe.position[2]));
-  assert.equal(buildBikeCafe(route, null, { structures, bright, occupancy, avoid: () => true }), null, "never in a river or lake");
+  assert.equal(buildBikeCafe(route, null, { occupancy, avoid: () => true }), null, "never in a river or lake");
 });
 
 // --- outdoor gym (#77) -----------------------------------------------------------
@@ -218,14 +154,10 @@ import { gymOfRoute } from "../public/js/workout/gymSpots.js";
 const lateralOf = (frame, p) => (p[0] - frame.center[0]) * frame.right[0] + (p[2] - frame.center[2]) * frame.right[2];
 
 test("the outdoor gym stands beside the café, off the road, with eight spots facing it", () => {
-  const structures = new MeshBuilder();
-  const bright = new MeshBuilder();
   const occupancy = new Occupancy();
-  buildBikeCafe(route, null, { structures, bright, occupancy });
-  const before = structures.vertexCount;
-  const gym = buildOutdoorGym(route, null, { structures, bright, occupancy });
+  buildBikeCafe(route, null, { occupancy });
+  const gym = buildOutdoorGym(route, null, { occupancy });
   assert.ok(gym, "room next to the café");
-  assert.ok(structures.vertexCount - before > 500, "mat, bars, bench, beam and sign");
   const frame = roadFrame(route, GYM_DISTANCE);
   assert.ok(lateralOf(frame, gym.center) > roadHalfWidth(route.lanes) + 8, "on the café side, set back");
   assert.equal(gym.spots.length, 8);
@@ -238,14 +170,14 @@ test("the outdoor gym stands beside the café, off the road, with eight spots fa
   const gaps = gym.spots.slice(1, 4).map((s, i) => Math.hypot(s.position[0] - gym.spots[i].position[0], s.position[2] - gym.spots[i].position[2]));
   for (const gap of gaps) assert.ok(Math.abs(gap - 1.8) < 1e-6, "1.8 m apart");
   assert.ok(occupancy.blocked(gym.center[0], gym.center[2]), "trees keep away");
-  assert.equal(buildOutdoorGym(route, null, { structures, bright, occupancy }), null, "not twice in one place");
-  assert.equal(buildOutdoorGym(route, null, { structures, bright, occupancy: new Occupancy(), avoid: () => true }), null, "never in a river or on a road");
+  assert.equal(buildOutdoorGym(route, null, { occupancy }), null, "not twice in one place");
+  assert.equal(buildOutdoorGym(route, null, { occupancy: new Occupancy(), avoid: () => true }), null, "never in a river or on a road");
 });
 
 test("a gym knows its café and where its statue row stands behind the pad", () => {
   const make = (extra) => {
     const occupancy = new Occupancy();
-    const gym = buildOutdoorGym(route, null, { structures: new MeshBuilder(), bright: new MeshBuilder(), occupancy, ...extra });
+    const gym = buildOutdoorGym(route, null, { occupancy, ...extra });
     return { gym, occupancy };
   };
   assert.equal(make({ cafeId: "valley-cafe" }).gym.cafeId, "valley-cafe");
@@ -266,7 +198,7 @@ test("a gym knows its café and where its statue row stands behind the pad", () 
 // --- one map for all routes: the road network (ADR 0010, #26) ---------------------
 
 import { RoadNetwork } from "../public/js/route/network.js";
-import { JUNCTION_LIFT } from "../public/js/view3d/world.js";
+import { JUNCTION_LIFT } from "../public/js/world/roads.js";
 
 const ROUTE_IDS = ["riverside-flats", "rolling-hills", "col-de-la-forge", "balcony-road", "forge-circuit", "island-tour", "cape-loop"];
 const loadRoute = (id) => new RouteGeometry(JSON.parse(readFileSync(new URL(`../../routes/${id}.json`, import.meta.url))));
@@ -366,15 +298,14 @@ const tracks = ["velodrome", "herne-hill", "herne-hill-clockwise"].map(loadRoute
 // As the client builds it: the map's network and its other routes.
 const mapWorld = buildWorld(hillsRoute, { network, others: [...valley, ...tracks] });
 
-/** Whether the road mesh of `world` has asphalt within 1.5 m of route coordinates (x, y) at height `elevation`. */
+/** Whether the road quads of `world` (lane lines included) lie within 1.5 m of route coordinates (x, y) at height `elevation`. */
 const asphaltAt = (world, x, y, elevation) =>
-  world.chunks.road.some(({ mesh }) => {
-    const p = mesh.positions;
-    for (let i = 0; i < p.length; i += 3) {
-      if (Math.hypot(p[i] - x, p[i + 2] + y) < 1.5 && Math.abs(p[i + 1] - elevation) < 0.5) return true;
+  (({ positions: p, kinds }) => {
+    for (let i = 0; i < kinds.length; i += 1) {
+      if (Math.hypot(p[i * 3] - x, p[i * 3 + 2] + y) < 1.5 && Math.abs(p[i * 3 + 1] - elevation) < 0.5) return true;
     }
     return false;
-  });
+  })(world.roads.strips);
 
 test("the tracks beside the roads are drawn and the ground is level under them", () => {
   for (const track of tracks) {
@@ -398,41 +329,41 @@ test("where a route cuts a junction's corner off the network's roads, it still c
   }
 });
 
-test("no tree or bush stands on the asphalt of any route of the map", () => {
-  const index = new RoadIndex(valley, { step: 2 });
-  const half = roadHalfWidth(hillsRoute.lanes);
-  const onRoad = [];
-  for (const chunk of mapWorld.chunks.scenery) {
-    const p = chunk.mesh.positions;
-    for (let i = 0; i < p.length; i += 3) {
-      const near = index.nearest(p[i], p[i + 2]);
-      if (near && near.distance < half && p[i + 1] > near.sample.elevation + 1.5) onRoad.push(`${near.sample.route.id} at ${Math.round(near.sample.distance)} m`);
-    }
-  }
-  assert.deepEqual([...new Set(onRoad)], []);
-});
-
 const near = (p, places, radius) => places.some((n) => Math.hypot(p.x - n.x, p.y - n.y) < radius);
 const places = [...network.nodes.values()];
 
 test("on a slope the gym's pad and its roadside sign stand on the ground", () => {
   const terrain = { height: (x, z) => 100 + 0.12 * x - 0.08 * z };
-  const structures = new MeshBuilder();
-  const bright = new MeshBuilder();
-  const gym = buildOutdoorGym(route, terrain, { structures, bright, occupancy: new Occupancy() });
+  const gym = buildOutdoorGym(route, terrain, { occupancy: new Occupancy() });
   for (const spot of gym.spots) assert.ok(spot.position[1] >= terrain.height(spot.position[0], spot.position[2]), "the mat is never buried");
-  // The sign's face is all that goes into the bright mesh.
-  const face = bright.build().positions;
-  let low = Infinity;
-  let x = 0;
-  let z = 0;
-  for (let i = 0; i < face.length; i += 3) {
-    low = Math.min(low, face[i + 1]);
-    x += face[i] / (face.length / 3);
-    z += face[i + 2] / (face.length / 3);
+  const local = (x, z) => [gym.position[0] + x * Math.cos(gym.yaw) + z * Math.sin(gym.yaw), gym.position[2] - x * Math.sin(gym.yaw) + z * Math.cos(gym.yaw)];
+  for (const [x, z] of [[-8.6, -3.6], [8.6, -3.6], [-8.6, 6.6], [8.6, 6.6]]) assert.ok(gym.base - gym.drop < terrain.height(...local(x, z)), "the pad reaches below its lowest corner");
+  const ground = terrain.height(...local(GYM_SIGN.x, GYM_SIGN.z));
+  assert.ok(Math.abs(gym.base + gym.signLift - ground) < 1e-6, "the sign's posts start at the ground there");
+});
+
+test("no town plot overlaps a café or a gym, and every café of the valley is a site with its style", () => {
+  const clearings = [
+    ...mapWorld.cafeSites.map((site) => ({ x: site.position[0], z: site.position[2], radius: 14 })),
+    ...mapWorld.gyms.map((gym) => ({ x: gym.position[0] + 3 * Math.sin(gym.yaw), z: gym.position[2] + 3 * Math.cos(gym.yaw), radius: 12 })),
+  ];
+  assert.ok(clearings.length >= 8);
+  let plots = 0;
+  for (const settlement of mapWorld.plan.settlements) {
+    for (const plot of settlement.plots) {
+      plots += 1;
+      for (const c of clearings) assert.ok(Math.hypot(plot.x - c.x, plot.z - c.z) > c.radius + Math.max(plot.width, plot.depth) / 2, `${settlement.id}: a plot at ${plot.x.toFixed(0)}, ${plot.z.toFixed(0)} is inside a clearing`);
+    }
   }
-  const above = low - terrain.height(x, z);
-  assert.ok(above > 1.3 && above < 1.8, `the board is ${above.toFixed(2)} m above the ground at the sign`);
+  assert.ok(plots > 20, "the towns still have houses");
+  const styles = Object.fromEntries(mapWorld.cafeSites.map((site) => [site.id, site.style]));
+  assert.deepEqual(styles, { "valley-cafe": "valley", "forge-hut": "hut", "hill-cafe": "hilltop", "beach-cafe": "beach" });
+  for (const site of mapWorld.cafeSites) {
+    assert.ok(site.name && site.position.length === 3 && Number.isFinite(site.yaw) && site.forecourt.inner.length > 0, site.id);
+    assert.ok(mapWorld.gyms.some((gym) => gym.cafeId === site.id), `${site.id} has its gym`);
+  }
+  assert.ok(mapWorld.gyms.find((gym) => gym.cafeId === "beach-cafe"), "the yoga venue finds the beach gym");
+  assert.deepEqual(sceneOf(mapWorld).cafeSites, mapWorld.cafeSites, "the cafés cross the worker boundary with the scene");
 });
 
 test("every café gets an outdoor gym", () => {
@@ -503,92 +434,7 @@ test("the map terrain is defined everywhere, out to the horizon", () => {
 // --- no flicker: stacked surfaces stay apart (#24) ---------------------------
 
 import { DRONE_LENS, RIDE_LENS, depthStep } from "../public/js/view3d/view3d.js";
-import { ROAD_LIFT } from "../public/js/view3d/world.js";
-
-/** Height of the highest triangle of `meshes` over (x, z), or null where there is none. */
-function surfaceOf(meshes, cell = 64) {
-  const triangles = [];
-  const buckets = new Map();
-  for (const mesh of meshes) {
-    const p = mesh.positions;
-    for (let i = 0; i < mesh.vertexCount; i += 3) {
-      const t = [0, 1, 2].map((k) => [p[(i + k) * 3], p[(i + k) * 3 + 1], p[(i + k) * 3 + 2]]);
-      const id = triangles.push(t) - 1;
-      const xs = t.map((v) => Math.floor(v[0] / cell));
-      const zs = t.map((v) => Math.floor(v[2] / cell));
-      for (let gx = Math.min(...xs); gx <= Math.max(...xs); gx += 1) {
-        for (let gz = Math.min(...zs); gz <= Math.max(...zs); gz += 1) {
-          const key = `${gx},${gz}`;
-          if (!buckets.has(key)) buckets.set(key, []);
-          buckets.get(key).push(id);
-        }
-      }
-    }
-  }
-  const surface = (x, z) => {
-    let top = null;
-    for (const id of buckets.get(`${Math.floor(x / cell)},${Math.floor(z / cell)}`) ?? []) {
-      const [a, b, c] = triangles[id];
-      const det = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
-      if (Math.abs(det) < 1e-9) continue;
-      const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / det;
-      const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / det;
-      const l3 = 1 - l1 - l2;
-      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
-      const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
-      top = top === null ? y : Math.max(top, y);
-    }
-    return top;
-  };
-  surface.triangles = triangles.length;
-  return surface;
-}
-
-test("terrain layers stay far enough apart for the depth buffer: fine over coarse over the sea floor", () => {
-  const horizon = mapWorld.meshes.horizon;
-  const coarseCount = horizon.vertexCount - 6; // the last quad is the sea-floor plane
-  const floor = horizon.positions[coarseCount * 3 + 1];
-  const fine = surfaceOf(mapWorld.chunks.terrain.map((chunk) => chunk.mesh));
-  const coarse = surfaceOf([{ positions: horizon.positions.subarray(0, coarseCount * 3), vertexCount: coarseCount }], 280);
-  // Fog ends by 4.2 km in the ride; the drone sees further but from higher up.
-  const needed = Math.max(depthStep(RIDE_LENS, 4200), depthStep(DRONE_LENS, 9000)) * 4;
-  let checked = 0;
-  for (let x = -6000; x <= 6000; x += 29) {
-    for (let z = -7000; z <= 5000; z += 31) {
-      const below = coarse(x, z);
-      if (below === null) continue;
-      assert.ok(below - floor > needed, `coarse grid only ${(below - floor).toFixed(2)} m above the sea-floor plane at (${x}, ${z})`);
-      const above = fine(x, z);
-      if (above === null) continue;
-      checked += 1;
-      assert.ok(above - below > needed, `fine terrain only ${(above - below).toFixed(2)} m above the coarse grid at (${x}, ${z})`);
-    }
-  }
-  assert.ok(checked > 10_000, `the island was sampled (${checked})`);
-});
-
-test("land far from the roads is drawn coarser, without holes and close to the full detail", () => {
-  const terrainOf = (options) => {
-    const into = new ChunkedMesh();
-    buildTerrain(mapWorld.terrain, { ...options, into });
-    return surfaceOf(into.build().map((chunk) => chunk.mesh));
-  };
-  const full = terrainOf({ detailReach: 0 });
-  const lighter = terrainOf({});
-  let land = 0;
-  for (let x = -5000; x <= 6000; x += 23) {
-    for (let z = -5000; z <= 5000; z += 29) {
-      const want = full(x, z);
-      if (want === null || want < 3) continue;
-      land += 1;
-      const got = lighter(x, z);
-      assert.ok(got !== null, `a hole in the terrain at (${x}, ${z})`);
-      assert.ok(Math.abs(got - want) < 3, `coarse terrain ${(got - want).toFixed(1)} m off the full detail at (${x}, ${z})`);
-    }
-  }
-  assert.ok(land > 50_000, `the island was sampled (${land})`);
-  assert.ok(lighter.triangles < full.triangles * 0.7, `fewer triangles (${lighter.triangles} of ${full.triangles})`);
-});
+import { ROAD_LIFT } from "../public/js/world/roads.js";
 
 test("other roads' markings stay under the ridden road's asphalt where they cross it", () => {
   const gap = ROAD_LIFT.ridden - (ROAD_LIFT.other + ROAD_LIFT.marking);
@@ -676,20 +522,16 @@ test("rivers run in valleys, not gorges", () => {
 test("the map world looks the same whichever route you ride", () => {
   // From a track, the other way round from the road the world was built from.
   const fromTrack = buildWorld(tracks[1], { network, others: [...valley, ...tracks] });
-  const vertices = (world, name) => world.chunks[name].reduce((sum, c) => sum + c.mesh.vertexCount, 0);
-  // Grass and flowers are thinner along roads you don't ride; the rest is the same.
-  for (const name of ["terrain", "scenery"]) assert.equal(vertices(fromTrack, name), vertices(mapWorld, name), name);
-  assert.deepEqual(fromTrack.rotors.map((r) => r.hub), mapWorld.rotors.map((r) => r.hub));
+  assert.deepEqual(fromTrack.ground.near.heights, mapWorld.ground.near.heights, "ground");
+  assert.deepEqual(fromTrack.plan.turbines, mapWorld.plan.turbines, "turbines");
   // Only the ridden route has arches and spectators.
-  assert.notDeepEqual(fromTrack.spectators.map((p) => p.position), mapWorld.spectators.map((p) => p.position));
+  assert.notDeepEqual(fromTrack.crowd.people.map((p) => p.position), mapWorld.crowd.people.map((p) => p.position));
 });
 
 test("one café at the shared start, however many routes start there", () => {
   const cafes = new Occupancy();
-  const structures = new MeshBuilder();
-  const bright = new MeshBuilder();
-  const first = buildBikeCafe(flatsRoute, null, { structures, bright, occupancy: cafes });
-  const second = buildBikeCafe(colRoute, null, { structures, bright, occupancy: cafes });
+  const first = buildBikeCafe(flatsRoute, null, { occupancy: cafes });
+  const second = buildBikeCafe(colRoute, null, { occupancy: cafes });
   assert.deepEqual(first.position, second.position, "every route's café is the same spot");
 });
 
@@ -701,7 +543,7 @@ const tinyFile = { id: "tiny", name: "Tiny", lanes: 2, seed: 3, points: [[0, 0, 
 
 test("the scene is plain data whose buffers can be handed to the main thread", () => {
   const scene = sceneOf(world);
-  assert.deepEqual(Object.keys(scene).sort(), ["biome", "chunks", "clouds", "gyms", "meshes", "overview", "rivers", "rotors", "spectatorMeshes", "spectators", "studio", "water", "weather"]);
+  assert.deepEqual(Object.keys(scene).sort(), ["arches", "biome", "cafeSites", "clouds", "crowd", "detail", "furniture", "ground", "gyms", "overview", "plan", "rivers", "roads", "season", "seed", "studio"]);
   assert.equal(scene.biome, "temperate", "the view knows which sky to draw");
   const buffers = transferList(scene);
   assert.ok(buffers.length > 20 && buffers.every((b) => b instanceof ArrayBuffer));
@@ -711,7 +553,7 @@ test("the scene is plain data whose buffers can be handed to the main thread", (
 
 test("without workers the scene is built in place, and a failing worker falls back too", async () => {
   const inPlace = await buildScene(tinyFile, [], { createWorker: () => null });
-  assert.ok(inPlace.chunks.terrain.length > 0);
+  assert.ok(inPlace.ground.near.columns > 1, "the ground comes as a grid");
 
   let terminated = false;
   const failing = {
@@ -726,7 +568,7 @@ test("without workers the scene is built in place, and a failing worker falls ba
   console.warn = () => {};
   try {
     const fallback = await buildScene(tinyFile, [], { createWorker: () => failing });
-    assert.ok(fallback.chunks.terrain.length > 0);
+    assert.ok(fallback.ground.near.columns > 1);
     assert.ok(terminated);
   } finally {
     console.warn = original;
@@ -734,7 +576,7 @@ test("without workers the scene is built in place, and a failing worker falls ba
 });
 
 test("a worker's scene is used as it arrives", async () => {
-  const scene = { meshes: {}, chunks: {}, rotors: [], spectators: [] };
+  const scene = { crowd: { people: [], figure: "person" } };
   const worker = {
     postMessage(message) {
       assert.equal(message.route.id, "tiny");
@@ -750,7 +592,13 @@ test("the drone's haze grows with the island, its draw reach does not", async ()
   assert.deepEqual({ ...droneLens({ radius: 2000 }), reach: undefined }, { ...DRONE_LENS, reach: undefined });
   const big = droneLens({ radius: 6500 });
   assert.ok(big.haze > DRONE_LENS.haze && big.far >= 6500 * 3);
-  assert.equal(big.reach, Math.sqrt(DRONE_LENS.haze));
+  assert.equal(big.reach, Math.sqrt(2.6), "the draw reach stays what the old, clearer air gave");
+});
+
+test("the drone's haze is thicker than before", async () => {
+  const { droneLens } = await import("../public/js/view3d/view3d.js");
+  assert.equal(droneLens({ radius: 3000 }).haze, 1.3);
+  assert.equal(droneLens({ radius: 9000 }).haze, 2);
 });
 
 test("the gym's lens keeps the low orbit's foreground out of the near plane", async () => {
@@ -794,11 +642,9 @@ test("Island Tour rides the coast", () => {
 
 test("a cliff zone gets a guard rail on the sea side only", () => {
   const road = new RouteGeometry({ id: "c", name: "c", lanes: 4, seed: 1, loop: false, points: [[0, 0, 10], [600, 0, 10]], zones: [] });
-  const posts = [];
-  const structures = { box: (at) => posts.push(at), orientedBox: () => {} };
   // The ground falls away on one side of the road: that is the sea.
   const terrain = { height: (x, z) => (z > 0 ? -5 : 25) };
-  buildRoadside(road, terrain, { structures, bright: {}, markers: false, cliffs: [{ from: 100, to: 400 }] });
+  const posts = roadsideFurniture(road, terrain, { markers: false, cliffs: [{ from: 100, to: 400 }] }).rails.map((rail) => rail.a);
   assert.ok(posts.length > 30, `${posts.length} posts`);
   for (const [x, , z] of posts) {
     assert.ok(x >= 99 && x <= 401, `post at ${x} m is outside the cliff zone`);
@@ -809,9 +655,7 @@ test("a cliff zone gets a guard rail on the sea side only", () => {
 test("on the real map the cliff rail is on the side the sea is nearer", () => {
   const road = roads.find((r) => r.edge.id === "south-coast");
   const { seaLevel } = mapWorld.terrain;
-  const posts = [];
-  const structures = { box: (at) => posts.push(at), orientedBox: () => {} };
-  buildRoadside(road, mapWorld.terrain, { structures, bright: {}, markers: false, twoWay: true, railGrade: 1000, cliffs: resolveZones(road).cliffs });
+  const posts = roadsideFurniture(road, mapWorld.terrain, { markers: false, twoWay: true, railGrade: 1000, cliffs: resolveZones(road).cliffs }).rails.map((rail) => rail.a);
   const toSea = (x, z, dx, dz) => {
     for (let m = 20; m <= 400; m += 20) if (mapWorld.terrain.height(x + dx * m, z + dz * m) < seaLevel) return m;
     return Infinity;
@@ -842,4 +686,51 @@ test("every gym on the map knows a distinct café of the network", () => {
   const cafeIds = network.cafes().map((c) => c.id);
   for (const id of ids) assert.ok(cafeIds.includes(id), `${id} is a café of the network`);
   assert.equal(new Set(ids).size, ids.length, "distinct");
+});
+
+import { MASK, maskAt } from "../public/js/world/plan/masks.js";
+test("the plan keeps plants off every outdoor gym's pad and statue row", () => {
+  for (const gym of mapWorld.gyms) {
+    const [px, , pz] = gym.center;
+    const [c, s] = [Math.cos(gym.yaw), Math.sin(gym.yaw)];
+    for (const x of [-8, -4, 0, 4, 8]) {
+      for (const z of [-3, 0, 3, 6, 8]) {
+        const at = [px + x * c + z * s, pz - x * s + z * c];
+        assert.notEqual(maskAt(mapWorld.plan.masks, ...at), MASK.free, `gym ${gym.cafeId}: free ground at local (${x}, ${z})`);
+      }
+    }
+  }
+});
+
+test("no verge plant or tree stands inside a café or gym clearing", () => {
+  const clearings = [
+    ...mapWorld.cafeSites.map((site) => ({ x: site.position[0], z: site.position[2], radius: 14 })),
+    ...mapWorld.gyms.map((gym) => ({ x: gym.position[0] + 3 * Math.sin(gym.yaw), z: gym.position[2] + 3 * Math.cos(gym.yaw), radius: 12 })),
+  ];
+  assert.ok(clearings.length >= 8);
+  let plants = 0;
+  for (const list of [...Object.values(mapWorld.plan.roadside), ...Object.values(mapWorld.plan.trees)]) {
+    for (let i = 0; i < list.length; i += 5) {
+      plants += 1;
+      for (const c of clearings) assert.ok(Math.hypot(list[i] - c.x, list[i + 2] - c.z) >= c.radius, `a plant at ${list[i].toFixed(0)}, ${list[i + 2].toFixed(0)} stands in a clearing`);
+    }
+  }
+  assert.ok(plants > 100, "the world still has plants");
+});
+
+import { STUDIO_FOOTPRINT } from "../public/js/view3d/features.js";
+
+test("no tree, plant or roadside prop stands on the spin studio's ground", () => {
+  const { position: [ox, , oz], yaw } = mapWorld.studio;
+  const { halfWidth, front, back } = STUDIO_FOOTPRINT;
+  const inside = (x, z) => {
+    const [dx, dz] = [x - ox, z - oz];
+    const [lx, lz] = [dx * Math.cos(yaw) - dz * Math.sin(yaw), dx * Math.sin(yaw) + dz * Math.cos(yaw)];
+    return Math.abs(lx) < halfWidth + 1 && lz > front - 1 && lz < back + 1;
+  };
+  for (const kind of ["trees", "roadside", "scrub", "landRows"]) {
+    for (const [id, spots] of Object.entries(mapWorld.plan[kind])) {
+      for (let i = 0; i < spots.length; i += 5) assert.ok(!inside(spots[i], spots[i + 2]), `${kind} ${id} at ${spots[i]}, ${spots[i + 2]}`);
+    }
+  }
 });

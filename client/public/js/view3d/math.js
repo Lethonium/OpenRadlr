@@ -61,14 +61,6 @@ export function invert(m) {
   ]);
 }
 
-/** Orthographic projection (used for the sun's shadow map). */
-export function orthographic(left, right, bottom, top, near, far) {
-  const lr = 1 / (left - right);
-  const bt = 1 / (bottom - top);
-  const nf = 1 / (near - far);
-  return new Float32Array([-2 * lr, 0, 0, 0, 0, -2 * bt, 0, 0, 0, 0, 2 * nf, 0, (left + right) * lr, (top + bottom) * bt, (far + near) * nf, 1]);
-}
-
 /** Uniform scale. */
 export const scaling = (s) => new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1]);
 

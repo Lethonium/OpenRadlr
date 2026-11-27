@@ -102,20 +102,6 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
-.biome-preview {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-.biome-preview i {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%);
-}
-
 kbd {
   font-family: inherit;
   border: 1px solid var(--border);
@@ -1443,13 +1429,6 @@ button.small {
 
 .setting-row-wide .field-hint {
   grid-column: 1 / -1;
-}
-
-/* The season swatches follow their select inside a row. */
-.setting-row .biome-preview {
-  grid-column: 2;
-  justify-self: end;
-  margin: 0;
 }
 
 /* Key help as a scannable grid of key caps. */

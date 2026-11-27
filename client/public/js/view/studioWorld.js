@@ -14,13 +14,13 @@ import { studioRouteId } from "./menuStage.js";
  * @param {object} deps
  * @param {{id: string, kind?: string}[]} deps.routes routes from /api/info (their maps are in their files)
  */
-export async function studioWorld({ routes, biome, fetchRouteFile, fetchNetwork, buildScene }) {
+export async function studioWorld({ routes, biome, season, fetchRouteFile, fetchNetwork, buildScene }) {
   const found = await valleyRoute(routes, fetchRouteFile, fetchNetwork);
   if (!found) return null;
   const { file, network } = found;
   const route = new RouteGeometry(file);
   const others = await fetchMapNeighbours(route, routes, fetchRouteFile);
-  const scene = await buildScene(file, others, { network, biome });
+  const scene = await buildScene(file, others, { network, biome, season });
   if (!scene?.studio) return null;
   const known = new Map([[route.id, route]]);
   for (const other of others) known.set(other.id, new RouteGeometry(other));

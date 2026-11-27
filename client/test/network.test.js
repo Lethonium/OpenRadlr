@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { NETWORK_LANES, RoadNetwork, hashSeed } from "../public/js/route/network.js";
 import { fetchMapNetwork, roadNetworkOf } from "../public/js/route/worldMap.js";
+import { ROAD_KIND } from "../public/js/world/plan/roadStrips.js";
 import { buildWorld, sharedStretches } from "../public/js/view3d/world.js";
 import { buildScene } from "../public/js/view3d/worldScene.js";
 import { drawMapPreview } from "../public/js/view/mapPreview.js";
@@ -105,7 +107,8 @@ test("a route on a network rides its roads point for point", () => {
 test("the world on a network: every road once, the café, junction pads", () => {
   // Drawn once: the ridden route on top, the roads only where it doesn't run.
   const alone = buildWorld(loop, { network: new RoadNetwork({ ...tinyNetworkFile(), edges: tinyNetworkFile().edges.slice(0, 1), routes: [] }) });
-  const vertices = (w) => w.chunks.road.reduce((sum, c) => sum + c.mesh.vertexCount, 0);
+  // Town pavements are not roads: they come with the towns, not with the network.
+  const vertices = (w) => w.roads.strips.kinds.filter((kind) => kind !== ROAD_KIND.pavement).length;
   assert.ok(vertices(world) < vertices(alone) * 1.2, "roads under the ridden route are not drawn again");
   assert.equal(world.cafes.length, 1);
   assert.ok(Math.hypot(world.cafes[0][0], world.cafes[0][2]) < 80, "the café is at the café");
@@ -132,7 +135,7 @@ test("the scene is built with the network, in a worker too", async () => {
   await buildScene(tinyLoopFile(), [], { biome: { id: "temperate" }, createWorker: () => worker });
   assert.equal(posted.biome, "temperate", "a biome object is sent by id");
   const inPlace = await buildScene(tinyLoopFile(), [], { network: file, createWorker: () => null });
-  assert.ok(inPlace.chunks.road.length > 0);
+  assert.ok(inPlace.roads.strips.kinds.length > 0);
 });
 
 // --- the menu's map --------------------------------------------------------------------
@@ -150,4 +153,23 @@ test("the menu map draws the island and every road of the network", () => {
   drawMapPreview(canvas, { routes: [loop], selectedId: loop.id, network: tinyNetworkFile() });
   assert.ok(calls.lineTo > 200, "coast, roads and the route");
   assert.equal(calls.arcs, 1, "the start");
+});
+
+// --- settlements and landmarks -----------------------------------------------------
+
+test("the valley lists three settlements and five landmarks", () => {
+  const map = new RoadNetwork(JSON.parse(readFileSync(new URL("../../routes/maps/valley.json", import.meta.url))));
+  assert.deepEqual(map.settlements.map((s) => s.id), ["hilltop", "southwest", "harbour"]);
+  assert.deepEqual(map.landmarks.map((l) => l.id), ["cape-light", "sw-ruin", "south-arch", "farm-mills", "valley-balloons"]);
+  assert.deepEqual(map.settlements[0].center, [2400, -950]);
+  assert.equal(map.landmarks[3].count, 5);
+});
+
+test("a map without settlements or landmarks has none", () => {
+  const bare = JSON.parse(readFileSync(new URL("../../routes/maps/valley.json", import.meta.url)));
+  delete bare.settlements;
+  delete bare.landmarks;
+  const map = new RoadNetwork(bare);
+  assert.deepEqual(map.settlements, []);
+  assert.deepEqual(map.landmarks, []);
 });

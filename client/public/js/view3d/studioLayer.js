@@ -1,20 +1,13 @@
 /**
- * The spin studio building in the valley, as a layer of the main-thread view
- * (like the statues): the shell's base once, a storey and a room per floor,
- * the roof on top. The floor count follows the studio's rooms, so nothing of
- * it is baked into the world chunks. Local frame as in the studio: riders
- * face −Z, up is +Y; the site gives its origin and yaw.
+ * Where the spin studio's floors and riders are, with no drawing: the floor count follows the studio's rooms (and the
+ * riders), so nothing of it is baked into the world chunks. The scene draws the building (scene/studioBuildingLayer.js)
+ * and the riders (riderLayer). Local frame as in the studio: riders face −Z, up is +Y; the site gives its origin and yaw.
  */
-import { multiply, placement, transformPoint } from "./math.js";
-import { FLOOR_HEIGHT, SLAB, buildStudioShell } from "./studioBuilding.js";
-import { buildStudioRoom } from "./studioRoom.js";
-import { INSTRUCTOR, seatPosition } from "./studioLayout.js";
+import { placement, transformPoint } from "./math.js";
+import { FLOOR_HEIGHT, INSTRUCTOR, SLAB, coachId, seatPosition } from "./studioLayout.js";
 
 /** The building never has fewer storeys than this, so it reads as a building. */
 const MIN_FLOORS = 2;
-const CLOSED_TINT = Object.freeze([0.3, 0.32, 0.36]);
-const CLOSED_GLASS = Object.freeze({ alpha: 0.75, tint: [0.25, 0.3, 0.36] });
-const OPEN_GLASS = Object.freeze({ alpha: 0.12, tint: [1, 1, 1] });
 
 /** Storeys drawn for `rooms` studio rooms. */
 export function floorCount(rooms) {
@@ -34,7 +27,7 @@ export function seatWorld(site, room, seat) {
 }
 
 /** World pose of the coach on `floor`'s stage. */
-function coachWorld(site, floor) {
+export function coachWorld(site, floor) {
   const [x, y, z] = INSTRUCTOR.position;
   const at = transformPoint(floorTransform(site, floor), [x, y + SLAB, z]);
   return { position: [at[0], at[1], at[2]], yaw: site.yaw + INSTRUCTOR.yaw };
@@ -42,30 +35,29 @@ function coachWorld(site, floor) {
 
 const forwardOf = (yaw) => [-Math.sin(yaw), 0, -Math.cos(yaw)];
 
-export class StudioLayer {
-  #renderer;
+/**
+ * Where the studio's floors and riders are, with no drawing: how many storeys (rooms, and any a rider sits above), which
+ * are open (lit) and where each studio rider and each floor's coach stands.
+ */
+export class StudioFloors {
   #site;
   #rooms = MIN_FLOORS;
   #declaredOpen = 0;
   #open = 0;
-  #handles;
 
-  /**
-   * @param {object} renderer uploads and draws meshes (the WebGL one, or a fake in tests)
-   * @param {{position: number[], yaw: number}} site from `studioSite`
-   */
-  constructor(renderer, site) {
-    this.#renderer = renderer;
+  /** @param {{position: number[], yaw: number}} site from `studioSite` */
+  constructor(site) {
     this.#site = site;
-    const shell = buildStudioShell();
-    const room = buildStudioRoom();
-    const up = (mesh) => renderer.upload(mesh);
-    this.#handles = { base: up(shell.base), floor: up(shell.floor), roof: up(shell.roof), glass: up(shell.glass), room: up(room.room), accents: up(room.accents) };
   }
 
   /** Storeys for the studio's rooms, or more where riders sit on a higher floor (road views never hear the room count). */
   get floors() {
     return Math.max(floorCount(this.#rooms), this.#open);
+  }
+
+  /** Floors below this count are open (lit): the declared ones, and those riders sit on. */
+  get open() {
+    return this.#open;
   }
 
   /** How many floors have a room, from the studio's room count. */
@@ -94,43 +86,13 @@ export class StudioLayer {
     return placed;
   }
 
-  /** The coach on every open floor, as placed riders (id 0, pedalling). */
+  /** The coach on every open floor, as placed riders: one id per floor (`coachId`), all with the instructor's look, pedalling. */
   coaches() {
     const placed = [];
     for (let floor = 0; floor < Math.min(this.#open, this.floors); floor += 1) {
       const { position, yaw } = coachWorld(this.#site, floor);
-      placed.push({ rider: { id: INSTRUCTOR.id, power: 1, speed: 0, studio: { room: floor, seat: -1 } }, position, forward: forwardOf(yaw), yaw });
+      placed.push({ rider: { id: coachId(floor), lookId: INSTRUCTOR.id, coach: true, power: 1, speed: 0, studio: { room: floor, seat: -1 } }, position, forward: forwardOf(yaw), yaw });
     }
     return placed;
-  }
-
-  /** "opaque": base, storeys, rooms, roof. "glass": the front panes, after every opaque mesh. */
-  draw(pass, _ctx) {
-    const r = this.#renderer;
-    const h = this.#handles;
-    const open = (floor) => floor < this.#open;
-    if (pass === "opaque") {
-      r.draw(h.base, floorTransform(this.#site, 0));
-      for (let floor = 0; floor < this.floors; floor += 1) {
-        const model = floorTransform(this.#site, floor);
-        r.draw(h.floor, model);
-        const at = multiply(model, placement([0, SLAB, 0]));
-        if (open(floor)) {
-          r.draw(h.room, at);
-          r.drawBright(h.accents, at, 0.8);
-        } else {
-          r.draw(h.room, at, CLOSED_TINT);
-        }
-      }
-      r.draw(h.roof, floorTransform(this.#site, this.floors));
-    } else if (pass === "glass") {
-      for (let floor = 0; floor < this.floors; floor += 1) {
-        r.drawTransparent(h.glass, floorTransform(this.#site, floor), open(floor) ? OPEN_GLASS : CLOSED_GLASS);
-      }
-    }
-  }
-
-  dispose() {
-    for (const handle of Object.values(this.#handles)) this.#renderer.dispose(handle);
   }
 }

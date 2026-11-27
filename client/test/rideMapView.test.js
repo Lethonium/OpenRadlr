@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { RoadNetwork } from "../public/js/route/network.js";
-import { LANE_WIDTH } from "../public/js/view3d/world.js";
+import { LANE_WIDTH } from "../public/js/world/roads.js";
 import { MAP_VIEW, cachedOffsetNodes, drawRideMap, laneOffset, mapCamera, mapRiderMarks, offsetNodes, roadPointAt } from "../public/js/view/rideMapView.js";
 import { tinyLoopFile, tinyNetworkFile } from "./helpers.js";
 
