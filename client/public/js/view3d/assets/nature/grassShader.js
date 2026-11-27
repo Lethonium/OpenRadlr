@@ -15,7 +15,7 @@ export const GRASS_GLSL = `
 
 /** Declarations at the top of the vertex shader: ground height sampling, noise, cloud shade. */
 export const GRASS_VERTEX_HEAD = `
-  attribute vec3 aOff; uniform vec3 uCam; uniform float uSize, uROut, uWorld, uRes, uBlade, uBladeW, uTime, uWind, uCSK; uniform vec2 uFadeIn; uniform sampler2D uH, uC;
+  attribute vec3 aOff; uniform vec3 uCam; uniform float uSize, uROut, uWorld, uRes, uBlade, uBladeW, uTime, uWind, uCSK; uniform vec2 uFadeIn; uniform sampler2D uH, uC, uK; uniform vec4 uKBox;
   varying vec3 vGCol; varying float vGY;
   ${GRASS_GLSL}
   ${CLOUD_GLSL}
@@ -30,7 +30,8 @@ export const GRASS_VERTEX_BLADE = `
   vec2 tuv = (p + uWorld*0.5)/uWorld*(uRes-1.0)/uRes + 0.5/uRes;
   vec4 tc = texture2D(uC, tuv);
   float dist = length(p - uCam.xz);
-  float dens = tc.a;
+  // The coarse density, cut back to zero on the plan's road, river and built cells (finer than the ground texture).
+  float dens = tc.a * texture2D(uK, (p - uKBox.xy)/uKBox.zw).r;
   float fade = (1.0 - smoothstep(uROut*0.8, uROut, dist)) * (uFadeIn.x < 0.0 ? 1.0 : smoothstep(uFadeIn.x, uFadeIn.y, dist));
   float keep = step(fract(rnd*13.73), dens*fade);
   float clump = gClump(p);

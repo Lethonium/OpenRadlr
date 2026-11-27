@@ -50,6 +50,14 @@ function bladeGeometry(segs) {
   return geometry;
 }
 
+/** A one-texel clearance texture that lets grass grow everywhere. */
+function everywhere() {
+  const texture = new THREE.DataTexture(Uint8Array.of(255), 1, 1, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.unpackAlignment = 1;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 /**
  * One ring of grass.
  * @param {object} options
@@ -58,13 +66,15 @@ function bladeGeometry(segs) {
  * @param {number} options.res texels per side of the ground textures
  * @param {import("../../../three.js").Texture} options.heightTex red: ground height (float)
  * @param {import("../../../three.js").Texture} options.colorTex rgb: ground colour, alpha: grass density
+ * @param {import("../../../three.js").Texture} [options.clearTex] red: 1 where a blade root may stand (finer than `colorTex`)
+ * @param {import("../../../three.js").Vector4} [options.clearBox] world x0, z0, width and depth `clearTex` covers
  * @param {ReturnType<typeof import("../materials.js").createSharedUniforms>} options.uniforms
  * @param {() => number} options.random source of the roots' scatter
  * @param {import("../../scene/tracker.js").Tracker["track"]} options.track
  * @param {number} [options.bladeHeight] metres of a full-density blade
  * @returns {{object: import("../../../three.js").Mesh, uniforms: object, update: (camera: import("../../../three.js").Vector3) => void, dispose: () => void}}
  */
-export function createGrassRing({ ring, world, res, heightTex, colorTex, uniforms: shared, random, track, bladeHeight = 0.5 }) {
+export function createGrassRing({ ring, world, res, heightTex, colorTex, clearTex = null, clearBox = null, uniforms: shared, random, track, bladeHeight = 0.5 }) {
   const owner = createOwner(track);
   const tile = ring.r * 2;
   const count = Math.max(1, Math.round(ring.dens * tile * tile));
@@ -87,6 +97,8 @@ export function createGrassRing({ ring, world, res, heightTex, colorTex, uniform
     uRes: { value: res },
     uH: { value: heightTex },
     uC: { value: colorTex },
+    uK: { value: clearTex ?? owner.own(everywhere()) },
+    uKBox: { value: clearBox ?? new THREE.Vector4(-1e6, -1e6, 2e6, 2e6) },
     uBlade: { value: bladeHeight * (ring.h ?? 1) },
     uBladeW: { value: ring.w },
     uTime: shared.time,
