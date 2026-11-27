@@ -35,6 +35,7 @@ import { RidePause } from "./ride/ridePause.js";
 import { planGoalBoards } from "./ride/goalBoards.js";
 import { createGoalSheet } from "./view3d/posters/goalSheet.js";
 import { createCanvas, paintPoster } from "./view3d/posters/paint.js";
+import { boardPosterPlan } from "./view3d/posters/plan.js";
 import { MAX_BOARDS, cropWindow, prepareImage } from "./profile/myBoards.js";
 import { dragCrop, initialCrop, zoomCrop } from "./view/boardCrop.js";
 import { boardErrorKey, myBoardsLines } from "./view/myBoardsView.js";
@@ -127,7 +128,7 @@ import { seasonChoices } from "./view/seasonPicker.js";
 import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
-import { nextQuality, qualityLevel } from "./view3d/quality.js";
+import { nextQuality, qualityLevel, qualitySettings } from "./view3d/quality.js";
 import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
 import { CAMERA_MODES } from "./view3d/chaseCamera.js";
 import { TIME_MODES } from "./world/daylight.js";
@@ -1085,6 +1086,7 @@ function initMenuStage() {
           // The menu's drone view is always Low, built so from the start.
           const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday(), quality: "low" });
           view.lens = droneLens(scene.overview);
+          paintBoardPosters(view, route.id ?? null, []);
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
         }
@@ -6090,6 +6092,55 @@ function setQuality(quality) {
   $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
   replanRideWorld(quality);
+  paintRideBoardPosters(app.view3d);
+}
+
+/**
+ * Chooses and paints the posters of `view`'s roadside boards into the atlas of its quality and hands them over.
+ * `uploads` are `{id, text, image}` (the rider's own boards, decoded); the menu's view passes none.
+ */
+function paintBoardPosters(view, routeId, uploads) {
+  try {
+    const atlas = qualitySettings(view.quality).boards.atlas;
+    const plan = boardPosterPlan(view.boards, { routeId, uploads, dateKey: isoDate(Date.now()), atlas, makeCanvas: createCanvas });
+    view.setBoardPosters(plan.atlas, plan.slotOf, plan.slotCount);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+/** A stored upload's picture, or null when the browser cannot decode it (the poster then shows only its text). */
+async function decodeBoardImage(blob) {
+  if (!blob) return null;
+  try {
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ride view's posters: the default ones plus the rider's own boards (kept on the device, never sent anywhere).
+ * Painted when the view is shown and again when its quality (so its atlas size) changes; the menu's drone view and the
+ * studio get the defaults only.
+ */
+async function paintRideBoardPosters(view) {
+  if (!view?.boards?.length || app.studio) return;
+  const route = app.route;
+  let entries = [];
+  try {
+    entries = await app.boards.list();
+  } catch (error) {
+    console.error(error);
+  }
+  const uploads = await Promise.all(entries.map(async ({ id, text, blob }) => ({ id, text, image: await decodeBoardImage(blob) })));
+  try {
+    // Another view or route came meanwhile: its own paint wins.
+    if (app.view3d !== view || app.route !== route) return;
+    paintBoardPosters(view, route?.id ?? null, uploads);
+  } finally {
+    for (const { image } of uploads) image?.close?.();
+  }
 }
 
 /** The newest ride-world replan; a later request makes an earlier one's result stale. */

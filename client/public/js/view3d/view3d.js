@@ -320,6 +320,8 @@ export class View3D {
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
     this.camera = new ChaseCamera(route);
     this.overview = world.overview ?? null;
+    /** The roadside billboard sites of this world (view3d/boards.js), the posters' basis. */
+    this.boards = world.boards ?? [];
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];
     this.#studioSite = world.studio ?? null;
