@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rideStores } from "../public/js/ride/rideStores.js";
+import { rideStores, riderDbNames } from "../public/js/ride/rideStores.js";
 import { riderDbName } from "../public/js/profile/riderStorage.js";
 
 /**
@@ -88,4 +88,18 @@ test("each rider's stores open that rider's three databases", async () => {
     "openradlr-history",
     "openradlr-history.x",
   ]);
+});
+
+test("a rider's boards live in their own database", async () => {
+  const idb = fakeIdb();
+  const anna = rideStores("anna", { idb });
+  assert.deepEqual(await anna.boards.add({ text: "hello" }).then((r) => r.ok), true);
+  assert.deepEqual([...idb.databases.keys()], [riderDbName("openradlr-boards", "anna")]);
+  assert.equal((await rideStores("ben", { idb }).boards.list()).length, 0);
+});
+
+test("deleting a rider removes the boards database too", () => {
+  const names = riderDbNames("anna");
+  assert.ok(names.includes("openradlr-boards.anna"));
+  assert.ok(riderDbNames("main").includes("openradlr-boards"));
 });

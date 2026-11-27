@@ -178,6 +178,7 @@ const DATA_NAMES = {
   goals: "profilePage.data.goals",
   progress: "profilePage.data.progress",
   unfinished: "profilePage.data.unfinished",
+  boards: "profilePage.data.boards",
   settings: "profilePage.data.settings",
   device: "profilePage.data.device",
 };
@@ -189,6 +190,7 @@ const DATA_DETAILS = {
   goals: "profilePage.data.goals.detail",
   progress: "profilePage.data.progress.detail",
   unfinished: "profilePage.data.unfinished.detail",
+  boards: "profilePage.data.boards.detail",
   settings: "profilePage.data.settings.detail",
   device: "profilePage.data.device.detail",
 };

@@ -69,7 +69,7 @@ import { LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
-import { rideStores } from "./ride/rideStores.js";
+import { rideStores, riderDbNames } from "./ride/rideStores.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
 import { toLatLon } from "./route/geo.js";
 import { RouteGeometry } from "./route/geometry.js";
@@ -469,6 +469,8 @@ const app = {
   history: stores.history,
   /** My best lap per route, ridden again by a ghost. */
   ghosts: stores.ghosts,
+  /** My own board posters: a picture and/or a line, on this device only. */
+  boards: stores.boards,
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -1349,8 +1351,6 @@ function askForPin(id, { canForget = true } = {}) {
     check: async (pin) => ((await unlock(riders, id, pin, pinDeps())) ? null : t("pin.error.wrong")),
   });
 }
-
-const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys"].map((base) => riderDbName(base, id));
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
@@ -4166,7 +4166,7 @@ function submitGoalForm() {
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
-  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store, boards: app.boards.store } };
 }
 
 /** The "Your data" page: each item with its count, export and delete. */

@@ -244,3 +244,11 @@ test("curveBars: each best effort as a share of the highest", () => {
   assert.deepEqual(bars.map((bar) => [bar.label, bar.watts, bar.share]), [["5 s", "600 W", 1], ["1 min", "300 W", 0.5]]);
   assert.deepEqual(curveBars(null), []);
 });
+
+test("dataRows: the boards row counts uploads and can be deleted", () => {
+  const rows = dataRows([{ id: "boards", count: 3, readable: true }, { id: "boards", count: 0, readable: true }]);
+  assert.equal(rows[0].name.length > 0, true);
+  assert.equal(rows[0].count, "3 entries");
+  assert.equal(rows[0].canDelete, true);
+  assert.equal(rows[1].canDelete, false);
+});

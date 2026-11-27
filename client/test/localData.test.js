@@ -31,6 +31,7 @@ const stores = () => ({
   history: mapStore({ "ride:1": { id: "1", startedAt: 1 }, "ride:2": { id: "2", startedAt: 2 } }),
   ghosts: mapStore({ "ghost:rolling-hills": { routeId: "rolling-hills", durationS: 1318 } }),
   autosave: mapStore({}),
+  boards: mapStore({}),
 });
 const storage = () => fakeStorage({
   "openride.profile.v1": JSON.stringify({ name: "Ralf", privateKeyJwk: { d: "secret" }, publicKey: "pk" }),
@@ -46,7 +47,7 @@ const storage = () => fakeStorage({
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
 
 test("the data items, in order", () => {
-  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings", "device"]);
+  assert.deepEqual(DATA_ITEMS, ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "boards", "settings", "device"]);
 });
 
 test("inventory counts each item", async () => {
@@ -337,4 +338,51 @@ test("deleteRiderFromRoster keeps the rider in the roster when a database refuse
   // The rider stays reachable, and so do the rides that refused to go.
   assert.deepEqual(kept, { active: "main", ids: ["main", "k3x9q2ab"] });
   assert.deepEqual([...databases.keys()], ["openradlr-history.k3x9q2ab"]);
+});
+
+const boardEntry = { id: "b-1-1", text: "SECRET LINE", blob: new Blob(["SECRETPIXELS"]), crop: null, addedAt: 1 };
+const withBoards = () => ({ ...stores(), boards: mapStore({ "b-1-1": boardEntry }) });
+
+test("boards are a data item and inventory counts them", async () => {
+  assert.ok(DATA_ITEMS.includes("boards"));
+  const by = byId(await inventory({ storage: storage(), stores: withBoards() }));
+  assert.equal(by.boards.count, 1);
+  assert.equal(by.boards.readable, true);
+});
+
+test("backupSnapshot never carries board uploads", async () => {
+  const source = withBoards();
+  let touched = false;
+  for (const method of ["get", "keys"]) {
+    const original = source.boards[method];
+    source.boards[method] = (...args) => ((touched = true), original(...args));
+  }
+  const text = JSON.stringify(await backupSnapshot({ storage: storage(), stores: source, now: 5 }));
+  assert.equal(touched, false);
+  assert.ok(!/boards|SECRET/i.test(text));
+});
+
+test("exportData never carries board uploads", async () => {
+  const source = withBoards();
+  let touched = false;
+  for (const method of ["get", "keys"]) {
+    const original = source.boards[method];
+    source.boards[method] = (...args) => ((touched = true), original(...args));
+  }
+  const text = JSON.stringify(await exportData({ storage: storage(), stores: source, now: 5 }));
+  assert.equal(touched, false);
+  assert.ok(!/boards|SECRET/i.test(text));
+});
+
+test("deleting the boards item clears the boards store only", async () => {
+  const source = withBoards();
+  assert.equal(await deleteItem("boards", { storage: storage(), stores: source }), true);
+  assert.equal(source.boards.map.size, 0);
+  assert.equal(source.history.map.size, 2);
+});
+
+test("deleting everything clears the boards store", async () => {
+  const source = withBoards();
+  assert.equal(await deleteItem("everything", { storage: storage(), stores: source }), true);
+  assert.equal(source.boards.map.size, 0);
 });
