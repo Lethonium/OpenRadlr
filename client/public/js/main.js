@@ -122,7 +122,7 @@ import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
-import { adjustQuality, firstRunQuality } from "./view3d/qualityPick.js";
+import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
 import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
 import { buildScene } from "./view3d/worldScene.js";
 import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
@@ -973,18 +973,23 @@ function applyFirstRunQuality() {
 }
 
 /**
- * The first 3D ride on an automatically picked level: after 90 frames its median
- * frame time may step the level down (or to 2D). Runs once, then the pick is final.
+ * Rides on an automatically picked level: whenever 90 frames in a row run
+ * slowly the level steps down (at Low, to 2D), again after a cooldown if it is
+ * still too slow. Each ride and each return to 3D starts a fresh sample; a
+ * hidden page's time never counts. Picking a level by hand ends it.
  */
-function probeFirstRide(time) {
-  if (readSetting(QUALITY_AUTO_KEY) !== "1" || app.viewMode !== "3d") return;
-  const probe = (app.qualityProbe ??= { last: null, frameMs: [] });
-  if (probe.last !== null && time - probe.last < 1) probe.frameMs.push((time - probe.last) * 1000);
-  probe.last = time;
-  if (probe.frameMs.length < QUALITY_PROBE_FRAMES) return;
-  writeSetting(QUALITY_AUTO_KEY, "0");
-  const next = adjustQuality(qualityLevel(readSetting(QUALITY_KEY)), probe.frameMs);
+function probeRideQuality(time) {
+  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES }));
+  const active = readSetting(QUALITY_AUTO_KEY) === "1" && app.viewMode === "3d" && Boolean(app.view3d);
+  if (!active || app.qualityProbeRide !== app.ride) {
+    probe.reset();
+    app.qualityProbeRide = active ? app.ride : null;
+  }
+  if (!active) return;
+  const next = probe.frame(time, app.view3d.quality);
+  if (next === null) return;
   if (next === "2d") {
+    writeSetting(QUALITY_AUTO_KEY, "0");
     setViewMode("2d");
     notify(t("quality.picked2d"));
   } else {
@@ -4827,6 +4832,8 @@ function initRecovery() {
   window.addEventListener("focus", () => deviceLog.info("Window has focus"));
   document.addEventListener("visibilitychange", () => {
     deviceLog.info(`Page ${document.visibilityState}`);
+    // Time spent hidden is not a slow frame.
+    app.qualityProbe?.pause();
     if (document.visibilityState !== "hidden") {
       if (nativeRide?.active) { app.nativeSyncing = true; nativeRide.flush().catch((error) => { app.nativeSyncing = false; console.warn(error); }); }
       return;
@@ -6159,7 +6166,7 @@ function frame() {
   const ghost = me && !app.finished ? updateGhostLap(me, time) : null;
 
   const draft = me ? draftInfo(me, riders, app.route) : null;
-  probeFirstRide(time);
+  probeRideQuality(time);
   if (app.viewMode === "3d") {
     app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
   } else {
