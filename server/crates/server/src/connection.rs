@@ -35,6 +35,7 @@ fn to_command(rider_id: RiderId, command: PlayerCommand) -> Command {
             exercise,
             side,
         },
+        PlayerCommand::Look { look } => Command::Look { rider_id, look },
         PlayerCommand::LeaveRace => Command::LeaveRace { rider_id },
         PlayerCommand::JoinEvent { event_id } => Command::JoinEvent { rider_id, event_id },
         PlayerCommand::LeaveEvent => Command::LeaveEvent { rider_id },

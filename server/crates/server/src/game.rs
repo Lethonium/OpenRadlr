@@ -188,6 +188,8 @@ struct Client {
     exercise: Option<Exercise>,
     /// The side of a sided pose (#77).
     side: Option<Side>,
+    /// The rider's look code (#25), passed on unread.
+    look: Option<String>,
     /// The part of the rider's odometer already added to the community totals.
     counted_m: f64,
 }
@@ -643,6 +645,7 @@ impl GameCore {
                 device: DeviceKind::Trainer,
                 exercise: None,
                 side: None,
+                look: None,
                 counted_m: self.world.rider(rider_id).map_or(0.0, |r| r.odometer),
             },
         );
@@ -723,6 +726,7 @@ impl GameCore {
                 device: client.device,
                 exercise: client.exercise,
                 side: client.side,
+                look: client.look.clone(),
             })
     }
 
@@ -771,6 +775,13 @@ impl GameCore {
         if let Some(client) = self.clients.get_mut(&rider_id) {
             client.exercise = exercise;
             client.side = side;
+        }
+    }
+
+    /// Keeps the rider's look code (#25) for the riders they are sent to.
+    pub fn set_look(&mut self, rider_id: RiderId, look: String) {
+        if let Some(client) = self.clients.get_mut(&rider_id) {
+            client.look = Some(look);
         }
     }
 
@@ -1223,6 +1234,10 @@ impl Game for GameCore {
 
     fn workout(&mut self, rider_id: RiderId, exercise: Option<Exercise>, side: Option<Side>) {
         GameCore::workout(self, rider_id, exercise, side);
+    }
+
+    fn set_look(&mut self, rider_id: RiderId, look: String) {
+        GameCore::set_look(self, rider_id, look);
     }
 
     fn input(&mut self, rider_id: RiderId, action: InputAction) {
@@ -2664,6 +2679,18 @@ mod tests {
             .find(|m| matches!(m, ServerMessage::State { .. }))
             .expect("a state message")
             .to_json()
+    }
+
+    #[test]
+    fn a_look_shows_in_riders_and_none_is_left_out() {
+        let mut game = game(0, 10);
+        let (anna, _) = join(&mut game, "Anna");
+        let (_, ben_sink) = join(&mut game, "Ben");
+        broadcast(&mut game);
+        assert!(!exercise_json(&ben_sink).contains(r#""look""#));
+        game.set_look(anna, "1a2b3c".to_owned());
+        broadcast(&mut game);
+        assert!(exercise_json(&ben_sink).contains(r#""look":"1a2b3c""#));
     }
 
     #[test]

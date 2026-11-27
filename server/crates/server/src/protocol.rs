@@ -145,6 +145,10 @@ pub enum ClientMessage {
         #[serde(default)]
         side: Option<String>,
     },
+    /// The rider's look code (#25); the session checks its form, the server passes it on unread.
+    Look {
+        look: String,
+    },
     /// Offer a pairing code for the second screen `key`, named `name`.
     PairOffer {
         key: String,
@@ -243,11 +247,21 @@ impl Side {
 }
 
 /// What others are told about a rider besides the sim's state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RiderTags {
     pub device: DeviceKind,
     pub exercise: Option<Exercise>,
     pub side: Option<Side>,
+    /// The rider's look code (#25), passed on unread.
+    pub look: Option<String>,
+}
+
+/// Longest rider look code (#25) the server passes on.
+pub const LOOK_MAX_LEN: usize = 48;
+
+/// Whether `look` is a look code the server passes on: 1–48 characters of `[0-9a-z]`.
+pub fn valid_look(look: &str) -> bool {
+    (1..=LOOK_MAX_LEN).contains(&look.len()) && look.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -556,6 +570,9 @@ pub struct RiderState {
     /// Where in the spin studio the rider sits, for studio riders shown on the road.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub studio: Option<StudioPlace>,
+    /// The rider's look code (#25); left out when they chose none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub look: Option<String>,
 }
 
 /// A room and bike of the spin studio.
@@ -590,6 +607,7 @@ impl RiderState {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 
@@ -620,6 +638,7 @@ impl RiderState {
                 room: s.room,
                 seat: s.seat,
             }),
+            look: None,
         }
     }
 }
@@ -989,6 +1008,7 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         style: bot.map(|b| b.profile().style.id()),
         bot_move: bot.and_then(|b| b.current_move().id()),
         studio: None,
+        look: tags.look,
     }
 }
 
@@ -1392,6 +1412,7 @@ mod tests {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 

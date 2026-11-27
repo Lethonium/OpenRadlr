@@ -40,6 +40,10 @@ test("parses the AFK warning from the server", () => {
   assert.notEqual(parseServerMessage('{"type":"afk_warning","leave_in_s":120,"can_stay":true}'), null);
 });
 
+test("the look message carries the code", () => {
+  assert.deepEqual(ClientMessages.look("1abc"), { type: "look", look: "1abc" });
+});
+
 test("workout messages carry the exercise or null", () => {
   assert.deepEqual(ClientMessages.workout("plank"), { type: "workout", exercise: "plank" });
   assert.deepEqual(ClientMessages.workout(), { type: "workout", exercise: null });

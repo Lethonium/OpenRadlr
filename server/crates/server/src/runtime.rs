@@ -103,6 +103,8 @@ pub trait Game: Send + 'static {
     fn pause(&mut self, _rider_id: RiderId, _on: bool) {}
     /// The exercise a workout rider does now (`None`: rest); the studio ignores it.
     fn workout(&mut self, _rider_id: RiderId, _exercise: Option<Exercise>, _side: Option<Side>) {}
+    /// The rider's look code (#25), passed on to others; the studio ignores it.
+    fn set_look(&mut self, _rider_id: RiderId, _look: String) {}
     fn chat(&mut self, rider_id: RiderId, text: &str);
     fn tick(&mut self);
     /// What the OpenBikeNet link reports; worlds without a shared route ignore it.
@@ -198,6 +200,11 @@ pub enum Command {
         rider_id: RiderId,
         exercise: Option<Exercise>,
         side: Option<Side>,
+    },
+    /// The rider's look code (#25).
+    Look {
+        rider_id: RiderId,
+        look: String,
     },
     /// Riders of other apps arriving or leaving on the shared route.
     Remote(RemoteEvent),
@@ -437,6 +444,7 @@ pub(crate) fn apply<G: Game>(core: &mut G, command: Command) {
             exercise,
             side,
         } => core.workout(rider_id, exercise, side),
+        Command::Look { rider_id, look } => core.set_look(rider_id, look),
         Command::Remote(event) => core.remote(event),
     }
 }

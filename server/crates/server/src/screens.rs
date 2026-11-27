@@ -292,6 +292,7 @@ mod tests {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 
