@@ -107,6 +107,15 @@ export function roadTriangles(mesh) {
   return keep;
 }
 
+/** The turn (the world's rotation.y) the 3D layers give a building baked unturned; the map rotates by its negative. */
+function buildingTurn(item) {
+  const yaw = item.yaw ?? 0;
+  if (item.layer === "farm") return Math.PI / 2 - yaw;
+  if (item.layer === "cafe") return yaw + Math.PI;
+  if (item.layer === "landmark") return item.id === "turbine" ? yaw + Math.PI / 2 : yaw;
+  return 0;
+}
+
 /** The top-view job each item draws as: `{ job, scale }`, or null. Built once from the catalog. */
 function spriteIndex() {
   const byId = new Map();
@@ -268,11 +277,18 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
     // Low things first, so crowns fall over their neighbours' shadows.
     things.sort((a, b) => a.item.z - b.item.z);
     for (const { item, sprite } of things) {
+      const turn = item.layer === "arch" ? item.yaw : buildingTurn(item);
       if (item.layer === "arch") {
         ctx.save();
         ctx.translate(item.x, item.z);
-        ctx.rotate(-item.yaw);
+        ctx.rotate(-turn);
         drawSprite(ctx, sprite, 0, 0, 1);
+        ctx.restore();
+      } else if (turn) {
+        ctx.save();
+        ctx.translate(item.x, item.z);
+        ctx.rotate(-turn);
+        drawSprite(ctx, sprite, 0, 0, item.s || 1);
         ctx.restore();
       } else drawSprite(ctx, sprite, item.x, item.z, item.s || 1);
     }

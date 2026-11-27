@@ -313,3 +313,27 @@ test("only the centre lane divider of the road mesh is kept", () => {
   assert.ok(ratio > 0.2 && ratio < 0.5, `kept ${ratio.toFixed(2)} of the marking triangles (one row of three)`);
   assert.equal(kept.length - count(kept), all.length - count(all), "every other triangle stays");
 });
+
+/** The turns (canvas radians) each tile canvas was rotated by, in order. */
+function turnsOf(item) {
+  const turns = [];
+  const createCanvas = (w, h) => {
+    const { canvas } = fakeCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    const spy = new Proxy(ctx, { get: (target, name) => (name === "rotate" ? (angle) => turns.push(angle) : target[name]), set: (target, name, value) => Reflect.set(target, name, value) });
+    return { ...canvas, getContext: () => spy };
+  };
+  const placed = { x: (Math.floor(start.x / MAP_TILE_M) + 0.5) * MAP_TILE_M, y: 0, z: (Math.floor(-start.y / MAP_TILE_M) + 0.5) * MAP_TILE_M, ...item };
+  const indexOf = { query: (x0, z0, x1, z1) => (placed.x >= x0 && placed.x <= x1 && placed.z >= z0 && placed.z <= z1 ? [placed] : []) };
+  const view = createMapView({ scene, route, index: indexOf, sampler: flat, store: fakeStore(), createCanvas });
+  frame(view);
+  return turns;
+}
+
+test("farms, cafes and landmarks are turned as the world places them", () => {
+  const near = (turns, angle) => turns.some((turn) => Math.abs(turn - angle) < 1e-9);
+  assert.ok(near(turnsOf({ layer: "farm", id: "cottage", yaw: 0.4 }), 0.4 - Math.PI / 2), "farm: the world turns it by pi/2 - yaw");
+  assert.ok(near(turnsOf({ layer: "cafe", id: "x", yaw: 0.4 }), -0.4 - Math.PI), "cafe: yaw + pi");
+  assert.ok(near(turnsOf({ layer: "landmark", id: "turbine", yaw: 0.4 }), -0.4 - Math.PI / 2), "turbine: yaw + pi/2");
+  assert.ok(near(turnsOf({ layer: "landmark", id: "windmill", yaw: 0.4 }), -0.4), "landmark: yaw");
+});
