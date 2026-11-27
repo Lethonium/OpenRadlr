@@ -27,10 +27,10 @@ export class Engine {
   /**
    * @param {HTMLCanvasElement | null} canvas
    * @param {{createRenderer?: (canvas: HTMLCanvasElement | null) => object,
-   *   createPost?: typeof createPost}} [deps]
+   *   createPost?: typeof createPost, settings?: import("../quality.js").QualitySettings}} [deps] `settings` the level the target and chain are first built at
    * @param {() => void} [onDispose]
    */
-  constructor(canvas, { createRenderer = defaultRenderer, createPost: makePost = createPost } = {}, onDispose = () => {}) {
+  constructor(canvas, { createRenderer = defaultRenderer, createPost: makePost = createPost, settings = qualitySettings("high") } = {}, onDispose = () => {}) {
     this.canvas = canvas;
     this.#createPost = makePost;
     this.#onDispose = onDispose;
@@ -43,7 +43,7 @@ export class Engine {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // Sizes are CSS pixels; the ratio scales the drawing buffer.
     this.renderer.setPixelRatio(1);
-    this.settings = qualitySettings("high");
+    this.settings = settings;
     this.size = { width: Math.max(1, canvas?.width ?? 1), height: Math.max(1, canvas?.height ?? 1) };
     this.target = sceneTarget(this.size.width, this.size.height, this.settings.msaa);
     this.#post = this.#createPost(this.renderer, this.target, this.settings);

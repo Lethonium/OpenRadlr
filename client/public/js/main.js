@@ -1044,9 +1044,9 @@ function initMenuStage() {
     season: () => app.season,
     createView: use3d
       ? (route, scene) => {
-          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday() });
+          // The menu's drone view is always Low, built so from the start.
+          const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday(), quality: "low" });
           view.lens = droneLens(scene.overview);
-          view.setQuality("low");
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
         }
@@ -3063,7 +3063,7 @@ function buildStudioWorld() {
     .then((world) => {
       if (app.ride !== ride) return;
       if (!world) return studioRoomOnly();
-      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday() });
+      const view = new View3D($("world3d"), $("labels3d"), world.route, world.scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
       view.routes = world.routes;
       view.network = world.network;
       view.camera = new StudioCamera(world.scene.studio, app.state?.room ?? 0, 3, cameraModeOf(readSetting(STUDIO_CAMERA_KEY)), { reducedMotion });
@@ -5746,7 +5746,7 @@ async function fetchNetworkFile(mapId) {
 /** Shows the 3D view once its world is built (or takes the menu's view as it is). */
 function show3d(scene, view = null) {
   try {
-    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday() });
+    app.view3d = view ?? new View3D($("world3d"), $("labels3d"), app.route, scene, { weather: weatherToday(), quality: qualityLevel(readSetting(QUALITY_KEY)) });
   } catch (error) {
     console.error(error);
     $("view-note").textContent = t("view.unavailable");

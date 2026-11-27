@@ -13,6 +13,7 @@ import { poseAt } from "../public/js/view3d/riderPose.js";
 import { PLINTHS } from "../public/js/view3d/statues.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
 import { fakeEngine } from "./support/fakeEngine.js";
+import { qualitySettings } from "../public/js/view3d/quality.js";
 import { groundFixture } from "./support/groundFixture.js";
 import { GYM_CAMERA, GymCamera, RIDE_LENS, projectToScreen, SIDE_CAMERA, View3D, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
@@ -226,6 +227,13 @@ function gymView(gyms, biome = "temperate", studio = undefined, engine = fakeEng
 }
 const workoutRider = { id: 7, name: "Ana", distance: 100, lane: 1, speed: 0, power: 0, device: "workout", exercise: null, exerciseSince: 10 };
 const colors = { me: "#ff0000", human: "#00ff00", bot: "#0000ff" };
+
+test("a view made at a quality level never builds the high level first", () => {
+  const engine = fakeEngine();
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), { biome: "temperate", crowd: { people: [], figure: "person" } }, { engine, quality: "low" });
+  assert.equal(view.quality, "low");
+  assert.deepEqual(engine.qualities, [qualitySettings("low")]);
+});
 
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");

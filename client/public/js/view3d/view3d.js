@@ -349,10 +349,11 @@ export class View3D {
    * @param {HTMLElement} labelLayer absolutely positioned element over the canvas
    * @param {import("../route/geometry.js").RouteGeometry} route
    * @param {object} [world] the scene from `buildScene` (built here if missing)
-   * @param {{engine?: object, weather?: object}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
-   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`)
+   * @param {{engine?: object, weather?: object, quality?: string}} [options] `engine` the canvas's engine (tests; the canvas's own is used otherwise), `weather` the day's sky: `date` (a Date,
+   *   the weather follows the season, the map and its UTC day; none means clear) and `override` (a fixed weather, `?weather=`), `quality` the graphics level the
+   *   scene is built at (building at one level and switching costs the scene twice)
    */
-  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null } = {}) {
+  constructor(canvas, labelLayer, route, world = sceneOf(buildWorld(route)), { engine = null, weather = null, quality = "high" } = {}) {
     this.canvas = canvas;
     this.labelLayer = labelLayer;
     this.route = route;
@@ -362,8 +363,9 @@ export class View3D {
     this.routes = null;
     /** The map's road network (RoadNetwork): riders off every route ride its roads (#15). */
     this.network = null;
+    if (QUALITY_LEVELS.includes(quality)) this.quality = quality;
     // One engine per canvas, shared with every other view on it and never disposed here.
-    this.engine = engine ?? engineFor(canvas);
+    this.engine = engine ?? engineFor(canvas, { settings: qualitySettings(this.quality) });
     this.engine.setQuality(qualitySettings(this.quality));
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
