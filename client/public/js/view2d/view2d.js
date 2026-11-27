@@ -4,6 +4,8 @@
  * what the views draw (a place and heading on the map, a distance on the side view), keeps the day's look (time,
  * season, weather) and the sprite store fed, and draws the picked view on its canvas once a frame.
  * `available` is false when the sprite baker cannot start (no WebGL2, context lost): the caller then keeps the old map.
+ * It is known up front from a cheap WebGL2 check; the baker itself (a second renderer and a world scene) is made on
+ * the first frame a 2D view draws, so a ride that stays in 3D never pays for it.
  */
 import { lookOf } from "../view3d/assets/riders/look.js";
 import { riderPosition } from "../world/roads.js";
@@ -15,7 +17,7 @@ import { groundSampler } from "./groundSampler.js";
 import { look2d } from "./look2d.js";
 import { createMapView } from "./mapView.js";
 import { createSideView } from "./sideView.js";
-import { createSpriteBaker } from "./sprites/baker.js";
+import { createSpriteBaker, webgl2Available } from "./sprites/baker.js";
 import { createSpriteStore } from "./sprites/spriteStore.js";
 import { indexWorld } from "./worldIndex.js";
 
@@ -40,7 +42,7 @@ const defaultCanvas = (w, h) => {
 };
 
 export class View2D {
-  /** False when the baker could not start: render then draws nothing. */
+  /** False when WebGL2 is missing or the baker failed to start: render then draws nothing. */
   available = false;
   #canvas;
   #route;
@@ -50,6 +52,9 @@ export class View2D {
   #weatherInput;
   #createCanvas;
   #mode = "map";
+  #createBaker;
+  #now;
+  #budgetMs;
   #baker = null;
   #store = null;
   #views = null;
@@ -63,9 +68,9 @@ export class View2D {
    * @param {object} canvas the 2D canvas element
    * @param {object} route RouteGeometry of my route
    * @param {object} scene the world scene (`buildScene`'s result)
-   * @param {{season?: string, timeMode?: string, weather?: {date?: Date, override?: object}, createBaker?: (options: {season: string}) => object, createCanvas?: (w: number, h: number) => object, now?: () => number, budgetMs?: number}} [options]
+   * @param {{season?: string, timeMode?: string, weather?: {date?: Date, override?: object}, createBaker?: (options: {season: string}) => object, isSupported?: () => boolean, createCanvas?: (w: number, h: number) => object, now?: () => number, budgetMs?: number}} [options]
    */
-  constructor(canvas, route, scene, { season = "summer", timeMode = "day", weather = null, createBaker = createSpriteBaker, createCanvas = defaultCanvas, now = () => performance.now(), budgetMs } = {}) {
+  constructor(canvas, route, scene, { season = "summer", timeMode = "day", weather = null, createBaker = createSpriteBaker, isSupported = webgl2Available, createCanvas = defaultCanvas, now = () => performance.now(), budgetMs } = {}) {
     this.#canvas = canvas;
     this.#route = route;
     this.#scene = scene;
@@ -73,14 +78,24 @@ export class View2D {
     this.#timeMode = timeMode;
     this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null };
     this.#createCanvas = createCanvas;
+    this.#createBaker = createBaker;
+    this.#now = now;
+    this.#budgetMs = budgetMs;
+    this.available = Boolean(isSupported());
+  }
+
+  /** The baker and the sprite store, made on first use; false (and the views unavailable) when the baker cannot start. */
+  #ensureStore() {
+    if (this.#store) return true;
     try {
-      this.#baker = createBaker({ season });
+      this.#baker = this.#createBaker({ season: this.#season });
     } catch (error) {
       console.warn("The 2D views are unavailable:", error); // i18n-ok: developer log
-      return;
+      this.available = false;
+      return false;
     }
-    this.#store = createSpriteStore({ bake: this.#baker.bake, now, ...(budgetMs ? { budgetMs } : {}) });
-    this.available = true;
+    this.#store = createSpriteStore({ bake: this.#baker.bake, now: this.#now, ...(this.#budgetMs ? { budgetMs: this.#budgetMs } : {}) });
+    return true;
   }
 
   /** "map" or "side"; anything else keeps the current one. */
@@ -199,7 +214,7 @@ export class View2D {
    *   `riders` are the ride's riders on my route, as the 3D view gets them.
    */
   render({ riders, myId, me, myCadence = 0, draft = null, lemons = [], ghost = null, timeS = 0, utcSeconds = 0, colors }) {
-    if (!this.available) return;
+    if (!this.available || !this.#ensureStore()) return;
     const ratio = Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO);
     // The views draw in CSS pixels; the backing store has `ratio` device pixels to each, set as the context's transform.
     const width = Math.max(1, Math.round(this.#canvas.clientWidth));

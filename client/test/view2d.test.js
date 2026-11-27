@@ -31,6 +31,7 @@ function fakeBaker({ cost = 0 } = {}) {
 function make({ baker = fakeBaker(), unavailable = false, ...options } = {}) {
   const screen = fakeCanvas(800, 600);
   const createBaker = () => {
+    baker.created = (baker.created ?? 0) + 1;
     if (unavailable) throw new Error("no webgl2");
     return baker;
   };
@@ -38,6 +39,7 @@ function make({ baker = fakeBaker(), unavailable = false, ...options } = {}) {
     season: "summer",
     timeMode: "day",
     createBaker,
+    isSupported: () => !unavailable,
     createCanvas: (w, h) => fakeCanvas(w, h).canvas,
     now: () => baker.clock,
     ...options,
@@ -58,6 +60,26 @@ test("a baker that cannot start makes the views unavailable and render draws not
   view.render(frame());
   assert.deepEqual(screen.calls, { lineTo: 0, fill: 0, fillRect: 0, stroke: 0, arc: 0, fillText: 0 });
   assert.equal(screen.fills.length, 0);
+});
+
+test("a baker that fails when first needed makes the views unavailable", () => {
+  const { view, baker, screen } = make({ isSupported: () => true, unavailable: true });
+  assert.equal(view.available, true, "the support check passed");
+  assert.doesNotThrow(() => view.render(frame()));
+  assert.equal(view.available, false);
+  assert.equal(baker.created, 1);
+  assert.equal(screen.calls.fillRect, 0);
+});
+
+test("the baker is made on the first 2D frame, once, and not before", () => {
+  const { view, baker } = make();
+  assert.equal(view.available, true, "known without the baker");
+  view.setMode("side");
+  view.setRoute(route);
+  assert.equal(baker.created ?? 0, 0);
+  view.render(frame());
+  view.render(frame());
+  assert.equal(baker.created, 1);
 });
 
 test("render draws the map and bakes what the map asked for", () => {

@@ -39,6 +39,17 @@ function defaultRenderer(canvas) {
   return new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
 }
 
+/** Whether this device can start a baker: a WebGL2 context can be made. Cheap: no scene is built, and the context is released. */
+export function webgl2Available(createCanvas = defaultCanvas) {
+  try {
+    const gl = createCanvas().getContext("webgl2");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return Boolean(gl);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {{season: string, createRenderer?: (canvas: object) => object, createCanvas?: () => object}} options
  * @returns {{bake: (job: import("./catalog.js").SpriteJob) => {frames: object[], ox: number, oy: number, ppm: number, bytes: number}, liveResources: () => number, dispose: () => void}}
