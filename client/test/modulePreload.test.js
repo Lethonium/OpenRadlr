@@ -32,3 +32,9 @@ test("index.html preloads exactly the modules main.js loads (npm run preload wri
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   assert.deepEqual(preloadedModules(html), moduleGraph());
 });
+
+test("the menu starts without Three.js or the world builder: main.js loads them when 3D is used", () => {
+  const modules = moduleGraph();
+  assert.ok(!modules.some((path) => path.includes("vendor/three")), "no Three.js");
+  for (const lazy of ["js/view3d/view3d.js", "js/view3d/studioScene.js", "js/view3d/worldScene.js", "js/view3d/world.js"]) assert.ok(!modules.includes(lazy), lazy);
+});

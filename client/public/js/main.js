@@ -123,9 +123,11 @@ import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
 import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
-import { CAMERA_MODES, TIME_MODES, View3D, droneLens, gymLens, isWebGl2Available } from "./view3d/view3d.js";
-import { buildScene } from "./view3d/worldScene.js";
-import { INSTRUCTOR, StudioView3D } from "./view3d/studioScene.js";
+import { CAMERA_MODES } from "./view3d/chaseCamera.js";
+import { TIME_MODES } from "./world/daylight.js";
+import { droneLens, gymLens } from "./view3d/lenses.js";
+import { isWebGl2Available } from "./view3d/webgl.js";
+import { INSTRUCTOR } from "./view3d/studioLayout.js";
 import { elsewhereName, onRoute, ridesElsewhere } from "./ride/roadRiders.js";
 import { STUDIO_CAMERAS, StudioCamera, cameraModeOf } from "./view3d/studioCamera.js";
 import { studioWorld } from "./view/studioWorld.js";
@@ -166,6 +168,29 @@ const QUALITY_KEY = "openride.quality";
 /** "1" while the stored quality was picked for the device and no ride has tested it yet. */
 const QUALITY_PROBE_FRAMES = 90;
 const QUALITY_AUTO_KEY = "openride.qualityAuto";
+
+/**
+ * The 3D renderer (Three.js) and the world builder, loaded on first use: the
+ * menu and its route list come up without them, and a 2D-only device never
+ * loads them. `View3D` and `StudioView3D` are set once `load3d` resolves.
+ */
+let View3D = null;
+let StudioView3D = null;
+let loading3d = null;
+function load3d() {
+  loading3d ??= Promise.all([import("./view3d/view3d.js"), import("./view3d/studioScene.js"), import("./view3d/worldScene.js")]).then(([view, studio, world]) => {
+    View3D = view.View3D;
+    StudioView3D = studio.StudioView3D;
+    return world;
+  });
+  return loading3d;
+}
+
+/** `buildScene` (view3d/worldScene.js) once the 3D modules are loaded, so a view can be made from its scene right away. */
+async function buildScene(...args) {
+  const world = await load3d();
+  return world.buildScene(...args);
+}
 /** Before seasons the look was a biome; a saved "winter" still opens in winter. */
 const BIOME_KEY = "openride.biome";
 const SEASON_KEY = "openride.season";
@@ -3087,6 +3112,16 @@ function buildStudioWorld() {
 /** The fallback: the training room alone, the glass a flat sky. */
 function studioRoomOnly() {
   $("view-note").textContent = "";
+  const ride = app.ride;
+  load3d().then(() => {
+    if (app.ride === ride) studioRoomView();
+  }, (error) => {
+    console.error(error);
+    notify(t("studio.unavailable3d"), "error");
+  });
+}
+
+function studioRoomView() {
   try {
     const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
