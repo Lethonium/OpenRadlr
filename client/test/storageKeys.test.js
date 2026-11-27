@@ -14,6 +14,7 @@ const RIDER_KEYS = [
   "openradlr.summits",
   "openradlr.lemons",
   "openradlr.achievements",
+  "openradlr.look",
   "openradlr.goals",
   "openride.view",
   "openride.camera",

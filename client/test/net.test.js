@@ -89,6 +89,30 @@ test("performs the hello and join handshake", async () => {
   assert.equal(connection.serverInfo.server_name, "Test");
 });
 
+test("the look follows joined, and a changed look is sent at once", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 70, look: "1abc" });
+  socket().open();
+  socket().receive({ type: "welcome" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1abc" });
+  connection.look("1xyz");
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1xyz" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1xyz" }, "a rejoin sends the newer look");
+});
+
+test("no look, no look message", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 70 });
+  socket().open();
+  socket().receive({ type: "welcome" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.ok(socket().sent.every((m) => m.type !== "look"));
+});
+
 test("signs the welcome challenge when the rider can sign", async () => {
   const { connection, socket } = connectionWithSocket();
   const signed = [];

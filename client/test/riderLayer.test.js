@@ -323,3 +323,18 @@ test("hideBody hides the classic rider's body, the bike stays", () => {
   assert.ok(riderMeshes(cyclist).length > 0 && riderMeshes(cyclist).every((mesh) => !mesh.visible));
   assert.ok(bikeMeshes(cyclist).every((mesh) => shown(mesh)));
 });
+
+// ---------- chosen looks (#25)
+
+test("a chosen look is drawn, and a new look rebuilds the rider's cyclist", () => {
+  const { layer } = make();
+  const look = { ...lookOf(1), bike: "city", glasses: false };
+  layer.update(frame([entry(1, 3, { look, lookKey: "a" })]));
+  const first = layer.cyclistOf(1);
+  layer.update(frame([entry(1, 3, { look: { ...look, bike: "road" }, lookKey: "b" })]));
+  const second = layer.cyclistOf(1);
+  assert.notEqual(second, first);
+  assert.equal(first.object.parent, null, "the old look left the scene");
+  layer.update(frame([entry(1, 3, { look: { ...look, bike: "road" }, lookKey: "b" })]));
+  assert.equal(layer.cyclistOf(1), second, "the same look keeps its cyclist");
+});

@@ -11,6 +11,8 @@ import { joinMessage } from "../profile/riderKey.js";
  */
 export class GameConnection extends Emitter {
   #socket = null;
+  /** The look code set while riding (#25), sent again after a rejoin. */
+  #look = null;
   riderId = null;
   serverInfo = null;
   /** Brings this rider back after a dropped connection (from `joined`, #73). */
@@ -29,8 +31,9 @@ export class GameConnection extends Emitter {
 
   /**
    * Connects, performs the hello/join handshake and resolves with the rider id. With
-   * `sign` (the rider key's), the join carries the welcome challenge signed with it.
-   * @param {{name: string, weightKg: number, publicKey?: string, sign?: (message: string) => Promise<string | null>}} profile
+   * `sign` (the rider key's), the join carries the welcome challenge signed with it. `look` (#25), when given, follows
+   * every `joined`, a rejoin's too.
+   * @param {{name: string, weightKg: number, publicKey?: string, sign?: (message: string) => Promise<string | null>, look?: string | null}} profile
    */
   join(profile) {
     return new Promise((resolve, reject) => {
@@ -54,6 +57,7 @@ export class GameConnection extends Emitter {
             this.riderId = message.rider_id;
             this.resumeToken = message.resume_token ?? null;
             this.physics = message.physics ?? null;
+            if (this.#look ?? profile.look) this.#send(ClientMessages.look(this.#look ?? profile.look));
             resolve(message.rider_id);
             if (rejoined) this.emit("rejoined", message);
             break;
@@ -125,6 +129,12 @@ export class GameConnection extends Emitter {
 
   leaveVehicle() {
     this.#send(ClientMessages.leaveVehicle());
+  }
+
+  /** Sends a changed look code (#25) now and after every rejoin. */
+  look(code) {
+    this.#look = code;
+    if (code) this.#send(ClientMessages.look(code));
   }
 
   /** Tells the server which café workout exercise is under way (`null`: none). */

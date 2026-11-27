@@ -161,6 +161,15 @@ export function lookFromChoice(choice, base) {
   return look;
 }
 
+/**
+ * The look to keep for a rider who switched on the old "Classic rider" setting before looks existed: their rolled look
+ * as the classic rider, once Old School is earned and no look is kept yet; else null (nothing to carry over).
+ */
+export function carriedClassic(kept, classicSetting, earnedIds, seed) {
+  if (kept || classicSetting !== "on" || !earnedIds?.classicRider) return null;
+  return { ...rolledChoice(seed), style: "classic" };
+}
+
 /** The kept look, or null when there is none or it cannot be read. */
 export function loadLook(storage) {
   try {

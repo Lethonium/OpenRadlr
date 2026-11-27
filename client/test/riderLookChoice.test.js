@@ -6,6 +6,7 @@ import {
   LOOK_SLOTS,
   decodeLook,
   encodeLook,
+  carriedClassic,
   isUnlocked,
   loadLook,
   lookFromChoice,
@@ -118,4 +119,11 @@ test("the look is kept in the rider's storage", () => {
   storage.setItem(LOOK_KEY, "{broken");
   assert.equal(loadLook(storage), null);
   assert.equal(saveLook({ setItem: () => { throw new Error("full"); } }, choice), false);
+});
+
+test("the old Classic rider setting is carried into the look once", () => {
+  assert.equal(carriedClassic(null, "on", { classicRider: 1 }, 4).style, "classic");
+  assert.equal(carriedClassic(null, "off", { classicRider: 1 }, 4), null);
+  assert.equal(carriedClassic(null, "on", {}, 4), null, "a stale on without Old School");
+  assert.equal(carriedClassic(rolledChoice(1), "on", { classicRider: 1 }, 4), null, "a kept look wins");
 });

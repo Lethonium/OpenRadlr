@@ -50,6 +50,7 @@
     <link rel="modulepreload" href="js/profile/pinLock.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
     <link rel="modulepreload" href="js/profile/riderKey.js" />
+    <link rel="modulepreload" href="js/profile/riderLook.js" />
     <link rel="modulepreload" href="js/profile/riderStorage.js" />
     <link rel="modulepreload" href="js/profile/riders.js" />
     <link rel="modulepreload" href="js/profile/seasonGoals.js" />
@@ -134,6 +135,7 @@
     <link rel="modulepreload" href="js/view3d/menuCamera.js" />
     <link rel="modulepreload" href="js/view3d/quality.js" />
     <link rel="modulepreload" href="js/view3d/qualityPick.js" />
+    <link rel="modulepreload" href="js/view3d/riderLooks.js" />
     <link rel="modulepreload" href="js/view3d/studioCamera.js" />
     <link rel="modulepreload" href="js/view3d/studioLayout.js" />
     <link rel="modulepreload" href="js/view3d/webgl.js" />
@@ -171,6 +173,7 @@
     <link rel="modulepreload" href="js/view/remoteRiders.js" />
     <link rel="modulepreload" href="js/view/rideMapDecor.js" />
     <link rel="modulepreload" href="js/view/rideMapTheme.js" />
+    <link rel="modulepreload" href="js/view3d/assets/riders/look.js" />
     <link rel="modulepreload" href="js/view3d/biomes/index.js" />
     <link rel="modulepreload" href="js/view3d/math.js" />
     <link rel="modulepreload" href="js/view3d/riderGeometry.js" />
@@ -441,12 +444,6 @@
                   <label class="setting-row">
                     <span class="setting-label" data-i18n="rider.autoPause">Auto-pause when I stop</span>
                     <input id="auto-pause" type="checkbox" />
-                  </label>
-                  <label id="classic-rider-row" class="setting-row" hidden>
-                    <span class="setting-label"><span data-i18n="settings.classicRider">Classic rider</span>
-                      <span class="setting-desc" data-i18n="settings.classicRiderHint">The old rider and bike, on your screen</span>
-                    </span>
-                    <input id="classic-rider" type="checkbox" />
                   </label>
                   <div class="setting-row setting-row-wide ride-only" id="difficulty-row">
                     <span class="setting-label"><span id="difficulty-label" data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value" for="difficulty">50 %</output></span>

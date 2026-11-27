@@ -17,12 +17,6 @@ export const NEW_WORLD_AT = Date.UTC(2026, 11, 1);
 /** Whether the saved achievements hold Old School, which unlocks the classic rider. */
 export const hasClassicRider = (state) => Boolean(state?.earned?.classicRider);
 
-/** The Classic rider setting: offered once Old School is earned, on only when chosen ("on") and offered (a stale "on" is ignored). */
-export const classicRiderChoice = (state, stored) => {
-  const available = hasClassicRider(state);
-  return { available, on: available && stored === "on" };
-};
-
 const YOGA_PLANS = new Set(PRESETS.filter((p) => VENUES[p.venue]?.category === "yoga").map((p) => p.id));
 const WEEK_STEP_MS = 8 * 86_400_000;
 
