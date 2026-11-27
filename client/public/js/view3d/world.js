@@ -350,6 +350,8 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The view needs the biome to resolve its sky and lighting at render time.
     biome: biome.id,
     season,
+    // The level the plan's populations (trees, roadside, animals) were budgeted for.
+    detail,
     terrain,
     zones: zonesOf.get(route),
     cafes: cafeSpots,

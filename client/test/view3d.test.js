@@ -235,6 +235,19 @@ test("a view made at a quality level never builds the high level first", () => {
   assert.deepEqual(engine.qualities, [qualitySettings("low")]);
 });
 
+test("a new plan for another quality level rebuilds the plan's layers in the view's season", () => {
+  const engine = fakeEngine();
+  const world = { biome: "temperate", season: "autumn", detail: "high", crowd: { people: [], figure: "person" } };
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), world, { engine });
+  assert.equal(view.planDetail, "high");
+  const rebuilt = [];
+  view.worldScene.setSeason = (season, plan) => rebuilt.push([season, plan]);
+  const plan = { settlements: [], farms: [], landmarks: [] };
+  view.setPlan(plan, "low");
+  assert.equal(view.planDetail, "low");
+  assert.deepEqual(rebuilt, [["autumn", plan]]);
+});
+
 test("the view resolves the scene's biome for its sky", () => {
   assert.equal(gymView([]).view.biome.id, "temperate");
   assert.equal(gymView([], "winter").view.biome.id, "winter");

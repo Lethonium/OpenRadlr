@@ -5840,6 +5840,31 @@ function setQuality(quality) {
   app.view3d.setQuality(quality);
   $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
+  replanRideWorld(quality);
+}
+
+/** The newest ride-world replan; a later request makes an earlier one's result stale. */
+let rideReplan = 0;
+
+/**
+ * The world's plan budgets its trees, roadside and animals for one quality
+ * level, so a quality change alone keeps the old level's populations. Plans
+ * the ride's world again for `quality` in the background and swaps the new
+ * plan into the same view.
+ */
+function replanRideWorld(quality) {
+  const view = app.view3d;
+  const { ride, routeFile, biome, season } = app;
+  if (!view?.planDetail || view.planDetail === quality || !ride || !routeFile || app.studio) return;
+  const build = ++rideReplan;
+  Promise.all([fetchMapNeighbours(app.route, routesOf(app.info), fetchRouteFile), fetchMapNetwork(app.route, fetchNetworkFile)])
+    .then(([others, network]) => buildScene(routeFile, others, { network, biome, season, detail: quality }))
+    .then((scene) => {
+      // A newer replan, another view or another season (which builds the whole world again) wins.
+      if (build !== rideReplan || app.view3d !== view || view.quality !== quality || scene.season !== view.season) return;
+      view.setPlan(scene.plan, quality);
+    })
+    .catch((error) => console.error(error));
 }
 
 function setTimeMode(mode) {

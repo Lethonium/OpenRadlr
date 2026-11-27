@@ -369,6 +369,8 @@ export class View3D {
     this.engine.setQuality(qualitySettings(this.quality));
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
+    /** The quality level the world's plan was budgeted for (its trees, roadside and animals), or null if unknown. */
+    this.planDetail = world.detail ?? null;
     this.tracker = createTracker();
     this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.seed ?? world.terrain?.seed ?? 0 };
     /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
@@ -405,6 +407,18 @@ export class View3D {
     const settings = qualitySettings(quality);
     this.engine.setQuality(settings);
     this.worldScene.setQuality(settings);
+  }
+
+  /**
+   * Swaps in the world's plan made for another quality level (`detail`): the layers it populates are rebuilt.
+   * A quality change alone keeps the populations the old plan was budgeted for.
+   * @param {object} plan
+   * @param {string} detail
+   */
+  setPlan(plan, detail) {
+    this.planDetail = detail;
+    this.sight = { ...this.sight, boxes: plotBoxes(plan) };
+    this.worldScene.setSeason(this.season, plan);
   }
 
   /**
