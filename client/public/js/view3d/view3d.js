@@ -24,8 +24,8 @@ import { StudioFloors } from "./studioLayer.js";
 import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
-import { buildWorld } from "./world.js";
-import { riderPosition } from "../world/roads.js";
+import { buildWorld, riddenSurface } from "./world.js";
+import { bikeOnRoad, riderPosition } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
@@ -532,7 +532,8 @@ export class View3D {
   /** A rider on a route: mine, or another route of the map. */
   #onRoute(rider) {
     const route = !rider.route || rider.route === this.route.id ? this.route : this.routes?.get(rider.route);
-    return route ? { rider, ...riderPosition(route, rider.distance, rider.lane) } : null;
+    // Wheels on the drawn asphalt, which is lifted and cuts across changes of grade (#144 review).
+    return route ? { rider, ...bikeOnRoad(route, rider.distance, rider.lane, riddenSurface(this.route)) } : null;
   }
 
   /** A rider off every route, on a road of the network in either direction. */
@@ -543,7 +544,7 @@ export class View3D {
     const offset = Math.min(road.length, Math.max(0, rider.road.offset));
     // Lanes count from the left in riding direction.
     const lane = back ? road.lanes - 1 - rider.lane : rider.lane;
-    const at = riderPosition(road, back ? road.length - offset : offset, lane);
+    const at = bikeOnRoad(road, back ? road.length - offset : offset, lane, riddenSurface(this.route));
     return { rider, ...at, forward: back ? scale(at.forward, -1) : at.forward };
   }
 

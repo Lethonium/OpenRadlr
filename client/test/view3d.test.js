@@ -6,7 +6,7 @@ import { identity, lookAt, multiply, perspective, placement, rotationXAbout, tra
 import { fbm, seededRandom, valueNoise } from "../public/js/world/noise.js";
 import { roadStrips } from "../public/js/world/plan/roadStrips.js";
 import { archPlacements } from "../public/js/view3d/world.js";
-import { LANE_WIDTH, RoadIndex, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
+import { LANE_WIDTH, RoadIndex, bikeOnRoad, riderPosition, roadFrame, terrainModel, waterLevel } from "../public/js/world/roads.js";
 import { invert } from "../public/js/view3d/math.js";
 import { CLIPS, mirrorPose } from "../public/js/view3d/clips.js";
 import { poseAt } from "../public/js/view3d/riderPose.js";
@@ -297,7 +297,7 @@ test("a workout rider with no gym in reach rides the road in the world scene", (
   const frames = recordFrames(view);
   view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
   const [entry] = frames.at(-1).riders;
-  closeVec(entry.position, riderPosition(squareRoute(), 100, 1).position, 0.01);
+  closeVec(entry.position, bikeOnRoad(squareRoute(), 100, 1).position, 0.01);
 });
 
 test("the gym camera looks at the mat centre from its road side", () => {
@@ -675,7 +675,7 @@ test("my best lap's ghost goes to the world scene as a see-through rider", () =>
   view.render({ riders: [me, ghost], myId: 1, timeS: 3, colors });
   const entry = frames.at(-1).riders.find((r) => r.id === -1);
   assert.equal(entry.ghost, true);
-  closeVec(entry.position, riderPosition(squareRoute(), 200, 2).position);
+  closeVec(entry.position, bikeOnRoad(squareRoute(), 200, 2).position);
   assert.equal(frames.at(-1).riders.find((r) => r.id === 1).ghost, false);
 });
 
@@ -774,7 +774,7 @@ test("road riders reach the world scene", () => {
   assert.deepEqual(riders.map((r) => r.tint), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
   assert.deepEqual(riders.map((r) => r.cadence), [77, 85, 0]);
   assert.deepEqual(riders.map((r) => r.speed), [8, 6, 7]);
-  const first = riderPosition(squareRoute(), 100, 1);
+  const first = bikeOnRoad(squareRoute(), 100, 1);
   closeVec(riders[0].position, first.position);
   closeVec(riders[0].forward, first.forward);
   assert.equal(riders[0].grade, squareRoute().gradeAt(100));
@@ -800,7 +800,7 @@ test("a vehicle reaches the rider layer, with me on it once", (t) => {
   assert.deepEqual(vehicle.seats.map((seat) => [seat.id, seat.me]), [[1, true], [2, false]]);
   assert.deepEqual(vehicle.seats[0].tint, [1, 0, 0]);
   assert.equal(vehicle.seats[0].cadence, 70);
-  const first = riderPosition(squareRoute(), 100, 1);
+  const first = bikeOnRoad(squareRoute(), 100, 1);
   closeVec(vehicle.position, first.position);
   closeVec(vehicle.forward, first.forward);
 });
