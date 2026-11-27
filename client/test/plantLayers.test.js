@@ -109,6 +109,42 @@ test("grass follows the camera", () => {
   layer.dispose();
 });
 
+test("grass squares behind the camera are not drawn, those ahead are", () => {
+  const layer = createGrassLayer(ground, plan, options());
+  // Eye height over the ground, looking level along +x.
+  const eye = heightSampler(ground.near)(0, 0) + 2;
+  const camera = cameraAt(0, eye, 0);
+  camera.lookAt(100, eye, 0);
+  camera.updateMatrixWorld();
+  layer.update({ ...frameAt(0, 0), camera });
+  const near = layer.rings[0];
+  const total = near.object.children.length;
+  assert.ok(near.drawn() > 0, "some squares ahead");
+  assert.ok(near.drawn() < total, `${near.drawn()} of ${total} squares drawn`);
+  for (const mesh of near.object.children) {
+    if (!mesh.visible) continue;
+    // A drawn square has roots ahead of the camera once wrapped around it.
+    const roots = mesh.geometry.getAttribute("aOff");
+    const size = near.ring.r * 2;
+    let ahead = false;
+    for (let i = 0; i < roots.count; i += 1) {
+      const x = roots.getX(i) + Math.floor((0 - roots.getX(i)) / size + 0.5) * size;
+      // Within the bounds' reach of a blade (1 m) and the 0.1 m near plane.
+      if (x > -1.5) ahead = true;
+    }
+    assert.ok(ahead);
+  }
+  layer.dispose();
+});
+
+test("grass squares are not drawn where no grass grows", () => {
+  const bare = { ...ground, near: { ...ground.near, normals: ground.near.normals.map((v, i) => (i % 3 === 1 ? 0 : v)) } };
+  const layer = createGrassLayer(bare, plan, options());
+  layer.update(frameAt(0, 0));
+  for (const ring of layer.rings) assert.equal(ring.drawn(), 0);
+  layer.dispose();
+});
+
 test("grass grows on meadow and the rim of fields, not on roads, field insides, beaches or cliffs", () => {
   const weights = grassWeights(ground.near, plan.masks);
   const { near } = ground;
@@ -276,7 +312,11 @@ test("the world scene draws the plan, and a season switch rebuilds without leaki
 test("a quality change rebuilds the plant layers to the new level", () => {
   const tracker = createTracker();
   const scene = createWorldScene({ ground, plan, season: "summer" }, { settings: high, track: tracker.track });
-  const blades = () => scene.scene.getObjectByName("grass").children.reduce((sum, ring) => sum + ring.geometry.instanceCount, 0);
+  const blades = () => {
+    let sum = 0;
+    scene.scene.getObjectByName("grass").traverse((mesh) => (sum += mesh.isMesh ? mesh.geometry.instanceCount : 0));
+    return sum;
+  };
   const wanted = (settings) => settings.grassRings.reduce((sum, ring) => sum + Math.max(1, Math.round(ring.dens * ring.r * 2 * ring.r * 2)), 0);
   assert.equal(blades(), wanted(high));
   scene.setQuality(low);

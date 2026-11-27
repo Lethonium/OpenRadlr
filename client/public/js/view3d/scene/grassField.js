@@ -137,3 +137,29 @@ export function grassClearAt(clear, x, z) {
   const j = Math.min(clear.rows - 1, Math.max(0, Math.floor(((z - clear.z0) / clear.depth) * clear.rows)));
   return clear.data[j * clear.columns + i] / 255;
 }
+
+/**
+ * The ground under a world rectangle, from the baked grass textures: its
+ * lowest and highest point, or null where no grass grows on any texel the
+ * shader could read for it (the rings skip that square).
+ * @param {ReturnType<typeof bakeGroundTextures>} baked
+ * @returns {(x0: number, z0: number, x1: number, z1: number) => {low: number, high: number} | null}
+ */
+export function groundRange({ world, res, heights, colors }) {
+  const step = world / (res - 1);
+  const index = (v, round) => Math.min(res - 1, Math.max(0, round((v + world / 2) / step)));
+  return (x0, z0, x1, z1) => {
+    let low = Infinity;
+    let high = -Infinity;
+    let grass = false;
+    for (let j = index(z0, Math.floor); j <= index(z1, Math.ceil); j += 1) {
+      for (let i = index(x0, Math.floor); i <= index(x1, Math.ceil); i += 1) {
+        const t = j * res + i;
+        low = Math.min(low, heights[t]);
+        high = Math.max(high, heights[t]);
+        if (colors[t * 4 + 3] > 0) grass = true;
+      }
+    }
+    return grass ? { low, high } : null;
+  };
+}

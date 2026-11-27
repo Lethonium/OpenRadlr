@@ -79,13 +79,13 @@ export function createGrassRing({ ring, world, res, heightTex, colorTex, clearTe
   const tile = ring.r * 2;
   const count = Math.max(1, Math.round(ring.dens * tile * tile));
   const base = bladeGeometry(ring.segs);
-  const geometry = owner.own(new THREE.InstancedBufferGeometry());
-  geometry.setIndex(base.index);
-  geometry.setAttribute("position", base.attributes.position);
-  const roots = new Float32Array(count * 3);
-  for (let i = 0; i < count; i += 1) roots.set([random() * tile, random() * tile, random()], i * 3);
-  geometry.setAttribute("aOff", new THREE.InstancedBufferAttribute(roots, 3));
-  geometry.instanceCount = count;
+  // The roots, sorted into TILES × TILES squares of the ring's tile: each square is a draw of its own.
+  const span = tile / TILES;
+  const bins = Array.from({ length: TILES * TILES }, () => []);
+  for (let i = 0; i < count; i += 1) {
+    const root = [random() * tile, random() * tile, random()];
+    bins[Math.min(TILES - 1, Math.floor(root[1] / span)) * TILES + Math.min(TILES - 1, Math.floor(root[0] / span))].push(root);
+  }
   const material = owner.own(new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.62, metalness: 0 }));
   const fade = ring.fadeIn ?? [-1, 0];
   const uniforms = {
@@ -118,9 +118,74 @@ export function createGrassRing({ ring, world, res, heightTex, colorTex, clearTe
       .replace("#include <emissivemap_fragment>", GRASS_EMISSIVE); // i18n-ok
   };
   material.customProgramCacheKey = () => `grass${ring.segs}`;
-  const object = new THREE.Mesh(geometry, material);
-  object.frustumCulled = false;
-  object.receiveShadow = true;
+  const object = new THREE.Group();
+  const tiles = [];
+  for (const [b, roots] of bins.entries()) {
+    if (roots.length === 0) continue;
+    const geometry = owner.own(new THREE.InstancedBufferGeometry());
+    geometry.setIndex(base.index);
+    geometry.setAttribute("position", base.attributes.position);
+    geometry.setAttribute("aOff", new THREE.InstancedBufferAttribute(Float32Array.from(roots.flat()), 3));
+    geometry.instanceCount = roots.length;
+    const mesh = new THREE.Mesh(geometry, material);
+    // The ring culls its squares itself: the blades move in the shader, so Three's bounds would be wrong.
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    object.add(mesh);
+    tiles.push({ mesh, x: (b % TILES) * span, z: Math.floor(b / TILES) * span });
+  }
   base.dispose();
-  return { object, uniforms, ring, update: (camera) => uniforms.uCam.value.copy(camera), dispose: () => owner.disposeAll() };
+  const xs = [];
+  const zs = [];
+  return {
+    object,
+    uniforms,
+    ring,
+    count,
+    /** Squares drawn after the last update. */
+    drawn: () => tiles.filter((t) => t.mesh.visible).length,
+    /**
+     * Wraps the blades around the camera. `sees(x0, z0, x1, z1)` says whether a world rectangle can show grass
+     * (in view, not bare); a square whose every wrapped piece fails it is not drawn.
+     * @param {import("../../../three.js").Vector3} camera
+     * @param {((x0: number, z0: number, x1: number, z1: number) => boolean) | null} [sees]
+     */
+    update(camera, sees = null) {
+      uniforms.uCam.value.copy(camera);
+      for (const t of tiles) {
+        if (!sees) {
+          t.mesh.visible = true;
+          continue;
+        }
+        xs.length = 0;
+        zs.length = 0;
+        xs.push(...wrappedSpans(t.x, span, camera.x, tile));
+        zs.push(...wrappedSpans(t.z, span, camera.z, tile));
+        t.mesh.visible = xs.some(([x0, x1]) => zs.some(([z0, z1]) => sees(x0, z0, x1, z1)));
+      }
+    },
+    dispose: () => owner.disposeAll(),
+  };
+}
+
+/** Squares per side a ring's tile is split into, so the squares out of view or without grass are not drawn. */
+export const TILES = 4;
+
+/**
+ * Where roots from [a, a + size) of a ring's tile land once wrapped around the camera at `c`
+ * (the shader's `p += floor((c - p)/tile + 0.5)*tile`): one world interval, or two at opposite
+ * ends of the ring where the wrap cuts through them.
+ * @returns {Array<[number, number]>}
+ */
+export function wrappedSpans(a, size, c, tile) {
+  const shift = (p) => Math.floor((c - p) / tile + 0.5);
+  const first = shift(a);
+  const last = shift(a + size * (1 - 1e-9));
+  if (first === last) return [[a + first * tile, a + size + first * tile]];
+  const pieces = [
+    [a + first * tile, c + tile / 2],
+    [c - tile / 2, a + size + last * tile],
+  ];
+  // A square starting right on the cut keeps only its wrapped piece.
+  return pieces.filter(([from, to]) => to > from);
 }

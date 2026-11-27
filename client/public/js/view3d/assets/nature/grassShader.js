@@ -34,26 +34,33 @@ export const GRASS_VERTEX_BLADE = `
   float dens = tc.a * texture2D(uK, (p - uKBox.xy)/uKBox.zw).r;
   float fade = (1.0 - smoothstep(uROut*0.8, uROut, dist)) * (uFadeIn.x < 0.0 ? 1.0 : smoothstep(uFadeIn.x, uFadeIn.y, dist));
   float keep = step(fract(rnd*13.73), dens*fade);
-  float clump = gClump(p);
-  float hgt = keep*uBlade*mix(0.6, 1.12, fract(rnd*7.31))*(0.5 + 0.5*dens)*mix(0.62, 1.4, clump);
-  float ang = rnd*6.2831853; float ca = cos(ang), sa = sin(ang);
-  vec3 lp = position; float yn = position.y; lp.x *= uBladeW*(0.7 + 0.6*fract(rnd*3.3)); lp.y *= hgt;
-  vec3 xa = vec3(ca, 0.0, sa);
-  vec3 r = vec3(lp.x*ca - lp.z*sa, lp.y, lp.x*sa + lp.z*ca);
-  vec2 wd = normalize(vec2(0.8, 0.6) + 0.35*vec2(sin(rnd*31.0), cos(rnd*17.0)));
-  float gust = gGust(p, uTime);
-  float bend = (0.45*fract(rnd*5.1) + 0.12 + (gust*0.6 + sin(uTime*4.7 + rnd*40.0)*0.07)*uWind)*yn*yn;
-  r.xz += wd*bend*hgt; r.y -= bend*bend*hgt*0.35;
-  vec3 gPos = vec3(p.x, hS(p) - 0.03, p.y) + r;
-  vec3 objectNormal = normalize(vec3(0.0, 1.0, 0.0) + xa*position.x*1.2 + vec3(wd.x, 0.0, wd.y)*bend*0.6);
-  vGY = yn;
-  float dry = gDry(p);
-  vec3 base = tc.rgb*mix(vec3(1.0), vec3(1.12, 1.06, 0.74), dry*0.45 + fract(rnd*2.71)*0.12);
-  base *= 0.86 + clump*0.26;
-  vGCol = base*mix(0.6, 1.16, yn*yn*0.5 + yn*0.5);
-  vGCol = mix(vGCol, vGCol*vec3(1.08, 1.06, 0.84), smoothstep(0.75, 1.0, yn)*0.4);
-  vGCol *= 1.0 + gust*0.08*uWind;
-  vGCol *= cloudShade(p, uTime, uCSK);
+  // A rejected root collapses to a point before the height, wind and colour work: its triangles have no area.
+  vec3 gPos = vec3(p.x, 0.0, p.y);
+  vec3 objectNormal = vec3(0.0, 1.0, 0.0);
+  vGY = 0.0;
+  vGCol = vec3(0.0);
+  if (keep > 0.0) {
+    float clump = gClump(p);
+    float hgt = uBlade*mix(0.6, 1.12, fract(rnd*7.31))*(0.5 + 0.5*dens)*mix(0.62, 1.4, clump);
+    float ang = rnd*6.2831853; float ca = cos(ang), sa = sin(ang);
+    vec3 lp = position; float yn = position.y; lp.x *= uBladeW*(0.7 + 0.6*fract(rnd*3.3)); lp.y *= hgt;
+    vec3 xa = vec3(ca, 0.0, sa);
+    vec3 r = vec3(lp.x*ca - lp.z*sa, lp.y, lp.x*sa + lp.z*ca);
+    vec2 wd = normalize(vec2(0.8, 0.6) + 0.35*vec2(sin(rnd*31.0), cos(rnd*17.0)));
+    float gust = gGust(p, uTime);
+    float bend = (0.45*fract(rnd*5.1) + 0.12 + (gust*0.6 + sin(uTime*4.7 + rnd*40.0)*0.07)*uWind)*yn*yn;
+    r.xz += wd*bend*hgt; r.y -= bend*bend*hgt*0.35;
+    gPos = vec3(p.x, hS(p) - 0.03, p.y) + r;
+    objectNormal = normalize(vec3(0.0, 1.0, 0.0) + xa*position.x*1.2 + vec3(wd.x, 0.0, wd.y)*bend*0.6);
+    vGY = yn;
+    float dry = gDry(p);
+    vec3 base = tc.rgb*mix(vec3(1.0), vec3(1.12, 1.06, 0.74), dry*0.45 + fract(rnd*2.71)*0.12);
+    base *= 0.86 + clump*0.26;
+    vGCol = base*mix(0.6, 1.16, yn*yn*0.5 + yn*0.5);
+    vGCol = mix(vGCol, vGCol*vec3(1.08, 1.06, 0.84), smoothstep(0.75, 1.0, yn)*0.4);
+    vGCol *= 1.0 + gust*0.08*uWind;
+    vGCol *= cloudShade(p, uTime, uCSK);
+  }
 `;
 
 export const GRASS_FRAGMENT_HEAD = "uniform float uGlow; uniform vec3 uSunDirV; uniform vec3 uSunCol; varying vec3 vGCol; varying float vGY;\n"; // i18n-ok
