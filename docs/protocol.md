@@ -105,8 +105,9 @@ where they ride the same road the same way.
 Studio `riders[]` entries: `id`, `name`, `is_bot`, `seat` (0–7 front row,
 8–15 back row), `power`, `cadence`, `speed` and `distance` (flat-road physics,
 for the ride record), `on_target_pct` (share of the class within 10 % of the
-target, `null` before the class) and `class_kj`. Events and chat stay in the
-room.
+target, `null` before the class), `class_kj` and `look` (as on the road, #25;
+left out when the rider sent none). A studio rider shown on the road carries
+their `look` too. Events and chat stay in the room.
 
 `race` has a `phase`:
 

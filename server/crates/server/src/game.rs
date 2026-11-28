@@ -2761,6 +2761,7 @@ mod tests {
             cadence: Some(90.0),
             room: 0,
             seat: id as usize % 16,
+            look: None,
         }
     }
 

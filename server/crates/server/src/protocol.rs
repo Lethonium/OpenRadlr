@@ -638,7 +638,7 @@ impl RiderState {
                 room: s.room,
                 seat: s.seat,
             }),
-            look: None,
+            look: s.look.clone(),
         }
     }
 }
@@ -689,6 +689,9 @@ pub struct SeatState {
     pub on_target_pct: Option<f64>,
     /// Work during the class in kJ.
     pub class_kj: f64,
+    /// The rider's look code (#25); left out when they chose none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub look: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1111,8 +1114,14 @@ fn vehicle_state(world: &World, v: &Vehicle) -> VehicleState {
     }
 }
 
-/// State of one studio room.
-pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[RiderState]) -> ServerMessage {
+/// State of one studio room; `look_of` gives a rider's look code (#25).
+pub fn studio_state_message(
+    studio: &Studio,
+    room: usize,
+    tick: u64,
+    road: &[RiderState],
+    look_of: &dyn Fn(RiderId) -> Option<String>,
+) -> ServerMessage {
     let clock = studio.clock();
     let class = studio.timetable().class(&clock);
     let riders = studio.rooms()[room]
@@ -1128,6 +1137,7 @@ pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[Rid
             distance: round2(r.distance),
             on_target_pct: r.on_target_share().map(|share| (share * 100.0).round()),
             class_kj: (r.class_joules / 1000.0).round(),
+            look: look_of(r.id),
         })
         .collect();
     ServerMessage::StudioState {
@@ -1426,6 +1436,7 @@ mod tests {
             cadence: Some(90.0),
             room: 1,
             seat: 4,
+            look: None,
         };
         let json = serde_json::to_string(&RiderState::studio_seat(&seat)).unwrap();
         assert!(json.contains(r#""studio":{"room":1,"seat":4}"#), "{json}");

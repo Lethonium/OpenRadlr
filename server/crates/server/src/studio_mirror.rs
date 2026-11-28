@@ -21,6 +21,8 @@ pub struct StudioSeat {
     pub cadence: Option<f64>,
     pub room: usize,
     pub seat: usize,
+    /// The rider's look code (#25), passed on unread.
+    pub look: Option<String>,
 }
 
 #[derive(Default)]
@@ -77,6 +79,7 @@ mod tests {
             cadence: Some(90.0),
             room: 0,
             seat: 3,
+            look: None,
         }
     }
 

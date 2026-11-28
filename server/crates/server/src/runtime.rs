@@ -103,7 +103,7 @@ pub trait Game: Send + 'static {
     fn pause(&mut self, _rider_id: RiderId, _on: bool) {}
     /// The exercise a workout rider does now (`None`: rest); the studio ignores it.
     fn workout(&mut self, _rider_id: RiderId, _exercise: Option<Exercise>, _side: Option<Side>) {}
-    /// The rider's look code (#25), passed on to others; the studio ignores it.
+    /// The rider's look code (#25), passed on to others.
     fn set_look(&mut self, _rider_id: RiderId, _look: String) {}
     fn chat(&mut self, rider_id: RiderId, text: &str);
     fn tick(&mut self);
