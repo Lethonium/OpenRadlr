@@ -1430,3 +1430,26 @@ async fn a_server_without_accounts_has_no_id_routes() {
     assert_eq!(serde_json::from_str::<Value>(&info).unwrap()["account"], false);
     assert_eq!(http_get(addr, "/id/v1/me").await.0, 404);
 }
+
+#[tokio::test]
+async fn a_riders_look_reaches_the_others() {
+    let addr = start_server(0).await;
+    let mut anna = connect(addr).await;
+    let (anna_id, _) = join_as(&mut anna, r#"{"type":"join","name":"Anna","weight_kg":70}"#).await;
+    send(&mut anna, r#"{"type":"look","look":"1021210w108a1cda3a03610ed"}"#).await;
+    let mut ben = connect(addr).await;
+    join_as(&mut ben, r#"{"type":"join","name":"Ben","weight_kg":70}"#).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(tokio::time::Instant::now() < deadline, "Ben never saw Anna's look");
+        let state = expect_type(&mut ben, "state").await;
+        let riders = state["riders"].as_array().unwrap();
+        let seen = riders.iter().find(|r| r["id"].as_u64() == Some(anna_id));
+        if let Some(rider) = seen {
+            assert_eq!(rider["look"], "1021210w108a1cda3a03610ed");
+            let ben_entry = riders.iter().find(|r| r["name"] == "Ben").unwrap();
+            assert!(ben_entry.get("look").is_none(), "no look sent, none passed on");
+            break;
+        }
+    }
+}

@@ -53,6 +53,8 @@ export const ClientMessages = Object.freeze({
   leaveVehicle: () => ({ type: "leave_vehicle" }),
   /** The café workout's current exercise (#77); null between exercises; `side` ("right" | "left") only for sided poses. */
   workout: (exercise, side = null) => ({ type: "workout", exercise: exercise ?? null, ...(side ? { side } : {}) }),
+  /** The rider's look code (#25), passed on to the others as `riders[].look`. */
+  look: (code) => ({ type: "look", look: code }),
   /** Pulling over for a pause (#89), and riding on after it. */
   pause: () => ({ type: "pause" }),
   /** Answers an AFK warning: the rider is still riding (server: `afk_warning`). */

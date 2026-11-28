@@ -60,6 +60,8 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {boolean} ghost
  * @property {number} [lookId] the id the look, kit and seed come from (default `id`): the studio's coaches have one id per floor but one look
  * @property {boolean} [classic] drawn as the classic cyclist (the old rider and bike) instead of the rigged one
+ * @property {import("../assets/riders/look.js").RiderLook} [look] the rider's own look (#25) instead of the one rolled from `lookId`
+ * @property {string} [lookKey] names `look` (its code): a new key builds the cyclist anew
  * @property {boolean} [hideBody] the rider is not drawn, its bike is (my own point of view in the studio)
  */
 
@@ -71,7 +73,8 @@ const hexOf = (tint) => `#${new THREE.Color().setRGB(tint[0], tint[1], tint[2], 
  * @property {number[]} position road point under the middle of the wheelbase, world metres
  * @property {number[]} forward unit direction of travel (may climb)
  * @property {number} speed m/s
- * @property {({id: number, me: boolean, cadence: number, tint: number[]} | null)[]} seats one per layout seat
+ * @property {({id: number, me: boolean, cadence: number, tint: number[], look?: object, lookKey?: string} | null)[]} seats one per
+ *   layout seat; `look` is the rider's own (#25)
  */
 
 /** A rider's own pedal phase, so a cheap group does not pedal in lockstep. */
@@ -113,12 +116,17 @@ export function createRiderLayer({ settings, uniforms, track }) {
     return target.setFromEuler(euler);
   };
 
-  /** The pool key of a rider's cyclist: the id, with a suffix for the classic style. */
-  const poolKey = (rider) => (rider.classic ? `${rider.id}c` : rider.id);
+  /** The pool key of a rider's cyclist: the id, with suffixes for the classic style and a chosen look. */
+  const poolKey = (rider) => {
+    const style = rider.classic ? `${rider.id}c` : rider.id;
+    return rider.lookKey ? `${style}|${rider.lookKey}` : style;
+  };
+  /** @type {Map<number, string>} the key of each rider's cyclist in the scene */
+  const keyById = new Map();
 
   /** Dresses a cyclist in the jersey of `tint`, swapping out the old kit (the classic jersey is vertex-coloured). */
   const paint = (record, tint) => {
-    const key = `${record.lookId}|${tint.join(",")}`;
+    const key = `${record.lookId}|${record.lookKey}|${tint.join(",")}`;
     if (record.kitKey === key) return;
     if (record.classic) {
       record.cyclist?.setPrimary(hexOf(tint));
@@ -127,7 +135,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
     }
     const previous = record.kit;
     record.kit = createOwner(track);
-    const texture = kitTexture({ ...lookOf(record.lookId), primary: hexOf(tint) }, record.kit.own);
+    const texture = kitTexture({ ...(record.look ?? lookOf(record.lookId)), primary: hexOf(tint) }, record.kit.own);
     if (record.cyclist) record.cyclist.setKit(texture);
     else record.rig?.setTexture(texture);
     record.kitKey = key;
@@ -135,10 +143,13 @@ export function createRiderLayer({ settings, uniforms, track }) {
     previous?.disposeAll();
   };
 
-  const create = (id, tint, lookId = id, classic = false) => {
-    const record = { id, key: classic ? `${id}c` : id, classic, lookId, bodyHidden: false, bodyMeshes: [], owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
+  const create = (rider) => {
+    const { id, tint } = rider;
+    const lookId = rider.lookId ?? id;
+    const classic = Boolean(rider.classic);
+    const record = { id, key: poolKey(rider), classic, lookId, look: rider.look ?? null, lookKey: rider.lookKey ?? "", bodyHidden: false, bodyMeshes: [], owner: createOwner(track), kit: null, kitKey: "", texture: null, cyclist: null, ghost: false, seen: 0, drawn: false, casts: new Map() };
     paint(record, tint);
-    const look = { ...lookOf(lookId), primary: hexOf(tint) };
+    const look = { ...(record.look ?? lookOf(lookId)), primary: hexOf(tint) };
     record.cyclist = classic ? createClassicCyclist(look, { own: record.owner.own, uniforms, seed: lookId }) : createCyclist(look, { own: record.owner.own, uniforms, seed: lookId, texture: record.texture });
     record.cyclist.object.traverse((child) => child.isMesh && record.casts.set(child, child.castShadow));
     record.cyclist.rider.object.traverse((child) => child.isMesh && record.bodyMeshes.push(child));
@@ -177,15 +188,16 @@ export function createRiderLayer({ settings, uniforms, track }) {
   /** The cyclist for this entry: the one in the scene, one off the free list, or a new one. */
   const acquire = (rider) => {
     const key = poolKey(rider);
-    // The other style of the same rider is dropped at once: the style flipped, one cyclist stays.
-    const other = active.get(poolKey({ id: rider.id, classic: !rider.classic }));
-    if (other) release(other);
+    // The rider's cyclist of another style or look is dropped at once: the look changed, one cyclist stays.
+    const shown = keyById.get(rider.id);
+    if (shown !== undefined && shown !== key && active.has(shown)) release(active.get(shown));
     let record = active.get(key);
     if (!record) {
       record = free.get(key);
       if (record) free.delete(key);
-      else record = create(rider.id, rider.tint, rider.lookId ?? rider.id, Boolean(rider.classic));
+      else record = create(rider);
       active.set(key, record);
+      keyById.set(rider.id, key);
       object.add(record.cyclist.object);
     }
     paint(record, rider.tint);
@@ -196,6 +208,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
 
   const release = (record) => {
     active.delete(record.key);
+    if (keyById.get(record.id) === record.key) keyById.delete(record.id);
     object.remove(record.cyclist.object);
     free.set(record.key, record);
     while (free.size > POOL_SIZE) {
@@ -213,19 +226,38 @@ export function createRiderLayer({ settings, uniforms, track }) {
   const freeSeated = new Map();
   const heads = new Map();
 
-  const createSeatedRider = (id, tint) => {
-    const record = { id, lookId: id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
+  const createSeatedRider = (occupant) => {
+    const { id, tint } = occupant;
+    const look = occupant.look ?? null;
+    const record = { id, lookId: id, look, lookKey: occupant.lookKey ?? "", owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, seen: 0, drawn: false, fitKey: "", fit: null };
     paint(record, tint);
-    record.rig = createRider({ ...lookOf(id), primary: hexOf(tint) }, { own: record.owner.own, uniforms, texture: record.texture });
+    record.rig = createRider({ ...(look ?? lookOf(id)), primary: hexOf(tint) }, { own: record.owner.own, uniforms, texture: record.texture });
     return record;
   };
 
+  const disposeSeated = (record) => {
+    record.rig.object.removeFromParent();
+    record.owner.disposeAll();
+    record.kit?.disposeAll();
+  };
+
   const acquireSeated = (occupant) => {
+    const lookKey = occupant.lookKey ?? "";
     let record = seated.get(occupant.id);
+    // A changed look (#25) builds the seated rider anew.
+    if (record && record.lookKey !== lookKey) {
+      seated.delete(occupant.id);
+      disposeSeated(record);
+      record = null;
+    }
     if (!record) {
       record = freeSeated.get(occupant.id);
       if (record) freeSeated.delete(occupant.id);
-      else record = createSeatedRider(occupant.id, occupant.tint);
+      if (record && record.lookKey !== lookKey) {
+        disposeSeated(record);
+        record = null;
+      }
+      record ??= createSeatedRider(occupant);
       seated.set(occupant.id, record);
     }
     paint(record, occupant.tint);
@@ -241,8 +273,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
       const [oldest] = freeSeated.keys();
       const gone = freeSeated.get(oldest);
       freeSeated.delete(oldest);
-      gone.owner.disposeAll();
-      gone.kit.disposeAll();
+      disposeSeated(gone);
     }
   };
 
@@ -322,7 +353,7 @@ export function createRiderLayer({ settings, uniforms, track }) {
       const fitKey = `${record.key}|${i}`;
       if (rider.rig.object.parent !== frameOfSeat || rider.fitKey !== fitKey) {
         frameOfSeat.add(rider.rig.object);
-        const look = { ...lookOf(occupant.id), primary: hexOf(occupant.tint) };
+        const look = { ...(occupant.look ?? lookOf(occupant.id)), primary: hexOf(occupant.tint) };
         rider.fit = seatFit(seat, look, rider.rig.saddleFor(seatFit(seat, look)));
         rider.fitKey = fitKey;
       }
@@ -359,7 +390,10 @@ export function createRiderLayer({ settings, uniforms, track }) {
     /** What was drawn last frame, for tests and the readout. */
     stats: () => ({ ...counts }),
     /** The full cyclist drawn for this rider id last frame, or null. */
-    cyclistOf: (id) => [active.get(id), active.get(`${id}c`)].find((record) => record?.drawn)?.cyclist ?? null,
+    cyclistOf: (id) => {
+      const record = active.get(keyById.get(id));
+      return record?.drawn ? record.cyclist : null;
+    },
     /** The vehicle asset drawn for this vehicle id last frame, or null. */
     vehicleOf: (id) => [...vehicles.values()].find((record) => record.drawn && record.key.startsWith(`${id}|`))?.vehicle ?? null,
     /** The rig of a seated rider drawn last frame, or null. */

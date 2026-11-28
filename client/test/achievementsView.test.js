@@ -21,7 +21,7 @@ test("locked come next in list order, secret locked last", () => {
 
 test("a locked one shows its name and hint, no date", () => {
   const card = achievementCards({ earned: {} }, ctx).cards.find((c) => c.id === "century");
-  assert.deepEqual(card, { id: "century", state: "locked", name: "Century", hint: "Ride 100 km in one go.", date: null });
+  assert.deepEqual(card, { id: "century", state: "locked", name: "Century", hint: "Ride 100 km in one go.", date: null, unlocks: "Unlocks for your look: Panels" });
 });
 
 test("a secret locked one shows ??? and no hint", () => {
@@ -31,7 +31,7 @@ test("a secret locked one shows ??? and no hint", () => {
 
 test("a secret earned one shows its name, hint and date", () => {
   const card = achievementCards({ earned: { nightOwl: at(3) } }, ctx).cards[0];
-  assert.deepEqual(card, { id: "nightOwl", state: "earned", name: "Night Owl", hint: "Start a ride between 22:00 and 04:00.", date: "3 Nov 2026" });
+  assert.deepEqual(card, { id: "nightOwl", state: "earned", name: "Night Owl", hint: "Start a ride between 22:00 and 04:00.", date: "3 Nov 2026", unlocks: "" });
 });
 
 test("ids this version doesn't know are not shown or counted", () => {
@@ -47,4 +47,12 @@ test("the count says how many of all are earned", () => {
 test("a malformed locale still formats the date", () => {
   const card = achievementCards({ earned: { firstRide: at(1) } }, { locale: "en-US@posix" }).cards[0];
   assert.equal(typeof card.date, "string");
+});
+
+test("a card says which look pieces it unlocks, never for a hidden secret", () => {
+  const cards = achievementCards({ earned: { lemons10: at(1) } }, ctx).cards;
+  assert.equal(cards.find((c) => c.id === "lemons10").unlocks, "Unlocks for your look: Lemon helmet");
+  assert.equal(cards.find((c) => c.id === "classicRider").unlocks, "Unlocks for your look: Classic rider and bike, Cycling cap");
+  assert.equal(cards.find((c) => c.id === "thumbWarrior").unlocks, "", "still a secret");
+  assert.equal(cards.find((c) => c.id === "croissants").unlocks, "", "unlocks no piece");
 });

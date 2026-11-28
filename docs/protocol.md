@@ -62,6 +62,7 @@ Workout riders are exempt.
 | `chat` | `text` (≤ 200 chars) | at most 5 in a row, then one every 2 s |
 | `leave` | – | leaving on purpose: the rider is removed at once and the server closes the connection |
 | `stay` | – | answer to an `afk_warning` that has `can_stay`; ignored when no warning is open or it is the final one. Leave now in that warning sends `leave` |
+| `look` | `look`: 1–48 characters of `0-9a-z` | the rider's look (#25), a code the clients define (`client/public/js/profile/riderLook.js`); the server keeps it and passes it on unread as `riders[].look`. Send it after `joined` and again on a change; a malformed code gets `invalid_look` |
 | `pair_offer` | `key` (32 lowercase hex characters), `name` | a tablet offers a pairing code for its screen key; no `join` needed, after `hello`. See [Second screens](#second-screens) |
 | `pair_claim` | `code` | a phone claims a pairing code; no `join` needed, after `hello` |
 | `watch` | `key`, `view`?: `data` (default) \| `world` | a phone watches the screen `key` instead of joining; takes no seat. See [Second screens](#second-screens) |
@@ -98,14 +99,15 @@ entered it, `next` the road they take at the next junction: their pick, else
 their route's, straight on off every route),
 `lap` (in a race, else `null`), `lane` (continuous, 0 = leftmost in riding
 direction), `speed`, `power`, and `device` (`sim`, `paddle` or `workout`; left out for
-trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest) and `side` (`right` or `left`, only for a sided pose, so the view can mirror the left side) and `app` (the id of the other app, for example `incyclist`, on a rider shared through OpenBikeNet; left out for riders of this server). Bots also carry `team` (their kit: `zitrone`, `moos`, `kirsche`, `lavendel`, `kreide`, `schiefer`, `petrol` or `rose`), `style` (their riding type: `rouleur`, `climber`, `sprinter`, `attacker` or `tourer`) and `move` (what they are doing: `pull`, `attack`, `answer` or `sprint`; left out while they just ride), see [bots](superpowers/specs/2026-11-10-bots-design.md) (#64); humans never have these fields. Such a remote rider has `is_bot: false`, an `id` from `0xF000_0000` upwards (each shared route its own range of `0x0100_0000`; never reused while the server runs), no physics, no drafting and no `vehicle`; clients show the name as text and mark the app. They ride only on shared routes, and every rider of that world gets them, nearest first, with their `route` (ADR 0020, 0027). A studio rider shown on the road (only to clients who asked with `features`) has `route: null`, `studio` (`room`, `seat`), an `id` from `0xE000_0000` upwards, no `vehicle`, and counts neither in `route_riders` nor against the player limit. Riders of different routes draft each other
+trainers and bots, so clients can mark phone paddlers and workouts), `vehicle`? (`id`, `kind`, `seat`, `seats`, `captain`: true for the current captain's seat) and `cadence` (only for seated riders, so each seat pedals at its own rate) and `parked` (true while pulled over for a pause, left out otherwise; always true for a workout rider) and `exercise` (the exercise a workout rider does now, left out at rest) and `side` (`right` or `left`, only for a sided pose, so the view can mirror the left side) and `app` (the id of the other app, for example `incyclist`, on a rider shared through OpenBikeNet; left out for riders of this server) and `look` (the rider's look code as they sent it with `look`, #25; left out when they sent none). Bots also carry `team` (their kit: `zitrone`, `moos`, `kirsche`, `lavendel`, `kreide`, `schiefer`, `petrol` or `rose`), `style` (their riding type: `rouleur`, `climber`, `sprinter`, `attacker` or `tourer`) and `move` (what they are doing: `pull`, `attack`, `answer` or `sprint`; left out while they just ride), see [bots](superpowers/specs/2026-11-10-bots-design.md) (#64); humans never have these fields. Such a remote rider has `is_bot: false`, an `id` from `0xF000_0000` upwards (each shared route its own range of `0x0100_0000`; never reused while the server runs), no physics, no drafting and no `vehicle`; clients show the name as text and mark the app. They ride only on shared routes, and every rider of that world gets them, nearest first, with their `route` (ADR 0020, 0027). A studio rider shown on the road (only to clients who asked with `features`) has `route: null`, `studio` (`room`, `seat`), an `id` from `0xE000_0000` upwards, no `vehicle`, and counts neither in `route_riders` nor against the player limit. Riders of different routes draft each other
 where they ride the same road the same way.
 
 Studio `riders[]` entries: `id`, `name`, `is_bot`, `seat` (0–7 front row,
 8–15 back row), `power`, `cadence`, `speed` and `distance` (flat-road physics,
 for the ride record), `on_target_pct` (share of the class within 10 % of the
-target, `null` before the class) and `class_kj`. Events and chat stay in the
-room.
+target, `null` before the class), `class_kj` and `look` (as on the road, #25;
+left out when the rider sent none). A studio rider shown on the road carries
+their `look` too. Events and chat stay in the room.
 
 `race` has a `phase`:
 
@@ -175,7 +177,7 @@ server turned the simulated trainer or phone paddles off), `chat_rate_limited`,
 `unknown_vehicle` (no vehicle has this code), `vehicle_full`, `vehicle_elsewhere` (the code
 belongs to another world; `message` is `route:<id>` to rejoin with), `not_captain`, `in_event` (seated riders can't join events or races and the other way round),
 `invalid_vehicle` (unsupported kind or seat count), `vehicle_rate_limited` (`create_vehicle` and `board_vehicle` share a slow per-connection limit: 3 at once, then one every 2 s), `already_aboard`, `in_vehicle` (joining an event while seated),
-`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`,
+`in_workout` (a riding message from a workout rider), `not_in_workout` (`workout` from a rider who did not join as one), `unknown_exercise`, `unknown_side`, `invalid_look`,
 `afk_timeout` (no answer to an `afk_warning`; connection closed, rider removed without grace), `rate_limited` (connection closed), `handshake_timeout`, `idle_timeout`.
 Second screens: `bad_screen_key` (a `screen_key`, `key` or pairing key that is not 32 lowercase hex characters), `pair_code_invalid` (unknown or expired code), `pair_code_expired` (an offering connection's code ran out; connection closed), `too_many_screens` (a fifth watcher; connection closed).
 
@@ -302,6 +304,7 @@ Pausing (#89) added `pause`, `resume`, `riders[].parked` and `pause_rejected` wi
 Second screens (#87) added `pair_offer`, `pair_code`, `pair_claim`, `paired`, `pair_claimed`, `watch`, `watch_status`, `display`, `join.screen_key`, `screens` in `/api/info` and the `bad_screen_key`, `pair_code_invalid`, `pair_code_expired` and `too_many_screens` errors within version 2.
 Workouts (#77) added `device: "workout"`, the `workout` message, `riders[].exercise` and the `in_workout`, `not_in_workout` and `unknown_exercise` errors within version 2. The yoga poses (`sun_salutation`, `forward_fold`, `downward_dog`, `cobra`, `child_pose`, `low_lunge`, `pigeon`), `workout.side`, `riders[].side` and the `unknown_side` error were added to it too.
 Security hardening added the `vehicle_rate_limited` error within version 2.
+Rider looks (#25) added the `look` message, `riders[].look` and the `invalid_look` error within version 2.
 An optional community invite (#110) added `discord_url` to `/api/info` within version 2.
 A privacy link (#12) added `privacy_url` to `/api/info` within version 2.
 Opt-in analytics (#12) added `analytics` to `/api/info` within version 2.

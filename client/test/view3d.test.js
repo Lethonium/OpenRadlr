@@ -20,6 +20,7 @@ import { assignSpots } from "../public/js/workout/gymSpots.js";
 import { squareRoute } from "./helpers.js";
 import { coachWorld, seatWorld } from "../public/js/view3d/studioLayer.js";
 import { COACH_KIT, INSTRUCTOR, coachId, isCoach } from "../public/js/view3d/studioLayout.js";
+import { encodeLook, rolledChoice } from "../public/js/profile/riderLook.js";
 
 const hexRgb = (hex) => [1, 3, 5].map((k) => Number.parseInt(hex.slice(k, k + 2), 16) / 255);
 const linear = (rgb) => rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -1076,7 +1077,9 @@ test("a view with a studio disposes without throwing", () => {
   assert.doesNotThrow(() => view.dispose());
 });
 
-test("only my road entry is classic, and only once the classic rider is on", (t) => {
+const lookCode = (changes) => encodeLook({ ...rolledChoice(4), primary: "#00a3c7", ...changes });
+
+test("riders wear the looks they chose; races and events dress everyone in the colour code", (t) => {
   const element = () => ({ style: {}, classList: { toggle() {} }, append() {}, querySelector: () => null, getBoundingClientRect: () => ({ width: 40, height: 16 }) });
   const saved = globalThis.document;
   globalThis.document = { createElement: element };
@@ -1084,27 +1087,45 @@ test("only my road entry is classic, and only once the classic rider is on", (t)
   const { view } = gymView([]);
   view.labelLayer = { append() {} };
   const frames = recordFrames(view);
-  const riders = [{ ...workoutRider, id: 7 }, { ...workoutRider, id: 8, distance: 110 }];
+  const theirs = lookCode({ primary: "#f28c17" });
+  const riders = [{ ...workoutRider, id: 7, look: "1zzz" }, { ...workoutRider, id: 8, distance: 110, look: theirs }, { ...workoutRider, id: 9, distance: 120 }];
   view.render({ riders, myId: 7, timeS: 12, colors });
-  assert.ok(frames.at(-1).riders.every((r) => !r.classic), "off by default");
-  view.setClassicRider(true);
+  const byId = (id) => frames.at(-1).riders.find((r) => r.id === id);
+  assert.equal(byId(7).look, undefined, "my look comes from this device, not the server's echo");
+  assert.equal(byId(8).lookKey, theirs);
+  assert.equal(byId(8).look.primary, "#f28c17");
+  assert.notDeepEqual(byId(8).tint, byId(9).tint, "their own jersey colour, not the colour code");
+  view.setMyLook(lookCode({ style: "classic" }));
   view.render({ riders, myId: 7, timeS: 12.1, colors });
-  const [mine, other] = [7, 8].map((id) => frames.at(-1).riders.find((r) => r.id === id));
-  assert.equal(mine.classic, true);
-  assert.ok(!other.classic, "the others keep the new look");
-  view.setClassicRider(false);
-  view.render({ riders, myId: 7, timeS: 12.2, colors });
-  assert.ok(frames.at(-1).riders.every((r) => !r.classic));
+  assert.equal(byId(7).classic, true);
+  assert.ok(!byId(8).classic && byId(9).look === undefined, "a rider without a look keeps the rolled one");
+  view.render({ riders, myId: 7, timeS: 12.2, colors, colourCode: true });
+  assert.deepEqual(byId(8).tint, byId(9).tint, "in a race the colour code dresses everyone");
+  assert.equal(byId(8).lookKey, theirs, "the rest of the look stays");
 });
 
-test("my studio entry is classic when the classic rider is on, the coach never", () => {
+test("at the gym my athlete wears my look", () => {
+  const gym = testGym();
+  const { view } = gymView([gym], "temperate");
+  view.workoutMode(gym, { reducedMotion: true });
+  const frames = recordFrames(view);
+  const code = lookCode({ primary: "#f28c17" });
+  view.setMyLook(code);
+  view.render({ riders: [workoutRider], myId: 7, timeS: 12, colors });
+  const [entry] = frames.at(-1).athletes;
+  assert.equal(entry.lookKey, code);
+  assert.equal(entry.look.primary, "#f28c17");
+});
+
+test("my studio entry wears my look, the coach never", () => {
   const { view } = gymView([], "temperate", studioSite);
   const frames = recordFrames(view);
-  view.setClassicRider(true);
+  view.setMyLook(lookCode({ style: "classic" }));
   view.camera = fixedCamera([100, 101.5, 90]);
   view.render({ riders: [studioRider(9, 3), studioRider(5, 4)], myId: 9, timeS: 1, colors });
   const entries = frames.at(-1).riders;
   assert.equal(entries.find((r) => r.id === 9).classic, true);
   assert.ok(!entries.find((r) => r.id === 5).classic);
   assert.ok(!entries.find((r) => r.id === coachId(0)).classic);
+  assert.equal(entries.find((r) => r.id === coachId(0)).look, undefined);
 });

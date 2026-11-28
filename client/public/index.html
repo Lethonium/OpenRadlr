@@ -50,6 +50,7 @@
     <link rel="modulepreload" href="js/profile/pinLock.js" />
     <link rel="modulepreload" href="js/profile/profileStore.js" />
     <link rel="modulepreload" href="js/profile/riderKey.js" />
+    <link rel="modulepreload" href="js/profile/riderLook.js" />
     <link rel="modulepreload" href="js/profile/riderStorage.js" />
     <link rel="modulepreload" href="js/profile/riders.js" />
     <link rel="modulepreload" href="js/profile/seasonGoals.js" />
@@ -101,6 +102,7 @@
     <link rel="modulepreload" href="js/view/ftpTestView.js" />
     <link rel="modulepreload" href="js/view/goalsView.js" />
     <link rel="modulepreload" href="js/view/hud.js" />
+    <link rel="modulepreload" href="js/view/lookPage.js" />
     <link rel="modulepreload" href="js/view/mapPreview.js" />
     <link rel="modulepreload" href="js/view/menuDialog.js" />
     <link rel="modulepreload" href="js/view/menuPages.js" />
@@ -128,6 +130,7 @@
     <link rel="modulepreload" href="js/view/workoutCards.js" />
     <link rel="modulepreload" href="js/view/workoutStudioView.js" />
     <link rel="modulepreload" href="js/view/workoutView.js" />
+    <link rel="modulepreload" href="js/view3d/assets/riders/look.js" />
     <link rel="modulepreload" href="js/view3d/chaseCamera.js" />
     <link rel="modulepreload" href="js/view3d/highlight.js" />
     <link rel="modulepreload" href="js/view3d/lenses.js" />
@@ -442,12 +445,6 @@
                     <span class="setting-label" data-i18n="rider.autoPause">Auto-pause when I stop</span>
                     <input id="auto-pause" type="checkbox" />
                   </label>
-                  <label id="classic-rider-row" class="setting-row" hidden>
-                    <span class="setting-label"><span data-i18n="settings.classicRider">Classic rider</span>
-                      <span class="setting-desc" data-i18n="settings.classicRiderHint">The old rider and bike, on your screen</span>
-                    </span>
-                    <input id="classic-rider" type="checkbox" />
-                  </label>
                   <div class="setting-row setting-row-wide ride-only" id="difficulty-row">
                     <span class="setting-label"><span id="difficulty-label" data-i18n="start.climbFeel">Climb feel</span> <output id="difficulty-value" for="difficulty">50 %</output></span>
                     <input id="difficulty" name="difficulty" type="range" min="0" max="100" step="5" aria-labelledby="difficulty-label" aria-describedby="difficulty-hint" />
@@ -515,6 +512,7 @@
                 <button type="button" id="profile-nav-goals" class="menu-nav-item" data-menu-nav="goals"><span class="menu-nav-title" data-i18n="goals.page">Goals</span></button>
                 <button type="button" id="profile-nav-overview" class="menu-nav-item" data-menu-nav="overview"><span class="menu-nav-title" data-i18n="profilePage.overview">Overview</span></button>
                 <button type="button" id="profile-nav-achievements" class="menu-nav-item" data-menu-nav="achievements"><span class="menu-nav-title" data-i18n="profilePage.achievements">Achievements</span></button>
+                <button type="button" id="profile-nav-look" class="menu-nav-item" data-menu-nav="look"><span class="menu-nav-title" data-i18n="look.page">Look</span></button>
                 <button type="button" id="profile-nav-rides" class="menu-nav-item" data-menu-nav="rides"><span class="menu-nav-title" data-i18n="profilePage.rides.title">Rides</span></button>
                 <button type="button" id="profile-nav-account" class="menu-nav-item" data-menu-nav="account" hidden><span class="menu-nav-title" data-i18n="account.title">Account</span></button>
                 <button type="button" id="profile-nav-data" class="menu-nav-item" data-menu-nav="data"><span class="menu-nav-title" data-i18n="profilePage.data">Your data</span></button>
@@ -595,6 +593,18 @@
                     <h2 data-i18n="profilePage.achievements">Achievements</h2>
                     <p id="profile-achievements-count" class="muted"></p>
                     <ul id="profile-achievements" class="achievement-grid"></ul>
+                  </div>
+                </div>
+                <div class="menu-page" data-menu-page="look" role="region" aria-labelledby="profile-nav-look" hidden>
+                  <div class="panel look-panel">
+                    <h2 data-i18n="look.page">Look</h2>
+                    <p class="field-hint" data-i18n="look.intro">How your rider looks on the road, to you and everyone else. In races and events the jerseys show the colour code again.</p>
+                    <div class="look-stage">
+                      <canvas id="look-preview" class="look-preview" aria-hidden="true"></canvas>
+                      <p id="look-no-preview" class="field-hint" hidden data-i18n="look.noPreview">No preview on this device: it can't draw the 3D world. Your choices still count.</p>
+                      <button type="button" id="look-surprise" class="secondary small" data-i18n="look.surprise">Surprise me</button>
+                    </div>
+                    <div id="look-choices" class="look-choices"></div>
                   </div>
                 </div>
                 <div class="menu-page" data-menu-page="rides" role="region" aria-labelledby="profile-nav-rides" hidden>

@@ -10,6 +10,7 @@ import { seededRandom } from "../../../world/noise.js";
 import { createSharedUniforms } from "../materials.js";
 import { createOwner } from "../owner.js";
 import { BIKE_TYPES, bikeGeometry, createBike } from "./bicycle.js";
+import { HAIR_STYLES, HELMET_STYLES, RIDER_KITS, RIDER_PATTERNS, SOCK_HEIGHTS } from "./look.js";
 import { BENCH_LOOK, createRider } from "./rider.js";
 
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
@@ -139,8 +140,6 @@ export function createCyclist(look, { own = (resource) => resource, uniforms = c
 
 // ---------- the workbench asset
 
-const KITS = Object.freeze(["road", "long", "skinsuit", "casual"]);
-const PATTERNS = Object.freeze(["solid", "hoops", "band", "sash", "panels", "chevron", "dots", "fade"]);
 
 export const meta = Object.freeze({
   id: "cyclist",
@@ -153,8 +152,12 @@ export const meta = Object.freeze({
     accent: Object.freeze({ type: "color", default: "#f2efe8" }),
     height: Object.freeze({ type: "range", min: 1.5, max: 2.05, step: 0.01, default: 1.78 }),
     weight: Object.freeze({ type: "range", min: 45, max: 120, step: 1, default: 70 }),
-    kit: Object.freeze({ type: "select", values: KITS, default: "road" }),
-    pattern: Object.freeze({ type: "select", values: PATTERNS, default: "band" }),
+    kit: Object.freeze({ type: "select", values: RIDER_KITS, default: "road" }),
+    pattern: Object.freeze({ type: "select", values: RIDER_PATTERNS, default: "band" }),
+    helmetStyle: Object.freeze({ type: "select", values: HELMET_STYLES, default: "road" }),
+    sockHeight: Object.freeze({ type: "select", values: SOCK_HEIGHTS, default: "crew" }),
+    hairStyle: Object.freeze({ type: "select", values: HAIR_STYLES, default: "short" }),
+    moustache: Object.freeze({ type: "bool", default: false }),
     primary: Object.freeze({ type: "color", default: "#e8473f" }),
     speed: Object.freeze({ type: "range", min: 0, max: 50, step: 1, default: 24 }),
     standing: Object.freeze({ type: "bool", default: false }),
@@ -173,8 +176,9 @@ const BENCH_CLIMB = 8;
  */
 export function create({ track, uniforms, type = "road", frame = "#2f5f9e", accent = "#f2efe8", speed = 24, standing = false, ...options } = {}) {
   const owner = createOwner(track);
-  const { height, weight, kit, pattern, primary, skin } = options;
-  const look = { ...BENCH_LOOK, bike: type, frame, frameAccent: accent, ...Object.fromEntries(Object.entries({ height, weight, kit, pattern, primary, skin }).filter(([, value]) => value !== undefined)) };
+  const { height, weight, kit, pattern, primary, skin, helmetStyle, sockHeight, hairStyle, moustache } = options;
+  const chosen = { height, weight, kit, pattern, primary, skin, helmetStyle, sockHeight, hairStyle, moustache };
+  const look = { ...BENCH_LOOK, bike: type, frame, frameAccent: accent, ...Object.fromEntries(Object.entries(chosen).filter(([, value]) => value !== undefined)) };
   const cyclist = createCyclist(look, { own: owner.own, uniforms, seed: 1 });
   const grade = standing ? BENCH_CLIMB : 0;
   const metres = speed / 3.6;

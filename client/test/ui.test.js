@@ -4,7 +4,7 @@ import { actionForKey, bindKeyboard } from "../public/js/input/keyboard.js";
 import { DEFAULT_PROFILE, ProfileStore, keepValid, validateProfile } from "../public/js/profile/profileStore.js";
 import { RiderKey } from "../public/js/profile/riderKey.js";
 import { formatDuration, formatGap, formatGrade, formatSpeed, formatWkg } from "../public/js/util/format.js";
-import { describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, riderSections } from "../public/js/view/panels.js";
+import { describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, riderSections, wearsColourCode } from "../public/js/view/panels.js";
 import { profileScale } from "../public/js/view/profileView.js";
 import { minimapTransform } from "../public/js/view/minimapView.js";
 import { squareRoute } from "./helpers.js";
@@ -255,4 +255,17 @@ test("the race row says what the race does, also when I'm not in it", () => {
   assert.equal(raceCaption({ phase: "finished", laps: 2 }, null, raceStatus({ phase: "finished" }, null), "–"), raceStatus({ phase: "finished" }, null));
   assert.equal(raceCaption({ phase: "countdown", remaining_s: 9, laps: 2 }, null, "Race starts in 9 s · 2 laps", "–"), "Race starts in 9 s · 2 laps");
   assert.equal(raceCaption(running, { toGoM: 15400 }, "Lap 1/2 · 6:15", "15.4 km"), "Lap 1/2 · 6:15 · 15.4 km to the finish");
+});
+
+test("the colour code is worn only while I race or ride an event I entered", () => {
+  const me = { id: 7, lap: null };
+  assert.equal(wearsColourCode(null, me, 7), false);
+  assert.equal(wearsColourCode({ race: { phase: "idle" } }, me, 7), false);
+  assert.equal(wearsColourCode({ race: { phase: "countdown", entrants: [7] } }, me, 7), true);
+  assert.equal(wearsColourCode({ race: { phase: "countdown", entrants: [3] } }, me, 7), false, "someone else's race");
+  assert.equal(wearsColourCode({ race: { phase: "running" } }, { id: 7, lap: 2 }, 7), true);
+  assert.equal(wearsColourCode({ race: { phase: "running" } }, me, 7), false);
+  assert.equal(wearsColourCode({ event: { phase: "running", entered: true } }, me, 7), true);
+  assert.equal(wearsColourCode({ event: { phase: "running", entered: false } }, me, 7), false, "a group ride I'm not in");
+  assert.equal(wearsColourCode({ event: { phase: "lobby", entered: true } }, me, 7), false, "waiting in the lobby");
 });

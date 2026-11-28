@@ -323,3 +323,34 @@ test("hideBody hides the classic rider's body, the bike stays", () => {
   assert.ok(riderMeshes(cyclist).length > 0 && riderMeshes(cyclist).every((mesh) => !mesh.visible));
   assert.ok(bikeMeshes(cyclist).every((mesh) => shown(mesh)));
 });
+
+// ---------- chosen looks (#25)
+
+test("a chosen look is drawn, and a new look rebuilds the rider's cyclist", () => {
+  const { layer } = make();
+  const look = { ...lookOf(1), bike: "city", glasses: false };
+  layer.update(frame([entry(1, 3, { look, lookKey: "a" })]));
+  const first = layer.cyclistOf(1);
+  layer.update(frame([entry(1, 3, { look: { ...look, bike: "road" }, lookKey: "b" })]));
+  const second = layer.cyclistOf(1);
+  assert.notEqual(second, first);
+  assert.equal(first.object.parent, null, "the old look left the scene");
+  layer.update(frame([entry(1, 3, { look: { ...look, bike: "road" }, lookKey: "b" })]));
+  assert.equal(layer.cyclistOf(1), second, "the same look keeps its cyclist");
+});
+
+test("a seated rider wears its chosen look, and a new look seats a new rig", () => {
+  const { layer, tracker } = make("high");
+  const look = { ...lookOf(11), height: 1.6 };
+  layer.update(vframe([beer([{ ...occupant(11), look, lookKey: "a" }, null, null, null, null, null, null])]));
+  const first = layer.seatedOf(11);
+  assert.equal(first.height, 1.6);
+  layer.update(vframe([beer([{ ...occupant(11), look: { ...look, height: 1.9 }, lookKey: "b" }, null, null, null, null, null, null])]));
+  const second = layer.seatedOf(11);
+  assert.notEqual(second, first);
+  assert.equal(second.height, 1.9);
+  assert.equal(first.object.parent, null, "the old rig left its seat");
+  const settled = tracker.live();
+  layer.update(vframe([beer([{ ...occupant(11), look: { ...look, height: 1.9 }, lookKey: "b" }, null, null, null, null, null, null])]));
+  assert.equal(tracker.live(), settled, "the same look builds nothing");
+});

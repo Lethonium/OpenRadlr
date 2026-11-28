@@ -19,7 +19,10 @@ import { createPinDialog, PIN_FORGOTTEN } from "./view/pinDialog.js";
 import { PROFILE_PAGES, RIDES_PAGE_SIZE, curveBars, dataRows, rideExtras, ftpChartLabel, ftpChartModel, overviewLines, paintFtpChart, rideRows } from "./view/profilePage.js";
 import { backupSnapshot, deleteItem, deleteRiderFromRoster, exportData, exportFileName, inventory, needsReload } from "./profile/localData.js";
 import { ftpSeries, hasFtpChart, periodTotals } from "./profile/stats.js";
-import { AchievementWatch, classicRiderChoice, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
+import { AchievementWatch, loadAchievements, reconcile, saveAchievements } from "./profile/achievements.js";
+import { carriedClassic, encodeLook, loadLook, lookFromChoice, randomChoice, rolledChoice, sanitizeLook, saveLook } from "./profile/riderLook.js";
+import { lookPageModel, renderLookPage, unlockLine } from "./view/lookPage.js";
+import { lookOf } from "./view3d/assets/riders/look.js";
 import { achievementCards } from "./view/achievementsView.js";
 import { badgeSvg } from "./view/badges.js";
 import { MAX_GOALS, activeGoals, addGoal, endPresets, goalWeek, loadGoals, refreshWeekBest, removeGoal, replaceGoal, saveGoals } from "./profile/seasonGoals.js";
@@ -91,7 +94,7 @@ import {
   splitLabel,
   splitLine,
 } from "./view/hud.js";
-import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections } from "./view/panels.js";
+import { appendFeed, describeEvent, inRace, nearbyRiders, onlineSummary, raceCaption, raceStatus, renderResults, renderRiderList, riderName, riderSections, wearsColourCode } from "./view/panels.js";
 import { PhotoAlbum, canShareFiles, canvasToPng, composePhoto, composeSummary, downloadBlob, grabScene, photoActions, photoFileName, photoStats } from "./view/photos.js";
 import { drawRideMap } from "./view/rideMapView.js";
 import { renderSplits } from "./view/splitsView.js";
@@ -200,7 +203,7 @@ const ROUTE_KEY = "openride.route";
 const RIDE_MODE_KEY = "openride.rideMode";
 const STUDIO_CAMERA_KEY = "openradlr.studio-camera";
 const COACH_VOICE_KEY = "openradlr.coach-voice";
-/** "on" when Old School riders ride the classic rider and bike on their own screen (per rider, like the other settings). */
+/** The old "Classic rider" setting, carried into the rider look once (#25). */
 const CLASSIC_RIDER_KEY = "openride.classicRider";
 /** How many golden lemons this browser's rider has collected, all rides together. */
 const LEMONS_KEY = "openradlr.lemons";
@@ -732,28 +735,90 @@ function fillSetupFields() {
   $("chainring").value = app.profile.chainring;
   $("cog").value = app.profile.cog;
   fillWorkoutSetup();
-  applyClassicRider();
-  refreshClassicRider();
+  applyMyLook();
+  refreshMyLook();
 }
 
-/** Shows the Classic rider checkbox when the rider has Old School, and gives the views the setting (a stale "on" does nothing without it). */
-function applyClassicRider() {
-  const { available, on } = classicRiderChoice(loadAchievements(browserStorage()), readSetting(CLASSIC_RIDER_KEY));
-  $("classic-rider-row").hidden = !available;
-  $("classic-rider").checked = on;
-  app.view3d?.setClassicRider(on);
-  app.studioView?.setClassicRider(on);
+/** The seed of the active rider's rolled look: their name, so it stays the same ride after ride. */
+function lookSeed() {
+  let hash = 7;
+  for (const char of app.profile?.name ?? "") hash = (Math.imul(hash, 31) + char.charCodeAt(0)) | 0;
+  return hash;
 }
 
-/** Latches the achievements from the kept rides (Old School may be earned by rides never opened in the profile), then shows the setting. */
-function refreshClassicRider() {
+/** The active rider's look code (#25), only pieces they have unlocked; null before they chose one. */
+function myLookCode() {
+  const storage = browserStorage();
+  const earned = loadAchievements(storage).earned;
+  const carried = carriedClassic(loadLook(storage), readSetting(CLASSIC_RIDER_KEY), earned, lookSeed());
+  if (carried) {
+    // The old Classic rider setting becomes the look's style, once.
+    saveLook(storage, carried);
+    writeSetting(CLASSIC_RIDER_KEY, "off");
+  }
+  const kept = loadLook(storage);
+  return kept ? encodeLook(sanitizeLook(kept, earned, lookSeed())) : null;
+}
+
+/** The active rider's look as the Look page shows it: the kept one, else the one rolled for them, only unlocked pieces. */
+function currentLook() {
+  const storage = browserStorage();
+  return sanitizeLook(loadLook(storage) ?? rolledChoice(lookSeed()), loadAchievements(storage).earned, lookSeed());
+}
+
+/** Draws the Look page and its preview; `focus` (`{slot, value}`) is the choice whose control keeps the focus. */
+function renderLook(focus = null) {
+  const choice = currentLook();
+  renderLookPage($("look-choices"), lookPageModel(choice, loadAchievements(browserStorage()).earned, app.profile.units), pickLook, { focus });
+  showLookPreview(choice);
+}
+
+/** Keeps a new look, hands it on, redraws the page and keeps the focus on the piece picked. */
+function keepLook(choice, focus = null) {
+  saveLook(browserStorage(), choice);
+  applyMyLook();
+  renderLook(focus);
+}
+
+function pickLook(slot, value) {
+  keepLook({ ...currentLook(), [slot]: value }, { slot, value });
+}
+
+/** The turning cyclist on the Look page, loaded with the 3D code; a note instead where WebGL 2 is missing. */
+function showLookPreview(choice) {
+  const available = isWebGl2Available();
+  $("look-preview").hidden = !available;
+  $("look-no-preview").hidden = available;
+  if (!available) return;
+  import("./view3d/lookPreview.js")
+    .then(({ LookPreview }) => {
+      if (app.profileDialog?.page !== "look") return;
+      const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+      app.lookPreview ??= new LookPreview($("look-preview"), { reducedMotion });
+      const look = lookFromChoice(choice, lookOf(1));
+      app.lookPreview.setLook(look, look.classic);
+      app.lookPreview.start();
+    })
+    .catch((error) => console.error(error));
+}
+
+/** Gives the views and the server the active rider's look. */
+function applyMyLook() {
+  const code = myLookCode();
+  app.view3d?.setMyLook(code);
+  app.studioView?.setMyLook(code);
+  app.connection?.look(code);
+}
+
+/** Latches the achievements from the kept rides (Old School may be earned by rides never opened in the profile), then applies the look. */
+function refreshMyLook() {
   const generation = app.riderGeneration;
   app.history
     .list()
     .then((records) => {
       if (generation !== app.riderGeneration) return;
       reconcileAchievements(records);
-      applyClassicRider();
+      applyMyLook();
     })
     .catch(() => {});
 }
@@ -783,10 +848,6 @@ function initSetup() {
   // The gears show with a trainer that can change resistance (useTrainer), not before.
   $("gear-settings").hidden = true;
   $("virtual-shifting").addEventListener("change", showShiftingSettings);
-  $("classic-rider").addEventListener("change", (event) => {
-    writeSetting(CLASSIC_RIDER_KEY, event.target.checked ? "on" : "off");
-    applyClassicRider();
-  });
   // Name, weight, FTP and settings are kept as they change, not only when riding.
   $("profile-form").addEventListener("change", keepFormEdits);
   for (const card of document.querySelectorAll(".mode-card")) {
@@ -2300,6 +2361,7 @@ async function joinRide(restored = null) {
   app.riderId = await connection.join({
     ...app.profile,
     sign: signAsRider,
+    look: myLookCode(),
     vehicleCode,
     routeId: route?.id,
     level: levelOf(app.profile),
@@ -2384,7 +2446,7 @@ async function joinWorkout(profile, errors) {
   const connection = new GameConnection({ url: defaultServerUrl(), ...(createRideSocket && { createSocket: createRideSocket }) });
   wireConnection(connection);
   app.connection = connection;
-  app.riderId = await connection.join({ ...app.profile, sign: signAsRider, routeId, level: levelOf(app.profile), device: "workout" });
+  app.riderId = await connection.join({ ...app.profile, sign: signAsRider, look: myLookCode(), routeId, level: levelOf(app.profile), device: "workout" });
   closeMenuStage(routeId, app.routeFile.map?.id ?? null);
   app.workoutPlan = plan;
   app.workout = new WorkoutSession({ plan, now, wallNow: () => Date.now() });
@@ -3107,7 +3169,7 @@ function buildStudioWorld() {
       view.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
       view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
       app.view3d = view;
-      applyClassicRider();
+      applyMyLook();
       $("view-note").textContent = "";
     })
     .catch((error) => {
@@ -3134,7 +3196,7 @@ function studioRoomView() {
     app.studioView = new StudioView3D($("world3d"), $("labels3d"), { reducedMotion });
     app.studioView.cameraMode = cameraModeOf(readSetting(STUDIO_CAMERA_KEY));
     app.studioView.setQuality(qualityLevel(readSetting(QUALITY_KEY)));
-    applyClassicRider();
+    applyMyLook();
   } catch (error) {
     console.error(error);
     notify(t("studio.unavailable3d"), "error");
@@ -3549,6 +3611,8 @@ function initProfile() {
       for (const item of root.querySelectorAll("[data-menu-nav]")) item.setAttribute("aria-current", String(item.dataset.menuNav === page));
       // A canvas on a hidden page has no size: draw the chart when its page shows.
       if (page === "overview") renderProfileFtp();
+      if (page === "look") renderLook();
+      else app.lookPreview?.stop();
     },
   });
   app.deleteConfirm = createDeleteConfirm({
@@ -3577,6 +3641,8 @@ function initProfile() {
   $("pin-set").addEventListener("click", () => changeRiderPin(setPinFlow));
   $("pin-change").addEventListener("click", () => changeRiderPin(changePinFlow));
   $("pin-remove").addEventListener("click", () => changeRiderPin(removePinFlow));
+  $("look-surprise").addEventListener("click", () => keepLook(randomChoice(loadAchievements(browserStorage()).earned, Math.random)));
+  relocaliseHooks.push(() => app.profileDialog?.page === "look" && renderLook());
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
@@ -3652,6 +3718,7 @@ function renderProfileAchievements() {
       item.dataset.state = card.state;
       item.append(achievementBadge(card.id, { hidden: card.state === "secret" }), textElement("strong", card.name));
       if (card.hint) item.append(textElement("span", card.hint));
+      if (card.unlocks) item.append(Object.assign(textElement("span", card.unlocks), { className: "achievement-unlocks" }));
       if (card.date) item.append(textElement("small", card.date));
       return item;
     }),
@@ -4323,7 +4390,8 @@ function showMilestone(text, achievementIds = []) {
   banner.textContent = text;
   for (const id of achievementIds) {
     if (banner.childNodes.length) banner.append(" · ");
-    const entry = textElement("span", t("achievement.banner", { name: t(`achievement.${id}.name`) }));
+    const unlocks = unlockLine(id);
+    const entry = textElement("span", [t("achievement.banner", { name: t(`achievement.${id}.name`) }), unlocks].filter(Boolean).join(" · "));
     entry.className = "achievement-entry";
     entry.prepend(achievementBadge(id));
     banner.append(entry);
@@ -4673,6 +4741,7 @@ async function rejoin(lost) {
     const riderId = await connection.join({
       ...app.profile,
       sign: signAsRider,
+      look: myLookCode(),
       routeId: app.route.id,
       level: levelOf(app.profile),
       // A workout rider is flagged again by its join, also when the server forgot it.
@@ -5809,7 +5878,7 @@ function show3d(scene, view = null) {
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
   app.view3d.setLemons(app.lemonHunt?.lemons);
-  applyClassicRider();
+  applyMyLook();
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);
   $("view-note").textContent = "";
   if ($("workout-note").textContent === t("workout.buildingGym")) $("workout-note").hidden = true;
@@ -6219,7 +6288,7 @@ function frame() {
   const draft = me ? draftInfo(me, riders, app.route) : null;
   probeRideQuality(time);
   if (app.viewMode === "3d") {
-    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors });
+    app.view3d.render({ riders: ghost ? [...everyone, ghost] : everyone, myId: app.riderId, myCadence: app.session.latest.cadence, timeS: time, utcSeconds: Date.now() / 1000, colors, colourCode: wearsColourCode(app.state, me, app.riderId) });
   } else {
     drawRideMap($("ride-map"), { route: app.route, riders: ghost ? [...riders, ghost] : riders, me, draft, lemons: app.lemonHunt?.lemons, colors, network: app.network, routes: app.routes, biome: app.biome, timeMode: app.timeMode });
   }

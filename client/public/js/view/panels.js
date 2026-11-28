@@ -48,6 +48,15 @@ export function inRace(race, me, myId) {
   return false;
 }
 
+/**
+ * Whether the jerseys follow the colour code (#25): while I am in a race (entered in its countdown, or riding it) or in
+ * a running event I entered, so the field can be told apart. Otherwise riders wear the looks they chose.
+ * @param {{race?: object, event?: {phase?: string, entered?: boolean}} | null} state the server's last `state`
+ */
+export function wearsColourCode(state, me, myId) {
+  return inRace(state?.race, me, myId) || (state?.event?.phase === "running" && state.event.entered === true);
+}
+
 /** One-line race status for the HUD. */
 export function raceStatus(race, myLap) {
   switch (race?.phase) {

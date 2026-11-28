@@ -61,16 +61,16 @@ export function createAthleteLayer({ uniforms, track }) {
     if (record.kitKey === key) return;
     const previous = record.kit;
     record.kit = createOwner(track);
-    record.texture = kitTexture({ ...lookOf(record.id), primary: hexOf(tint) }, record.kit.own);
+    record.texture = kitTexture({ ...(record.look ?? lookOf(record.id)), primary: hexOf(tint) }, record.kit.own);
     record.rig?.setTexture(record.texture);
     record.kitKey = key;
     previous?.disposeAll();
   };
 
   const create = (entry) => {
-    const record = { key: `${entry.id}|${entry.figure}`, id: entry.id, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, group: new THREE.Group(), bike: null, bikeShown: false, plantMesh: null, plant: null };
+    const record = { key: athleteKey(entry), id: entry.id, look: entry.look ?? null, owner: createOwner(track), kit: null, kitKey: "", texture: null, rig: null, group: new THREE.Group(), bike: null, bikeShown: false, plantMesh: null, plant: null };
     record.group.userData.athlete = entry.id;
-    const look = { ...lookOf(entry.id), primary: hexOf(entry.tint) };
+    const look = { ...(record.look ?? lookOf(entry.id)), primary: hexOf(entry.tint) };
     paint(record, entry.tint);
     record.rig = createRider(look, { own: record.owner.own, uniforms, texture: record.texture });
     if (entry.figure === "penguin") dressAsPenguin(record.rig, { own: record.owner.own, uniforms, scarf: look.primary });
@@ -83,8 +83,11 @@ export function createAthleteLayer({ uniforms, track }) {
     record.kit.disposeAll();
   };
 
+  /** One athlete per rider, figure and chosen look (#25): a changed look builds it anew. */
+  const athleteKey = (entry) => `${entry.id}|${entry.figure}|${entry.lookKey ?? ""}`;
+
   const acquire = (entry) => {
-    const key = `${entry.id}|${entry.figure}`;
+    const key = athleteKey(entry);
     let record = active.get(key);
     if (!record) {
       record = free.get(key);
@@ -117,7 +120,7 @@ export function createAthleteLayer({ uniforms, track }) {
       return;
     }
     if (!record.bike) {
-      const look = lookOf(record.id);
+      const look = record.look ?? lookOf(record.id);
       const scale = Math.min(SCALE_RANGE[1], Math.max(SCALE_RANGE[0], look.height / REFERENCE_HEIGHT));
       record.bike = createBike({ type: look.bike, frame: look.frame, accent: look.frameAccent, scale, saddleHeight: record.rig.saddleFor(bikeGeometry(look.bike, { scale })), own: record.owner.own, uniforms });
       record.bike.object.userData.athlete = record.id;

@@ -101,3 +101,15 @@ test("ride and menu shots keep their addresses", () => {
   assert.equal(urlFor(shot({ at: 12 }), "http://x"), "http://x/?at=12");
   assert.equal(urlFor({ name: "m", kind: "menu" }, "http://x"), "http://x/");
 });
+
+test("settingsFor stores a shot's extra storage, objects as JSON", () => {
+  const settings = settingsFor(shot({ storage: { "openradlr.look": { kit: "road" }, "openride.flag": "on" } }));
+  assert.equal(settings["openradlr.look"], '{"kit":"road"}');
+  assert.equal(settings["openride.flag"], "on");
+});
+
+test("parseShotList keeps a shot's storage and refuses one that is not an object", () => {
+  const [parsed] = parseShotList(JSON.stringify([{ name: "a", kind: "ride", storage: { "openradlr.look": { kit: "road" } } }]));
+  assert.deepEqual(parsed.storage, { "openradlr.look": { kit: "road" } });
+  assert.throws(() => parseShotList(JSON.stringify([{ name: "a", kind: "ride", storage: "x" }])), /storage/);
+});

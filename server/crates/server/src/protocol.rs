@@ -145,6 +145,10 @@ pub enum ClientMessage {
         #[serde(default)]
         side: Option<String>,
     },
+    /// The rider's look code (#25); the session checks its form, the server passes it on unread.
+    Look {
+        look: String,
+    },
     /// Offer a pairing code for the second screen `key`, named `name`.
     PairOffer {
         key: String,
@@ -243,11 +247,21 @@ impl Side {
 }
 
 /// What others are told about a rider besides the sim's state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RiderTags {
     pub device: DeviceKind,
     pub exercise: Option<Exercise>,
     pub side: Option<Side>,
+    /// The rider's look code (#25), passed on unread.
+    pub look: Option<String>,
+}
+
+/// Longest rider look code (#25) the server passes on.
+pub const LOOK_MAX_LEN: usize = 48;
+
+/// Whether `look` is a look code the server passes on: 1–48 characters of `[0-9a-z]`.
+pub fn valid_look(look: &str) -> bool {
+    (1..=LOOK_MAX_LEN).contains(&look.len()) && look.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -556,6 +570,9 @@ pub struct RiderState {
     /// Where in the spin studio the rider sits, for studio riders shown on the road.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub studio: Option<StudioPlace>,
+    /// The rider's look code (#25); left out when they chose none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub look: Option<String>,
 }
 
 /// A room and bike of the spin studio.
@@ -590,6 +607,7 @@ impl RiderState {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 
@@ -620,6 +638,7 @@ impl RiderState {
                 room: s.room,
                 seat: s.seat,
             }),
+            look: s.look.clone(),
         }
     }
 }
@@ -670,6 +689,9 @@ pub struct SeatState {
     pub on_target_pct: Option<f64>,
     /// Work during the class in kJ.
     pub class_kj: f64,
+    /// The rider's look code (#25); left out when they chose none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub look: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -989,6 +1011,7 @@ fn rider_state(world: &World, r: &Rider, tags: RiderTags) -> RiderState {
         style: bot.map(|b| b.profile().style.id()),
         bot_move: bot.and_then(|b| b.current_move().id()),
         studio: None,
+        look: tags.look,
     }
 }
 
@@ -1091,8 +1114,14 @@ fn vehicle_state(world: &World, v: &Vehicle) -> VehicleState {
     }
 }
 
-/// State of one studio room.
-pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[RiderState]) -> ServerMessage {
+/// State of one studio room; `look_of` gives a rider's look code (#25).
+pub fn studio_state_message(
+    studio: &Studio,
+    room: usize,
+    tick: u64,
+    road: &[RiderState],
+    look_of: &dyn Fn(RiderId) -> Option<String>,
+) -> ServerMessage {
     let clock = studio.clock();
     let class = studio.timetable().class(&clock);
     let riders = studio.rooms()[room]
@@ -1108,6 +1137,7 @@ pub fn studio_state_message(studio: &Studio, room: usize, tick: u64, road: &[Rid
             distance: round2(r.distance),
             on_target_pct: r.on_target_share().map(|share| (share * 100.0).round()),
             class_kj: (r.class_joules / 1000.0).round(),
+            look: look_of(r.id),
         })
         .collect();
     ServerMessage::StudioState {
@@ -1392,6 +1422,7 @@ mod tests {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 
@@ -1405,6 +1436,7 @@ mod tests {
             cadence: Some(90.0),
             room: 1,
             seat: 4,
+            look: None,
         };
         let json = serde_json::to_string(&RiderState::studio_seat(&seat)).unwrap();
         assert!(json.contains(r#""studio":{"room":1,"seat":4}"#), "{json}");

@@ -21,11 +21,13 @@ pub const STUDIO_NAME: &str = "Spin Studio";
 /// FTP for riders who don't send one: a fit amateur's 2.5 W/kg.
 const DEFAULT_FTP_WKG: f64 = 2.5;
 
-/// What the community totals need to know about a rider.
+/// What the studio keeps about a rider besides their bike: for the community totals, and their look.
 struct Ridden {
     device: DeviceKind,
     /// The part of the rider's distance already added to the totals.
     counted_m: f64,
+    /// The rider's look code (#25), passed on unread to the room and the road.
+    look: Option<String>,
 }
 
 pub struct StudioCore {
@@ -90,9 +92,15 @@ impl StudioCore {
                     cadence: rider.cadence,
                     room,
                     seat,
+                    look: self.look_of(rider.id),
                 })
             })
             .collect()
+    }
+
+    /// A rider's look code (#25); `None` for bots and riders who sent none.
+    fn look_of(&self, rider_id: RiderId) -> Option<String> {
+        self.ridden.get(&rider_id).and_then(|ridden| ridden.look.clone())
     }
 
     /// The state of `room`, with what its windows show: the road's riders and the other rooms.
@@ -101,7 +109,7 @@ impl StudioCore {
             let others = seats.iter().filter(|s| s.room != room).map(RiderState::studio_seat);
             mirror.road().into_iter().chain(others).collect()
         });
-        studio_state_message(&self.studio, room, self.tick, &road)
+        studio_state_message(&self.studio, room, self.tick, &road, &|id| self.look_of(id))
     }
 
     /// Shares the resume `tokens` with the route games.
@@ -208,6 +216,7 @@ impl Game for StudioCore {
             Ridden {
                 device: DeviceKind::Trainer,
                 counted_m: self.studio.rider(rider_id).map_or(0.0, |r| r.distance),
+                look: None,
             },
         );
         Ok(JoinedRider { rider_id, epoch })
@@ -260,6 +269,12 @@ impl Game for StudioCore {
     fn set_device(&mut self, rider_id: RiderId, device: DeviceKind) {
         if let Some(ridden) = self.ridden.get_mut(&rider_id) {
             ridden.device = device;
+        }
+    }
+
+    fn set_look(&mut self, rider_id: RiderId, look: String) {
+        if let Some(ridden) = self.ridden.get_mut(&rider_id) {
+            ridden.look = Some(look);
         }
     }
 
@@ -476,6 +491,7 @@ mod tests {
             cadence: None,
             room,
             seat,
+            look: None,
         }
     }
 
@@ -532,6 +548,39 @@ mod tests {
         let other_room = sinks[16].0;
         assert!(ids.contains(&other_room), "room 1's rider is outside room 0's windows");
         assert_eq!(ids.len(), 2, "none of room 0's own riders: {ids:?}");
+    }
+
+    #[test]
+    fn a_look_reaches_the_room_and_the_road_and_none_is_left_out() {
+        let mirror = StudioMirror::default();
+        let mut core = core(0, 50).with_mirror(mirror.clone());
+        let (anna, _) = join(&mut core, "Anna");
+        let (ben, ben_sink) = join(&mut core, "Ben");
+        Game::set_look(&mut core, anna, "1a2b3c".to_owned());
+        ben_sink.take();
+        for _ in 0..5 {
+            core.tick();
+        }
+        let messages = ben_sink.take();
+        let ServerMessage::StudioState { riders, .. } = studio_states(&messages)[0] else {
+            unreachable!()
+        };
+        let look_of = |id| riders.iter().find(|r| r.id == id).and_then(|r| r.look.clone());
+        assert_eq!(look_of(anna).as_deref(), Some("1a2b3c"), "Ben sees Anna's look");
+        assert_eq!(look_of(ben), None, "Ben sent none");
+        let json = serde_json::to_string(studio_states(&messages)[0]).unwrap();
+        assert_eq!(json.matches(r#""look""#).count(), 1, "{json}");
+        let (_, seats) = mirror.seats_snapshot();
+        let road = seats
+            .iter()
+            .find(|s| s.id == anna)
+            .map(RiderState::studio_seat)
+            .unwrap();
+        assert_eq!(
+            road.look.as_deref(),
+            Some("1a2b3c"),
+            "the road sees it on her studio seat"
+        );
     }
 
     #[test]

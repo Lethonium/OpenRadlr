@@ -9,7 +9,7 @@ use crate::afk::{AfkEvent, AfkWatch};
 use crate::guard::{ConnectionLimits, TokenBucket};
 use crate::pair_codes::PAIR_CODE_TTL_S;
 use crate::protocol::{
-    ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, Side, PROTOCOL_VERSION,
+    valid_look, ClientMessage, DeviceKind, Exercise, InputAction, ResumePoint, ServerMessage, Side, PROTOCOL_VERSION,
 };
 use crate::screens::WatchView;
 use crate::studio::STUDIO_ID;
@@ -135,6 +135,10 @@ pub enum PlayerCommand {
     Workout {
         exercise: Option<Exercise>,
         side: Option<Side>,
+    },
+    /// The rider's look code (#25), checked for its form.
+    Look {
+        look: String,
     },
 }
 
@@ -420,6 +424,16 @@ impl Session {
                     None => Action::Reply(ServerMessage::error("unknown_exercise", "no such exercise")),
                 },
             },
+            (Phase::Joined(_), ClientMessage::Look { look }) => {
+                if valid_look(&look) {
+                    Action::Forward(PlayerCommand::Look { look })
+                } else {
+                    Action::Reply(ServerMessage::error(
+                        "invalid_look",
+                        "a look is 1-48 characters of 0-9 and a-z",
+                    ))
+                }
+            }
             (Phase::Joined(_), ClientMessage::Leave) => Action::Leave,
             (Phase::Joined(_), ClientMessage::Chat { text }) => {
                 if self.chat.allow(now_s) {
@@ -872,6 +886,21 @@ mod tests {
             &s.on_text(r#"{"type":"workout","exercise":"pullups"}"#, 0.2),
             "unknown_exercise"
         ));
+    }
+
+    #[test]
+    fn a_look_is_forwarded_and_a_malformed_one_refused() {
+        let mut s = joined_session();
+        assert_eq!(
+            s.on_text(r#"{"type":"look","look":"10a3z"}"#, 0.2),
+            Action::Forward(PlayerCommand::Look {
+                look: "10a3z".to_owned()
+            })
+        );
+        for bad in [r#""""#, r#""Hello!""#, &format!(r#""{}""#, "a".repeat(49))] {
+            let message = format!(r#"{{"type":"look","look":{bad}}}"#);
+            assert!(is_error(&s.on_text(&message, 0.3), "invalid_look"), "{bad}");
+        }
     }
 
     #[test]

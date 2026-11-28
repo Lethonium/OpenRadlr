@@ -17,6 +17,7 @@ import { COACH_KIT, INSTRUCTOR, ROOM, STAGE, coachId, seatPosition } from "./stu
 import { STUDIO_CAMERAS, cameraModeOf, studioCamera } from "./studioCamera.js";
 import { hexToRgb, linearOf, projectToScreen, visibleLabels } from "./view3d.js";
 import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
+import { RiderLooks } from "./riderLooks.js";
 
 export { INSTRUCTOR, ROOM, STAGE, seatPosition };
 
@@ -66,7 +67,7 @@ const forwardOf = (yaw) => [-Math.sin(yaw), 0, -Math.cos(yaw)];
 
 export class StudioView3D {
   #labels = new Map();
-  #classicRider = false;
+  #looks = new RiderLooks();
   #lastTime = null;
   #reducedMotion;
   #owner;
@@ -120,9 +121,9 @@ export class StudioView3D {
     this.#makeRiders(settings);
   }
 
-  /** Draws my own rider as the classic cyclist (the old rider and bike); the others and the coach keep the new look. */
-  setClassicRider(on) {
-    this.#classicRider = Boolean(on);
+  /** My own look code (#25); null for the rolled look. The coach always wears the lemon kit. */
+  setMyLook(code) {
+    this.#looks.setMine(code);
   }
 
   /** The room's riders, rebuilt for a graphics level. */
@@ -191,6 +192,8 @@ export class StudioView3D {
     const entries = visible.map(({ rider, position, yaw }) => {
       const mine = rider.id === myId;
       const tint = rider.coach ? tints.coach : mine ? tints.me : rider.is_bot ? tints.bot : tints.human;
+      const own = rider.coach ? { classic: false } : this.#looks.of(rider, mine);
+      const dressed = { ...own, tint: linearOf(own.look ? hexToRgb(own.look.primary) : tint) };
       return {
         id: rider.coach ? coachId(0) : rider.id,
         lookId: rider.coach ? INSTRUCTOR.id : undefined,
@@ -200,9 +203,8 @@ export class StudioView3D {
         cadence: rider.coach ? coachCadence : mine ? (myCadence ?? 0) : (rider.cadence ?? 0),
         speed: rider.coach ? (coachCadence > 0 ? 9 : 0) : (rider.speed ?? 0),
         grade: 0,
-        tint: linearOf(tint),
         ghost: false,
-        classic: mine && this.#classicRider,
+        ...dressed,
         // In my own point of view the camera sits in my head: the body is left out, the bike stays.
         hideBody: mine && this.cameraMode === "pov",
       };

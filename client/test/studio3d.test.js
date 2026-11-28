@@ -4,6 +4,7 @@ import { INSTRUCTOR, ROOM, STUDIO_CAMERAS, StudioView3D, seatPosition, shownInRo
 import { lookAt } from "../public/js/view3d/math.js";
 import { fakeEngine } from "./support/fakeEngine.js";
 import { COACH_KIT, coachId } from "../public/js/view3d/studioLayout.js";
+import { encodeLook, rolledChoice } from "../public/js/profile/riderLook.js";
 
 test("seats: two rows of eight facing the stage, the back row raised", () => {
   const front = [0, 1, 2, 3, 4, 5, 6, 7].map(seatPosition);
@@ -115,12 +116,12 @@ test("my own point of view leaves my body out", () => {
   view.dispose();
 });
 
-test("the classic rider is mine only, and my point of view still hides its body", () => {
+test("my look (here the classic rider) is mine only, and my point of view still hides its body", () => {
   const view = studioView();
   const entries = [];
   const update = view.riderLayer.update;
   view.riderLayer.update = (frame) => (entries.push(...frame.riders), update(frame));
-  view.setClassicRider(true);
+  view.setMyLook(encodeLook({ ...rolledChoice(1), style: "classic" }));
   view.cameraMode = "pov";
   withDocument(() => view.render(frameOf([rider(7, 3), rider(8, 9)])));
   const mine = entries.find((e) => e.id === 7);
@@ -128,7 +129,7 @@ test("the classic rider is mine only, and my point of view still hides its body"
   assert.equal(mine.hideBody, true);
   assert.ok(!entries.find((e) => e.id === 8).classic);
   assert.ok(!entries.find((e) => e.id === coachId(0)).classic);
-  view.setClassicRider(false);
+  view.setMyLook(null);
   entries.length = 0;
   withDocument(() => view.render(frameOf([rider(7, 3)], { timeS: 2 })));
   assert.ok(!entries.find((e) => e.id === 7).classic);

@@ -40,6 +40,10 @@ test("parses the AFK warning from the server", () => {
   assert.notEqual(parseServerMessage('{"type":"afk_warning","leave_in_s":120,"can_stay":true}'), null);
 });
 
+test("the look message carries the code", () => {
+  assert.deepEqual(ClientMessages.look("1abc"), { type: "look", look: "1abc" });
+});
+
 test("workout messages carry the exercise or null", () => {
   assert.deepEqual(ClientMessages.workout("plank"), { type: "workout", exercise: "plank" });
   assert.deepEqual(ClientMessages.workout(), { type: "workout", exercise: null });
@@ -83,6 +87,30 @@ test("performs the hello and join handshake", async () => {
   socket().receive({ type: "joined", rider_id: 7 });
   assert.equal(await joined, 7);
   assert.equal(connection.serverInfo.server_name, "Test");
+});
+
+test("the look follows joined, and a changed look is sent at once", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 70, look: "1abc" });
+  socket().open();
+  socket().receive({ type: "welcome" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1abc" });
+  connection.look("1xyz");
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1xyz" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  assert.deepEqual(socket().sent.at(-1), { type: "look", look: "1xyz" }, "a rejoin sends the newer look");
+});
+
+test("no look, no look message", async () => {
+  const { connection, socket } = connectionWithSocket();
+  const joined = connection.join({ name: "Anna", weightKg: 70 });
+  socket().open();
+  socket().receive({ type: "welcome" });
+  socket().receive({ type: "joined", rider_id: 7 });
+  await joined;
+  assert.ok(socket().sent.every((m) => m.type !== "look"));
 });
 
 test("signs the welcome challenge when the rider can sign", async () => {

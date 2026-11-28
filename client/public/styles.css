@@ -8209,3 +8209,154 @@ body.working-out #paddles {
     gap: 8px;
   }
 }
+
+/* ---------- Profile: Look (#25) */
+
+[data-menu-nav="look"] {
+  --menu-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 3l3 2 3-2 5 3-2 5-2-1v11H8V10l-2 1-2-5z'/></svg>");
+}
+
+.look-panel {
+  --icon-lock: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>");
+}
+
+/* The preview stays in sight while the choices scroll under it. */
+.look-stage {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  margin: 8px 0 12px;
+  padding-top: 4px;
+  /* the menu card under the panel's tint, opaque so the choices pass under it */
+  background: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04)), rgb(17, 20, 25);
+}
+
+.look-preview {
+  display: block;
+  /* sideways drags turn the rider, up and down still scroll the page */
+  touch-action: pan-y;
+  cursor: grab;
+  width: 100%;
+  height: 210px;
+  border-radius: var(--radius);
+  background: linear-gradient(#7fa9cf, #c9dbe6 70%, #dfe7e3);
+}
+
+.look-stage #look-surprise {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+
+.look-group h3 {
+  margin: 16px 0 6px;
+  font-size: 15px;
+}
+
+.look-slot {
+  display: grid;
+  grid-template-columns: minmax(96px, 9rem) 1fr;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 0;
+}
+
+.look-slot-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.look-chips,
+.look-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.look-chip {
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+.look-chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.look-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--swatch);
+}
+
+.look-swatch[aria-pressed="true"] {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.look-chip.locked,
+.look-swatch.locked {
+  opacity: 0.5;
+  cursor: help;
+}
+
+/* a small padlock after a locked chip's name */
+.look-chip.locked::after {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 5px;
+  background: currentColor;
+  -webkit-mask: var(--icon-lock) center / contain no-repeat;
+  mask: var(--icon-lock) center / contain no-repeat;
+}
+
+.look-note {
+  grid-column: 2;
+  margin: 0;
+  color: var(--lemon);
+  font-size: 12px;
+}
+
+.look-swatch.locked {
+  background: repeating-linear-gradient(45deg, var(--swatch) 0 5px, var(--surface) 5px 8px);
+}
+
+.look-slot input[type="range"] {
+  width: min(100%, 220px);
+}
+
+.look-range-value {
+  grid-column: 2;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.achievement-unlocks {
+  color: var(--lemon);
+  font-size: 12px;
+}
+
+/* Phones: each label sits above its choices, and the preview takes less height. */
+@media (max-width: 560px) {
+  .look-slot {
+    grid-template-columns: 1fr;
+  }
+
+  .look-note,
+  .look-range-value {
+    grid-column: 1;
+  }
+
+  .look-preview {
+    height: 170px;
+  }
+}
+

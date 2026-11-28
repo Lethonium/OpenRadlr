@@ -4,6 +4,7 @@
  * needs no protocol changes.
  */
 import { TEAM_KITS, botKit } from "../view/botKits.js";
+import { RiderLooks } from "./riderLooks.js";
 import { CAMERA_MODES, ChaseCamera } from "./chaseCamera.js";
 import { STATUE_MOMENT, clipFor, mirrorPlant, mirrorPose } from "./clips.js";
 import * as THREE from "../three.js";
@@ -257,8 +258,8 @@ export class View3D {
   sideView = null;
   /** The last frame's draw calls and triangles before the post chain (the dev `?stats` readout); null before one. */
   frameStats = null;
-  /** Whether my rider is drawn as the classic rider and bike (the Old School setting). */
-  #classicRider = false;
+  /** The looks riders chose (#25): mine from this device, the others' from the server. */
+  #looks = new RiderLooks();
   /** Where the side camera frames, metres ahead of my spot; null until the first side view. */
   #sideAhead = null;
   #labels = new Map();
@@ -329,9 +330,19 @@ export class View3D {
     this.sight = { height: groundHeight(world.ground), boxes: plotBoxes(world.plan) };
   }
 
-  /** Draws my own rider as the classic cyclist (the old rider and bike) on this screen; the others keep the new look. */
-  setClassicRider(on) {
-    this.#classicRider = Boolean(on);
+  /** My own look code (#25), drawn at once without waiting for the server; null for the rolled look. */
+  setMyLook(code) {
+    this.#looks.setMine(code);
+  }
+
+  /**
+   * A rider's look for its entry, and its jersey: its own look's colour, or the colour code `tint` when `colourCode`
+   * (races and events) or when the rider chose no look.
+   */
+  #dressed(rider, mine, tint, colourCode, lookId) {
+    const dressed = this.#looks.of(rider, mine, lookId);
+    const own = dressed.look && !colourCode && !rider.ghost;
+    return { ...dressed, tint: linearOf(own ? hexToRgb(dressed.look.primary) : tint) };
   }
 
   /** "auto" (by local clock), "day", "golden", "dusk" or "night". */
@@ -560,10 +571,11 @@ export class View3D {
 
   /**
    * Draws one frame.
-   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, utcSeconds?: number, colors: {me: string, human: string, bot: string}}} frame
-   *   `timeS` is the scene's clock; `utcSeconds` the wall clock (when the showers fall), read by the caller
+   * @param {{riders: object[], myId: number, myCadence?: number, timeS: number, utcSeconds?: number, colors: {me: string, human: string, bot: string}, colourCode?: boolean}} frame
+   *   `timeS` is the scene's clock; `utcSeconds` the wall clock (when the showers fall), read by the caller; `colourCode`
+   *   dresses every jersey in the colour code (races and events), else riders wear the looks they chose
    */
-  render({ riders, myId, myCadence, timeS, utcSeconds = 0, colors }) {
+  render({ riders, myId, myCadence, timeS, utcSeconds = 0, colors, colourCode = false }) {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
@@ -617,7 +629,8 @@ export class View3D {
       const cadence = rider.id === myId ? (myCadence ?? 0) : rider.power > 0 ? 85 : 0;
       const tint = rider.ghost ? SCENE.ghost.tint : rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
       if (!gym) {
-        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), tint: linearOf(tint), ghost: Boolean(rider.ghost), classic: rider.id === myId && this.#classicRider });
+        const mine = rider.id === myId && !rider.ghost;
+        roadRiders.push({ id: rider.id, me: rider.id === myId, position, forward, cadence, speed: rider.speed ?? 0, grade: this.#gradeOf(rider), ghost: Boolean(rider.ghost), ...this.#dressed(rider, mine, tint, colourCode) });
         continue;
       }
       athletes.push({
@@ -625,7 +638,7 @@ export class View3D {
         position: gym.spot.position,
         yaw: gym.spot.yaw,
         ...this.#workoutPose(rider, timeS),
-        tint: linearOf(tint),
+        ...this.#dressed(rider, rider.id === myId, tint, colourCode),
         figure: this.biome.workoutFigure ?? "rider",
         bike: this.#rackBike(gym.gym, gym.slot),
       });
@@ -643,7 +656,8 @@ export class View3D {
       const seats = vehicle.seats.map((rider) => {
         if (!rider) return null;
         const tint = rider.id === myId ? tints.me : isRemote(rider) ? tints.remote : rider.is_bot ? botTint(rider, tints) : tints.human;
-        return { id: rider.id, me: rider.id === myId, cadence: rider.id === myId ? (myCadence ?? seatCadence(rider)) : seatCadence(rider), tint: linearOf(tint) };
+        const { look, lookKey, tint: jersey } = this.#dressed(rider, rider.id === myId, tint, colourCode);
+        return { id: rider.id, me: rider.id === myId, cadence: rider.id === myId ? (myCadence ?? seatCadence(rider)) : seatCadence(rider), tint: jersey, look, lookKey };
       });
       vehicles.push({ id: vehicle.id, kind: vehicle.kind, layout, position, forward, speed: vehicle.at.rider.speed ?? 0, seats });
     }
@@ -665,9 +679,8 @@ export class View3D {
           cadence: rider.cadence ?? (rider.power > 0 ? 85 : 0),
           speed: rider.speed ?? 0,
           grade: 0,
-          tint: linearOf(tint),
           ghost: false,
-          classic: mine && this.#classicRider,
+          ...this.#dressed(rider, mine, tint, colourCode || isCoach(rider.id), rider.lookId),
           // In my own point of view the camera sits in my head: the body is left out, the bike stays.
           hideBody: mine && this.camera.mode === "pov",
         });

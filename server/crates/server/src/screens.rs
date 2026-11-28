@@ -292,6 +292,7 @@ mod tests {
             style: None,
             bot_move: None,
             studio: None,
+            look: None,
         }
     }
 
@@ -307,6 +308,7 @@ mod tests {
             distance: 0.0,
             on_target_pct: None,
             class_kj: 0.0,
+            look: None,
         }
     }
 
