@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { QUALITY_LEVELS, nextQuality, qualityLevel, qualitySettings } from "../public/js/view3d/quality.js";
+import { QUALITY_LEVELS, nextQuality, qualityLevel, qualitySettings, renderPixelRatio } from "../public/js/view3d/quality.js";
 import en from "../public/js/i18n/en.js";
 import de from "../public/js/i18n/de.js";
 
@@ -89,6 +89,7 @@ test("each level has grass rings that grow outwards, and Low stays lighter than 
     previous = blades;
   }
   assert.ok(qualitySettings("low").grassRings[3].r < qualitySettings("medium").grassRings[3].r);
+  assert.ok(bladeCount(qualitySettings("low").grassRings) <= 22_000, "Low limits grass submissions");
 });
 
 test("tree detail: cards come closer than hulls, leaf shadows are off on Low, the roadside reaches further with quality", () => {
@@ -126,4 +127,14 @@ test("every level sets the land-use reaches, growing from low to ultra", () => {
     }
     before = landUse;
   }
+});
+
+test("Low caps the drawing buffer on large screens while preserving aspect ratio", () => {
+  const scale = renderPixelRatio(2560, 1440, 2, qualitySettings("low"));
+  assert.ok(scale < 1);
+  assert.ok(Math.round(2560 * scale) * Math.round(1440 * scale) <= 1_000_000);
+});
+
+test("Low keeps a smaller screen at native resolution", () => {
+  assert.equal(renderPixelRatio(900, 600, 1, qualitySettings("low")), 1);
 });

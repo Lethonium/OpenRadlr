@@ -1774,6 +1774,13 @@ body.riding {
   backdrop-filter: blur(8px);
 }
 
+/* A moving world behind blur requires an extra compositor pass on every frame. */
+.ride[data-quality="low"] .hud .glass {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .caption {
   display: block;
   font-size: 12px;

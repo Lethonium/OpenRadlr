@@ -32,7 +32,7 @@ import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
 import { groundHeight, labelInSight, plotBoxes } from "./labelSight.js";
 import { isRemote } from "../view/remoteRiders.js";
-import { QUALITY_LEVELS, qualitySettings } from "./quality.js";
+import { QUALITY_LEVELS, qualitySettings, renderPixelRatio } from "./quality.js";
 import { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens } from "./lenses.js";
 import { isWebGl2Available } from "./webgl.js";
 
@@ -579,10 +579,11 @@ export class View3D {
     const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
     this.#lastTime = timeS;
 
-    const { pixelRatioMax, shadows } = qualitySettings(this.quality);
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, pixelRatioMax);
+    const settings = qualitySettings(this.quality);
+    const { shadows } = settings;
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
+    const ratio = renderPixelRatio(width, height, globalThis.devicePixelRatio || 1, settings);
     this.engine.resize(width, height, ratio);
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
@@ -704,7 +705,7 @@ export class View3D {
 
     // The Three.js scene into the engine's target (ground, sea, sky, riders, features), then the post chain presents it.
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
-    this.engine.beginFrame();
+    this.engine.beginFrame(env);
     this.#aim(this.worldCamera, view, projection, lens, width / height);
     this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
