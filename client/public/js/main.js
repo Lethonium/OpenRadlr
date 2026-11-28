@@ -766,10 +766,10 @@ function currentLook() {
   return sanitizeLook(loadLook(storage) ?? rolledChoice(lookSeed()), loadAchievements(storage).earned, lookSeed());
 }
 
-/** Draws the Look page and its preview. */
-function renderLook() {
+/** Draws the Look page and its preview; `focus` (`{slot, value}`) is the choice whose control keeps the focus. */
+function renderLook(focus = null) {
   const choice = currentLook();
-  renderLookPage($("look-choices"), lookPageModel(choice, loadAchievements(browserStorage()).earned, app.profile.units), pickLook);
+  renderLookPage($("look-choices"), lookPageModel(choice, loadAchievements(browserStorage()).earned, app.profile.units), pickLook, { focus });
   showLookPreview(choice);
 }
 
@@ -777,8 +777,7 @@ function renderLook() {
 function keepLook(choice, focus = null) {
   saveLook(browserStorage(), choice);
   applyMyLook();
-  renderLook();
-  if (focus) $("look-choices").querySelector(`[data-slot="${focus.slot}"][data-option="${focus.value}"]`)?.focus();
+  renderLook(focus);
 }
 
 function pickLook(slot, value) {

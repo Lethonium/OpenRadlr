@@ -68,11 +68,14 @@ export function lookPageModel(choice, earned, units = "metric") {
 
 /**
  * Writes the model into `container` (replacing what was there); `onPick(slot, value)` gets every choice made.
+ * `focus` (`{slot, value}`, the choice just made) puts the keyboard focus back on its control in the new page: the
+ * picked chip or swatch, or the slider itself, so arrow keys keep moving it.
  * @param {HTMLElement} container
  * @param {ReturnType<typeof lookPageModel>} model
  * @param {(slot: string, value: string | number) => void} onPick
+ * @param {{focus?: {slot: string, value: string | number} | null}} [options]
  */
-export function renderLookPage(container, model, onPick) {
+export function renderLookPage(container, model, onPick, { focus = null } = {}) {
   const doc = container.ownerDocument;
   const el = (tag, className, text) => {
     const node = doc.createElement(tag);
@@ -80,6 +83,7 @@ export function renderLookPage(container, model, onPick) {
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  let focusTarget = null;
   const groups = model.map((group) => {
     const section = el("section", "look-group");
     section.append(el("h3", "", group.title));
@@ -92,6 +96,8 @@ export function renderLookPage(container, model, onPick) {
         const input = el("input");
         Object.assign(input, { type: "range", min: String(slot.min), max: String(slot.max), step: "1", value: String(slot.value) });
         input.setAttribute("aria-labelledby", name.id);
+        input.dataset.slot = slot.id;
+        if (focus?.slot === slot.id) focusTarget = input;
         const output = el("output", "look-range-value", slot.text);
         input.addEventListener("input", () => (output.textContent = heightLabel(Number(input.value), slot.units)));
         input.addEventListener("change", () => onPick(slot.id, Number(input.value)));
@@ -108,6 +114,7 @@ export function renderLookPage(container, model, onPick) {
           const button = el("button", slot.kind === "colour" ? "look-swatch" : "look-chip", slot.kind === "colour" ? "" : option.label);
           button.type = "button";
           Object.assign(button.dataset, { slot: slot.id, option: option.id });
+          if (focus?.slot === slot.id && focus.value === option.id) focusTarget = button;
           button.setAttribute("aria-pressed", String(option.selected));
           if (slot.kind === "colour") {
             button.style.setProperty("--swatch", option.colour);
@@ -132,4 +139,5 @@ export function renderLookPage(container, model, onPick) {
     return section;
   });
   container.replaceChildren(...groups);
+  focusTarget?.focus();
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { LOOK_GROUPS, heightLabel, lookPageModel, unlockLine } from "../public/js/view/lookPage.js";
+import { LOOK_GROUPS, heightLabel, lookPageModel, renderLookPage, unlockLine } from "../public/js/view/lookPage.js";
 import { LOOK_SLOTS, rolledChoice } from "../public/js/profile/riderLook.js";
 import en from "../public/js/i18n/en.js";
 import de from "../public/js/i18n/de.js";
@@ -56,4 +56,75 @@ test("every group, slot and option has English and German text", () => {
 
 test("the gold frame has its own name in the unlock line", () => {
   assert.equal(unlockLine("km1000"), "Unlocks for your look: Gold frame");
+});
+
+/** Just enough of a document for renderLookPage: elements with children, dataset, attributes, events and focus. */
+function fakeDocument() {
+  const doc = { activeElement: null };
+  doc.createElement = (tag) => {
+    const listeners = {};
+    const node = {
+      tagName: tag.toUpperCase(),
+      ownerDocument: doc,
+      children: [],
+      dataset: {},
+      attributes: {},
+      style: { setProperty() {} },
+      classList: { add() {} },
+      setAttribute(name, value) {
+        this.attributes[name] = value;
+      },
+      append(...nodes) {
+        this.children.push(...nodes);
+      },
+      replaceChildren(...nodes) {
+        this.children = nodes;
+      },
+      addEventListener(type, listener) {
+        (listeners[type] ??= []).push(listener);
+      },
+      dispatch(type) {
+        for (const listener of listeners[type] ?? []) listener();
+      },
+      focus() {
+        doc.activeElement = node;
+      },
+    };
+    return node;
+  };
+  return doc;
+}
+
+const allNodes = (node) => [node, ...node.children.flatMap(allNodes)];
+
+test("the height slider keeps the focus through two keyboard steps in a row", () => {
+  const doc = fakeDocument();
+  const container = doc.createElement("div");
+  let choice = rolledChoice(1);
+  const picks = [];
+  const render = (focus) => renderLookPage(container, lookPageModel(choice, {}), onPick, { focus });
+  const onPick = (slot, value) => {
+    picks.push(value);
+    choice = { ...choice, [slot]: value };
+    // The app saves the look and draws the page again, as main.js's keepLook does.
+    render({ slot, value });
+  };
+  render(null);
+  const slider = () => allNodes(container).find((node) => node.type === "range");
+  slider().focus();
+  for (const step of [1, 2]) {
+    const focused = doc.activeElement;
+    assert.equal(focused?.type, "range", `focus on the slider before step ${step}`);
+    focused.value = String(Number(focused.value) + 1);
+    focused.dispatch("change");
+  }
+  assert.deepEqual(picks, [choice.height - 1, choice.height]);
+  assert.equal(doc.activeElement, slider());
+});
+
+test("a picked chip gets the focus back after the page is drawn again", () => {
+  const doc = fakeDocument();
+  const container = doc.createElement("div");
+  renderLookPage(container, lookPageModel(rolledChoice(1), {}), () => {}, { focus: { slot: "sockHeight", value: "crew" } });
+  assert.deepEqual([doc.activeElement?.dataset.slot, doc.activeElement?.dataset.option], ["sockHeight", "crew"]);
 });
