@@ -9,7 +9,7 @@ import { formatDistanceWithUnit, formatDuration, formatElevation, formatSpeed, s
 import { levelLabel } from "../profile/level.js";
 import { ftpProvenance } from "./ftpProvenance.js";
 
-export const PROFILE_PAGES = ["goals", "overview", "achievements", "rides", "account", "data"];
+export const PROFILE_PAGES = ["goals", "overview", "achievements", "boards", "rides", "account", "data"];
 export const RIDES_PAGE_SIZE = 20;
 
 const CURVE_KEYS = [5, 60, 300, 1200];
@@ -178,6 +178,7 @@ const DATA_NAMES = {
   goals: "profilePage.data.goals",
   progress: "profilePage.data.progress",
   unfinished: "profilePage.data.unfinished",
+  boards: "profilePage.data.boards",
   settings: "profilePage.data.settings",
   device: "profilePage.data.device",
 };
@@ -189,6 +190,7 @@ const DATA_DETAILS = {
   goals: "profilePage.data.goals.detail",
   progress: "profilePage.data.progress.detail",
   unfinished: "profilePage.data.unfinished.detail",
+  boards: "profilePage.data.boards.detail",
   settings: "profilePage.data.settings.detail",
   device: "profilePage.data.device.detail",
 };

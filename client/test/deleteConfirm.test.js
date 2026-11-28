@@ -76,7 +76,7 @@ test("deleteTexts: all goals with their count", () => {
 });
 
 test("deleteTexts: every kind of data has its texts", () => {
-  for (const item of ["ride", "rides", "bestLaps", "goal", "goals", "profile", "progress", "unfinished", "settings", "everything"]) {
+  for (const item of ["ride", "rides", "bestLaps", "goal", "goals", "profile", "progress", "unfinished", "boards", "settings", "everything"]) {
     const x = deleteTexts(item, { count: 2, summits: 1, lemons: 3, from: "a", to: "b", date: "d" });
     assert.ok(x.title && x.action && x.lines.length >= 2, item);
     assert.ok(![x.title, x.action, ...x.lines].join(" ").includes("{"), item);

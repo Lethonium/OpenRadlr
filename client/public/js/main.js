@@ -32,6 +32,13 @@ import { bindKeyboard } from "./input/keyboard.js";
 import { GameConnection } from "./net/connection.js";
 import { Reconnector } from "./net/reconnector.js";
 import { RidePause } from "./ride/ridePause.js";
+import { planGoalBoards } from "./ride/goalBoards.js";
+import { createGoalSheet } from "./view3d/posters/goalSheet.js";
+import { createCanvas, paintPoster } from "./view3d/posters/paint.js";
+import { boardPosterPlan, ridePosterPlan } from "./view3d/posters/plan.js";
+import { MAX_BOARDS, cropWindow, prepareImage } from "./profile/myBoards.js";
+import { dragCrop, initialCrop, zoomCrop } from "./view/boardCrop.js";
+import { boardErrorKey, myBoardsLines, thumbSize } from "./view/myBoardsView.js";
 import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
@@ -66,7 +73,7 @@ import { LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
-import { rideStores } from "./ride/rideStores.js";
+import { rideStores, riderDbNames, useRideStores } from "./ride/rideStores.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
 import { toLatLon } from "./route/geo.js";
 import { RouteGeometry } from "./route/geometry.js";
@@ -121,7 +128,7 @@ import { seasonChoices } from "./view/seasonPicker.js";
 import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
-import { nextQuality, qualityLevel } from "./view3d/quality.js";
+import { nextQuality, qualityLevel, qualitySettings } from "./view3d/quality.js";
 import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
 import { CAMERA_MODES } from "./view3d/chaseCamera.js";
 import { TIME_MODES } from "./world/daylight.js";
@@ -466,6 +473,8 @@ const app = {
   history: stores.history,
   /** My best lap per route, ridden again by a ghost. */
   ghosts: stores.ghosts,
+  /** My own board posters: a picture and/or a line, on this device only. */
+  boards: stores.boards,
   /** Laps on my route and its best lap: `{run, best}`; null off the routes, on routes that aren't loops, in the studio and workouts. */
   ghostLap: null,
   finishSplits: [],
@@ -1077,6 +1086,7 @@ function initMenuStage() {
           // The menu's drone view is always Low, built so from the start.
           const view = new View3D(canvas, $("labels3d"), route, scene, { weather: weatherToday(), quality: "low" });
           view.lens = droneLens(scene.overview);
+          paintBoardPosters(view, route.id ?? null, []);
           view.setTimeMode(TIME_MODES.includes(readSetting(TIME_KEY)) ? readSetting(TIME_KEY) : "day");
           return view;
         }
@@ -1267,10 +1277,9 @@ function applyRoster(roster) {
   saveRiders(rawStorage, riders);
   // The ride stores follow the active rider; those of the previous one stay with the
   // saves still using them (#115).
-  const own = rideStores(roster.active);
-  app.autosave = own.autosave;
-  app.history = own.history;
-  app.ghosts = own.ghosts;
+  useRideStores(app, roster.active);
+  // A picture half added belongs to the previous rider.
+  clearBoardDraft();
   // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
   app.riderGeneration += 1;
   app.profile = profiles.load();
@@ -1346,8 +1355,6 @@ function askForPin(id, { canForget = true } = {}) {
     check: async (pin) => ((await unlock(riders, id, pin, pinDeps())) ? null : t("pin.error.wrong")),
   });
 }
-
-const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys"].map((base) => riderDbName(base, id));
 
 /**
  * "Forgot your PIN": deletes rider `id` without the PIN, after the usual confirmation. That is
@@ -3573,6 +3580,7 @@ function initProfile() {
   $("profile-export").addEventListener("click", exportProfileData);
   $("profile-delete-all").addEventListener("click", () => deleteProfileData("everything"));
   $("profile-delete-rider").addEventListener("click", () => deleteActiveRider());
+  initBoardsForm();
   initGoalForm();
   $("profile-goals-link").addEventListener("click", () => app.profileDialog.open("goals"));
   $("profile-rides-more").addEventListener("click", () => {
@@ -3582,6 +3590,194 @@ function initProfile() {
   relocaliseHooks.push(() => {
     if (app.profileDialog.isOpen) renderProfile();
   });
+}
+
+// ------------------------------------------------------- my boards page ---
+
+const BOARD_TEXT_MAX = 80;
+const BOARD_PREVIEW = { width: 512, height: 256 };
+/** CSS width of a thumbnail in the list (the first column of .board-item in styles.css). */
+const BOARD_THUMB_CSS_WIDTH = 96;
+
+/** The picture being added: the chosen file, its decoded image and the crop (profile/myBoards.js's model). */
+let boardDraft = null;
+/** Counts picture picks (and cleared drafts): a decode that finishes after a newer one is dropped. */
+let boardPick = 0;
+
+function showBoardError(reason) {
+  const error = $("boards-error");
+  error.hidden = !reason;
+  error.textContent = reason ? t(boardErrorKey(reason), { max: reason === "tooLong" ? BOARD_TEXT_MAX : MAX_BOARDS }) : "";
+}
+
+/** The part of the draft picture the crop shows, on a canvas of `size`. */
+function croppedDraft(size) {
+  const canvas = createCanvas(size.width, size.height);
+  const { image, crop } = boardDraft;
+  const { sx, sy, sw, sh } = cropWindow(image.width, image.height, crop);
+  canvas.getContext("2d").drawImage(image, sx, sy, sw, sh, 0, 0, size.width, size.height);
+  return canvas;
+}
+
+/** Redraws the crop frame and the board preview (the poster as the ride paints it) from the draft and the text. */
+function renderBoardPreview() {
+  const preview = $("boards-preview");
+  preview.width = BOARD_PREVIEW.width;
+  preview.height = BOARD_PREVIEW.height;
+  const text = $("boards-text").value.trim();
+  const image = boardDraft ? croppedDraft(BOARD_PREVIEW) : null;
+  paintPoster(preview.getContext("2d"), { type: "upload", image: image ?? undefined, text }, BOARD_PREVIEW);
+  if (!image) return;
+  const frame = $("boards-crop-canvas");
+  frame.width = BOARD_PREVIEW.width;
+  frame.height = BOARD_PREVIEW.height;
+  frame.getContext("2d").drawImage(image, 0, 0);
+}
+
+function clearBoardDraft() {
+  boardPick += 1;
+  boardDraft?.image.close?.();
+  boardDraft = null;
+  $("boards-file").value = "";
+  $("boards-text").value = "";
+  $("boards-zoom").value = "1";
+  $("boards-crop-row").hidden = true;
+  renderBoardPreview();
+}
+
+async function chooseBoardPicture() {
+  // A newer pick, a cleared draft or a rider switch supersedes this one while it decodes.
+  const pick = ++boardPick;
+  const file = $("boards-file").files[0];
+  boardDraft?.image.close?.();
+  boardDraft = null;
+  $("boards-crop-row").hidden = true;
+  showBoardError(null);
+  if (file) {
+    const image = await createImageBitmap(file).catch(() => null);
+    if (pick !== boardPick) return image?.close?.();
+    if (image) {
+      boardDraft = { file, image, crop: initialCrop() };
+      $("boards-zoom").value = "1";
+      $("boards-crop-row").hidden = false;
+    } else {
+      $("boards-file").value = "";
+      showBoardError("unreadable");
+    }
+  }
+  renderBoardPreview();
+}
+
+function initBoardsForm() {
+  $("boards-file").addEventListener("change", chooseBoardPicture);
+  $("boards-text").addEventListener("input", renderBoardPreview);
+  $("boards-zoom").addEventListener("input", () => {
+    if (!boardDraft) return;
+    boardDraft.crop = zoomCrop(boardDraft.crop, Number($("boards-zoom").value), { imageW: boardDraft.image.width, imageH: boardDraft.image.height });
+    renderBoardPreview();
+  });
+  const frame = $("boards-crop");
+  let last = null;
+  frame.addEventListener("pointerdown", (event) => {
+    last = { x: event.clientX, y: event.clientY };
+    frame.setPointerCapture?.(event.pointerId);
+  });
+  frame.addEventListener("pointermove", (event) => {
+    if (!last || !boardDraft) return;
+    const { image } = boardDraft;
+    boardDraft.crop = dragCrop(boardDraft.crop, event.clientX - last.x, event.clientY - last.y, { imageW: image.width, imageH: image.height, frameW: frame.clientWidth || BOARD_PREVIEW.width });
+    last = { x: event.clientX, y: event.clientY };
+    renderBoardPreview();
+  });
+  for (const type of ["pointerup", "pointercancel"]) frame.addEventListener(type, () => (last = null));
+  $("boards-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitBoardsForm();
+  });
+  renderBoardPreview();
+}
+
+async function submitBoardsForm() {
+  // The save uses what the form held when it was sent, and the store of the rider who sent it.
+  const generation = app.riderGeneration;
+  const boards = app.boards;
+  const draft = boardDraft;
+  const text = $("boards-text").value;
+  const crop = draft ? { ...draft.crop } : null;
+  const button = $("boards-add");
+  button.disabled = true;
+  showBoardError(null);
+  try {
+    let blob = null;
+    if (draft) {
+      const prepared = await prepareImage(draft.file, crop);
+      if (generation !== app.riderGeneration) return;
+      if (!prepared.ok) return showBoardError(prepared.reason);
+      blob = prepared.blob;
+    }
+    const added = await boards.add({ blob, text, crop });
+    if (generation !== app.riderGeneration) return;
+    if (!added.ok) return showBoardError(added.reason);
+    // A picture picked while this one was saved stays in the form.
+    if (boardDraft === draft) clearBoardDraft();
+  } finally {
+    button.disabled = false;
+    if (generation === app.riderGeneration) await renderProfileBoards();
+  }
+}
+
+/**
+ * The list of the rider's own boards, each as the poster the ride shows, with a remove button. The count and the rows
+ * show as soon as the entries are read; the thumbnails are painted into them afterwards, one by one.
+ */
+async function renderProfileBoards() {
+  const generation = app.riderGeneration;
+  const entries = await app.boards.list();
+  if (generation !== app.riderGeneration) return;
+  const lines = myBoardsLines(entries, { max: MAX_BOARDS });
+  $("boards-count").textContent = lines.count;
+  $("boards-empty").hidden = !lines.empty;
+  $("boards-empty").textContent = lines.empty ?? "";
+  $("boards-add").disabled = !lines.canAdd;
+  if (!lines.canAdd) showBoardError("full");
+  else if ($("boards-error").textContent === t(boardErrorKey("full"), { max: MAX_BOARDS })) showBoardError(null);
+  const items = entries.map((entry) => boardItem(entry, generation));
+  $("boards-list").replaceChildren(...items.map((item) => item.element));
+  await Promise.all(items.map((item) => item.painted));
+}
+
+/** A list row for `entry` at once; `painted` resolves when its thumbnail is on the canvas. */
+function boardItem(entry, generation) {
+  const item = document.createElement("li");
+  item.className = "board-item";
+  const canvas = document.createElement("canvas");
+  canvas.className = "board-canvas";
+  const size = thumbSize(BOARD_THUMB_CSS_WIDTH, window.devicePixelRatio || 1);
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const painted = (async () => {
+    let image;
+    if (entry.blob) {
+      try {
+        image = await createImageBitmap(entry.blob);
+      } catch {
+        image = undefined;
+      }
+    }
+    // The row may have been replaced by a newer list meanwhile.
+    if (generation === app.riderGeneration && canvas.isConnected !== false) paintPoster(canvas.getContext("2d"), { type: "upload", image, text: entry.text }, size);
+    image?.close?.();
+  })();
+  const remove = textElement("button", t("boards.page.remove"));
+  remove.type = "button";
+  remove.className = "secondary small";
+  const boards = app.boards;
+  remove.addEventListener("click", async () => {
+    await boards.remove(entry.id);
+    if (generation === app.riderGeneration) await renderProfileBoards();
+  });
+  item.append(canvas, textElement("span", entry.text), remove);
+  return { element: item, painted };
 }
 
 /** Opens the profile on `page` and fills it from fresh reads of the stores. */
@@ -3612,6 +3808,7 @@ async function loadProfile(keep) {
 function renderProfile() {
   if (!app.profileData) return;
   renderProfileGoals();
+  renderProfileBoards();
   renderProfileOverview();
   renderProfileAchievements();
   renderProfileFtp();
@@ -3871,6 +4068,9 @@ function startGoals() {
   app.goalData = null;
   app.goalLive = null;
   app.goalLaps = new Map();
+  app.goalBoardPlan = null;
+  app.goalRideAt = 0;
+  app.view3d?.setGoalPlan([]);
   app.goalLapSaves = [];
   app.historySave = null;
   const ride = app.ride;
@@ -3893,7 +4093,7 @@ function liveGoals() {
   if (!app.goalData || !app.recorder || !app.goalLaps) return [];
   const at = Date.now();
   if (!app.goalLive || at - app.goalLive.at >= 1000) {
-    const { distanceM, durationS, elevationGainM } = app.recorder.summary();
+    const { distanceM, durationS, elevationGainM } = app.recorder.totals();
     const live = { distanceM, durationS, elevationGainM, laps: app.goalLaps };
     app.goalLive = { at, entries: goalEntries(at, live).filter(({ week }) => !week.finished) };
   }
@@ -3907,6 +4107,43 @@ function renderGoalLine() {
   const line = rotatingGoal(hudGoalLines(liveGoals(), { routeId: app.route?.id ?? null, racing }), Date.now());
   app.hud.set("goal", line ?? "");
   for (const element of document.querySelectorAll(".hud-goal")) element.hidden = line === null;
+  updateGoalBoards(me, racing);
+}
+
+/**
+ * The goal boards in the world (ride/goalBoards.js): planned from this week's goals once they are read, for the view
+ * and the route of the moment (a season change builds a new view, a turn puts my rider on another route: either plans
+ * again), taken down in a race or event; the ride's pace goes to the view once a second while any are planned.
+ */
+function updateGoalBoards(me, racing) {
+  const view = app.view3d;
+  if (!view) return;
+  const routeId = app.route?.id ?? null;
+  if (racing || !app.route?.length) {
+    if (app.goalBoardPlan) view.setGoalPlan([]);
+    app.goalBoardPlan = null;
+    return;
+  }
+  if (app.goalBoardPlan?.view !== view || app.goalBoardPlan.routeId !== routeId) {
+    if (!app.goalData || !app.recorder) return;
+    const entries = goalEntries().filter(({ week }) => !week.finished);
+    const planned = planGoalBoards(entries, { routeId, routeLength: app.route.length });
+    app.goalSheet ??= createGoalSheet(createCanvas);
+    view.onGoalPoster = (slot, text) => {
+      if (app.goalSheet.paint(slot, text)) view.setGoalPosters(app.goalSheet.canvas);
+    };
+    // A new view gets the sheet as painted so far: the posters it already shows are not painted again.
+    view.setGoalPosters(app.goalSheet.canvas);
+    view.setGoalPlan(planned);
+    app.goalBoardPlan = { view, routeId, boards: planned.length };
+    app.goalRideAt = 0;
+  }
+  if (!app.goalBoardPlan.boards) return;
+  const at = Date.now();
+  if (app.goalRideAt && at - app.goalRideAt < 1000) return;
+  app.goalRideAt = at;
+  const { distanceM, durationS, elevationGainM } = app.recorder.totals();
+  view.setGoalRide({ rideM: distanceM, durationS, elevationGainM, speedMps: me?.speed ?? 0 });
 }
 
 /**
@@ -4129,7 +4366,7 @@ function submitGoalForm() {
 
 /** localStorage and the raw IndexedDB stores, for profile/localData.js. */
 function dataSources() {
-  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store } };
+  return { storage: browserStorage(), deviceStorage: deviceStorage(rawStorage), stores: { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store, boards: app.boards.store } };
 }
 
 /** The "Your data" page: each item with its count, export and delete. */
@@ -5883,6 +6120,58 @@ function setQuality(quality) {
   $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
   replanRideWorld(quality);
+  paintRideBoardPosters(app.view3d);
+}
+
+/**
+ * Chooses and paints the posters of `view`'s roadside boards into the atlas of its quality and hands them over.
+ * `uploads` are `{id, text, image}` (the rider's own boards, decoded); the menu's view passes none.
+ */
+function paintBoardPosters(view, routeId, uploads) {
+  try {
+    const atlas = qualitySettings(view.quality).boards.atlas;
+    const plan = boardPosterPlan(view.boards, { routeId, uploads, dateKey: isoDate(Date.now()), atlas, makeCanvas: createCanvas });
+    view.setBoardPosters(plan.atlas, plan.slotOf, plan.slotCount);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+/** The ride's last poster atlas (posters/plan.js ridePosterPlan): a quality change with the same posters keeps it. */
+let rideAtlas = null;
+
+/**
+ * The ride view's posters: the default ones plus the rider's own boards (kept on the device, never sent anywhere).
+ * Painted when the view is shown and again when its quality (so its atlas size) changes; only the uploads chosen for a
+ * board are decoded. The menu's drone view and the studio get the defaults only.
+ */
+async function paintRideBoardPosters(view) {
+  if (!view?.boards?.length || app.studio) return;
+  const route = app.route;
+  let entries = [];
+  try {
+    entries = await app.boards.list();
+  } catch (error) {
+    console.error(error);
+  }
+  try {
+    const plan = await ridePosterPlan(view.boards, {
+      routeId: route?.id ?? null,
+      uploads: entries,
+      dateKey: isoDate(Date.now()),
+      atlas: qualitySettings(view.quality).boards.atlas,
+      makeCanvas: createCanvas,
+      decode: (blob) => createImageBitmap(blob),
+      lang: getLocale(),
+      previous: rideAtlas,
+    });
+    // Another view or route came meanwhile: its own paint wins.
+    if (app.view3d !== view || app.route !== route) return;
+    rideAtlas = plan;
+    view.setBoardPosters(plan.atlas, plan.slotOf, plan.slotCount);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 /** The newest ride-world replan; a later request makes an earlier one's result stale. */

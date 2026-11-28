@@ -1,5 +1,5 @@
 /**
- * The ride stores of one rider (#112): the autosave, the ride history and the ghost laps,
+ * The ride stores of one rider (#112): the autosave, the ride history, the ghost laps and the rider's own boards,
  * each over an IndexedDB named for that rider alone. The stores are pinned to the rider at
  * construction, because their operations span awaits — a lap is offered with a read and a
  * write, the finish saves and then reads back — and the active rider can change while such
@@ -11,6 +11,7 @@
 import { RideAutosave, indexedDbStore } from "./rideAutosave.js";
 import { RideHistory } from "./rideHistory.js";
 import { GhostStore } from "./ghostLap.js";
+import { MyBoards } from "../profile/myBoards.js";
 import { riderDbName } from "../profile/riderStorage.js";
 
 /**
@@ -25,5 +26,20 @@ export function rideStores(riderId, { idb = globalThis.indexedDB } = {}) {
     autosave: new RideAutosave({ store: store("openradlr-autosave") }),
     history: new RideHistory({ store: store("openradlr-history") }),
     ghosts: new GhostStore({ store: store("openradlr-ghosts") }),
+    boards: new MyBoards({ store: store("openradlr-boards") }),
   };
 }
+
+/**
+ * Puts rider `riderId`'s ride stores on `target` (the app), every one of them, so nothing keeps reading the
+ * previous rider's (#112). Operations that started before keep the stores they started with.
+ * @param {object} target
+ * @param {string} riderId
+ * @param {{idb?: IDBFactory}} [options]
+ */
+export function useRideStores(target, riderId, options) {
+  return Object.assign(target, rideStores(riderId, options));
+}
+
+/** The IndexedDB databases that belong to rider `id`, for deleting them with the rider. */
+export const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys", "openradlr-boards"].map((base) => riderDbName(base, id));

@@ -1,0 +1,35 @@
+/**
+ * The default poster pool. Each poster's text is t("boards.line." + id); the kind says which board it may stand on and
+ * the art names the flat illustration painted for it (see art.js).
+ */
+export const POSTERS = Object.freeze([
+  { id: "halfLegend", kind: "general", art: "lemon" },
+  { id: "painRadler", kind: "general", art: "glass" },
+  { id: "notThereYet", kind: "general", art: "glass" },
+  { id: "pedalPour", kind: "general", art: "cheers" },
+  { id: "lifeLemons", kind: "general", art: "lemon" },
+  { id: "legsCalled", kind: "general", art: "rider" },
+  { id: "forecast", kind: "general", art: "rider" },
+  { id: "mixFun", kind: "general", art: "cheers" },
+  { id: "lemonProud", kind: "general", art: "lemon" },
+  { id: "everyKm", kind: "general", art: "glass" },
+  { id: "sofaZero", kind: "general", art: "rider" },
+  { id: "freshStrong", kind: "general", art: "cheers" },
+  { id: "noRegret", kind: "general", art: "hill" },
+  { id: "squeezeOn", kind: "general", art: "lemon" },
+  { id: "believes", kind: "general", art: "lemon" },
+  { id: "zestMode", kind: "general", art: "lemon" },
+  { id: "squeeze", kind: "climb", art: "lemon" },
+  { id: "gravity", kind: "climb", art: "hill" },
+  { id: "topView", kind: "climb", art: "glass" },
+  { id: "ambition", kind: "climb", art: "hill" },
+  { id: "almost", kind: "climb", art: "hill" },
+  { id: "sourSweet", kind: "climb", art: "lemon" },
+  { id: "lemonadeUp", kind: "climb", art: "glass" },
+  { id: "emptyGlass", kind: "lastKm", art: "glass" },
+  { id: "sprintWarm", kind: "lastKm", art: "flag" },
+  { id: "allOut", kind: "lastKm", art: "rider" },
+  { id: "legsKnow", kind: "lastKm", art: "flag" },
+  { id: "lastDrop", kind: "lastKm", art: "lemon" },
+  { id: "lastOrders", kind: "lastKm", art: "cheers" },
+]);

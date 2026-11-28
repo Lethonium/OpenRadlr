@@ -2,7 +2,8 @@
  * What this browser keeps for OpenRadlr, for the profile's "Your data" page:
  * counts per item, an export file and deletes. Pure over the injected
  * localStorage and the raw IndexedDB key-value stores (ride/rideAutosave.js
- * `indexedDbStore`): `{history, ghosts, autosave}`. `storage` is the active
+ * `indexedDbStore`): `{history, ghosts, autosave, boards}`. The rider's own
+ * board uploads (`boards`) are counted and deleted here but never exported or backed up. `storage` is the active
  * rider's; `deviceStorage` (profile/riderStorage.js) is the device's own keys.
  */
 
@@ -10,7 +11,7 @@ import { ACHIEVEMENTS_KEY, loadAchievements } from "./achievements.js";
 import { GOALS_KEY, loadGoals } from "./seasonGoals.js";
 import { RIDERS_KEY, removeRider } from "./riders.js";
 
-export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "settings", "device"];
+export const DATA_ITEMS = ["profile", "rides", "bestLaps", "goals", "progress", "unfinished", "boards", "settings", "device"];
 
 const PROFILE_KEY = "openride.profile.v1";
 const SUMMITS_KEY = "openradlr.summits";
@@ -19,7 +20,7 @@ const PROGRESS_KEYS = [SUMMITS_KEY, LEMONS_KEY, ACHIEVEMENTS_KEY];
 // Pairing secrets stay out of the export: this device's key for its second
 // screens, and on a phone used as a cockpit, the tablet's key.
 const SECRET_KEYS = ["openradlr.screenKey", "openradlr.cockpit"];
-const STORE_OF = { rides: "history", bestLaps: "ghosts", unfinished: "autosave" };
+const STORE_OF = { rides: "history", bestLaps: "ghosts", unfinished: "autosave", boards: "boards" };
 // The autosave keeps one ride ("current") and its photos.
 const UNFINISHED_KEY = "current";
 
@@ -72,6 +73,7 @@ const COUNTS = {
     return { summits: summits.length, lemons, achievements: Object.keys(achievements).length };
   },
   unfinished: ({ stores }) => stores.autosave.keys().then((keys) => (keys.includes(UNFINISHED_KEY) ? 1 : 0)),
+  boards: ({ stores }) => stores.boards.keys().then((keys) => keys.length),
   settings: ({ storage }) => settingsKeys(storage).length,
   device: ({ deviceStorage }) => deviceKeys(deviceStorage).length,
 };

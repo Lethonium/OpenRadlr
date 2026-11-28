@@ -6,8 +6,8 @@ const profile = { name: "Ralf", weightKg: 74, ftp: 245, ftpSource: "tested", ftp
 const zero = { rides: 0, distanceM: 0, durationS: 0, elevationGainM: 0 };
 const noRides = { week: zero, month: zero, all: zero };
 
-test("the profile has five pages, goals first", () => {
-  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "achievements", "rides", "account", "data"]);
+test("the profile has seven pages, goals first", () => {
+  assert.deepEqual(PROFILE_PAGES, ["goals", "overview", "achievements", "boards", "rides", "account", "data"]);
 });
 
 test("routeName: server name, Studio for null, id when unknown", () => {
@@ -243,4 +243,12 @@ test("curveBars: each best effort as a share of the highest", () => {
   const bars = curveBars({ 5: 600, 60: 300 });
   assert.deepEqual(bars.map((bar) => [bar.label, bar.watts, bar.share]), [["5 s", "600 W", 1], ["1 min", "300 W", 0.5]]);
   assert.deepEqual(curveBars(null), []);
+});
+
+test("dataRows: the boards row counts uploads and can be deleted", () => {
+  const rows = dataRows([{ id: "boards", count: 3, readable: true }, { id: "boards", count: 0, readable: true }]);
+  assert.equal(rows[0].name.length > 0, true);
+  assert.equal(rows[0].count, "3 entries");
+  assert.equal(rows[0].canDelete, true);
+  assert.equal(rows[1].canDelete, false);
 });
