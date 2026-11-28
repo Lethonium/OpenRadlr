@@ -4068,7 +4068,7 @@ function startGoals() {
   app.goalData = null;
   app.goalLive = null;
   app.goalLaps = new Map();
-  app.goalBoardsPlanned = false;
+  app.goalBoardPlan = null;
   app.goalRideAt = 0;
   app.view3d?.setGoalPlan([]);
   app.goalLapSaves = [];
@@ -4093,7 +4093,7 @@ function liveGoals() {
   if (!app.goalData || !app.recorder || !app.goalLaps) return [];
   const at = Date.now();
   if (!app.goalLive || at - app.goalLive.at >= 1000) {
-    const { distanceM, durationS, elevationGainM } = app.recorder.summary();
+    const { distanceM, durationS, elevationGainM } = app.recorder.totals();
     const live = { distanceM, durationS, elevationGainM, laps: app.goalLaps };
     app.goalLive = { at, entries: goalEntries(at, live).filter(({ week }) => !week.finished) };
   }
@@ -4111,32 +4111,38 @@ function renderGoalLine() {
 }
 
 /**
- * The goal boards in the world (ride/goalBoards.js): planned once from this week's goals once they are read, taken
- * down in a race or event; the ride's pace goes to the view once a second.
+ * The goal boards in the world (ride/goalBoards.js): planned from this week's goals once they are read, for the view
+ * and the route of the moment (a season change builds a new view, a turn puts my rider on another route: either plans
+ * again), taken down in a race or event; the ride's pace goes to the view once a second while any are planned.
  */
 function updateGoalBoards(me, racing) {
   const view = app.view3d;
   if (!view) return;
+  const routeId = app.route?.id ?? null;
   if (racing || !app.route?.length) {
-    if (app.goalBoardsPlanned) view.setGoalPlan([]);
-    app.goalBoardsPlanned = false;
+    if (app.goalBoardPlan) view.setGoalPlan([]);
+    app.goalBoardPlan = null;
     return;
   }
-  if (!app.goalBoardsPlanned) {
+  if (app.goalBoardPlan?.view !== view || app.goalBoardPlan.routeId !== routeId) {
     if (!app.goalData || !app.recorder) return;
     const entries = goalEntries().filter(({ week }) => !week.finished);
-    const planned = planGoalBoards(entries, { routeId: app.route.id ?? null, routeLength: app.route.length });
+    const planned = planGoalBoards(entries, { routeId, routeLength: app.route.length });
     app.goalSheet ??= createGoalSheet(createCanvas);
     view.onGoalPoster = (slot, text) => {
       if (app.goalSheet.paint(slot, text)) view.setGoalPosters(app.goalSheet.canvas);
     };
+    // A new view gets the sheet as painted so far: the posters it already shows are not painted again.
+    view.setGoalPosters(app.goalSheet.canvas);
     view.setGoalPlan(planned);
-    app.goalBoardsPlanned = true;
+    app.goalBoardPlan = { view, routeId, boards: planned.length };
+    app.goalRideAt = 0;
   }
+  if (!app.goalBoardPlan.boards) return;
   const at = Date.now();
   if (app.goalRideAt && at - app.goalRideAt < 1000) return;
   app.goalRideAt = at;
-  const { distanceM, durationS, elevationGainM } = app.recorder.summary();
+  const { distanceM, durationS, elevationGainM } = app.recorder.totals();
   view.setGoalRide({ rideM: distanceM, durationS, elevationGainM, speedMps: me?.speed ?? 0 });
 }
 

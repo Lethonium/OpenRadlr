@@ -116,6 +116,30 @@ export class RideRecorder {
     return this.samples.length < 2;
   }
 
+  /** What `totals()` has summed so far, carried on with each new sample. */
+  #running = null;
+
+  /**
+   * The distance, riding time and climbing of `summary()`, kept up as the ride goes on: each call only looks at
+   * the samples added since the last one, so it costs the same an hour or six hours in (the live goals read it
+   * every second). Summed again from the start when the samples are replaced or a pause closes.
+   */
+  totals() {
+    const s = this.samples;
+    const closed = this.#closedPauses.length;
+    let run = this.#running;
+    if (!run || run.samples !== s || run.closed !== closed || run.count > s.length) {
+      run = this.#running = { samples: s, closed, count: 0, pausedMs: 0, gain: 0 };
+    }
+    for (let i = Math.max(1, run.count); i < s.length; i += 1) {
+      if (this.#spansPause(s[i - 1], s[i])) run.pausedMs += s[i].t - s[i - 1].t;
+      if (s[i].elevation !== null && s[i - 1].elevation !== null) run.gain += Math.max(0, s[i].elevation - s[i - 1].elevation);
+    }
+    run.count = s.length;
+    if (s.length === 0) return { distanceM: 0, durationS: 0, elevationGainM: 0 };
+    return { distanceM: s[s.length - 1].distance - s[0].distance, durationS: (s[s.length - 1].t - s[0].t - run.pausedMs) / 1000, elevationGainM: Math.round(run.gain) };
+  }
+
   /** Totals for the end-of-ride screen. */
   summary() {
     const s = this.samples;

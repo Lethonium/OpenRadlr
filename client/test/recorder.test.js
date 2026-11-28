@@ -172,3 +172,28 @@ test("TCX writes one lap per split with every trackpoint once", () => {
   assert.equal((single.match(/<Lap /g) ?? []).length, 1);
   assert.match(single, /<TriggerMethod>Manual</);
 });
+
+const totalsOf = ({ distanceM, durationS, elevationGainM }) => ({ distanceM, durationS, elevationGainM });
+
+test("totals match the summary's distance, time and climbing as the ride goes on", () => {
+  const recorder = new RideRecorder();
+  for (let i = 0; i <= 60; i += 1) {
+    if (i === 20) recorder.pause(T0 + 20_500);
+    if (i === 40) recorder.resume(T0 + 39_500);
+    if (i > 20 && i < 40) continue;
+    recorder.add({ t: T0 + i * 1000, distance: i * 10, power: 200, speed: 10, elevation: 100 + (i % 3) });
+    assert.deepEqual(recorder.totals(), totalsOf(recorder.summary()), `after sample ${i}`);
+  }
+  assert.equal(recorder.totals().durationS, 40);
+});
+
+test("totals of a restored ride match its summary, also once it goes on", () => {
+  const copy = RideRecorder.from(JSON.parse(JSON.stringify(pausedRide())));
+  assert.deepEqual(copy.totals(), totalsOf(copy.summary()));
+  copy.add({ t: copy.samples.at(-1).t + 1000, distance: copy.samples.at(-1).distance + 10, elevation: 140 });
+  assert.deepEqual(copy.totals(), totalsOf(copy.summary()));
+});
+
+test("totals of an empty ride are zero", () => {
+  assert.deepEqual(new RideRecorder().totals(), { distanceM: 0, durationS: 0, elevationGainM: 0 });
+});
