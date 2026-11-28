@@ -35,7 +35,7 @@ import { RidePause } from "./ride/ridePause.js";
 import { planGoalBoards } from "./ride/goalBoards.js";
 import { createGoalSheet } from "./view3d/posters/goalSheet.js";
 import { createCanvas, paintPoster } from "./view3d/posters/paint.js";
-import { boardPosterPlan } from "./view3d/posters/plan.js";
+import { boardPosterPlan, ridePosterPlan } from "./view3d/posters/plan.js";
 import { MAX_BOARDS, cropWindow, prepareImage } from "./profile/myBoards.js";
 import { dragCrop, initialCrop, zoomCrop } from "./view/boardCrop.js";
 import { boardErrorKey, myBoardsLines, thumbSize } from "./view/myBoardsView.js";
@@ -6137,20 +6137,13 @@ function paintBoardPosters(view, routeId, uploads) {
   }
 }
 
-/** A stored upload's picture, or null when the browser cannot decode it (the poster then shows only its text). */
-async function decodeBoardImage(blob) {
-  if (!blob) return null;
-  try {
-    return await createImageBitmap(blob);
-  } catch {
-    return null;
-  }
-}
+/** The ride's last poster atlas (posters/plan.js ridePosterPlan): a quality change with the same posters keeps it. */
+let rideAtlas = null;
 
 /**
  * The ride view's posters: the default ones plus the rider's own boards (kept on the device, never sent anywhere).
- * Painted when the view is shown and again when its quality (so its atlas size) changes; the menu's drone view and the
- * studio get the defaults only.
+ * Painted when the view is shown and again when its quality (so its atlas size) changes; only the uploads chosen for a
+ * board are decoded. The menu's drone view and the studio get the defaults only.
  */
 async function paintRideBoardPosters(view) {
   if (!view?.boards?.length || app.studio) return;
@@ -6161,13 +6154,23 @@ async function paintRideBoardPosters(view) {
   } catch (error) {
     console.error(error);
   }
-  const uploads = await Promise.all(entries.map(async ({ id, text, blob }) => ({ id, text, image: await decodeBoardImage(blob) })));
   try {
+    const plan = await ridePosterPlan(view.boards, {
+      routeId: route?.id ?? null,
+      uploads: entries,
+      dateKey: isoDate(Date.now()),
+      atlas: qualitySettings(view.quality).boards.atlas,
+      makeCanvas: createCanvas,
+      decode: (blob) => createImageBitmap(blob),
+      lang: getLocale(),
+      previous: rideAtlas,
+    });
     // Another view or route came meanwhile: its own paint wins.
     if (app.view3d !== view || app.route !== route) return;
-    paintBoardPosters(view, route?.id ?? null, uploads);
-  } finally {
-    for (const { image } of uploads) image?.close?.();
+    rideAtlas = plan;
+    view.setBoardPosters(plan.atlas, plan.slotOf, plan.slotCount);
+  } catch (error) {
+    console.error(error);
   }
 }
 
