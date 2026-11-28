@@ -21,11 +21,11 @@ const FONT = (px) => `800 ${px}px ${FONT_FAMILY}`;
 const MAX_LINES = 3;
 const MIN_FONT = 6;
 
-/** Greedy word wrap by measured width. */
+/** Greedy word wrap by measured width; a no-break space (\u00a0) holds its words together. */
 function wrap(ctx, text, maxWidth) {
   const lines = [];
   let line = "";
-  for (const word of text.split(/\s+/).filter(Boolean)) {
+  for (const word of text.split(/[ \t\n]+/).filter(Boolean)) {
     const next = line ? `${line} ${word}` : word;
     if (line && ctx.measureText(next).width > maxWidth) {
       lines.push(line);

@@ -144,3 +144,13 @@ test("paintAtlas paints every slot into its own cell", () => {
     .map((c) => c.args.join(","));
   assert.deepEqual(cellOrigins, ["0,0", "512,0", "0,256"]);
 });
+
+test("a no-break space keeps a number and its unit on one line", () => {
+  for (const id of ["forecast", "sofaZero"]) {
+    const ctx = fakeContext();
+    paintPoster(ctx, poster(id), SIZE);
+    const lines = texts(ctx).map((c) => c.args[0]);
+    assert.ok(lines.length > 1, `${id} wraps`);
+    for (const line of lines) assert.ok(!/^[%:0-9]/.test(line), `${id}: line "${line}" starts with a split-off number or sign`);
+  }
+});
