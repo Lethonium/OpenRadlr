@@ -56,7 +56,7 @@ const level = (settings) =>
   Object.freeze({ ...settings, ssao: settings.ssao && Object.freeze(settings.ssao), treeLod: Object.freeze(settings.treeLod), cropStalks: Object.freeze(settings.cropStalks), landUse: Object.freeze(settings.landUse), cropExtras: Object.freeze(settings.cropExtras), buildings: Object.freeze(settings.buildings), weather: Object.freeze(settings.weather), animals: Object.freeze(settings.animals), riders: Object.freeze(settings.riders), boards: Object.freeze(settings.boards) });
 
 const RINGS = Object.freeze({
-  low: rings({ r: 10, dens: 32, w: 0.085, segs: 4 }, { r: 30, dens: 10, w: 0.17, segs: 3 }, { r: 80, dens: 1.5, w: 0.4, segs: 2, h: 1.05 }, { r: 160, dens: 0.3, w: 0.9, segs: 1, h: 1.1 }),
+  low: rings({ r: 8, dens: 8, w: 0.14, segs: 2 }, { r: 20, dens: 3, w: 0.24, segs: 2 }, { r: 46, dens: 1, w: 0.55, segs: 1, h: 1.05 }, { r: 88, dens: 0.18, w: 1.1, segs: 1, h: 1.1 }),
   medium: rings({ r: 12, dens: 44, w: 0.077, segs: 4 }, { r: 37, dens: 13, w: 0.15, segs: 4 }, { r: 98, dens: 2, w: 0.35, segs: 3, h: 1.05 }, { r: 205, dens: 0.38, w: 0.8, segs: 2, h: 1.1 }),
   high: rings({ r: 14, dens: 54, w: 0.07, segs: 5 }, { r: 44, dens: 16, w: 0.13, segs: 4 }, { r: 115, dens: 3.2, w: 0.3, segs: 3, h: 1.05 }, { r: 250, dens: 0.45, w: 0.68, segs: 2, h: 1.1 }),
   ultra: rings({ r: 18, dens: 68, w: 0.065, segs: 5 }, { r: 56, dens: 19, w: 0.12, segs: 4 }, { r: 145, dens: 3.6, w: 0.27, segs: 3, h: 1.05 }, { r: 330, dens: 0.55, w: 0.6, segs: 2, h: 1.1 }),
@@ -76,4 +76,10 @@ const SETTINGS = Object.freeze({
  */
 export function qualitySettings(level) {
   return SETTINGS[qualityLevel(level)];
+}
+
+/** Keep the full CSS viewport while bounding the scene's fill rate on large displays. */
+export function renderPixelRatio(width, height, deviceRatio, settings) {
+  const maxPixels = settings === SETTINGS.low ? 998_000 : settings === SETTINGS.medium ? 1_800_000 : 3_000_000;
+  return Math.min(deviceRatio, settings.pixelRatioMax, Math.sqrt(maxPixels / (width * height)));
 }

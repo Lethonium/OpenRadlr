@@ -165,9 +165,9 @@ test("grass grows on meadow and the rim of fields, not on roads, field insides, 
   assert.ok(besideRoad > 20, "grass grows right up to the road's edge");
 });
 
-test("the grass is a carpet up to the road: dense rings, and the verge strip is green grass at full weight", () => {
+test("the higher levels keep dense rings and the verge strip is green grass at full weight", () => {
   // the reference's high rings (roots per square metre): ours are at least as dense
-  const reference = { low: [26, 8, 1.5, 0.3], medium: [33, 10, 2, 0.38], high: [40, 12, 2.4, 0.45], ultra: [52, 14, 2.8, 0.55] };
+  const reference = { medium: [33, 10, 2, 0.38], high: [40, 12, 2.4, 0.45], ultra: [52, 14, 2.8, 0.55] };
   for (const [level, dens] of Object.entries(reference)) {
     qualitySettings(level).grassRings.forEach((ring, i) => assert.ok(ring.dens >= dens[i], `${level} ring ${i}`));
   }
