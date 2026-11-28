@@ -39,11 +39,15 @@ Suggested PRs: 1+2 (stream kept on the device), 3 (ride list), 4 (Your data),
 
 ## 3. Use it in the ride list
 
-- [ ] An opened ride with a stream shows `.fit`, `.tcx`, `.gpx` downloads (the finish
-      screen's helpers fed with the decoded recorder); file names as at the finish.
-- [ ] Best power bars from the stream at every duration up to the ride's length
-      (`bestEfforts` over the decoded samples), else the record's points.
-- [ ] Decoding happens only when a ride is opened; screenshots on phone and desktop.
+- [x] An opened ride with a stream shows `.fit`, `.tcx`, `.gpx` downloads (`view/rideFiles.js`:
+      the recorder's exporters on the decoded stream, the finish screen's rules: none for
+      phone paddles, no GPX and an indoor FIT for the studio); file names as at the finish.
+- [x] Best power from the stream at `STREAM_CURVE_DURATIONS` (5 s to 2 h, those the ride
+      was long enough for), else the record's points; `bestEfforts` takes the durations.
+- [x] The stream is decoded only when a ride is opened, once; an unreadable one says so
+      next to the buttons. Checked in Chromium on desktop and a phone with an hour-long
+      ride: ten bars, all three files complete (3,600 trackpoints); a ride without a
+      stream unchanged.
 
 ## 4. "Your data"
 

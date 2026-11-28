@@ -8223,3 +8223,15 @@ body.working-out #paddles {
     gap: 8px;
   }
 }
+
+/* The files of a past ride (from its stream): small buttons in a row. */
+.profile-ride-file-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-ride-file-buttons button {
+  min-width: 64px;
+  font-family: var(--num);
+}

@@ -1338,4 +1338,7 @@ export default {
   "account.passkeys.added": "Hinzugefügt am {date}",
   "account.rider.full.title": "Dein Konto ist voll",
   "account.rider.full.detail": "Neue Fahrten werden nicht mehr gesichert. Sie bleiben auf diesem Gerät.",
+  "profilePage.rides.files": "Fahrtdatei",
+  "profilePage.rides.fileLabel": "Fahrt als {format} herunterladen",
+  "profilePage.rides.fileMissing": "Die Daten dieser Fahrt lassen sich in diesem Browser nicht mehr lesen.",
 };
