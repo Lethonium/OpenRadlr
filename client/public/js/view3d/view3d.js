@@ -36,6 +36,7 @@ import { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens } from "
 import { isWebGl2Available } from "./webgl.js";
 
 export { DRONE_LENS, GYM_LENS, RIDE_LENS, depthStep, droneLens, gymLens, isWebGl2Available };
+import { ResolutionGovernor } from "./engine/resolutionScale.js";
 
 export { CAMERA_MODES, TIME_MODES, TIME_PRESETS };
 
@@ -277,6 +278,12 @@ export class View3D {
   /** What the day's weather is rolled from (see the constructor's `weather` option). */
   #weatherInput = { date: null, override: null, seed: 0 };
   #weatherCache = null;
+  /** The share of the resolution drawn, lowered while frames are slow (see resolutionScale.js). */
+  #resolution;
+  /** True until this world's shaders are compiled (see `#warm`); a later level or season warms its own new layers. */
+  #needsWarm = true;
+  /** Compiling the shaders ahead: the view draws nothing meanwhile, so the last picture stays and the page runs on. */
+  #warming = null;
   timeMode = "day";
   quality = "high";
   lens = RIDE_LENS;
@@ -306,6 +313,7 @@ export class View3D {
     // One engine per canvas, shared with every other view on it and never disposed here.
     this.engine = engine ?? engineFor(canvas, { settings: qualitySettings(this.quality) });
     this.engine.setQuality(qualitySettings(this.quality));
+    this.#resolution = new ResolutionGovernor({ floor: qualitySettings(this.quality).resolutionFloor });
     /** The season's look of the sky and light (the ground's colours were baked into the world). */
     this.season = SEASONS.includes(world.season) ? world.season : "summer";
     /** The quality level the world's plan was budgeted for (its trees, roadside and animals), or null if unknown. */
@@ -313,7 +321,9 @@ export class View3D {
     this.tracker = createTracker();
     this.#weatherInput = { date: weather?.date ?? null, override: weather?.override ?? null, seed: world.seed ?? world.terrain?.seed ?? 0 };
     /** The world as a Three.js scene: ground, sea, sky and sun, with its riders, athletes and the studio. */
-    this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track });
+    // Staged: a new level or season is built over a few frames while this one is still drawn, and swapped in warm.
+    this.worldScene = createWorldScene(world, { settings: qualitySettings(this.quality), track: this.tracker.track, stage: true });
+    if (typeof this.engine.warm === "function") this.worldScene.setWarm((root) => this.engine.warm(root, this.worldCamera, this.worldScene.scene));
     this.worldCamera = new THREE.PerspectiveCamera();
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
     this.camera = new ChaseCamera(route);
@@ -341,11 +351,12 @@ export class View3D {
 
   /** A graphics level (see quality.js): "low" has no shadow map or grass and a 1x pixel ratio, for weaker GPUs. */
   setQuality(quality) {
-    if (!QUALITY_LEVELS.includes(quality)) return;
+    if (!QUALITY_LEVELS.includes(quality) || quality === this.quality) return;
     this.quality = quality;
     const settings = qualitySettings(quality);
     this.engine.setQuality(settings);
     this.worldScene.setQuality(settings);
+    this.#resolution.setFloor(settings.resolutionFloor);
   }
 
   /**
@@ -564,15 +575,20 @@ export class View3D {
    *   `timeS` is the scene's clock; `utcSeconds` the wall clock (when the showers fall), read by the caller
    */
   render({ riders, myId, myCadence, timeS, utcSeconds = 0, colors }) {
-    const dt = this.#lastTime === null ? 0 : Math.min(0.1, timeS - this.#lastTime);
+    const elapsed = this.#lastTime === null ? 0 : timeS - this.#lastTime;
+    const dt = Math.min(0.1, elapsed);
     this.#lastTime = timeS;
 
     const settings = qualitySettings(this.quality);
     const { shadows } = settings;
     const width = Math.max(1, Math.round(this.canvas.clientWidth));
     const height = Math.max(1, Math.round(this.canvas.clientHeight));
-    const ratio = renderPixelRatio(width, height, globalThis.devicePixelRatio || 1, settings);
-    this.engine.resize(width, height, ratio);
+    // While the shaders compile nothing is drawn, so those frames say nothing about the resolution this GPU affords.
+    const scale = this.#warming ? this.#resolution.scale : this.#resolution.sample(elapsed * 1000);
+    const pixelRatio = renderPixelRatio(width, height, globalThis.devicePixelRatio || 1, settings);
+    // Device pixels of the scene as drawn (the inset's box is measured in them).
+    const ratio = pixelRatio * scale;
+    this.engine.resize(width, height, pixelRatio, scale);
 
     // Riders of the map's other routes ride their own route (#14); unknown ones are skipped.
     const onRoads = riders.filter((rider) => !rider.studio).map((rider) => (rider.route === null ? this.#onRoad(rider) : this.#onRoute(rider))).filter(Boolean);
@@ -692,8 +708,9 @@ export class View3D {
 
     // The Three.js scene into the engine's target (ground, sea, sky, riders, features), then the post chain presents it.
     const env = this.#environmentFor(preset, lens.haze, utcSeconds);
-    this.engine.beginFrame(env);
     this.#aim(this.worldCamera, view, projection, lens, width / height);
+    if (this.#warm()) return;
+    this.engine.beginFrame(env);
     this.worldScene.update({ dt, t: timeS, utcSeconds, camera: this.worldCamera, focus: me ? me.position : this.camera.target, heading: groundHeading(me ? me.forward : forward), shadows: shadows && lens.shadows, riders: roadRiders, athletes, vehicles, crowd, lemons, studio, statueGlow: this.#glow.gym ? { gym: this.#glow.gym, index: this.#glow.index } : null });
     this.engine.renderScene(this.worldScene.scene, this.worldCamera);
 
@@ -722,6 +739,27 @@ export class View3D {
     for (const id of this.#clips.keys()) if (!gymSpots.has(id)) this.#clips.delete(id);
     this.frameStats = this.engine.frameStats?.() ?? null;
     this.engine.present(this.worldCamera, env, { ride: this.camera instanceof ChaseCamera, height: me ? this.worldCamera.position.y - me.position[1] : 0 });
+  }
+
+  /**
+   * Starts compiling the world's shaders ahead when its level, season or world is new, and says whether the view
+   * waits for them (it then draws nothing: the previous picture stays on the canvas and the page keeps running,
+   * where drawing would have stalled on each new shader in turn). An engine that cannot compile ahead never waits.
+   */
+  #warm() {
+    if (this.#needsWarm && typeof this.engine.warm === "function") {
+      this.#needsWarm = false;
+      const warming = this.worldScene
+        .prepare((scene) => this.engine.warm(scene, this.worldCamera))
+        // Not compiled ahead is not broken: the frames compile what they need, as without warming.
+        .catch((error) => console.warn("shader warm-up failed", error)) // i18n-ok: a log line
+        .then(() => {
+          // A newer warm-up (another level meanwhile) keeps the view waiting.
+          if (this.#warming === warming) this.#warming = null;
+        });
+      this.#warming = warming;
+    }
+    return Boolean(this.#warming);
   }
 
   /** The grade in percent under a rider on a route (0 on a road of the network or on an unknown route). */

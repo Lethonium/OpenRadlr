@@ -1,8 +1,10 @@
 /**
  * Light for the night: a soft pool on the ground under every planned street lamp (one merged additive mesh), the
  * nearest `settings.lampLights` lamps as warm point lights, and the rider's headlight, a spot on the front of the bike
- * aimed along the heading, on at every level so the road stays readable. All strengths follow `env.night`; lights
- * are dimmed to 0 rather than hidden so the shaders stay the same from day to night.
+ * aimed along the heading, on at every level so the road stays readable. All strengths follow `env.night`. By day
+ * the lights are hidden, not only dimmed: a hidden light is left out of every lit material's shader, where even at
+ * strength 0 each one costs every fragment its loop (and the headlight its shadow pass). Dusk changes those shaders
+ * once; `showNightState` lets the view prepare them ahead (see `View3D`).
  */
 import * as THREE from "../../three.js";
 import { heightSampler } from "./grassField.js";
@@ -99,6 +101,12 @@ export function createNightLights(plan, { settings, track, ground }) {
 
   let night = 0;
   const nearest = [];
+  const all = [...lights, headlight];
+  /** Lights take part in the lighting only while the night has begun. */
+  const showLights = (on) => {
+    for (const light of all) light.visible = on;
+  };
+  showLights(false);
   return {
     object,
     lights,
@@ -128,6 +136,18 @@ export function createNightLights(plan, { settings, track, ground }) {
       material.opacity = POOL.opacity * night;
       for (const light of lights) light.intensity = LAMP.intensity * night;
       headlight.intensity = HEAD.intensity * night;
+      showLights(night > 0);
+    },
+    /** Whether the lights are on (the night has begun). */
+    atNight: () => night > 0,
+    /**
+     * Shows the lights as at night (or, with `on` false, as by day) until the returned function puts them back: the
+     * view compiles the other half of the day's shaders ahead with it.
+     */
+    showNightState(on = true) {
+      const was = all.map((light) => light.visible);
+      showLights(on);
+      return () => all.forEach((light, i) => (light.visible = was[i]));
     },
     dispose() {
       object.clear();

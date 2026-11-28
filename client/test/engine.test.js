@@ -197,3 +197,105 @@ test("changing between Low and High allocates and releases the post chain", () =
   assert.equal(engine.target, null);
   assert.equal(posts[0].disposed, 1);
 });
+
+test("warm compiles a scene's shaders ahead and resolves once they are ready", async () => {
+  const { engine, fake } = make();
+  const asked = [];
+  let ready;
+  fake.compileAsync = (scene, camera) => {
+    asked.push({ scene, camera });
+    return new Promise((resolve) => (ready = resolve));
+  };
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera();
+  let done = false;
+  const warming = engine.warm(scene, camera).then(() => (done = true));
+  assert.deepEqual(asked, [{ scene, camera }]);
+  await Promise.resolve();
+  assert.equal(done, false, "not before the shaders are");
+  ready();
+  await warming;
+  assert.equal(done, true);
+});
+
+test("warm resolves at once on a renderer that cannot compile ahead", async () => {
+  const { engine } = make();
+  await engine.warm(new THREE.Scene(), new THREE.PerspectiveCamera());
+});
+
+test("warm gives up waiting after a while, so a stuck driver never stops the drawing", async () => {
+  const fake = fakeRenderer();
+  fake.compileAsync = () => new Promise(() => {});
+  const timers = [];
+  const engine = engineFor({}, { createRenderer: () => fake, createPost: () => ({ render() {}, setSize() {}, dispose() {} }), setTimeout: (fn, ms) => timers.push({ fn, ms }) });
+  const warming = engine.warm(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(timers.length, 1);
+  assert.ok(timers[0].ms >= 1000);
+  timers[0].fn();
+  await warming;
+});
+
+test("warm calls the timer as a plain function, as browsers only allow", async () => {
+  const fake = fakeRenderer();
+  fake.compileAsync = () => Promise.resolve();
+  let self = "unset";
+  function timer() {
+    "use strict";
+    self = this;
+  }
+  const engine = engineFor({}, { createRenderer: () => fake, createPost: () => ({ render() {}, setSize() {}, dispose() {} }), setTimeout: timer });
+  await engine.warm(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(self, undefined);
+});
+
+test("warm compiles for the scene target the frames draw into (its tone mapping and colours differ from the screen's)", async () => {
+  const { engine, fake } = make();
+  let target = "unset";
+  fake.compileAsync = () => ((target = fake.getRenderTarget()), Promise.resolve());
+  fake.setRenderTarget(null);
+  await engine.warm(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.equal(target, engine.target);
+  assert.equal(fake.getRenderTarget(), null, "what was bound before is bound again");
+});
+
+test("shader error checks are off unless asked for (each costs a stall on a shader's first use)", () => {
+  const quiet = fakeRenderer();
+  quiet.debug = { checkShaderErrors: true };
+  const createPost = () => ({ render() {}, setSize() {}, dispose() {} });
+  engineFor({}, { createRenderer: () => quiet, createPost });
+  assert.equal(quiet.debug.checkShaderErrors, false);
+  const checked = fakeRenderer();
+  checked.debug = { checkShaderErrors: false };
+  engineFor({}, { createRenderer: () => checked, createPost, checkShaderErrors: true });
+  assert.equal(checked.debug.checkShaderErrors, true);
+});
+
+test("a resolution scale draws the scene smaller while the canvas keeps its size (resizing a canvas stalls the GPU)", () => {
+  const { engine, fake, posts } = make();
+  engine.resize(200, 100, 2);
+  engine.resize(200, 100, 2, 0.5);
+  assert.deepEqual(fake.calls.sizes, [[400, 200]], "the canvas was sized once");
+  assert.deepEqual([engine.target.width, engine.target.height], [200, 100]);
+  assert.deepEqual(posts.at(-1).sizes.at(-1), [200, 100]);
+});
+
+test("the post chain presents over the whole canvas, whatever the scale", () => {
+  const { engine, fake } = make();
+  engine.resize(200, 100, 2, 0.5);
+  engine.present(new THREE.PerspectiveCamera(), { exposure: 1 });
+  assert.deepEqual(fake.calls.viewports.at(-1), [0, 0, 400, 200]);
+});
+
+test("after a warm-up the new shaders are put to first use a few per frame, not all in the frame that needs them", async () => {
+  const { engine, fake } = make();
+  const used = [];
+  const program = (id) => ({ getUniforms: () => used.push(id), getAttributes() {} });
+  fake.info = { programs: [1, 2, 3, 4, 5, 6, 7].map(program), render: {}, reset() {} };
+  fake.compileAsync = () => Promise.resolve();
+  await engine.warm(new THREE.Scene(), new THREE.PerspectiveCamera());
+  assert.deepEqual(used, [], "none at once");
+  engine.beginFrame();
+  assert.ok(used.length > 0 && used.length < 7, `a few in a frame (${used.length})`);
+  for (let i = 0; i < 7; i += 1) engine.beginFrame();
+  assert.deepEqual([...new Set(used)].sort(), [1, 2, 3, 4, 5, 6, 7]);
+});

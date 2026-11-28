@@ -167,6 +167,8 @@ const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 /** "1" while the stored quality was picked for the device and no ride has tested it yet. */
 const QUALITY_PROBE_FRAMES = 30;
+/** Seconds after the 3D view appears that the probe leaves out: the world's first frames compile shaders and settle. */
+const QUALITY_PROBE_WARMUP_S = 6;
 const QUALITY_AUTO_KEY = "openride.qualityAuto";
 
 /**
@@ -998,6 +1000,11 @@ function applyFirstRunQuality() {
   if (pick.notice) notify(t("quality.picked2d"));
 }
 
+/** The probe of automatically picked levels (see `probeRideQuality`). */
+function qualityProbe() {
+  return (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES, cooldownS: 6 }));
+}
+
 /**
  * Rides on an automatically picked level: whenever a window of frames runs
  * slowly the level steps down (at Low, to 2D), again after a cooldown if it is
@@ -1005,7 +1012,7 @@ function applyFirstRunQuality() {
  * hidden page's time never counts. Picking a level by hand ends it.
  */
 function probeRideQuality(time) {
-  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES, cooldownS: 6 }));
+  const probe = qualityProbe();
   const active = readSetting(QUALITY_AUTO_KEY) === "1" && app.viewMode === "3d" && Boolean(app.view3d);
   if (!active || app.qualityProbeRide !== app.ride) {
     probe.reset();
@@ -5808,6 +5815,8 @@ function show3d(scene, view = null) {
   }
   app.view3d.routes = app.routes;
   app.view3d.network = app.network;
+  // Its first seconds compile shaders and settle: not a measure of the device.
+  qualityProbe().settle(now(), QUALITY_PROBE_WARMUP_S);
   app.view3d.setLemons(app.lemonHunt?.lemons);
   applyClassicRider();
   if (app.view3d.route !== app.route) app.view3d.setRoute(app.route);

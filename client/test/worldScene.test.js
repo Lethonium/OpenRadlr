@@ -8,6 +8,8 @@ import { hazeBand, hazeHeight } from "../public/js/view3d/scene/sky.js";
 import { createTracker } from "../public/js/view3d/scene/tracker.js";
 import { qualitySettings } from "../public/js/view3d/quality.js";
 import { groundFixture } from "./support/groundFixture.js";
+import { planOf, valleyWorld } from "./support/planFixture.js";
+import { buildGroundGrids, groundExtent } from "../public/js/view3d/world.js";
 
 const day = environmentAt(resolvePreset("day"), "summer");
 const night = environmentAt(resolvePreset("night"), "summer");
@@ -181,4 +183,144 @@ test("the sky takes the scene's fog colour and density from the environment", ()
   assert.deepEqual(sky.material.uniforms.uFogColor.value.toArray().map((v) => +v.toFixed(5)), [...night.fogColor].map((v) => +v.toFixed(5)));
   world.update(frame());
   assert.equal(sky.material.uniforms.uFar.value, 9000, "the band reads the lens's far plane");
+});
+
+/** A world scene over the valley fixture's plan: towns with lamps, woods, fields and verges. */
+let valley = null;
+function planned(quality = "high") {
+  if (!valley) {
+    const terrain = valleyWorld();
+    const plan = planOf(terrain);
+    const ground = buildGroundGrids(terrain.terrain, groundExtent(terrain.terrain), { season: "summer", long: false, regions: terrain.regions, masks: plan.masks });
+    valley = { ground, plan, season: "summer" };
+  }
+  const world = createWorldScene(valley, { settings: qualitySettings(quality), track: createTracker().track });
+  world.setEnvironment(day);
+  return { world };
+}
+
+test("prepare warms the shaders as lit now, then as lit at night, and leaves the lights as they were", async () => {
+  const { world } = planned();
+  const lamps = () => world.scene.getObjectByName("nightLights").children.filter((c) => c.isLight);
+  const seen = [];
+  const warm = (scene) => {
+    assert.equal(scene, world.scene);
+    seen.push(lamps().every((light) => light.visible));
+    return Promise.resolve();
+  };
+  assert.ok(lamps().length > 0, "the valley has lamps");
+  await world.prepare(warm);
+  assert.deepEqual(seen.slice(0, 1), [false], "the day's state first");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(seen, [false, true], "then the night's, in the background");
+  assert.ok(lamps().every((light) => !light.visible), "back to day");
+});
+
+test("a scene disposed while warming warms nothing more", async () => {
+  const { world } = make({ quality: "high" });
+  let calls = 0;
+  let release;
+  const first = world.prepare(() => {
+    calls += 1;
+    return new Promise((resolve) => (release = resolve));
+  });
+  world.dispose();
+  release();
+  await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+});
+
+test("the plant layers do not walk their thousands of objects every frame", () => {
+  const { world } = planned();
+  for (const name of ["forest", "roadside", "scrub", "landRows", "fieldEdges"]) {
+    const layer = world.scene.getObjectByName(name);
+    assert.ok(layer, name);
+    assert.equal(layer.matrixWorldAutoUpdate, false, `${name} is static`);
+    // Placed once: every plant's world matrix is already its place.
+    layer.traverse((object) => {
+      const expected = object.parent ? object.parent.matrixWorld.clone().multiply(object.matrix) : object.matrix;
+      assert.ok(object.matrixWorld.equals(expected), `${name}: ${object.name || object.type} placed`);
+    });
+  }
+});
+
+test("a static layer rebuilt for a new season or level is placed and static too", () => {
+  const { world } = planned();
+  world.setQuality(qualitySettings("medium"));
+  world.setSeason("winter");
+  for (const name of ["forest", "roadside", "scrub", "landRows", "fieldEdges"]) assert.equal(world.scene.getObjectByName(name).matrixWorldAutoUpdate, false, name);
+});
+
+/** A staged world scene over the valley: one layer built per frame (no time budget). */
+function stagedValley(quality = "high", tracker = createTracker()) {
+  planned();
+  const world = createWorldScene(valley, { settings: qualitySettings(quality), track: tracker.track, stage: { budgetMs: 0, now: () => 0 } });
+  world.setEnvironment(day);
+  return { world, tracker };
+}
+const SEASON_LAYERS = ["islands", "forest", "crops", "roadside", "landRows", "scrub", "fieldEdges", "settlements", "farms", "landmarks", "fauna", "venues"];
+const objectsOf = (world, names) => names.map((name) => world.scene.getObjectByName(name));
+
+test("staged, a new season is built a layer per frame while the old layers stay, then swapped in at once", () => {
+  const { world } = stagedValley();
+  const before = objectsOf(world, SEASON_LAYERS);
+  world.setSeason("winter");
+  assert.deepEqual(objectsOf(world, SEASON_LAYERS), before, "nothing changes on the call itself");
+  for (let i = 0; i < SEASON_LAYERS.length - 1; i += 1) {
+    world.update(frame());
+    assert.deepEqual(objectsOf(world, SEASON_LAYERS), before, `still the old world after ${i + 1} frames`);
+  }
+  world.update(frame());
+  const after = objectsOf(world, SEASON_LAYERS);
+  after.forEach((object, i) => assert.notEqual(object, before[i], `${SEASON_LAYERS[i]} is new`));
+  before.forEach((object) => assert.equal(object.parent, null, "the old ones are gone"));
+});
+
+test("staged, each new layer's shaders are warmed, and the swap waits for all of them", async () => {
+  const { world } = stagedValley();
+  const releases = [];
+  const roots = [];
+  world.setWarm((root) => {
+    roots.push(root);
+    return new Promise((resolve) => releases.push(resolve));
+  });
+  const forest = world.scene.getObjectByName("forest");
+  world.setSeason("winter");
+  for (let i = 0; i < SEASON_LAYERS.length + 3; i += 1) world.update(frame());
+  assert.ok(roots.some((root) => root.name === "forest" && root !== forest), "the new forest was warmed on its own");
+  releases.slice(1).forEach((release) => release());
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(world.scene.getObjectByName("forest"), forest, "one layer still compiling holds the swap");
+  releases[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.notEqual(world.scene.getObjectByName("forest"), forest);
+});
+
+test("staged, a change while a rebuild is under way starts it over with the newest settings", () => {
+  const { world } = stagedValley("high");
+  world.setSeason("winter");
+  world.update(frame());
+  world.setQuality(qualitySettings("low"));
+  for (let i = 0; i < 40; i += 1) world.update(frame());
+  const grass = world.scene.getObjectByName("grass");
+  const fresh = stagedValley("low").world.scene.getObjectByName("grass");
+  assert.equal(grass.children.length, fresh.children.length, "the grass is the low level's");
+  assert.equal(world.scene.getObjectByName("forest").matrixWorldAutoUpdate, false);
+});
+
+test("staged, the sun's shadow follows a new level at once", () => {
+  const { world } = stagedValley("high");
+  world.setQuality(qualitySettings("low"));
+  assert.equal(world.sun.castShadow, false);
+});
+
+test("a staged scene disposed mid-rebuild frees what it had built", () => {
+  const tracker = createTracker();
+  const { world } = stagedValley("high", tracker);
+  world.setSeason("winter");
+  world.update(frame());
+  world.update(frame());
+  world.dispose();
+  assert.equal(tracker.live(), 0);
 });

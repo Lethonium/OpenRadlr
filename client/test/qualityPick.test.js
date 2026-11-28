@@ -142,3 +142,11 @@ test("the start screen respects reduced motion and data saving", () => {
   assert.equal(menuUses3d("ultra", { reducedMotion: true }), false);
   assert.equal(menuUses3d("ultra", { saveData: true }), false);
 });
+
+test("frames right after the 3D view appears are not judged, while its world compiles and settles", () => {
+  const probe = new QualityProbe({ frames: 2 });
+  probe.settle(100, 6);
+  assert.deepEqual(feed(probe, [100, 100.5, 101, 103, 105.9]), [null, null, null, null, null], "slow warm-up frames pass");
+  assert.deepEqual(feed(probe, [106, 106.016, 106.032]), [null, null, null], "fast frames after it keep the level");
+  assert.deepEqual(feed(probe, [106.2, 106.4]), [null, "medium"], "slow ones after it still count");
+});
