@@ -211,7 +211,7 @@ export class StudioView3D {
     this.#uniforms.time.value += dt;
     this.#uniforms.sunDirV.value.copy(this.#sunDirection).transformDirection(this.#camera.matrixWorldInverse);
     this.riderLayer.update({ dt, t: timeS, camera: this.#camera, riders: entries });
-    this.engine.beginFrame();
+    this.engine.beginFrame(STUDIO_ENV);
     this.engine.renderScene(this.scene, this.#camera);
     this.#updateLabels(visible, myId, eye, viewProjection, width, height);
     this.engine.present(this.#camera, STUDIO_ENV, { ride: false, height: 0 });

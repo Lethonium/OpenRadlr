@@ -45,8 +45,8 @@ export class Engine {
     this.renderer.setPixelRatio(1);
     this.settings = settings;
     this.size = { width: Math.max(1, canvas?.width ?? 1), height: Math.max(1, canvas?.height ?? 1) };
-    this.target = sceneTarget(this.size.width, this.size.height, this.settings.msaa);
-    this.#post = this.#createPost(this.renderer, this.target, this.settings);
+    this.target = null;
+    this.#configureTarget();
     this.clearColor = new THREE.Color(0, 0, 0);
   }
 
@@ -62,7 +62,7 @@ export class Engine {
     if (deviceWidth === this.size.width && deviceHeight === this.size.height) return;
     this.size = { width: deviceWidth, height: deviceHeight };
     this.renderer.setSize(deviceWidth, deviceHeight, false);
-    this.target.setSize(deviceWidth, deviceHeight);
+    this.target?.setSize(deviceWidth, deviceHeight);
     this.#post?.setSize(deviceWidth, deviceHeight);
   }
 
@@ -73,17 +73,28 @@ export class Engine {
   setQuality(settings) {
     if (settings === this.settings) return;
     this.settings = settings;
-    this.#post?.dispose();
-    this.target.samples = settings.msaa;
-    this.target.dispose();
-    this.#post = this.#createPost(this.renderer, this.target, settings);
-    this.#post?.setSize(this.size.width, this.size.height);
+    this.#configureTarget();
   }
 
-  /** Binds the scene target and clears it; the scene is then drawn into it. */
-  beginFrame() {
+  #configureTarget() {
+    this.#post?.dispose();
+    this.target?.dispose();
+    this.#post = null;
+    this.target = null;
+    if (this.settings === qualitySettings("low")) return;
+    const { width, height } = this.size;
+    this.target = sceneTarget(width, height, this.settings.msaa);
+    this.#post = this.#createPost(this.renderer, this.target, this.settings);
+  }
+
+  /** Binds and clears the frame's destination. Low draws directly to the canvas. */
+  beginFrame(env) {
     const { renderer, target } = this;
     renderer.setRenderTarget(target);
+    if (!target) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = env?.exposure ?? 1;
+    }
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, this.size.width, this.size.height);
     renderer.setClearColor(this.clearColor, 1);
@@ -109,9 +120,11 @@ export class Engine {
     // The target's own viewport and scissor, not the renderer's: a shadow pass inside `render` hands the target back
     // with `setRenderTarget(target)`, which restores these and would draw a rectangle over the whole frame.
     const area = rect ?? { x: 0, y: 0, width: size.width, height: size.height };
-    target.viewport.set(area.x, area.y, area.width, area.height);
-    target.scissor.set(area.x, area.y, area.width, area.height);
-    target.scissorTest = Boolean(rect);
+    if (target) {
+      target.viewport.set(area.x, area.y, area.width, area.height);
+      target.scissor.set(area.x, area.y, area.width, area.height);
+      target.scissorTest = Boolean(rect);
+    }
     renderer.setRenderTarget(target);
     if (rect) {
       renderer.setScissorTest(true);
@@ -125,9 +138,11 @@ export class Engine {
     }
     renderer.render(scene, camera);
     renderer.setScissorTest(false);
-    target.viewport.set(0, 0, size.width, size.height);
-    target.scissor.set(0, 0, size.width, size.height);
-    target.scissorTest = false;
+    if (target) {
+      target.viewport.set(0, 0, size.width, size.height);
+      target.scissor.set(0, 0, size.width, size.height);
+      target.scissorTest = false;
+    }
   }
 
   /**
@@ -152,7 +167,7 @@ export class Engine {
     this.#disposed = true;
     this.#post?.dispose();
     this.#post = null;
-    this.target.dispose();
+    this.target?.dispose();
     this.renderer.dispose();
     this.#onDispose();
   }

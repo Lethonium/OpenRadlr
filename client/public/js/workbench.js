@@ -238,7 +238,7 @@ function loop(now) {
   camera.updateMatrixWorld(true);
   asset?.update?.(dt, now / 1000);
   world.update({ dt, t: now / 1000, camera, focus: frame.target.toArray(), shadowHalf: Math.max(6, frame.radius * 1.6) });
-  engine.beginFrame();
+  engine.beginFrame(environment);
   engine.renderer.info.reset();
   engine.renderScene(world.scene, camera);
   const { triangles, calls } = engine.renderer.info.render;

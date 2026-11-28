@@ -19,12 +19,12 @@ function make(canvas = {}, settings = undefined) {
   return { engine, fake, posts };
 }
 
-test("an engine made for a quality level builds its chain at that level only", () => {
+test("Low starts without an offscreen render target or post chain", () => {
   const low = qualitySettings("low");
   const { engine, posts } = make({}, low);
   assert.equal(engine.settings, low);
-  assert.equal(posts.length, 1);
-  assert.equal(posts[0].settings, low);
+  assert.equal(posts.length, 0);
+  assert.equal(engine.target, null);
 });
 
 test("one engine per canvas", () => {
@@ -167,4 +167,33 @@ test("a whole-frame scene is not cleared again after beginFrame", () => {
   const clears = fake.calls.clears.length;
   engine.renderScene(new THREE.Scene(), new THREE.PerspectiveCamera());
   assert.equal(fake.calls.clears.length, clears);
+});
+
+test("Low resets the entire viewport after an inset and a resize", () => {
+  const { engine, fake } = make({}, qualitySettings("low"));
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera();
+  engine.resize(120, 80);
+  engine.beginFrame({ exposure: 1.5 });
+  engine.renderScene(scene, camera, { x: 10, y: 5, width: 50, height: 30 });
+  assert.deepEqual(fake.calls.viewports.at(-1), [10, 5, 50, 30]);
+  engine.present(camera, { exposure: 1.5 });
+  assert.equal(fake.calls.renderTargets.at(-1), null);
+  assert.deepEqual(fake.calls.viewports.at(-1), [0, 0, 120, 80]);
+  engine.resize(160, 120);
+  engine.beginFrame({ exposure: 1.5 });
+  assert.deepEqual(fake.calls.clears.at(-1).viewport, [0, 0, 160, 120]);
+  assert.equal(fake.calls.clears.at(-1).scissorTest, false);
+  assert.equal(fake.toneMappingExposure, 1.5);
+});
+
+test("changing between Low and High allocates and releases the post chain", () => {
+  const { engine, posts } = make({}, qualitySettings("low"));
+  engine.resize(120, 80);
+  engine.setQuality(qualitySettings("high"));
+  assert.deepEqual([engine.target.width, engine.target.height], [120, 80]);
+  assert.equal(posts.length, 1);
+  engine.setQuality(qualitySettings("low"));
+  assert.equal(engine.target, null);
+  assert.equal(posts[0].disposed, 1);
 });

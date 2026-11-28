@@ -16,15 +16,18 @@ const LEVELS = Object.freeze(["low", "medium", "high", "ultra"]);
 
 /**
  * The level for a device by what the browser tells about it.
- * @param {DeviceSignals} signals `deviceMemory` is `navigator.deviceMemory` (missing counts as 8)
+ * @param {DeviceSignals} signals `deviceMemory` is `navigator.deviceMemory` (missing starts at Medium)
  * @returns {"2d"|"low"|"medium"|"high"}
  */
 export function chooseQuality({ webgl2, deviceMemory, saveData, coarsePointer }) {
-  const memory = deviceMemory ?? 8;
   if (!webgl2) return "2d";
-  if (saveData || memory <= 2) return "low";
-  if (coarsePointer || memory <= 4) return "medium";
-  return "high";
+  if (saveData || coarsePointer || deviceMemory <= 4) return "low";
+  return deviceMemory >= 8 ? "high" : "medium";
+}
+
+/** Start the optional drone preview only when the rider has explicitly chosen a high level. */
+export function menuUses3d(level, { automatic = false, reducedMotion = false, saveData = false } = {}) {
+  return !automatic && !reducedMotion && !saveData && (level === "high" || level === "ultra");
 }
 
 /**
