@@ -52,7 +52,7 @@ export function webgl2Available(createCanvas = defaultCanvas) {
 
 /**
  * @param {{season: string, createRenderer?: (canvas: object) => object, createCanvas?: () => object}} options
- * @returns {{bake: (job: import("./catalog.js").SpriteJob) => {frames: object[], ox: number, oy: number, ppm: number, bytes: number}, liveResources: () => number, dispose: () => void}}
+ * @returns {{start: (job: import("./catalog.js").SpriteJob) => {step: () => object | null, cancel: () => void}, bake: (job: import("./catalog.js").SpriteJob) => {frames: object[], ox: number, oy: number, ppm: number, bytes: number}, lost: () => boolean, liveResources: () => number, dispose: () => void}}
  */
 export function createSpriteBaker({ season, createRenderer = defaultRenderer, createCanvas = defaultCanvas }) {
   const canvas = createCanvas();
@@ -122,55 +122,113 @@ export function createSpriteBaker({ season, createRenderer = defaultRenderer, cr
     return { x0, x1, y0, y1 };
   }
 
-  return {
-    /** Renders one job. A failing job throws (the caller skips and logs it); the asset is disposed either way. */
-    bake(job) {
-      const entry = WORKBENCH_ASSETS[job.id];
-      if (!entry) throw new Error(`no asset ${job.id}`);
+  /** The context is gone (the browser took it back): what it renders now is empty, so nothing more is baked. */
+  let contextLost = false;
+  canvas.addEventListener?.("webglcontextlost", (event) => {
+    event.preventDefault?.();
+    contextLost = true;
+  });
+  const isLost = () => contextLost || Boolean(renderer.getContext?.()?.isContextLost?.());
+  const checkContext = () => {
+    if (isLost()) {
+      contextLost = true;
+      throw new SpriteBakerUnavailable(new Error("WebGL context lost"));
+    }
+  };
+
+  /**
+   * Starts baking `job`, one step at a time: the first step builds the asset and frames it, each further step
+   * renders one frame, the last returns the sprite (null before), so a 12-frame rider can wait between frames.
+   * One job at a time: start the next once this one is done or cancelled. A failing step throws (and frees the
+   * asset); a lost context throws SpriteBakerUnavailable.
+   */
+  function start(job) {
+    checkContext();
+    const entry = WORKBENCH_ASSETS[job.id];
+    if (!entry) throw new Error(`no asset ${job.id}`);
+    let asset = null;
+    let shot = null;
+    const frames = [];
+    const free = () => {
+      if (!asset) return;
+      world.scene.remove(asset.object);
+      asset.dispose();
+      asset = null;
+    };
+    function setUp() {
       light(job.night);
-      const asset = entry.create({ ...job.options, season, track: tracker.track, uniforms: world.uniforms });
+      asset = entry.create({ ...job.options, season, track: tracker.track, uniforms: world.uniforms });
       const object = asset.object;
-      try {
-        groundAsset(object);
-        object.rotation.y = job.yaw;
-        object.updateMatrixWorld(true);
-        world.scene.add(object);
-        object.traverse((child) => {
-          if (child.isMesh) child.castShadow = true;
-        });
-        const box = new THREE.Box3().setFromObject(object);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const reach = Math.max(size.x, size.y, size.z);
-        catcher.scale.setScalar(reach * CATCHER_REACH);
-        catcher.visible = job.view === "top";
-        const { x0, x1, y0, y1 } = frame(job, box, size, center, reach);
-        let scale = job.ppm;
-        const longest = Math.max((x1 - x0) * scale, (y1 - y0) * scale);
-        if (longest > MAX_PIXELS) scale *= MAX_PIXELS / longest;
-        const width = Math.max(2, Math.ceil((x1 - x0) * scale));
-        const height = Math.max(2, Math.ceil((y1 - y0) * scale));
-        Object.assign(camera, { left: x0, right: x1, top: y1, bottom: y0 });
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height, false);
-        const origin = new THREE.Vector3(0, 0, 0).applyMatrix4(camera.matrixWorldInverse);
-        const frames = [];
-        for (let f = 0; f < job.frames; f += 1) {
-          if (f > 0) asset.update?.(job.dt, f * job.dt);
-          world.update({ dt: 0, t: 0, camera, focus: center.toArray(), shadowHalf: reach * SHADOW_BOX_REACH });
-          renderer.render(world.scene, camera);
-          const copy = createCanvas();
-          copy.width = width;
-          copy.height = height;
-          copy.getContext("2d").drawImage(canvas, 0, 0);
-          frames.push(copy);
+      groundAsset(object);
+      object.rotation.y = job.yaw;
+      object.updateMatrixWorld(true);
+      world.scene.add(object);
+      object.traverse((child) => {
+        if (child.isMesh) child.castShadow = true;
+      });
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const reach = Math.max(size.x, size.y, size.z);
+      catcher.scale.setScalar(reach * CATCHER_REACH);
+      catcher.visible = job.view === "top";
+      const { x0, x1, y0, y1 } = frame(job, box, size, center, reach);
+      let scale = job.ppm;
+      const longest = Math.max((x1 - x0) * scale, (y1 - y0) * scale);
+      if (longest > MAX_PIXELS) scale *= MAX_PIXELS / longest;
+      const width = Math.max(2, Math.ceil((x1 - x0) * scale));
+      const height = Math.max(2, Math.ceil((y1 - y0) * scale));
+      Object.assign(camera, { left: x0, right: x1, top: y1, bottom: y0 });
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      const origin = new THREE.Vector3(0, 0, 0).applyMatrix4(camera.matrixWorldInverse);
+      shot = { width, height, scale, center, reach, ox: (origin.x - x0) * scale, oy: (y1 - origin.y) * scale };
+    }
+    function renderFrame(f) {
+      if (f > 0) asset.update?.(job.dt, f * job.dt);
+      world.update({ dt: 0, t: 0, camera, focus: shot.center.toArray(), shadowHalf: shot.reach * SHADOW_BOX_REACH });
+      renderer.render(world.scene, camera);
+      checkContext();
+      const copy = createCanvas();
+      copy.width = shot.width;
+      copy.height = shot.height;
+      copy.getContext("2d").drawImage(canvas, 0, 0);
+      frames.push(copy);
+    }
+    return {
+      step() {
+        try {
+          checkContext();
+          if (!shot) {
+            setUp();
+            return null;
+          }
+          renderFrame(frames.length);
+          if (frames.length < job.frames) return null;
+          free();
+          const { width, height, scale, ox, oy } = shot;
+          return { frames, ox, oy, ppm: scale, bytes: width * height * 4 * frames.length };
+        } catch (error) {
+          free();
+          throw error;
         }
-        return { frames, ox: (origin.x - x0) * scale, oy: (y1 - origin.y) * scale, ppm: scale, bytes: width * height * 4 * frames.length };
-      } finally {
-        world.scene.remove(object);
-        asset.dispose();
+      },
+      cancel: free,
+    };
+  }
+
+  return {
+    start,
+    /** Renders one job in one go. A failing job throws (the caller skips and logs it); the asset is disposed either way. */
+    bake(job) {
+      const task = start(job);
+      for (;;) {
+        const sprite = task.step();
+        if (sprite) return sprite;
       }
     },
+    /** Whether the WebGL context was lost: the views then fall back to the old map. */
+    lost: isLost,
     /** Tracked Three.js resources not disposed yet: unchanged by a bake, 0 after `dispose`. */
     liveResources: () => tracker.live(),
     dispose() {

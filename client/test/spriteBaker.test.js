@@ -127,3 +127,93 @@ test("baker: dispose works on a renderer without forceContextLoss", () => {
   baker.dispose();
   assert.equal(renderer.calls.disposed, 1);
 });
+
+/** Runs a started job step by step; returns the sprite and how many renders each step made. */
+function stepThrough(baker, renderer, task) {
+  const perStep = [];
+  for (;;) {
+    const before = renderer.calls.renders.length;
+    const sprite = task.step();
+    perStep.push(renderer.calls.renders.length - before);
+    if (sprite) return { sprite, perStep };
+  }
+}
+
+test("baker: a started job renders at most one frame per step, so a side rider can wait between its frames", () => {
+  const { baker, renderer } = bakerWith();
+  const { sprite, perStep } = stepThrough(baker, renderer, baker.start(riderJob({ primary: "#e8473f" }, "side")));
+  assert.equal(sprite.frames.length, 12);
+  assert.ok(Math.max(...perStep) <= 1, `renders per step: ${perStep}`);
+  const whole = baker.bake(riderJob({ primary: "#e8473f" }, "side"));
+  const shape = ({ frames, ox, oy, ppm, bytes }) => [frames.length, frames[0].width, frames[0].height, ox, oy, ppm, bytes];
+  assert.deepEqual(shape(sprite), shape(whole), "the same sprite as a bake in one go");
+  baker.dispose();
+});
+
+test("baker: a job cancelled halfway frees its asset", () => {
+  const { baker } = bakerWith();
+  const before = baker.liveResources();
+  const task = baker.start(riderJob({}, "side"));
+  task.step();
+  task.step();
+  task.cancel();
+  assert.equal(baker.liveResources(), before);
+  baker.dispose();
+});
+
+/** A canvas that also takes event listeners, as the browser's does. */
+function listeningCanvas() {
+  const canvas = fakeCanvas();
+  const listeners = {};
+  canvas.addEventListener = (type, listener) => ((listeners[type] ??= []).push(listener));
+  canvas.dispatch = (type) => listeners[type]?.forEach((listener) => listener({ type, preventDefault() {} }));
+  return canvas;
+}
+
+test("baker: a context lost after the first sprite makes the next bake SpriteBakerUnavailable, not an empty sprite", () => {
+  const renderer = fakeRenderer();
+  let lost = false;
+  renderer.getContext = () => ({ isContextLost: () => lost });
+  const baker = createSpriteBaker({ season: "summer", createRenderer: () => renderer, createCanvas: fakeCanvas });
+  assert.equal(baker.bake(job("broadleaf")).frames.length, 1);
+  lost = true;
+  assert.throws(() => baker.bake(job("pine")), SpriteBakerUnavailable);
+  assert.equal(baker.lost(), true);
+  baker.dispose();
+});
+
+test("baker: a context lost in the middle of a job ends it with SpriteBakerUnavailable", () => {
+  const canvases = [];
+  const make = () => {
+    const canvas = listeningCanvas();
+    canvases.push(canvas);
+    return canvas;
+  };
+  const baker = createSpriteBaker({ season: "summer", createRenderer: () => fakeRenderer(), createCanvas: make });
+  const task = baker.start(riderJob({}, "side"));
+  task.step();
+  canvases[0].dispatch("webglcontextlost");
+  assert.throws(() => task.step(), SpriteBakerUnavailable);
+  baker.dispose();
+});
+
+test("probe: with a stepping baker it reports the longest single step, the worst stall a ride sees", async () => {
+  const { runProbe, describeProbe } = await import("../public/js/view2d/probe.js");
+  let t = 0;
+  const costs = { broadleaf: [3, 4], cow: [2, 9, 1] };
+  const baker = {
+    start(job) {
+      const steps = [...costs[job.id]];
+      return {
+        step() {
+          t += steps.shift();
+          return steps.length ? null : { bytes: 1 };
+        },
+      };
+    },
+  };
+  const result = runProbe(baker, [job("broadleaf"), job("cow")], () => t);
+  assert.deepEqual(result.worstStep, { key: job("cow").key, ms: 9 });
+  assert.equal(result.slowest[0].ms, 12, "a sprite's time is still all its steps");
+  assert.match(describeProbe(result, "summer", "UA"), /longest step: 9 ms/);
+});

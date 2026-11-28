@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { createSpriteStore, DEFAULT_LOOK } from "../public/js/view2d/sprites/spriteStore.js";
+import { SpriteBakerUnavailable } from "../public/js/view2d/sprites/baker.js";
 import { drawSprite } from "../public/js/view2d/drawSprite.js";
 import { riderJob, spriteJobs } from "../public/js/view2d/sprites/catalog.js";
 import { lookOf } from "../public/js/view3d/assets/riders/look.js";
@@ -72,9 +73,10 @@ test("spriteStore: a rider not baked yet is drawn with the default look, and its
 
 test("spriteStore: 100 looks bake over several pumps, never past the budget", () => {
   const { store, baked, clock } = rig({ cost: 2, budgetMs: 6 });
-  for (let id = 1; id <= 100; id++) store.rider(lookOf(id), "side");
   let pumps = 0;
   while (true) {
+    // The view asks for every rider it draws, each frame.
+    for (let id = 1; id <= 100; id++) store.rider(lookOf(id), "side");
     const before = clock.t;
     const count = store.pump();
     if (count === 0) break;
@@ -176,4 +178,75 @@ test("drawSprite: draws the frame with its anchor at x, y, scaled to pixels per 
   assert.deepEqual(images[0].args, [100 - 5, 200 - 10, 20, 30]);
   drawSprite(ctx, sprite, 100, 200, 20, { frame: 7 });
   assert.equal(images[1].image.n, 1, "the frame wraps");
+});
+
+/** A store whose baker steps: each job takes `steps` steps of `cost` ms; records every step and cancel. */
+function steppingRig({ steps = 4, cost = 2, budgetMs = 6, lose = () => false } = {}) {
+  const clock = { t: 0 };
+  const log = [];
+  const start = (job) => {
+    let done = 0;
+    return {
+      step() {
+        if (lose(job, done)) throw new SpriteBakerUnavailable(new Error("lost"));
+        clock.t += cost;
+        done += 1;
+        log.push(`${job.key}#${done}`);
+        return done < steps ? null : { frames: [{ id: job.key }], ox: 0, oy: 0, ppm: job.ppm, bytes: 100 };
+      },
+      cancel: () => log.push(`${job.key} cancelled`),
+    };
+  };
+  const bake = () => assert.fail("a store with start bakes step by step");
+  const store = createSpriteStore({ bake, start, now: () => clock.t, budgetMs });
+  return { store, log, clock };
+}
+
+test("spriteStore: a job of many frames is baked across pumps, never past the budget in one", () => {
+  const { store, log, clock } = steppingRig({ steps: 12, cost: 2, budgetMs: 6 });
+  const job = riderJob({ primary: "#e8473f" }, "side");
+  let pumps = 0;
+  while (!store.get(job.key)) {
+    const before = clock.t;
+    store.want(job, 0);
+    store.pump();
+    assert.ok(clock.t - before <= 6, `pump ${pumps} took ${clock.t - before} ms`);
+    pumps += 1;
+    assert.ok(pumps < 20, "it finishes");
+  }
+  assert.equal(pumps, 4);
+  assert.equal(log.length, 12);
+});
+
+test("spriteStore: a rider's look no longer asked for leaves the queue unbaked; scenery stays queued", () => {
+  // One bake a pump.
+  const { store, log } = steppingRig({ steps: 1, cost: 2, budgetMs: 2 });
+  const [near, far] = [riderJob(lookOf(1), "top"), riderJob(lookOf(2), "top")];
+  store.want(far, 50);
+  store.want(dayJobs[0], 60);
+  store.want(near, 0);
+  store.pump();
+  // From the next frame on only `near` is asked for: `far` rode out of the view.
+  for (let frame = 0; frame < 3; frame += 1) {
+    store.want(near, 0);
+    store.pump();
+  }
+  assert.deepEqual(log, [`${near.key}#1`, `${dayJobs[0].key}#1`]);
+});
+
+test("spriteStore: a rider's look half baked and no longer asked for is cancelled", () => {
+  const { store, log } = steppingRig({ steps: 12, cost: 2, budgetMs: 4 });
+  const job = riderJob({ primary: "#2f5f9e" }, "side");
+  store.want(job, 0);
+  store.pump();
+  for (let frame = 0; frame < 3; frame += 1) store.pump();
+  assert.ok(log.includes(`${job.key} cancelled`), log.join(", "));
+  assert.equal(store.get(job.key), null);
+});
+
+test("spriteStore: a lost WebGL context stops the pump with SpriteBakerUnavailable and fails no job", () => {
+  const { store } = steppingRig({ steps: 2, lose: (job, done) => done === 1 });
+  store.want(dayJobs[0], 0);
+  assert.throws(() => store.pump(), SpriteBakerUnavailable);
+  assert.deepEqual(store.failed(), []);
 });

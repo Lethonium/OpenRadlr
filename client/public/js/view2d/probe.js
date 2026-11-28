@@ -21,25 +21,38 @@ export function probeJobs() {
 }
 
 /**
- * Bakes `jobs` and measures them.
- * @returns {{count: number, ms: number, megabytes: number, slowest: {key: string, ms: number}[], errors: string[]}}
+ * Bakes `jobs` and measures them. With a baker that steps (`start`), also the longest single step: the 2D views
+ * bake a step at a time between frames, so that is the longest a ride can stall for a sprite.
+ * @returns {{count: number, ms: number, megabytes: number, slowest: {key: string, ms: number}[], worstStep: {key: string, ms: number} | null, errors: string[]}}
  */
 export function runProbe(baker, jobs, now = () => performance.now()) {
   const timings = [];
   const errors = [];
   let bytes = 0;
+  let worstStep = null;
+  const bake = (job) => {
+    if (!baker.start) return baker.bake(job);
+    const task = baker.start(job);
+    for (;;) {
+      const t0 = now();
+      const sprite = task.step();
+      const ms = now() - t0;
+      if (!worstStep || ms > worstStep.ms) worstStep = { key: job.key, ms };
+      if (sprite) return sprite;
+    }
+  };
   const start = now();
   for (const job of jobs) {
     const t0 = now();
     try {
-      bytes += baker.bake(job).bytes;
+      bytes += bake(job).bytes;
       timings.push({ key: job.key, ms: now() - t0 });
     } catch (error) {
       errors.push(`${job.key}: ${error.message}`);
     }
   }
   const slowest = [...timings].sort((a, b) => b.ms - a.ms).slice(0, SLOWEST);
-  return { count: timings.length, ms: now() - start, megabytes: bytes / 1024 / 1024, slowest, errors };
+  return { count: timings.length, ms: now() - start, megabytes: bytes / 1024 / 1024, slowest, worstStep, errors };
 }
 
 /** The result as the text the owner copies. */
@@ -49,6 +62,7 @@ export function describeProbe(result, season, userAgent) {
     `sprites: ${result.count} (${result.errors.length} failed)`,
     `total: ${result.ms.toFixed(0)} ms, ${(result.ms / Math.max(1, result.count)).toFixed(1)} ms per sprite`, // i18n-ok: developer page
     `memory: ${result.megabytes.toFixed(1)} MB`,
+    ...(result.worstStep ? [`longest step: ${result.worstStep.ms.toFixed(0)} ms  ${result.worstStep.key}`] : []), // i18n-ok: developer page
     "slowest:",
     ...result.slowest.map((entry) => `  ${entry.ms.toFixed(0)} ms  ${entry.key}`),
     ...result.errors.map((line) => `error: ${line}`),

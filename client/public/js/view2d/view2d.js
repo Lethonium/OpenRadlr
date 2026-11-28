@@ -3,7 +3,8 @@
  * drawn from the 3D world's scene with sprites baked on the device. It turns the ride's riders (distance, lane) into
  * what the views draw (a place and heading on the map, a distance on the side view), keeps the day's look (time,
  * season, weather) and the sprite store fed, and draws the picked view on its canvas once a frame.
- * `available` is false when the sprite baker cannot start (no WebGL2, context lost): the caller then keeps the old map.
+ * `available` is false when the sprite baker cannot start (no WebGL2) or loses its WebGL context during the ride: the
+ * caller then keeps, or goes back to, the old map.
  * It is known up front from a cheap WebGL2 check; the baker itself (a second renderer and a world scene) is made on
  * the first frame a 2D view draws, so a ride that stays in 3D never pays for it.
  */
@@ -94,7 +95,7 @@ export class View2D {
       this.available = false;
       return false;
     }
-    this.#store = createSpriteStore({ bake: this.#baker.bake, now: this.#now, ...(this.#budgetMs ? { budgetMs: this.#budgetMs } : {}) });
+    this.#store = createSpriteStore({ bake: this.#baker.bake, start: this.#baker.start ?? null, now: this.#now, ...(this.#budgetMs ? { budgetMs: this.#budgetMs } : {}) });
     return true;
   }
 
@@ -260,7 +261,14 @@ export class View2D {
         lemons,
       });
     }
-    this.#store.pump();
+    try {
+      this.#store.pump();
+    } catch (error) {
+      if (error?.name !== "SpriteBakerUnavailable") throw error;
+      // The WebGL context went during the ride: nothing more can be baked, so the caller takes the old map over.
+      console.warn("The 2D views are unavailable:", error); // i18n-ok: developer log
+      this.dispose();
+    }
   }
 
   dispose() {

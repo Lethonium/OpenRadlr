@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
 import { View2D } from "../public/js/view2d/view2d.js";
+import { SpriteBakerUnavailable } from "../public/js/view2d/sprites/baker.js";
 import { VIEW_MODES, nextViewMode, viewModeOf } from "../public/js/view2d/viewMode.js";
 import { startingViewMode } from "../public/js/view/workoutStudioView.js";
 import { buildSceneNow } from "../public/js/view3d/worldScene.js";
@@ -69,6 +70,23 @@ test("a baker that fails when first needed makes the views unavailable", () => {
   assert.equal(view.available, false);
   assert.equal(baker.created, 1);
   assert.equal(screen.calls.fillRect, 0);
+});
+
+test("a WebGL context lost after the first sprite makes the views unavailable, and the baker goes", () => {
+  // One bake a frame.
+  const baker = fakeBaker({ cost: 10 });
+  const bake = baker.bake;
+  baker.bake = (job) => {
+    if (baker.jobs.length >= 1) throw new SpriteBakerUnavailable(new Error("WebGL context lost"));
+    return bake(job);
+  };
+  const { view } = make({ baker });
+  view.render(frame());
+  assert.equal(baker.jobs.length, 1, "one sprite baked before the loss");
+  assert.equal(view.available, true);
+  assert.doesNotThrow(() => view.render(frame()));
+  assert.equal(view.available, false, "main.js then draws the old map");
+  assert.equal(baker.disposed, 1);
 });
 
 test("the baker is made on the first 2D frame, once, and not before", () => {

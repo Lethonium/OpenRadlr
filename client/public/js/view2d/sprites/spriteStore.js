@@ -7,6 +7,9 @@
  * but for the `-night` view prefix. While night is on, `get` returns the night sprite if it is baked,
  * else the day one; asking for a day job also asks for its night variant.
  * Riders: a look not baked yet is drawn with `DEFAULT_LOOK`'s sprite (which is baked first).
+ * A rider's look not asked for again since the last pump has left the view: it leaves the queue unbaked (a half-baked
+ * one is cancelled). Scenery stays queued: its jobs are the catalog's, each baked once, while looks have no end. With the baker's `start`, a job is baked a step (one frame) at a time, so a 12-frame rider spreads over
+ * frames instead of stalling one. A lost WebGL context (SpriteBakerUnavailable) stops the pump and is thrown on.
  */
 import { lookOf } from "../../view3d/assets/riders/look.js";
 import { riderJob, spriteJobs } from "./catalog.js";
@@ -22,10 +25,14 @@ const isRider = (job) => job.id === "cyclist";
 const nightKeyOf = (key) => key.replace(":", "-night:");
 
 /**
- * @param {{bake: (job: object) => {frames: object[], ox: number, oy: number, ppm: number, bytes: number}, now: () => number, budgetMs?: number, maxBytes?: number}} options
+ * @param {{bake: (job: object) => {frames: object[], ox: number, oy: number, ppm: number, bytes: number}, start?: (job: object) => {step: () => object | null, cancel: () => void}, now: () => number, budgetMs?: number, maxBytes?: number}} options
  */
-export function createSpriteStore({ bake, now, budgetMs = 6, maxBytes = 40e6 }) {
-  const pending = new Map(); // key -> {job, priority, seq}
+export function createSpriteStore({ bake, start = null, now, budgetMs = 6, maxBytes = 40e6 }) {
+  const pending = new Map(); // key -> {job, priority, seq, wantedAt}
+  /** The job being baked step by step: `{job, task, wantedAt}`, or null. */
+  let current = null;
+  /** Pumps so far: a job last asked for before the latest pump has left the view. */
+  let pumps = 0;
   const baked = new Map(); // key -> {sprite, job, used}
   const failedKeys = [];
   const nightJobs = new Map(); // night key -> job, for the views seen
@@ -38,9 +45,15 @@ export function createSpriteStore({ bake, now, budgetMs = 6, maxBytes = 40e6 }) 
 
   function enqueue(job, priority) {
     if (baked.has(job.key) || failedKeys.includes(job.key)) return;
+    if (current?.job.key === job.key) {
+      current.wantedAt = pumps;
+      return;
+    }
     const queued = pending.get(job.key);
-    if (queued) queued.priority = Math.min(queued.priority, priority);
-    else pending.set(job.key, { job, priority, seq: seq++ });
+    if (queued) {
+      queued.priority = Math.min(queued.priority, priority);
+      queued.wantedAt = pumps;
+    } else pending.set(job.key, { job, priority, seq: seq++, wantedAt: pumps });
   }
 
   function nightVariant(job) {
@@ -122,21 +135,56 @@ export function createSpriteStore({ bake, now, budgetMs = 6, maxBytes = 40e6 }) 
     }
   }
 
+  /** Drops the rider looks not asked for since the last pump: the view no longer shows them. */
+  function expire() {
+    const gone = (item) => isRider(item.job) && item.wantedAt < pumps;
+    for (const [key, item] of pending) if (gone(item)) pending.delete(key);
+    if (current && gone(current)) {
+      current.task.cancel();
+      current = null;
+    }
+  }
+
+  function keep(job, sprite) {
+    baked.set(job.key, { sprite, job, used: ++tick });
+    total += sprite.bytes;
+    evict(job.key);
+  }
+
+  /** One bake of the next job, or one step of the current one: true when a sprite was finished. */
+  function work() {
+    if (!current) {
+      const item = next();
+      pending.delete(item.job.key);
+      if (!start) {
+        keep(item.job, bake(item.job));
+        return true;
+      }
+      current = { job: item.job, task: null, wantedAt: item.wantedAt };
+      current.task = start(item.job);
+    }
+    const sprite = current.task.step();
+    if (!sprite) return false;
+    keep(current.job, sprite);
+    current = null;
+    return true;
+  }
+
   function pump() {
-    const start = now();
+    expire();
+    pumps += 1;
+    const began = now();
     let count = 0;
-    while (pending.size > 0 && now() - start < budgetMs) {
-      const { job } = next();
-      pending.delete(job.key);
+    while ((current || pending.size > 0) && now() - began < budgetMs) {
+      const key = current?.job.key ?? next().job.key;
       try {
-        const sprite = bake(job);
-        baked.set(job.key, { sprite, job, used: ++tick });
-        total += sprite.bytes;
-        count += 1;
-        evict(job.key);
+        if (work()) count += 1;
       } catch (error) {
-        failedKeys.push(job.key);
-        console.warn(`sprite ${job.key} failed to bake`, error); // i18n-ok: developer log
+        current = null;
+        // A lost context is the baker's end, not this job's fault.
+        if (error?.name === "SpriteBakerUnavailable") throw error;
+        failedKeys.push(key);
+        console.warn(`sprite ${key} failed to bake`, error); // i18n-ok: developer log
       }
     }
     return count;
