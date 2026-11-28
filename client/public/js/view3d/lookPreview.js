@@ -7,7 +7,7 @@ import { createSharedUniforms } from "./assets/materials.js";
 import { createOwner } from "./assets/owner.js";
 import { createClassicCyclist } from "./assets/riders/classicCyclist.js";
 import { createCyclist } from "./assets/riders/cyclist.js";
-import { Turntable } from "./lookTurntable.js";
+import { PreviewTicker, Turntable } from "./lookTurntable.js";
 
 /** How the rider pedals. */
 const RIDE = Object.freeze({ cadence: 82, speed: 7 });
@@ -21,8 +21,8 @@ export class LookPreview {
   #uniforms = createSharedUniforms();
   #cyclist = null;
   #owner = null;
-  #frame = 0;
-  #last = 0;
+  #ticker;
+  #resizes = null;
   #time = 0;
   #reducedMotion;
   #turntable;
@@ -52,6 +52,12 @@ export class LookPreview {
     this.#camera.position.set(0.2, 1.45, 4.6);
     this.#camera.lookAt(0.1, 0.8, 0);
     this.#removeDrag = this.#listenForDrags(canvas);
+    this.#ticker = new PreviewTicker({ still: reducedMotion, onFrame: (dt) => this.#step(dt) });
+    // Without the loop (reduced motion), a new size is drawn when it comes.
+    if (reducedMotion && globalThis.ResizeObserver) {
+      this.#resizes = new ResizeObserver(() => this.#draw());
+      this.#resizes.observe(canvas);
+    }
   }
 
   /** A round patch of meadow with a stretch of road on the stand, the bike on its lane. */
@@ -87,7 +93,7 @@ export class LookPreview {
       if (lastX === null) return;
       this.#turntable.drag(event.clientX - lastX);
       lastX = event.clientX;
-      if (!this.#frame) this.#draw();
+      if (!this.#ticker.running) this.#draw();
     };
     const up = () => {
       if (lastX === null) return;
@@ -146,29 +152,28 @@ export class LookPreview {
     if (this.#fit()) this.#renderer.render(this.#scene, this.#camera);
   }
 
-  /** Starts turning and pedalling, drawing every animation frame. */
+  #step(dt) {
+    this.#time += dt;
+    this.#turntable.update(dt);
+    this.#cyclist?.ride(dt, this.#rideState());
+    this.#draw();
+  }
+
+  /**
+   * Starts turning and pedalling, drawn at most 30 times a second; with reduced motion nothing moves on its own, so
+   * the preview draws only for a new look, a drag or a new size.
+   */
   start() {
-    if (this.#frame) return;
-    this.#last = performance.now();
-    const step = (now) => {
-      const dt = Math.min(0.1, (now - this.#last) / 1000);
-      this.#last = now;
-      this.#time += dt;
-      this.#turntable.update(dt);
-      this.#cyclist?.ride(dt, this.#rideState());
-      this.#draw();
-      this.#frame = requestAnimationFrame(step);
-    };
-    this.#frame = requestAnimationFrame(step);
+    this.#ticker.start();
   }
 
   stop() {
-    if (this.#frame) cancelAnimationFrame(this.#frame);
-    this.#frame = 0;
+    this.#ticker.stop();
   }
 
   dispose() {
     this.stop();
+    this.#resizes?.disconnect();
     this.#owner?.disposeAll();
     this.#removeDrag();
     for (const resource of this.#props) resource.dispose();
