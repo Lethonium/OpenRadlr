@@ -100,14 +100,13 @@ export class RidePause {
   /** The pause button or key. */
   toggle(now) {
     if (!this.allowed) return [];
-    if (this.state === "parked") return this.#resume();
-    const actions = this.state === "riding" ? ["pauseTimer", "park"] : ["park"];
-    if (this.state === "riding") this.pausedAt = now;
+    if (this.state !== "riding") return this.#resume();
+    this.pausedAt = now;
     this.state = "parked";
     this.#slowSince = null;
     this.#pedalSince = null;
     this.#coasted = false;
-    return actions;
+    return ["pauseTimer", "park"];
   }
 
   /** The server refused the pause (race, event or vehicle). */

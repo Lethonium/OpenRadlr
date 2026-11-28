@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { QualityProbe, adjustQuality, chooseQuality, firstRunQuality } from "../public/js/view3d/qualityPick.js";
+import { QualityProbe, adjustQuality, chooseQuality, firstRunQuality, menuUses3d } from "../public/js/view3d/qualityPick.js";
 import en from "../public/js/i18n/en.js";
 import de from "../public/js/i18n/de.js";
 
@@ -20,20 +20,20 @@ test("2 GB or less picks low", () => {
   assert.equal(chooseQuality({ ...strong, deviceMemory: 0.5 }), "low");
 });
 
-test("a coarse pointer picks medium", () => {
-  assert.equal(chooseQuality({ ...strong, coarsePointer: true }), "medium");
+test("a coarse pointer starts with Low", () => {
+  assert.equal(chooseQuality({ ...strong, coarsePointer: true }), "low");
 });
 
-test("4 GB or less picks medium", () => {
-  assert.equal(chooseQuality({ ...strong, deviceMemory: 4 }), "medium");
+test("4 GB or less starts with Low", () => {
+  assert.equal(chooseQuality({ ...strong, deviceMemory: 4 }), "low");
 });
 
 test("a strong device picks high", () => {
   assert.equal(chooseQuality(strong), "high");
 });
 
-test("a missing device memory counts as 8", () => {
-  assert.equal(chooseQuality({ ...strong, deviceMemory: undefined }), "high");
+test("unknown device memory starts with Medium", () => {
+  assert.equal(chooseQuality({ ...strong, deviceMemory: undefined }), "medium");
 });
 
 test("ultra is never picked", () => {
@@ -73,7 +73,7 @@ test("no samples keep the level", () => {
 });
 
 test("the first run stores the pick and marks it automatic", () => {
-  assert.deepEqual(firstRunQuality(null, { ...strong, deviceMemory: 4 }, null), { quality: "medium", auto: true, view: null, notice: false });
+  assert.deepEqual(firstRunQuality(null, { ...strong, deviceMemory: 4 }, null), { quality: "low", auto: true, view: null, notice: false });
 });
 
 test("a 2D pick also sets the view and asks for the notice", () => {
@@ -130,3 +130,15 @@ test("a reset drops the partial window and the frame baseline", () => {
   assert.deepEqual(feed(probe, [5, 5.016, 5.032]), [null, null, null]);
 });
 
+
+test("the start screen stays on the light map until a high level is selected manually", () => {
+  assert.equal(menuUses3d(null), false);
+  assert.equal(menuUses3d("high", { automatic: true }), false);
+  assert.equal(menuUses3d("medium"), false);
+  assert.equal(menuUses3d("high"), true);
+});
+
+test("the start screen respects reduced motion and data saving", () => {
+  assert.equal(menuUses3d("ultra", { reducedMotion: true }), false);
+  assert.equal(menuUses3d("ultra", { saveData: true }), false);
+});

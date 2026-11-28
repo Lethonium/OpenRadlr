@@ -122,7 +122,7 @@ import { biomeForSeason, seasonFromLocation } from "./world/seasons.js";
 import { weatherFromLocation } from "./world/weather.js";
 import { MenuCamera, springTo } from "./view3d/menuCamera.js";
 import { nextQuality, qualityLevel } from "./view3d/quality.js";
-import { QualityProbe, firstRunQuality } from "./view3d/qualityPick.js";
+import { QualityProbe, firstRunQuality, menuUses3d } from "./view3d/qualityPick.js";
 import { CAMERA_MODES } from "./view3d/chaseCamera.js";
 import { TIME_MODES } from "./world/daylight.js";
 import { droneLens, gymLens } from "./view3d/lenses.js";
@@ -166,7 +166,7 @@ const CAMERA_KEY = "openride.camera";
 const TIME_KEY = "openride.time";
 const QUALITY_KEY = "openride.quality";
 /** "1" while the stored quality was picked for the device and no ride has tested it yet. */
-const QUALITY_PROBE_FRAMES = 90;
+const QUALITY_PROBE_FRAMES = 30;
 const QUALITY_AUTO_KEY = "openride.qualityAuto";
 
 /**
@@ -980,8 +980,9 @@ function openStartMenu() {
 
 /** First run only: store a graphics level (or the 2D view) that suits this device; a stored choice stays. */
 function applyFirstRunQuality() {
+  if (readSetting(QUALITY_KEY)) return;
   const pick = firstRunQuality(
-    readSetting(QUALITY_KEY),
+    null,
     {
       webgl2: isWebGl2Available(),
       deviceMemory: globalThis.navigator?.deviceMemory,
@@ -998,13 +999,13 @@ function applyFirstRunQuality() {
 }
 
 /**
- * Rides on an automatically picked level: whenever 90 frames in a row run
+ * Rides on an automatically picked level: whenever a window of frames runs
  * slowly the level steps down (at Low, to 2D), again after a cooldown if it is
  * still too slow. Each ride and each return to 3D starts a fresh sample; a
  * hidden page's time never counts. Picking a level by hand ends it.
  */
 function probeRideQuality(time) {
-  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES }));
+  const probe = (app.qualityProbe ??= new QualityProbe({ frames: QUALITY_PROBE_FRAMES, cooldownS: 6 }));
   const active = readSetting(QUALITY_AUTO_KEY) === "1" && app.viewMode === "3d" && Boolean(app.view3d);
   if (!active || app.qualityProbeRide !== app.ride) {
     probe.reset();
@@ -1029,10 +1030,10 @@ function probeRideQuality(time) {
  */
 function initMenuStage() {
   initSeasonPicker();
-  applyFirstRunQuality();
   const saveData = Boolean(globalThis.navigator?.connection?.saveData);
-  const use3d = isWebGl2Available() && readSetting(QUALITY_KEY) !== "low" && !saveData;
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const automatic = readSetting(QUALITY_AUTO_KEY) === "1";
+  const use3d = menuUses3d(readSetting(QUALITY_KEY), { automatic, reducedMotion, saveData }) && isWebGl2Available();
   const canvas = $("world3d");
   const home = { parent: canvas.parentElement, next: canvas.nextSibling };
   app.menuCanvasHome = home;
@@ -2647,6 +2648,7 @@ function stampExercise(rider) {
 }
 
 async function startRide() {
+  applyFirstRunQuality();
   const info = app.connection.serverInfo;
   $("server-label").textContent = app.studio ? `${info.server_name} · ${app.route.name}` : `${info.server_name} · ${app.route.name} · ${formatDistanceWithUnit(app.route.length, 1)}`;
   setDifficultyInputs(app.profile.difficulty);
@@ -2804,7 +2806,12 @@ function startRoad({ simulated, setSimPower }) {
     toggleMenu: () => toggleMenu(),
     takePhoto: () => takePhoto(),
     // A finished ride's recorder stays as it was.
-    togglePause: () => app.finished || performPause(app.pause?.toggle(now()) ?? [], now()),
+    togglePause: () => {
+      if (app.finished || !app.pause) return;
+      const time = now();
+      performPause(app.pause.toggle(time), time);
+      renderPause(app.pause, time);
+    },
     closePanels: () => closeTopPanel(),
   };
   app.ride.unbindKeyboard = bindKeyboard(window, app.actions);
@@ -5880,6 +5887,7 @@ const GRAPHICS_LABELS = { low: "graphics.low", medium: "graphics.medium", high: 
 
 function setQuality(quality) {
   app.view3d.setQuality(quality);
+  $("ride").dataset.quality = quality;
   $("quality-mode").textContent = t("graphics.label", { level: t(GRAPHICS_LABELS[quality]) });
   writeSetting(QUALITY_KEY, quality);
   replanRideWorld(quality);
@@ -6136,14 +6144,22 @@ function updatePause(time, me) {
   const race = app.state?.race;
   pause.allowed = !app.vehicleId && !app.state?.event?.entered && !inRace(race, me, app.riderId);
   const left = performPause(pause.update({ now: time, speed: me?.speed ?? 0, power: app.session.latest.power || 0, offline: app.offline }), time);
-  if (left) return true;
+  if (!left) renderPause(pause, time);
+  return left;
+}
+
+function renderPause(pause, time) {
   const button = $("pause-ride");
+  const paused = pause.state !== "riding";
+  const action = paused ? t("workout.resume") : t("workout.pause");
   button.hidden = !pause.allowed;
-  button.textContent = pause.state === "riding" ? t("workout.pause") : t("workout.resume");
+  if (button.textContent !== action) button.textContent = action;
   const pill = $("pause-pill");
-  pill.hidden = pause.state === "riding";
-  if (!pill.hidden) pill.textContent = t("ride.paused", { time: formatDuration(time - app.pausedFrom) }) + (pause.state === "parked" ? t("ride.pedalToResume") : "");
-  return false;
+  pill.hidden = !paused;
+  if (!paused) return;
+  const elapsed = formatDuration(time - app.pausedFrom);
+  const status = t("ride.paused", { time: elapsed }) + (pause.state === "parked" ? t("ride.pedalToResume") : "");
+  if (pill.textContent !== status) pill.textContent = status;
 }
 
 /** Carries out what the pause state machine decided. @returns {boolean} true if the ride was left */

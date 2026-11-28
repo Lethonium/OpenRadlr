@@ -36,12 +36,13 @@ test("toggle while parked resumes", () => {
   assert.equal(pause.pausedAt, null);
 });
 
-test("toggle while auto-paused only parks", () => {
+test("Resume during auto-pause restarts the timer without parking", () => {
   const pause = moving({ autoPause: true });
   run(pause, 2, 3.5, { speed: 0 });
   assert.equal(pause.state, "stopped");
-  assert.deepEqual(pause.toggle(6), ["park"]);
-  assert.equal(pause.state, "parked");
+  assert.deepEqual(pause.toggle(6), ["resumeTimer"]);
+  assert.equal(pause.state, "riding");
+  assert.deepEqual(run(pause, 6, 4, { speed: 0 }), []);
 });
 
 test("auto-pause after 3 s under 1 km/h", () => {
