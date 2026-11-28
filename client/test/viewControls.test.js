@@ -4,11 +4,11 @@ import { viewControls } from "../public/js/view/viewControls.js";
 
 const ids = (items) => items.map((item) => item.id);
 
-test("route rides offer four cameras five layouts and 3D/2D", () => {
+test("route rides offer four cameras five layouts and 3D, map and side", () => {
   const controls = viewControls({ studio: false });
   assert.deepEqual(
     { cameras: ids(controls.cameras), layouts: ids(controls.layouts), modes: ids(controls.modes), showTime: controls.showTime },
-    { cameras: ["chase", "close", "drone", "side"], layouts: ["auto", "cockpit", "broadcast", "training", "race"], modes: ["3d", "2d"], showTime: true },
+    { cameras: ["chase", "close", "drone", "side"], layouts: ["auto", "cockpit", "broadcast", "training", "race"], modes: ["3d", "map", "side"], showTime: true },
   );
 });
 

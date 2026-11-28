@@ -326,7 +326,7 @@ function drawMarkings(ctx, route, camera, theme) {
 }
 
 /** Golden lemons along the road, under the riders, collected ones gone. */
-function drawLemons(ctx, { route, lemons, camera, width, height }) {
+export function drawLemons(ctx, { route, lemons, camera, width, height }) {
   for (const lemon of lemons) {
     if (lemon.collected) continue;
     const screen = camera.toScreen(roadPointAt(route, lemon.distance, lemon.lane));
@@ -339,7 +339,7 @@ function drawLemons(ctx, { route, lemons, camera, width, height }) {
 }
 
 /** The draft gap, as a soft band from me to the rider ahead (as the lane strip drew it). */
-function drawDraft(ctx, { route, me, draft, camera, colors }) {
+export function drawDraft(ctx, { route, me, draft, camera, colors }) {
   if (!me || !draft || !(draft.gap > 0)) return;
   const steps = Math.max(2, Math.ceil(draft.gap / 2));
   const points = [];

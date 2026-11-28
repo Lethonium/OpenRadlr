@@ -139,16 +139,24 @@ test("closing with focus elsewhere leaves focus alone", () => {
   assert.equal(button.focused ?? 0, 0);
 });
 
-test("2D hides the camera and time rows", () => {
-  const { popover, root } = setup({ selected: () => ({ camera: "chase", mode: "2d" }) });
+test("the map and the side view hide the camera row and keep the time row", () => {
+  for (const mode of ["map", "side"]) {
+    const { popover, root } = setup({ selected: () => ({ camera: "chase", mode }) });
+    popover.open();
+    assert.deepEqual([rowHidden(root, "camera"), rowHidden(root, "time"), rowHidden(root, "layout")], [true, false, false]);
+  }
+});
+
+test("without the 2D views' sprites the side option is hidden", () => {
+  const { popover, option } = setup({ selected: () => ({ mode: "map", hasSide: false }) });
   popover.open();
-  assert.deepEqual([rowHidden(root, "camera"), rowHidden(root, "time"), rowHidden(root, "layout")], [true, true, false]);
+  assert.deepEqual([option("mode", "side").hidden, Boolean(option("mode", "map").hidden)], [true, false]);
 });
 
 test("without a 3D view the 3D option is disabled", () => {
-  const { popover, option } = setup({ selected: () => ({ mode: "2d", has3d: false }) });
+  const { popover, option } = setup({ selected: () => ({ mode: "map", has3d: false }) });
   popover.open();
-  assert.deepEqual([option("mode", "3d").disabled, Boolean(option("mode", "2d").disabled)], [true, false]);
+  assert.deepEqual([option("mode", "3d").disabled, Boolean(option("mode", "map").disabled)], [true, false]);
 });
 
 test("a camera the popover does not offer hides the camera row", () => {

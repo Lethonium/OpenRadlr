@@ -317,6 +317,8 @@ export class View3D {
     this.worldCamera = new THREE.PerspectiveCamera();
     /** Anything with `eye` and `target`; the chase camera updates itself from my rider. */
     this.camera = new ChaseCamera(route);
+    /** The world's scene, which the 2D views draw from too. */
+    this.world = world;
     this.overview = world.overview ?? null;
     /** The outdoor gyms (#77): where workout riders train. */
     this.gyms = world.gyms ?? [];

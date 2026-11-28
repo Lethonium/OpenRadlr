@@ -24,6 +24,11 @@ const RULES = Object.freeze([
     folder: "js/view3d/scene/",
     allows: (target) => !target.startsWith("js/view3d/engine/"),
   },
+  {
+    // The 2D views: Three.js only in the sprite baker, which renders the 3D assets into sprites.
+    folder: "js/view2d/",
+    allows: (target, file) => !target.startsWith("js/view3d/engine/") && (!THREE(target) || file === "js/view2d/sprites/baker.js"),
+  },
 ]);
 
 /**
@@ -39,7 +44,7 @@ export function layerViolations(files, read) {
     if (!rule) continue;
     for (const match of read(file).matchAll(IMPORT)) {
       const target = posix.normalize(posix.join(posix.dirname(file), match[1] ?? match[2]));
-      if (!rule.allows(target)) violations.push(`${file} imports ${target}`);
+      if (!rule.allows(target, file)) violations.push(`${file} imports ${target}`);
     }
   }
   return violations;

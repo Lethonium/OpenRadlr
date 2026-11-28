@@ -77,7 +77,7 @@ test("the first run stores the pick and marks it automatic", () => {
 });
 
 test("a 2D pick also sets the view and asks for the notice", () => {
-  assert.deepEqual(firstRunQuality(null, { ...strong, webgl2: false }, null), { quality: "low", auto: false, view: "2d", notice: true });
+  assert.deepEqual(firstRunQuality(null, { ...strong, webgl2: false }, null), { quality: "low", auto: false, view: "map", notice: true });
 });
 
 test("a stored choice is never overwritten", () => {

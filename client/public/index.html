@@ -128,6 +128,7 @@
     <link rel="modulepreload" href="js/view/workoutCards.js" />
     <link rel="modulepreload" href="js/view/workoutStudioView.js" />
     <link rel="modulepreload" href="js/view/workoutView.js" />
+    <link rel="modulepreload" href="js/view2d/viewMode.js" />
     <link rel="modulepreload" href="js/view3d/chaseCamera.js" />
     <link rel="modulepreload" href="js/view3d/highlight.js" />
     <link rel="modulepreload" href="js/view3d/lenses.js" />
@@ -1126,7 +1127,8 @@
                     </label>
                     <div class="view-switch" role="group" aria-label="View" data-i18n-attr="aria-label:drawer.view">
                       <button type="button" id="view-3d" class="toggle" aria-pressed="true">3D</button>
-                      <button type="button" id="view-2d" class="toggle" aria-pressed="false">2D</button>
+                      <button type="button" id="view-map" class="toggle" aria-pressed="false" title="Top-down map" data-i18n="view.map" data-i18n-attr="title:view.mapTitle">Map</button>
+                      <button type="button" id="view-side" class="toggle" aria-pressed="false" title="Side view with the road's height" data-i18n="view.side" data-i18n-attr="title:view.sideTitle" hidden>Side</button>
                       <span id="view-note" class="view-note"></span>
                     </div>
                     <div id="scene-controls" class="scene-controls">

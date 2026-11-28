@@ -53,12 +53,12 @@ export function adjustQuality(level, frameMs) {
  * @param {string|null} storedQuality
  * @param {DeviceSignals} signals
  * @param {string|null} storedView
- * @returns {{quality: string, auto: boolean, view: "2d"|null, notice: boolean}|null}
+ * @returns {{quality: string, auto: boolean, view: "map"|null, notice: boolean}|null}
  */
 export function firstRunQuality(storedQuality, signals, storedView) {
   if (storedQuality) return null;
   const pick = chooseQuality(signals);
-  if (pick === "2d") return { quality: "low", auto: false, view: storedView ? null : "2d", notice: !storedView };
+  if (pick === "2d") return { quality: "low", auto: false, view: storedView ? null : "map", notice: !storedView };
   return { quality: pick, auto: true, view: null, notice: false };
 }
 

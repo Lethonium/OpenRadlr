@@ -5,6 +5,7 @@ import { RoadNetwork } from "../public/js/route/network.js";
 import { LANE_WIDTH } from "../public/js/world/roads.js";
 import { MAP_VIEW, cachedOffsetNodes, drawRideMap, laneOffset, mapCamera, mapRiderMarks, offsetNodes, roadPointAt } from "../public/js/view/rideMapView.js";
 import { tinyLoopFile, tinyNetworkFile } from "./helpers.js";
+import { fakeCanvas } from "./support/fakeCanvas.js";
 
 const COLORS = Object.freeze({
   text: "#e8ecf1",
@@ -96,30 +97,6 @@ test("a vehicle is marked once, at its captain", () => {
   assert.equal(vehicle.label, "Anna's beer bike");
   assert.ok(vehicle.mine);
 });
-
-function fakeCanvas(width = 800, height = 600) {
-  const calls = { lineTo: 0, fill: 0, fillRect: 0, stroke: 0, arc: 0, fillText: 0 };
-  const fills = [];
-  const strokes = [];
-  const alphas = [];
-  const ctx = new Proxy(
-    {},
-    {
-      get: (_, name) => {
-        if (name === "measureText") return () => ({ width: 20 });
-        if (name in calls) return () => (calls[name] += 1);
-        return () => {};
-      },
-      set: (_, name, value) => {
-        if (name === "fillStyle") fills.push(value);
-        if (name === "strokeStyle") strokes.push(value);
-        if (name === "globalAlpha") alphas.push(value);
-        return true;
-      },
-    },
-  );
-  return { canvas: { clientWidth: width, clientHeight: height, width: 0, height: 0, style: {}, getContext: () => ctx }, calls, fills, strokes, alphas };
-}
 
 test("the map draws the coast, every road, the lane lines and the riders", () => {
   const { canvas, calls } = fakeCanvas();

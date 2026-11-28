@@ -4,6 +4,7 @@
  */
 import { formatDuration } from "../util/format.js";
 import { t } from "../i18n/i18n.js";
+import { viewModeOf } from "../view2d/viewMode.js";
 import { EXERCISES, flowStep } from "../workout/plan.js";
 
 /** The planned exercise time (rests excluded): what a workout's active time is measured against. */
@@ -12,10 +13,10 @@ const exerciseDuration = (plan) => plan.blocks.reduce((sum, block) => sum + (blo
 /**
  * The view a screen opens in: the workout is the 3D gym whatever 2D/3D
  * preference was saved (its HUD sits on the world, the 2D map has nothing
- * to show), the ride follows the saved preference.
+ * to show), the ride follows the saved preference (3D, the map or the side view).
  */
 export function startingViewMode(saved, { workout = false } = {}) {
-  return workout || saved !== "2d" ? "3d" : "2d";
+  return workout ? "3d" : viewModeOf(saved);
 }
 
 /**

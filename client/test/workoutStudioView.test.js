@@ -206,7 +206,7 @@ test("a reconnect without a workout sends nothing", () => {
 
 test("the workout opens in 3D whatever view was saved; a ride follows the saved view", () => {
   assert.equal(startingViewMode("2d", { workout: true }), "3d");
-  assert.equal(startingViewMode("2d"), "2d");
+  assert.equal(startingViewMode("2d"), "map");
   assert.equal(startingViewMode(null), "3d");
 });
 
