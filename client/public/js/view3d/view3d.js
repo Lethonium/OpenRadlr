@@ -25,9 +25,9 @@ import { StudioCamera } from "./studioCamera.js";
 import { assignSpots, nearestGym } from "../workout/gymSpots.js";
 import { seatCadence, layoutOf, placedVehicles } from "./vehicleScene.js";
 import { buildWorld, riddenSurface } from "./world.js";
-import { bikeOnRoad, riderPosition, roadFrame } from "../world/roads.js";
+import { bikeOnRoad, riderPosition } from "../world/roads.js";
 import { sceneOf } from "./worldScene.js";
-import { boardSpot } from "./boards.js";
+import { goalBoardSpot } from "./boards.js";
 import { anchorGoalBoards, resolvePending } from "../ride/goalBoards.js";
 import { resolveBiome } from "./biomes/index.js";
 import { LabelVisibility, labelLook } from "./labels.js";
@@ -468,9 +468,7 @@ export class View3D {
         this.onGoalPoster?.(slot, text);
       }
       taken.add(slot);
-      const { x, z, yaw } = boardSpot(this.route, distance);
-      const road = roadFrame(this.route, distance).center;
-      return { position: [x, road[1], z], yaw, slot };
+      return { ...goalBoardSpot(this.route, distance, this.sight.height), slot };
     });
   }
 

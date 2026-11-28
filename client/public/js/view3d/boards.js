@@ -148,3 +148,14 @@ export function placeBoards(route, terrain, sites, { occupancy, avoid = () => fa
   }
   return boards;
 }
+
+/**
+ * Where a goal board at `distance` stands: beside the road like the other boards, on the ground there. `ground` is the
+ * height sampler of the world's ground grids; without one (or off its grids) the board takes the road's height.
+ */
+export function goalBoardSpot(route, distance, ground) {
+  const { x, z, yaw } = boardSpot(route, distance);
+  const height = ground?.(x, z);
+  const y = Number.isFinite(height) ? height : roadFrame(route, distance).center[1];
+  return { position: [x, y, z], yaw };
+}

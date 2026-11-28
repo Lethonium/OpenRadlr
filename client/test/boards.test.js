@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { BOARD, boardClearings, boardSites, boardSpot, placeBoards } from "../public/js/view3d/boards.js";
+import { BOARD, boardClearings, boardSites, boardSpot, goalBoardSpot, placeBoards } from "../public/js/view3d/boards.js";
 import { Occupancy } from "../public/js/view3d/features.js";
 import { sceneOf } from "../public/js/view3d/worldScene.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../public/js/world/roads.js";
@@ -123,6 +123,21 @@ test("a house off the sight line leaves the board where it was", () => {
   const far = { x: boardSpot(route, site.distance).x, z: boardSpot(route, site.distance).z + 60, halfX: 6, halfZ: 6, yaw: 0, top: 8 };
   const [board] = placeBoards(route, flatTerrain, [site], { occupancy: new Occupancy(), boxes: [far] });
   assert.equal(board.distance, site.distance);
+});
+
+test("a goal board stands on the ground beside the road, not at the road's height", () => {
+  const route = straight(flat(6000));
+  const slope = (x, z) => 3 + z * 0.5;
+  const { position, yaw } = goalBoardSpot(route, 3000, slope);
+  const spot = boardSpot(route, 3000);
+  assert.deepEqual(position, [spot.x, slope(spot.x, spot.z), spot.z]);
+  assert.equal(yaw, spot.yaw);
+});
+
+test("a goal board without ground data takes the road's height", () => {
+  const route = straight([[0, 0, 5], [3000, 0, 5], [6000, 0, 5]]);
+  assert.equal(goalBoardSpot(route, 3000, undefined).position[1], roadFrame(route, 3000).center[1]);
+  assert.equal(goalBoardSpot(route, 3000, () => -Infinity).position[1], roadFrame(route, 3000).center[1]);
 });
 
 test("the scene carries the boards", () => {
