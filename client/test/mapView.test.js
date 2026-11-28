@@ -391,3 +391,43 @@ test("a tile whose look changed keeps its old canvas until its new ground is pai
   const total = tilesOf(made.slice(0, count));
   assert.equal(screen.images.filter((entry) => made.some((m) => m.canvas === entry.image)).length, total, "every tile is still drawn, the old ones as they were");
 });
+
+/** An index with an arch in the middle of every tile around the start. */
+const archEverywhere = () => {
+  const arches = [];
+  const [ti, tj] = [Math.floor(me.x / MAP_TILE_M), Math.floor(me.z / MAP_TILE_M)];
+  for (let i = -3; i <= 3; i += 1) {
+    for (let j = -3; j <= 3; j += 1) arches.push({ layer: "arch", id: "arch", x: (ti + i + 0.5) * MAP_TILE_M, y: 0, z: (tj + j + 0.5) * MAP_TILE_M, yaw: 0, w: 8 });
+  }
+  return { query: (x0, z0, x1, z1) => arches.filter((a) => a.x >= x0 && a.x <= x1 && a.z >= z0 && a.z <= z1) };
+};
+
+test("tiles redrawn for a new sprite share the frame budget with new ground, the rest keep their old canvas", () => {
+  const store = fakeStore([]);
+  const { view, made } = make({ store, indexOf: archEverywhere(), tileBudget: 3 });
+  for (let k = 0; k < 20; k += 1) frame(view);
+  const tiles = tilesOf(made);
+  assert.ok(tiles > 3, `${tiles} tiles`);
+  store.bake("route-arch");
+  let drawn = 0;
+  for (let k = 0; drawn < tiles; k += 1) {
+    const screen = frame(view);
+    const now = archesDrawn(made);
+    assert.ok(now - drawn <= 3, `frame ${k} redrew ${now - drawn} tiles`);
+    assert.equal(screen.images.length >= tiles, true, "every tile still shows, old or new");
+    drawn = now;
+    assert.ok(k < 20, "they all get there");
+  }
+});
+
+test("riders far outside the rotated view ask for no sprite and get no label; one just outside is still fetched", () => {
+  const store = fakeStore();
+  const asked = [];
+  store.rider = (look, view, priority) => (asked.push(priority), tiny("rider"));
+  const { view } = make({ store });
+  const half = (MAP_SPAN_M * 800) / 600 / 2;
+  const screen = frame(view, { riders: [rider("me", 0, 0, { mine: true }), rider("near", half + 5, 0, { name: "Near" }), rider("far", 2000, 0, { name: "Far" })] });
+  assert.equal(asked.length, 2, "me and the rider just past the edge");
+  assert.ok(asked.every((priority) => priority < 100));
+  assert.equal(screen.calls.fillText, 0, "the near one is off screen too: no label drawn");
+});

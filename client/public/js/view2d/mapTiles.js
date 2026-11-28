@@ -13,7 +13,7 @@ import { HOUSE_YAWS, BUILDING_SPRITES, spriteJobs } from "./sprites/catalog.js";
 export const MAP_TILE_M = 64;
 export const MAP_TILE_PPM = 6;
 export const MAP_TILE_CACHE = 32;
-/** How many tiles' ground one frame may paint; the rest wait for the next frames. */
+/** How many tiles one frame may paint (new ground, or the scenery again over kept ground); the rest wait for the next frames. */
 export const MAP_TILES_PER_FRAME = 3;
 /** Ground pixels are worked out every this many pixels, then filled square. */
 const STEP = 2;
@@ -163,7 +163,8 @@ function spriteIndex() {
  * @param {{scene: object, index: {query: Function}, sampler: {color: Function, water: number}, store: {want: Function, get: Function}, createCanvas: (w: number, h: number) => object}} deps
  */
 export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
-  let budget = Infinity; // ground paintings left in this frame
+  let budget = Infinity; // tile paintings left in this frame (ground, or scenery again)
+  let dirty = []; // tiles of this frame whose scenery has a new sprite: {tile, tx, tz, look, priority}
   const tiles = new Map(); // key -> {canvas, ground, used: Map<jobKey, sprite|null>, signature}
   const sprites = spriteIndex();
   const roadBuckets = bucketTriangles(scene.roads.strips.positions, scene.roads.strips.indices, roadTriangles(scene.roads.strips));
@@ -328,16 +329,20 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
   });
 
   return {
-    /** A new frame: at most `paints` tiles' ground may be painted before the next call. */
+    /** A new frame: at most `paints` tiles may be painted before the next call; ask for the nearest tiles first. */
     beginFrame(paints = Infinity) {
       budget = paints;
     },
-    /** The tile's canvas, made if needed (its ground remade when the look changed, its scenery redrawn when a sprite it lacked has been baked). `priority`: its distance from the rider, metres. Null while its ground waits for the frame budget and it has no canvas yet. */
+    /**
+     * The tile's canvas, made if needed (its ground remade when the look changed), taking one of the frame's paintings.
+     * A tile whose scenery has a new sprite is only queued: `finishFrame` redraws it into the same canvas.
+     * `priority`: its distance from the rider, metres. Null while its ground waits and it has no canvas yet.
+     */
     tile(tx, tz, look, priority = 0) {
       const key = `${tx},${tz}`;
       let tile = tiles.get(key);
       if (tile && tile.signature === signatureOf(look)) {
-        if (gainedSprite(tile)) compose(tile, tx, tz, look, priority);
+        if (gainedSprite(tile)) dirty.push({ tile, tx, tz, look, priority });
         tiles.delete(key);
         tiles.set(key, tile); // most recent last
         return tile.canvas;
@@ -350,8 +355,22 @@ export function createMapTiles({ scene, index, sampler, store, createCanvas }) {
       while (tiles.size > MAP_TILE_CACHE) tiles.delete(tiles.keys().next().value);
       return tile.canvas;
     },
+    /**
+     * Redraws the scenery of the frame's queued tiles, nearest first, with the paintings new ground left over; the rest
+     * keep showing their old canvas and are queued again next frame. Call after the frame's `tile` calls, before drawing.
+     */
+    finishFrame() {
+      dirty.sort((a, b) => a.priority - b.priority);
+      for (const { tile, tx, tz, look, priority } of dirty) {
+        if (budget <= 0) break;
+        budget -= 1;
+        compose(tile, tx, tz, look, priority);
+      }
+      dirty = [];
+    },
     clear() {
       tiles.clear();
+      dirty = [];
     },
     count: () => tiles.size,
   };

@@ -30,6 +30,9 @@ const CAFE_GLOW = Object.freeze({ r: 14, rgb: [1, 0.75, 0.43], a: 0.5 });
 const HEADLIGHT = Object.freeze({ length: 18, spread: 0.35, rgb: [1, 0.97, 0.86], a: 0.3 });
 const TAILLIGHT = Object.freeze({ r: 1.6, rgb: [1, 0.16, 0.16], a: 0.35 });
 const PRIORITY_PER_M = 1;
+/** Metres past the view's edges a rider still gets their sprite asked for (they are about to show); a label needs them on screen. */
+const PREFETCH_M = 15;
+const LABEL_MARGIN_M = 2;
 
 /** The first top-view sprite job of a workbench id. */
 const topJobs = new Map(spriteJobs({ view: "top" }).map((job) => [job.id, job]));
@@ -76,6 +79,8 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     // The nearest tiles get the frame's painting budget first; a tile still without ground is left out (the sea shows).
     tiles.beginFrame(tileBudget);
     for (const spot of [...visible].sort((a, b) => a.distance - b.distance)) spot.canvas = tiles.tile(spot.tx, spot.tz, look, spot.distance);
+    // New ground first (a tile without it shows the sea), then the tiles whose scenery gained a sprite.
+    tiles.finishFrame();
     for (const { tx, tz, canvas } of visible) {
       if (canvas) ctx.drawImage(canvas, tx * MAP_TILE_M - 0.04, tz * MAP_TILE_M - 0.04, MAP_TILE_M + 0.08, MAP_TILE_M + 0.08);
     }
@@ -171,6 +176,14 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     const [anchorX, anchorY] = [width / 2, height * MAP_RIDER_Y];
     // The route's own coordinates (x, y = -z) through the same camera, for the lemons and the draft band.
     const [cos, sin] = [Math.cos(me.heading), Math.sin(me.heading)];
+    const [spanX, spanY] = [width / scale, height / scale];
+    /** Whether a place in the world is within `margin` metres of the rotated view. */
+    const inView = ({ x, z }, margin) => {
+      const [dx, dz] = [x - me.x, z - me.z];
+      const across = dx * cos + dz * sin;
+      const down = -dx * sin + dz * cos;
+      return Math.abs(across) <= spanX / 2 + margin && down >= -MAP_RIDER_Y * spanY - margin && down <= (1 - MAP_RIDER_Y) * spanY + margin;
+    };
     const camera = {
       scale,
       rider: { x: anchorX, y: anchorY },
@@ -199,8 +212,9 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
     ctx.scale(scale, scale);
     ctx.rotate(-me.heading);
     ctx.translate(-me.x, -me.z);
-    const solo = soloRiders(riders);
-    const vehicles = vehicleMarkers(riders, me.id);
+    // Riders out of view (a solo ride's route can hold them kilometres away) ask for no sprite, label or light.
+    const solo = soloRiders(riders).filter((rider) => rider.mine || inView(rider, PREFETCH_M));
+    const vehicles = vehicleMarkers(riders, me.id).filter((marker) => marker.mine || inView(marker.rider, PREFETCH_M));
     for (const rider of solo) drawRiderMark(ctx, rider, me, Math.hypot(rider.x - me.x, rider.z - me.z));
     for (const marker of vehicles) {
       const s = sprite(topJobs.get(VEHICLE_JOBS[marker.kind]), 0);
@@ -221,7 +235,8 @@ export function createMapView({ scene, route, index, sampler, store, createCanva
       drawBeams(ctx, look, beams);
       ctx.restore();
     }
-    drawLabels(ctx, [...solo.map((r) => ({ x: r.x, z: r.z, label: r.name, mine: r.mine })), ...vehicles.map((m) => ({ x: m.rider.x, z: m.rider.z, label: m.label, mine: m.mine }))], camera);
+    const labels = [...solo.map((r) => ({ x: r.x, z: r.z, label: r.name, mine: r.mine })), ...vehicles.map((m) => ({ x: m.rider.x, z: m.rider.z, label: m.label, mine: m.mine }))];
+    drawLabels(ctx, labels.filter((mark) => inView(mark, LABEL_MARGIN_M)), camera);
     drawWeather(ctx, look, { width, height, t });
   }
 
