@@ -12,8 +12,8 @@ import { CLIPS, mirrorPose } from "../public/js/view3d/clips.js";
 import { poseAt } from "../public/js/view3d/riderPose.js";
 import { PLINTHS } from "../public/js/view3d/statues.js";
 import { StudioCamera } from "../public/js/view3d/studioCamera.js";
+import { qualitySettings, renderPixelRatio } from "../public/js/view3d/quality.js";
 import { fakeEngine } from "./support/fakeEngine.js";
-import { qualitySettings } from "../public/js/view3d/quality.js";
 import { groundFixture } from "./support/groundFixture.js";
 import { GYM_CAMERA, GymCamera, RIDE_LENS, projectToScreen, SIDE_CAMERA, View3D, gymCameraPose, insetViewport, sideCameraPose } from "../public/js/view3d/view3d.js";
 import { assignSpots } from "../public/js/workout/gymSpots.js";
@@ -990,9 +990,10 @@ test("every graphics level but low renders the shadow map", () => {
 // --- the world scene and the engine (new world, part 1) ----------------------
 
 /** A view over a world with real ground, logging its engine's calls. */
-function worldView({ timeMode = "day", sideView = null } = {}) {
+function worldView({ timeMode = "day", sideView = null, warm = null } = {}) {
   const log = [];
   const engine = fakeEngine(log);
+  if (warm) engine.warm = warm;
   const gym = testGym();
   const world = { biome: "temperate", season: "summer", ground: groundFixture(), chunks: { scenery: [], structures: [] }, crowd: { people: [], figure: "person" }, gyms: [gym] };
   const canvas = { clientWidth: 320, clientHeight: 200, getBoundingClientRect: () => ({ left: 0, top: 0, width: 320, height: 200 }) };
@@ -1107,4 +1108,49 @@ test("my studio entry is classic when the classic rider is on, the coach never",
   assert.equal(entries.find((r) => r.id === 9).classic, true);
   assert.ok(!entries.find((r) => r.id === 5).classic);
   assert.ok(!entries.find((r) => r.id === coachId(0)).classic);
+});
+
+test("a new view draws nothing until its world's shaders are ready, then draws", async () => {
+  const { engine, log, render } = worldView();
+  let ready;
+  engine.warm = () => new Promise((resolve) => (ready = resolve));
+  render();
+  render();
+  assert.equal(log.filter((c) => c === "renderScene").length, 0, "the last picture stays meanwhile");
+  ready();
+  await new Promise((resolve) => setImmediate(resolve));
+  render();
+  assert.equal(log.filter((c) => c === "renderScene").length, 1);
+});
+
+test("a new quality level keeps drawing the old world while the new one is built and warmed", async () => {
+  const roots = [];
+  const { view, log, render } = worldView({ warm: (root) => (roots.push(root), Promise.resolve()) });
+  render();
+  await new Promise((resolve) => setImmediate(resolve));
+  render();
+  const drawn = () => log.filter((c) => c === "renderScene").length;
+  const before = drawn();
+  view.setQuality("low");
+  for (let i = 0; i < 40; i += 1) render();
+  assert.equal(drawn(), before + 40, "every frame is drawn");
+  assert.ok(roots.some((root) => root !== view.worldScene.scene), "the new layers were warmed on their own");
+});
+
+test("a view starts at the quality it is given and builds its world once", () => {
+  const engine = fakeEngine();
+  const view = new View3D({ clientWidth: 320, clientHeight: 200 }, null, squareRoute(), { biome: "temperate", crowd: { people: [], figure: "person" }, gyms: [] }, { engine, quality: "low" });
+  assert.equal(view.quality, "low");
+  assert.deepEqual(engine.qualities.map((q) => q.shadowMapSize), [0], "one level, the one asked for");
+});
+
+test("slow frames draw the view at a lower resolution, down to the level's floor", () => {
+  const { view, engine } = gymView([]);
+  const settings = qualitySettings("high");
+  const cap = renderPixelRatio(320, 200, globalThis.devicePixelRatio || 1, settings);
+  const { resolutionFloor } = settings;
+  for (let i = 0; i < 400; i += 1) view.render({ riders: [], myId: null, timeS: 1 + i * 0.05, colors });
+  const [, , ratio, scale] = engine.resizes.at(-1);
+  assert.equal(ratio, cap, "the canvas keeps its resolution");
+  assert.equal(scale, resolutionFloor, "the scene is drawn at the floor");
 });

@@ -56,11 +56,15 @@ export const compositeFragment = (samples) => `#define RS ${Math.max(1, samples)
       float ao = w > 1e-6 ? clamp(s/w, 0.0, 1.0) : 1.0; c.rgb *= mix(1.0, ao, uAOStr*(1.0 - smoothstep(uAOFar*0.35, uAOFar, z)));
     }
     if(uRays > 0.001){
-      vec2 dir = uSun - vUv; vec2 st = dir/float(RS); float L = 0.0, decay = 1.0;
-      vec2 p = vUv + st*fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056,0.00583715))));
-      for(int i=0;i<RS;i++){ float m = step(0.99999, texture2D(tDepth, p).x); vec3 sc = texture2D(tDiffuse, p).rgb; L += m*max(dot(sc, vec3(0.3,0.5,0.2)) - 0.75, 0.0)*decay; decay *= 0.95; p += st; }
-      L /= float(RS); float fall = 1.0 - smoothstep(0.0, 0.85, length(dir*vec2(uAspect, 1.0)));
-      c.rgb += uRayCol*L*uRays*fall;
+      // The falloff first: most of the screen lies beyond its reach, where the march would add nothing.
+      vec2 dir = uSun - vUv; float fall = 1.0 - smoothstep(0.0, 0.85, length(dir*vec2(uAspect, 1.0)));
+      if (fall > 0.0) {
+        vec2 st = dir/float(RS); float L = 0.0, decay = 1.0;
+        vec2 p = vUv + st*fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056,0.00583715))));
+        for(int i=0;i<RS;i++){ float m = step(0.99999, texture2D(tDepth, p).x); vec3 sc = texture2D(tDiffuse, p).rgb; L += m*max(dot(sc, vec3(0.3,0.5,0.2)) - 0.75, 0.0)*decay; decay *= 0.95; p += st; }
+        L /= float(RS);
+        c.rgb += uRayCol*L*uRays*fall;
+      }
     }
     gl_FragColor = vec4(max(c.rgb, vec3(0.0)), c.a);
   }`;

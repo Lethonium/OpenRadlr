@@ -11,8 +11,8 @@ export function fakeEngine(calls = []) {
     rects: [],
     resizes: [],
     qualities: [],
-    resize(width, height, ratio) {
-      this.resizes.push([width, height, ratio]);
+    resize(width, height, ratio, scale = 1) {
+      this.resizes.push([width, height, ratio, scale]);
     },
     setQuality(settings) {
       this.qualities.push(settings);

@@ -70,6 +70,26 @@ test("the headlight is ahead of every bike's bars and front hub, so my own bike 
   }
 });
 
+test("by day the lamps and the headlight are left out of the lighting, so no fragment pays for them", () => {
+  const layer = make("ultra");
+  layer.setEnvironment(day);
+  assert.ok(layer.lights.length > 0);
+  for (const light of [...layer.lights, layer.headlight]) assert.equal(light.visible, false, `${light.name} hidden by day`);
+  layer.setEnvironment(night);
+  for (const light of [...layer.lights, layer.headlight]) assert.equal(light.visible, true, `${light.name} shown at night`);
+  layer.dispose();
+});
+
+test("the lights' night state can be shown for a moment, to prepare its shaders, and put back", () => {
+  const layer = make("high");
+  layer.setEnvironment(day);
+  const restore = layer.showNightState();
+  assert.ok([...layer.lights, layer.headlight].every((light) => light.visible), "as at night");
+  restore();
+  assert.ok([...layer.lights, layer.headlight].every((light) => !light.visible), "back to day");
+  layer.dispose();
+});
+
 test("the headlight points along the heading", () => {
   const layer = make();
   layer.setEnvironment(night);

@@ -49,9 +49,9 @@ test("the post switches of each level", () => {
     return [s.shadowMapSize, s.msaa, s.ssao, s.sunRays, s.bloom, s.depthOfField, s.resolutionFloor];
   };
   assert.deepEqual(pick("low"), [0, 0, null, 0, false, false, 0.6]);
-  assert.deepEqual(pick("medium"), [2048, 2, { samples: 10, full: false }, 0, true, false, 0.7]);
-  assert.deepEqual(pick("high"), [4096, 4, { samples: 12, full: false }, 24, true, true, 0.75]);
-  assert.deepEqual(pick("ultra"), [4096, 8, { samples: 16, full: true }, 40, true, true, 0.85]);
+  assert.deepEqual(pick("medium"), [2048, 2, { samples: 10, full: false }, 0, true, false, 0.6]);
+  assert.deepEqual(pick("high"), [4096, 4, { samples: 12, full: false }, 24, true, true, 0.65]);
+  assert.deepEqual(pick("ultra"), [4096, 8, { samples: 16, full: true }, 40, true, true, 0.75]);
 });
 
 test("levels never get lighter going up", () => {

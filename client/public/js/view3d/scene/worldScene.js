@@ -42,6 +42,18 @@ import { createOwner } from "./tracker.js";
 
 /** Sun placement and shadow box, in metres. */
 export const SUN = Object.freeze({ distance: 1800, shadowHalf: 130, near: 10, far: 4000, bias: -0.00025, normalBias: 0.35 });
+/**
+ * Layers whose objects stay where they were built (their updates only show and hide chunks): their world matrices are
+ * worked out once, and Three's walk over every object each frame skips them (the forest alone has thousands).
+ */
+const STATIC_LAYERS = new Set(["forest", "roadside", "scrub", "landRows", "fieldEdges"]);
+/** Fixes a static layer's world matrices where it was built; any other layer is left as it is. */
+const settle = (layer) => {
+  if (!STATIC_LAYERS.has(layer.object.name)) return layer;
+  layer.object.updateMatrixWorld(true);
+  layer.object.matrixWorldAutoUpdate = false;
+  return layer;
+};
 /** The layers the workout's side view keeps: backdrop, ground and my athlete. */
 const SIDE_VIEW_LAYERS = new Set(["sky", "sea", "terrain", "athletes"]);
 /** How much of the sun's colour shows through thin leaves and blades. */
@@ -73,9 +85,13 @@ const LIGHTNING = 3;
 /**
  * Builds the scene for a built world.
  * @param {{ground?: {near: object, far: object}, roads?: object, rivers?: object, plan?: import("../../world/plan/index.js").WorldPlan, season?: string}} world the scene object from `buildScene`
- * @param {{settings: import("../quality.js").QualitySettings, track: import("./tracker.js").Tracker["track"]}} options
+ * @param {{settings: import("../quality.js").QualitySettings, track: import("./tracker.js").Tracker["track"],
+ *   stage?: boolean | {budgetMs?: number, now?: () => number}}} options `stage` rebuilds a new level's or season's layers
+ *   over several frames (`budgetMs` of building per frame, at least one layer; `now` the clock in ms) while the old ones
+ *   are still drawn, then swaps them in together, once `setWarm`'s compile has their shaders ready; without it a
+ *   rebuild happens in the call
  */
-export function createWorldScene(world, { settings, track }) {
+export function createWorldScene(world, { settings, track, stage = false }) {
   const { own, disposeAll } = createOwner(track);
   const uniforms = createSharedUniforms();
   const grain = own(createGrainTexture());
@@ -130,21 +146,75 @@ export function createWorldScene(world, { settings, track }) {
   if (world.roads) layers.push(createRoadLayer(world.roads, { uniforms, track }));
   if (world.rivers) layers.push(createRiverLayer(world.rivers, { uniforms, track }));
   layers.push(makers.arches(), makers.furniture(), makers.venues(), ...(world.studio ? [makers.studio()] : []), makers.riders(), makers.athletes(), makers.statues(), makers.crowd(), makers.lemons(), makers.highlight(), makers.clouds(), makers.weather(), makers.nightLights());
-  for (const layer of layers) scene.add(layer.object);
+  for (const layer of layers) scene.add(settle(layer).object);
+
+  /** A new layer `name` from the current settings, season and plan, given the rows, bands and light of now. */
+  const make = (name) => {
+    const layer = settle(makers[name]());
+    if (name === "statues" && statueRows.length) layer.setRows(statueRows);
+    if (name === "highlight" && highlightBands.length) layer.setBands(highlightBands);
+    if (environment) layer.setEnvironment(environment);
+    return layer;
+  };
+  /** Puts `layer` in the place of the layer of the same name, freeing the old one. */
+  const replace = (name, layer) => {
+    const at = layers.findIndex((entry) => entry.object.name === name);
+    if (at < 0) return layer.dispose();
+    scene.remove(layers[at].object);
+    layers[at].dispose();
+    layers[at] = layer;
+    scene.add(layer.object);
+    // Rows, bands or light may have changed since it was built.
+    if (name === "statues" && statueRows.length) layer.setRows(statueRows);
+    if (name === "highlight" && highlightBands.length) layer.setBands(highlightBands);
+    if (environment) layer.setEnvironment(environment);
+  };
+  const staging = stage ? { budgetMs: stage.budgetMs ?? 6, now: stage.now ?? (() => globalThis.performance.now()) } : null;
+  /** A staged rebuild under way: the layers still to build, those built, and the shaders' warm-up once all are. */
+  let pending = null;
+  /** Compiles a root's shaders ahead (`setWarm`); null swaps a staged rebuild in as soon as it is built. */
+  let warmRoot = null;
 
   /** Replaces the named layers with new ones built from the current settings, season and plan. */
   const rebuild = (...names) => {
-    for (const name of names) {
-      const at = layers.findIndex((layer) => layer.object.name === name);
-      if (at < 0) continue;
-      scene.remove(layers[at].object);
-      layers[at].dispose();
-      layers[at] = makers[name]();
-      if (name === "statues" && statueRows.length) layers[at].setRows(statueRows);
-      if (name === "highlight" && highlightBands.length) layers[at].setBands(highlightBands);
-      scene.add(layers[at].object);
-      if (environment) layers[at].setEnvironment(environment);
+    const present = names.filter((name) => layers.some((layer) => layer.object.name === name));
+    if (!staging) {
+      for (const name of present) replace(name, make(name));
+      return;
     }
+    // What a rebuild under way has built used the settings before this change: it starts over, with every name.
+    // The night lights go first, so every layer after them is warmed lit as it will be.
+    const all = [...new Set([...(pending?.names ?? []), ...present])].sort((a, b) => (b === "nightLights") - (a === "nightLights"));
+    if (pending) for (const layer of pending.built.values()) layer.dispose();
+    pending = all.length ? { names: all, queue: [...all], built: new Map(), warming: [] } : null;
+  };
+
+  /**
+   * Builds the next layers of a staged rebuild within the frame's budget, each warmed as soon as it is built (so the
+   * compiling is spread over the frames too); swaps them all in once every one is built and warm.
+   */
+  const buildStaged = () => {
+    if (!pending || pending.queue.length === 0) return;
+    const start = staging.now();
+    do {
+      const name = pending.queue.shift();
+      const layer = make(name);
+      pending.built.set(name, layer);
+      if (warmRoot) {
+        const lights = pending.built.get("nightLights") ?? named("nightLights");
+        const outgoing = pending.built.has("nightLights") ? named("nightLights")?.object : null;
+        pending.warming.push(warmLit(warmRoot, layer.object, lights, outgoing).catch(() => {}));
+      }
+    } while (pending.queue.length && staging.now() - start < staging.budgetMs);
+    if (pending.queue.length) return;
+    const done = pending;
+    const swap = () => {
+      if (pending !== done || disposed) return;
+      pending = null;
+      for (const [name, layer] of done.built) replace(name, layer);
+    };
+    if (!warmRoot) return swap();
+    Promise.all(done.warming).then(swap);
   };
 
   const hemisphere = new THREE.HemisphereLight();
@@ -163,6 +233,7 @@ export function createWorldScene(world, { settings, track }) {
   const keyDirection = new THREE.Vector3(0, 1, 0);
   let shadowSize = 0;
   let shadowsOn = true;
+  let disposed = false;
   /** The layer objects the side view hid, with what they showed before; null outside the side view. */
   let hidden = null;
 
@@ -195,6 +266,27 @@ export function createWorldScene(world, { settings, track }) {
   const lastFocus = [0, 0, 0];
   placeSun(lastFocus, SUN.shadowHalf);
 
+  /**
+   * Warms `root`'s shaders as lit now, resolving once those are ready, then, in the background, as lit in the other
+   * half of the day (night by day, day by night), so dusk and dawn do not stall on the lamps' and headlight's shaders.
+   * `lights` is the night-lights layer in effect for them; `outgoing`, when set, the old one it replaces (left out).
+   * `warm` collects the lights while it is called, so every light is back as it was before anything is drawn.
+   */
+  const warmLit = async (warm, root, lights, outgoing = null) => {
+    const pass = (flip) => {
+      const was = outgoing?.visible;
+      if (outgoing) outgoing.visible = false;
+      const restore = flip && lights?.showNightState ? lights.showNightState(!lights.atNight()) : () => {};
+      const compiled = warm(root);
+      restore();
+      if (outgoing) outgoing.visible = was;
+      return compiled;
+    };
+    await pass(false);
+    if (disposed || !lights?.showNightState) return;
+    pass(true).catch(() => {});
+  };
+
   return {
     scene,
     sun,
@@ -221,6 +313,7 @@ export function createWorldScene(world, { settings, track }) {
       lastFocus[2] = frame.focus[2];
       placeSun(lastFocus, half);
       for (const layer of layers) layer.update(frame);
+      if (staging) buildStaged();
       const bolt = weather().flash ?? 0;
       if (bolt !== flash) {
         flash = bolt;
@@ -265,6 +358,19 @@ export function createWorldScene(world, { settings, track }) {
       }
       named("athletes").isolate(id);
     },
+    /**
+     * Compiles the scene's shaders ahead with `warm` (the engine's): first as it is lit now, resolving once those are
+     * ready; then, in the background, as lit in the other half of the day.
+     * @param {(root: import("../../three.js").Object3D) => Promise<void>} warm
+     * @returns {Promise<void>}
+     */
+    prepare(warm) {
+      return warmLit(warm, scene, named("nightLights"));
+    },
+    /** How a staged rebuild compiles its new layers' shaders before they are swapped in (the engine's warm, lit by this scene). */
+    setWarm(warm) {
+      warmRoot = warm;
+    },
     setEnvironment(env) {
       environment = env;
       uniforms.sunCol.value.setRGB(...env.sunColor).multiplyScalar((1 - env.night) * SUN_THROUGH * (env.sunShare ?? 1));
@@ -282,6 +388,9 @@ export function createWorldScene(world, { settings, track }) {
       for (const layer of layers) layer.setEnvironment(env);
     },
     dispose() {
+      disposed = true;
+      if (pending) for (const layer of pending.built.values()) layer.dispose();
+      pending = null;
       for (const layer of layers) layer.dispose();
       scene.clear();
       disposeAll();

@@ -100,6 +100,15 @@ export class QualityProbe {
     return next;
   }
 
+  /**
+   * The 3D view has just appeared (its world compiles its shaders and settles for a few seconds): frames until
+   * `seconds` from `time` are not judged, or a fast device would be stepped down by its first frames.
+   */
+  settle(time, seconds) {
+    this.#quietUntil = Math.max(this.#quietUntil, time + seconds);
+    this.#samples = [];
+  }
+
   /** The page was hidden or shown again: the next frame starts a new gap. */
   pause() {
     this.#last = null;
