@@ -30,3 +30,13 @@ export function myBoardsLines(entries, { max }) {
     empty: entries.length === 0 ? t("boards.page.empty") : null,
   };
 }
+
+/**
+ * The pixel size of a poster thumbnail shown `cssWidth` CSS pixels wide (the poster is 2:1) on a screen of `ratio`
+ * device pixels per CSS pixel, so it is painted at the size it is displayed at, not stretched.
+ * @returns {{width: number, height: number}}
+ */
+export function thumbSize(cssWidth, ratio = 1) {
+  const width = Math.max(1, Math.round(cssWidth * (ratio > 0 ? ratio : 1)));
+  return { width, height: Math.round(width / 2) };
+}

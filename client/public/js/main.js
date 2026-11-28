@@ -38,7 +38,7 @@ import { createCanvas, paintPoster } from "./view3d/posters/paint.js";
 import { boardPosterPlan } from "./view3d/posters/plan.js";
 import { MAX_BOARDS, cropWindow, prepareImage } from "./profile/myBoards.js";
 import { dragCrop, initialCrop, zoomCrop } from "./view/boardCrop.js";
-import { boardErrorKey, myBoardsLines } from "./view/myBoardsView.js";
+import { boardErrorKey, myBoardsLines, thumbSize } from "./view/myBoardsView.js";
 import { joinAtMetres } from "./ride/joinAt.js";
 import { AfkPrompt } from "./ride/afkPrompt.js";
 import { defaultServerUrl } from "./net/protocol.js";
@@ -3597,7 +3597,8 @@ function initProfile() {
 
 const BOARD_TEXT_MAX = 80;
 const BOARD_PREVIEW = { width: 512, height: 256 };
-const BOARD_THUMB = { width: 192, height: 96 };
+/** CSS width of a thumbnail in the list (the first column of .board-item in styles.css). */
+const BOARD_THUMB_CSS_WIDTH = 96;
 
 /** The picture being added: the chosen file, its decoded image and the crop (profile/myBoards.js's model). */
 let boardDraft = null;
@@ -3713,7 +3714,10 @@ async function submitBoardsForm() {
   }
 }
 
-/** The list of the rider's own boards, each as the poster the ride shows, with a remove button. */
+/**
+ * The list of the rider's own boards, each as the poster the ride shows, with a remove button. The count and the rows
+ * show as soon as the entries are read; the thumbnails are painted into them afterwards, one by one.
+ */
 async function renderProfileBoards() {
   const generation = app.riderGeneration;
   const entries = await app.boards.list();
@@ -3725,28 +3729,33 @@ async function renderProfileBoards() {
   $("boards-add").disabled = !lines.canAdd;
   if (!lines.canAdd) showBoardError("full");
   else if ($("boards-error").textContent === t(boardErrorKey("full"), { max: MAX_BOARDS })) showBoardError(null);
-  const items = await Promise.all(entries.map((entry) => boardItem(entry)));
-  if (generation !== app.riderGeneration) return;
-  $("boards-list").replaceChildren(...items);
+  const items = entries.map((entry) => boardItem(entry, generation));
+  $("boards-list").replaceChildren(...items.map((item) => item.element));
+  await Promise.all(items.map((item) => item.painted));
 }
 
-async function boardItem(entry) {
+/** A list row for `entry` at once; `painted` resolves when its thumbnail is on the canvas. */
+function boardItem(entry, generation) {
   const item = document.createElement("li");
   item.className = "board-item";
   const canvas = document.createElement("canvas");
   canvas.className = "board-canvas";
-  canvas.width = BOARD_THUMB.width;
-  canvas.height = BOARD_THUMB.height;
-  let image;
-  if (entry.blob) {
-    try {
-      image = await createImageBitmap(entry.blob);
-    } catch {
-      image = undefined;
+  const size = thumbSize(BOARD_THUMB_CSS_WIDTH, window.devicePixelRatio || 1);
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const painted = (async () => {
+    let image;
+    if (entry.blob) {
+      try {
+        image = await createImageBitmap(entry.blob);
+      } catch {
+        image = undefined;
+      }
     }
-  }
-  paintPoster(canvas.getContext("2d"), { type: "upload", image, text: entry.text }, BOARD_THUMB);
-  image?.close?.();
+    // The row may have been replaced by a newer list meanwhile.
+    if (generation === app.riderGeneration && canvas.isConnected !== false) paintPoster(canvas.getContext("2d"), { type: "upload", image, text: entry.text }, size);
+    image?.close?.();
+  })();
   const remove = textElement("button", t("boards.page.remove"));
   remove.type = "button";
   remove.className = "secondary small";
@@ -3755,7 +3764,7 @@ async function boardItem(entry) {
     await renderProfileBoards();
   });
   item.append(canvas, textElement("span", entry.text), remove);
-  return item;
+  return { element: item, painted };
 }
 
 /** Opens the profile on `page` and fills it from fresh reads of the stores. */

@@ -7667,7 +7667,7 @@ body.working-out #paddles {
 
 /* --- profile · my boards (roadside boards) ----------------------------- */
 
-.board-list {
+.my-boards-list {
   display: grid;
   gap: 8px;
   margin: 0;
