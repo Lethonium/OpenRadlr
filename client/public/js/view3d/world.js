@@ -13,6 +13,7 @@
  */
 import { ARCH_HEIGHT, BANNERS, archSpots, bannerPlacements } from "./banners.js";
 import { boardClearings, boardSites, placeBoards } from "./boards.js";
+import { plotBoxes } from "./labelSight.js";
 import {
   Occupancy,
   buildBikeCafe,
@@ -323,7 +324,7 @@ export function buildWorld(route, { others = [], network = null, biome = tempera
     // The spin studio across the road from the Valley Café only.
     if (cafeId === "valley-cafe") studio = studioSite(r, terrain, { occupancy, avoid });
   }
-  const boards = placeBoards(route, terrain, boardSitesOnRoute, { occupancy, avoid });
+  const boards = placeBoards(route, terrain, boardSitesOnRoute, { occupancy, avoid, boxes: plotBoxes(plan) });
   const { people, barriers } = buildSpectators(route, terrain, { seed: route.seed >>> 0, biome, blocked: (x, z) => nearRiver(x, z) || occupancy.blocked(x, z, 1) });
   // Rails, signs and the crowd's barriers are placement data for the furniture layer; the people are the crowd layer's.
   const furniture = { rails: [], signs: [], flammeRouge: null, barriers };

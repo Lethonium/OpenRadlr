@@ -7,6 +7,7 @@
 import { BANNERS } from "./banners.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../world/roads.js";
 import { inStretch } from "../world/zones.js";
+import { labelInSight } from "./labelSight.js";
 
 /** Poster size (metres), setback from the verge edge to the board's centre, clearing radius and the turn (radians) of its face off the road's direction. */
 export const BOARD = Object.freeze({ width: 6, height: 3, setback: 5, clearing: 7, angle: 0.35 });
@@ -102,17 +103,48 @@ export function boardClearings(route, sites) {
   });
 }
 
+/** Where the riders see a board from: this far back along the road, at eye height over the road. */
+const SIGHT_BACK_M = [25, 45, 65];
+const EYE_M = 1.6;
+/** Height of the board's middle over the ground. */
+const BOARD_MID_M = 4;
+/** A site that a house blocks slides along the road by these distances (either way) before it is given up. */
+const SLIDE_M = [20, 40, 60, 80, 100];
+
+/** Whether a board at `spot` is in view from the road: no house (`boxes`, as labelSight's plotBoxes) between the road 25-65 m before it and the board, and none under it. */
+function seenFromRoad(route, terrain, boxes, distance, spot) {
+  if (!boxes.length) return true;
+  const target = [spot.x, terrain.height(spot.x, spot.z) + BOARD_MID_M, spot.z];
+  const under = boxes.some((box) => Math.hypot(box.x - spot.x, box.z - spot.z) < Math.max(box.halfX, box.halfZ) + BOARD.width / 2);
+  if (under) return false;
+  return SIGHT_BACK_M.every((back) => {
+    const eye = roadFrame(route, route.wrap(distance - back)).center;
+    return labelInSight([eye[0], eye[1] + EYE_M, eye[2]], target, { height: () => -Infinity, boxes });
+  });
+}
+
 /**
- * The boards for `sites`, placed: `{kind, distance, position, yaw}` for each one that `avoid` (x, z, radius) and the
- * `occupancy` leave room for. Each placed board claims its ground in `occupancy`.
+ * The boards for `sites`, placed: `{kind, distance, position, yaw}` for each one that `avoid` (x, z, radius), the
+ * `occupancy` and the houses (`boxes`) leave room for; each placed board claims its ground in `occupancy`. A site whose
+ * view from the road a house blocks slides along the road (up to 100 m, nearest first) and is dropped if none is free;
+ * `distance` is where the board ended up. A site the world avoids or
+ * something else occupies is dropped, not slid.
  */
-export function placeBoards(route, terrain, sites, { occupancy, avoid = () => false }) {
+export function placeBoards(route, terrain, sites, { occupancy, avoid = () => false, boxes = [] }) {
   const boards = [];
-  for (const { kind, distance } of sites) {
-    const { x, z, yaw } = boardSpot(route, distance);
-    if (avoid(x, z, BOARD.width / 2) || occupancy?.blocked(x, z, BOARD.width / 2)) continue;
-    occupancy?.add(x, z, BOARD.clearing);
-    boards.push({ kind, distance, position: [x, terrain.height(x, z), z], yaw });
+  for (const { kind, distance: wanted } of sites) {
+    const home = boardSpot(route, wanted);
+    if (avoid(home.x, home.z, BOARD.width / 2) || occupancy?.blocked(home.x, home.z, BOARD.width / 2)) continue;
+    for (const slide of [0, ...SLIDE_M.flatMap((m) => [m, -m])]) {
+      const distance = wanted + slide;
+      if (distance < 0 || distance > route.length) continue;
+      const { x, z, yaw } = boardSpot(route, distance);
+      if (avoid(x, z, BOARD.width / 2) || occupancy?.blocked(x, z, BOARD.width / 2)) continue;
+      if (!seenFromRoad(route, terrain, boxes, distance, { x, z })) continue;
+      occupancy?.add(x, z, BOARD.clearing);
+      boards.push({ kind, distance, position: [x, terrain.height(x, z), z], yaw });
+      break;
+    }
   }
   return boards;
 }

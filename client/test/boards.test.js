@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RouteGeometry } from "../public/js/route/geometry.js";
-import { BOARD, boardClearings, boardSites, placeBoards } from "../public/js/view3d/boards.js";
+import { BOARD, boardClearings, boardSites, boardSpot, placeBoards } from "../public/js/view3d/boards.js";
 import { Occupancy } from "../public/js/view3d/features.js";
 import { sceneOf } from "../public/js/view3d/worldScene.js";
 import { VERGE, roadFrame, roadHalfWidth } from "../public/js/world/roads.js";
@@ -56,7 +56,7 @@ test("no general board inside a village", () => {
 test("placed boards stand beside the road, face oncoming riders and claim their ground", () => {
   const route = straight(flat(6000));
   const occupancy = new Occupancy();
-  const [site] = boardSites(route, {});
+  const site = { kind: "general", distance: 3000 };
   const [board] = placeBoards(route, flatTerrain, [site], { occupancy });
   const frame = roadFrame(route, site.distance);
   const off = (board.position[0] - frame.center[0]) * frame.right[0] + (board.position[2] - frame.center[2]) * frame.right[2];
@@ -90,6 +90,39 @@ test("a site the world avoids is dropped", () => {
   const placed = placeBoards(route, flatTerrain, sites, { occupancy: new Occupancy(), avoid });
   assert.equal(placed.length, sites.length - 1);
   assert.ok(placed.every((b) => b.distance !== sites[0].distance));
+});
+
+/** A house box standing between the road 45 m before `distance` and the board of a straight east-west route. */
+const houseBefore = (route, distance) => {
+  const spot = boardSpot(route, distance);
+  return { x: spot.x - 30, z: (spot.z + roadFrame(route, distance).center[2]) / 3, halfX: 12, halfZ: 4, yaw: 0, top: 8 };
+};
+
+test("a house between the road and a board moves the board along the road, to where it is seen", () => {
+  const route = straight(flat(6000));
+  const site = { kind: "general", distance: 3000 };
+  const boxes = [houseBefore(route, site.distance)];
+  const [board] = placeBoards(route, flatTerrain, [site], { occupancy: new Occupancy(), boxes });
+  assert.ok(board, "the board was dropped instead of moved");
+  assert.notEqual(board.distance, site.distance);
+  assert.ok(Math.abs(board.distance - site.distance) <= 100);
+  const clear = placeBoards(route, flatTerrain, [{ ...site, distance: board.distance }], { occupancy: new Occupancy(), boxes });
+  assert.equal(clear[0].distance, board.distance);
+});
+
+test("a board no slide frees from houses is dropped", () => {
+  const route = straight(flat(6000));
+  const site = { kind: "general", distance: 3000 };
+  const wall = { x: roadFrame(route, site.distance).center[0], z: boardSpot(route, site.distance).z / 2, halfX: 400, halfZ: 3, yaw: 0, top: 8 };
+  assert.deepEqual(placeBoards(route, flatTerrain, [site], { occupancy: new Occupancy(), boxes: [wall] }), []);
+});
+
+test("a house off the sight line leaves the board where it was", () => {
+  const route = straight(flat(6000));
+  const site = { kind: "general", distance: 3000 };
+  const far = { x: boardSpot(route, site.distance).x, z: boardSpot(route, site.distance).z + 60, halfX: 6, halfZ: 6, yaw: 0, top: 8 };
+  const [board] = placeBoards(route, flatTerrain, [site], { occupancy: new Occupancy(), boxes: [far] });
+  assert.equal(board.distance, site.distance);
 });
 
 test("the scene carries the boards", () => {
