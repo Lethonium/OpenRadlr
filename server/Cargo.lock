@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "openradlr-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes-gcm",
  "axum",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "openradlr-sim"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "p256"

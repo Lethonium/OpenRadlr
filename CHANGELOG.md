@@ -5,6 +5,33 @@ Conventional Commit titles of the pull requests merged since the last one
 (see [docs/releases.md](docs/releases.md)). Don't edit it by hand; a clear PR
 title is the release note.
 
+## [0.3.0](https://github.com/Lethonium/OpenRadlr/compare/v0.2.0...v0.3.0) (2026-11-28)
+
+
+### Features
+
+* **client:** Add an optional PIN lock per rider profile ([#128](https://github.com/Lethonium/OpenRadlr/issues/128)) ([5333705](https://github.com/Lethonium/OpenRadlr/commit/5333705eb0c8159c273d9e1b963f0e6c6ff78cf0))
+* **client:** Chart a ride's power curve and its power, heart rate and elevation ([#143](https://github.com/Lethonium/OpenRadlr/issues/143)) ([6dae991](https://github.com/Lethonium/OpenRadlr/commit/6dae9915ec809ada46a580b961f7be954cd2c25a))
+* **client:** Keep every second of a finished ride on the device ([#141](https://github.com/Lethonium/OpenRadlr/issues/141)) ([a94cf2b](https://github.com/Lethonium/OpenRadlr/commit/a94cf2b9af8b201ecf9733e88a2670dc5fb538ff))
+* **client:** Offer the files and a finer power curve of past rides ([#142](https://github.com/Lethonium/OpenRadlr/issues/142)) ([6b87008](https://github.com/Lethonium/OpenRadlr/commit/6b87008c97e0a4a294234553cb1e6047d97a8ba0))
+* **client:** Save rider progress in an account ([#137](https://github.com/Lethonium/OpenRadlr/issues/137)) ([1e228a3](https://github.com/Lethonium/OpenRadlr/commit/1e228a3f91a6bd2a86dba9a86cba0c756879909d))
+* **client:** Show rides as cards with their figures and best power ([#134](https://github.com/Lethonium/OpenRadlr/issues/134)) ([7f0f75f](https://github.com/Lethonium/OpenRadlr/commit/7f0f75fbb209c7a104fffb53637b259e5d746c42))
+* Prove the rider key when joining and keep it unreadable ([#135](https://github.com/Lethonium/OpenRadlr/issues/135)) ([007edc7](https://github.com/Lethonium/OpenRadlr/commit/007edc75fd25e8044200556af0442e6c8e28ab05))
+* **server:** Offer accounts with email codes, passkeys and rider backups ([#136](https://github.com/Lethonium/OpenRadlr/issues/136)) ([29bdb0d](https://github.com/Lethonium/OpenRadlr/commit/29bdb0d2a8ccf81a3319f2209a40d836694d3da6))
+
+
+### Bug Fixes
+
+* **client:** Keep an opened ride inside the screen on phones ([#139](https://github.com/Lethonium/OpenRadlr/issues/139)) ([68e1457](https://github.com/Lethonium/OpenRadlr/commit/68e1457d9b0324077dae0df919938ba6a965a62c))
+* **deploy:** Label a build from make update with the commit it pulled ([#140](https://github.com/Lethonium/OpenRadlr/issues/140)) ([e0cdcd7](https://github.com/Lethonium/OpenRadlr/commit/e0cdcd7fd84dcb03a631d2eaa5cb933697dfb948))
+* **deploy:** Pass the account settings to the server in Docker Compose ([#138](https://github.com/Lethonium/OpenRadlr/issues/138)) ([7f1b439](https://github.com/Lethonium/OpenRadlr/commit/7f1b439469896d1263cee758ff668b6c2b4bf9a2))
+* **deps:** Update vulnerable lint and SQLite dependencies ([#126](https://github.com/Lethonium/OpenRadlr/issues/126)) ([e736fff](https://github.com/Lethonium/OpenRadlr/commit/e736fff1c5fdca5afc6b5916d9d2c35e602400c9))
+
+
+### Performance Improvements
+
+* **app:** Reduce Android release size with R8 ([#125](https://github.com/Lethonium/OpenRadlr/issues/125)) ([522b4f6](https://github.com/Lethonium/OpenRadlr/commit/522b4f6e0c6537d67519f4fec90f9938acb497e9))
+
 ## [0.2.0](https://github.com/Lethonium/OpenRadlr/compare/v0.1.0...v0.2.0) (2026-11-17)
 
 
