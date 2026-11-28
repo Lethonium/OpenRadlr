@@ -148,7 +148,7 @@ no projection while the rider is stopped. Goal boards have their own two small t
 - Deleted by "delete rider" and "delete everything" (`deleteConfirm`, `localData`), listed there with a count.
 - Used on **general** boards only; climb, last-km and goal boards keep their own wording. Uploads take general
   boards first; if a rider has more uploads than general boards, they rotate by ride (seeded by date).
-- Marker: every upload poster gets a thin **red bar along the bottom edge with a small "Your upload"** (rider's
+- Marker: every upload poster gets a **red bar (12 % of the poster height) along the bottom edge with a bold "Your upload"** (rider's
   language), painted into the poster, not switchable. Default posters carry nothing extra.
 - Shown only on this rider's own screen. Other riders and the second-screen relay never see them.
 

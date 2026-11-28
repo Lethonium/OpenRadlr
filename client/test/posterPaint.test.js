@@ -34,14 +34,18 @@ const texts = (ctx) => ctx.calls.filter((c) => c.name === "fillText");
 const joined = (ctx) => texts(ctx).map((c) => c.args[0]).join(" ");
 const poster = (id) => ({ type: "default", id });
 
-test("an upload poster paints the red bar over the bottom 8 percent with 'Your upload'", () => {
+test("an upload poster paints the red bar over the bottom 12 percent with 'Your upload' in bold, large letters", () => {
   setLocale("en");
   const ctx = fakeContext();
   paintPoster(ctx, { type: "upload", image: {}, text: "Mine" }, SIZE);
   const bar = ctx.calls.find((c) => c.name === "fillRect" && c.fillStyle === "#d62828");
   assert.ok(bar);
-  assert.equal(bar.args[1], SIZE.height * 0.92);
-  assert.equal(bar.args[3], SIZE.height * 0.08);
+  assert.equal(bar.args[1], SIZE.height * 0.88);
+  assert.equal(bar.args[3], SIZE.height * 0.12);
+  const label = ctx.calls.find((c) => c.name === "fillText" && c.args[0] === "Your upload");
+  assert.match(label.font, /^(800|bold|700) /);
+  assert.equal(Number.parseFloat(label.font.match(/([\d.]+)px/)[1]), SIZE.height * 0.12 * 0.75);
+  assert.ok(label.args[1] >= SIZE.width * 0.03);
   assert.match(joined(ctx), /Your upload/);
 });
 

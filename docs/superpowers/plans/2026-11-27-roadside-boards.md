@@ -19,7 +19,7 @@
 - UI text only through `js/i18n/en.js` + `de.js` (parity test `i18nParity.test.js`).
 - Density: general boards ~1 per 7–10 km of route, at least 2 per loop, at least 3 km apart; climb boards on climb markers with `length >= 1500` (one ~150 m before the top, a second at the climb's middle when `length >= 2500`), clear of arches/banners by `BANNERS.clearOfArchM` (60 m); one lastKm board 600–900 m before the start/finish (loop: before `route.length`; point-to-point: before the route's end).
 - Uploads: max 12 per rider; pictures downscaled to 1024×512 and re-encoded (JPEG 0.85); stored in IndexedDB `riderDbName("openradlr-boards", riderId)`; never in `backupSnapshot`, `exportData`, WebSocket messages; deleted with the rider and with "everything".
-- Upload posters get a red bar along the bottom (8 % of the poster height, colour `#d62828`) with "Your upload" / "Dein Upload" in white, painted in; default posters carry no marker.
+- Upload posters get a red bar along the bottom (12 % of the poster height, the text bold at 0.75 of the bar, colour `#d62828`) with "Your upload" / "Dein Upload" in white, painted in; default posters carry no marker.
 - Uploads show only in the ride view; the menu drone view shows default posters only and no goal boards. No goal boards in a race or an entered event (same rule as `hudGoal`'s `racing`).
 - Draw calls: the board layer adds at most 4 at Low (frames 1, static posters 1, goal posters 1).
 - Run client tests and lint per the dev-machine rule (Docker `node:22-alpine`, see `~/.claude/CLAUDE.md`); `make check` before claiming done.
@@ -196,7 +196,7 @@ Copy (owner reviews and cuts before merge; ids → en / de):
   - `paintAtlas(createCanvas, slots, { slotWidth, slotHeight, uploadsById: Map }) → canvas` — slots in a 2-column grid, slot `i` at column `i % 2`, row `i >> 1`; `slotUv(i) → [u0, v0, u1, v1]` for the fixed 2 × 4 grid of `ATLAS_SLOTS` (row 0 at the top, so v from 1 down).
   - `createCanvas(width, height)` default factory: `OffscreenCanvas` if defined, else `document.createElement("canvas")` (only in `paint.js`'s browser default, injected everywhere else).
 
-- [ ] **Step 1: Failing tests:** an upload poster paints a `fillRect` with `#d62828` covering the bottom 8 % and a `fillText` of "Your upload"; a default poster paints its line's text (joined across wrapped lines) and never "Your upload"; a goal poster paints its given text; long text never draws wider than the text box (fake `measureText` = 0.6 × font px × chars); `slotUv(3)` is `[0.5, 0.5, 1, 0.75]` and `slotUv(0)` is `[0, 0.75, 0.5, 1]`; `paintAtlas` with 3 slots calls `paintPoster` area for each slot (3 `drawImage`/paint regions within bounds).
+- [ ] **Step 1: Failing tests:** an upload poster paints a `fillRect` with `#d62828` covering the bottom 12 % and a `fillText` of "Your upload"; a default poster paints its line's text (joined across wrapped lines) and never "Your upload"; a goal poster paints its given text; long text never draws wider than the text box (fake `measureText` = 0.6 × font px × chars); `slotUv(3)` is `[0.5, 0.5, 1, 0.75]` and `slotUv(0)` is `[0, 0.75, 0.5, 1]`; `paintAtlas` with 3 slots calls `paintPoster` area for each slot (3 `drawImage`/paint regions within bounds).
 - [ ] **Step 2: Run, expect FAIL.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run, expect PASS.**

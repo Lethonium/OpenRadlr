@@ -27,7 +27,7 @@ Privacy rules, all tested:
 - Never in the account backup, the data export or any WebSocket message.
 - Deleted with the rider and with "delete everything"; the data page counts them.
 - Only the rider's own ride view shows them. The menu's drone view, other riders and second screens never do.
-- Every upload poster has a red bar along the bottom with "Your upload".
+- Every upload poster has a red bar (12 % of the poster height) along the bottom with a bold "Your upload".
 
 ## Where things live
 

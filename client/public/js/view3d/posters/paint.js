@@ -15,7 +15,7 @@ const KIND_STYLE = {
 };
 const GOAL = { background: "#22356f", stripe: "#1a2a5a", ink: "#ffffff" };
 const UPLOAD_BAR = "#d62828";
-const BAR_SHARE = 0.08;
+const BAR_SHARE = 0.12;
 const FONT_FAMILY = `system-ui, "Segoe UI", Roboto, sans-serif`; // i18n-ok
 const FONT = (px) => `800 ${px}px ${FONT_FAMILY}`;
 const MAX_LINES = 3;
@@ -122,11 +122,11 @@ function paintUpload(ctx, poster, { width, height }) {
   }
   ctx.fillStyle = UPLOAD_BAR;
   ctx.fillRect(0, height - barHeight, width, barHeight);
-  ctx.font = FONT(barHeight * 0.7);
+  ctx.font = FONT(barHeight * 0.75);
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(t("boards.yourUpload"), width * 0.02, height - barHeight / 2);
+  ctx.fillText(t("boards.yourUpload"), width * 0.03, height - barHeight / 2);
 }
 
 /**
