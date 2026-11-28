@@ -30,5 +30,16 @@ export function rideStores(riderId, { idb = globalThis.indexedDB } = {}) {
   };
 }
 
+/**
+ * Puts rider `riderId`'s ride stores on `target` (the app), every one of them, so nothing keeps reading the
+ * previous rider's (#112). Operations that started before keep the stores they started with.
+ * @param {object} target
+ * @param {string} riderId
+ * @param {{idb?: IDBFactory}} [options]
+ */
+export function useRideStores(target, riderId, options) {
+  return Object.assign(target, rideStores(riderId, options));
+}
+
 /** The IndexedDB databases that belong to rider `id`, for deleting them with the rider. */
 export const riderDbNames = (id) => ["openradlr-history", "openradlr-ghosts", "openradlr-autosave", "openradlr-keys", "openradlr-boards"].map((base) => riderDbName(base, id));

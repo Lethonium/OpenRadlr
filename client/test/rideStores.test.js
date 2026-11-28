@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rideStores, riderDbNames } from "../public/js/ride/rideStores.js";
+import { rideStores, riderDbNames, useRideStores } from "../public/js/ride/rideStores.js";
+import { deleteItem } from "../public/js/profile/localData.js";
 import { riderDbName } from "../public/js/profile/riderStorage.js";
 
 /**
@@ -102,4 +103,30 @@ test("deleting a rider removes the boards database too", () => {
   const names = riderDbNames("anna");
   assert.ok(names.includes("openradlr-boards.anna"));
   assert.ok(riderDbNames("main").includes("openradlr-boards"));
+});
+
+test("switching riders switches every ride store, the boards included", () => {
+  const idb = fakeIdb();
+  const app = {};
+  useRideStores(app, "anna", { idb });
+  const annas = app.boards;
+  useRideStores(app, "ben", { idb });
+  assert.deepEqual(Object.keys(app).sort(), Object.keys(rideStores("x", { idb })).sort());
+  assert.notEqual(app.boards, annas);
+});
+
+test("after a switch, My boards lists and deletes only the new rider's boards", async () => {
+  const idb = fakeIdb();
+  const app = {};
+  useRideStores(app, "anna", { idb });
+  await app.boards.add({ text: "Anna's poster" });
+  useRideStores(app, "ben", { idb });
+  assert.deepEqual(await app.boards.list(), []);
+  await app.boards.add({ text: "Ben's poster" });
+  // "Delete everything" goes through the stores the app holds at that moment.
+  const stores = { history: app.history.store, ghosts: app.ghosts.store, autosave: app.autosave.store, boards: app.boards.store };
+  await deleteItem("boards", { storage: { length: 0, key: () => null, removeItem() {} }, stores });
+  assert.deepEqual(await app.boards.list(), []);
+  useRideStores(app, "anna", { idb });
+  assert.deepEqual((await app.boards.list()).map((entry) => entry.text), ["Anna's poster"]);
 });

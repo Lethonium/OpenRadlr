@@ -73,7 +73,7 @@ import { LapRun, formatLapGap, ghostAt, timeAt } from "./ride/ghostLap.js";
 import { MilestoneWatch, lifetimeTotals } from "./ride/milestones.js";
 import { rideRecord } from "./ride/rideHistory.js";
 import { RideRecorder, rideFileName } from "./ride/rideRecorder.js";
-import { rideStores, riderDbNames } from "./ride/rideStores.js";
+import { rideStores, riderDbNames, useRideStores } from "./ride/rideStores.js";
 import { SPLIT_SETTINGS, computeSplits, resolveSplitMode } from "./ride/splits.js";
 import { toLatLon } from "./route/geo.js";
 import { RouteGeometry } from "./route/geometry.js";
@@ -1277,10 +1277,9 @@ function applyRoster(roster) {
   saveRiders(rawStorage, riders);
   // The ride stores follow the active rider; those of the previous one stay with the
   // saves still using them (#115).
-  const own = rideStores(roster.active);
-  app.autosave = own.autosave;
-  app.history = own.history;
-  app.ghosts = own.ghosts;
+  useRideStores(app, roster.active);
+  // A picture half added belongs to the previous rider.
+  clearBoardDraft();
   // Reads that started for the previous rider are dropped when they finish (loadProfile, refreshUnfinished).
   app.riderGeneration += 1;
   app.profile = profiles.load();
@@ -3602,6 +3601,8 @@ const BOARD_THUMB_CSS_WIDTH = 96;
 
 /** The picture being added: the chosen file, its decoded image and the crop (profile/myBoards.js's model). */
 let boardDraft = null;
+/** Counts picture picks (and cleared drafts): a decode that finishes after a newer one is dropped. */
+let boardPick = 0;
 
 function showBoardError(reason) {
   const error = $("boards-error");
@@ -3634,6 +3635,7 @@ function renderBoardPreview() {
 }
 
 function clearBoardDraft() {
+  boardPick += 1;
   boardDraft?.image.close?.();
   boardDraft = null;
   $("boards-file").value = "";
@@ -3644,18 +3646,21 @@ function clearBoardDraft() {
 }
 
 async function chooseBoardPicture() {
+  // A newer pick, a cleared draft or a rider switch supersedes this one while it decodes.
+  const pick = ++boardPick;
   const file = $("boards-file").files[0];
   boardDraft?.image.close?.();
   boardDraft = null;
   $("boards-crop-row").hidden = true;
   showBoardError(null);
   if (file) {
-    try {
-      const image = await createImageBitmap(file);
+    const image = await createImageBitmap(file).catch(() => null);
+    if (pick !== boardPick) return image?.close?.();
+    if (image) {
       boardDraft = { file, image, crop: initialCrop() };
       $("boards-zoom").value = "1";
       $("boards-crop-row").hidden = false;
-    } catch {
+    } else {
       $("boards-file").value = "";
       showBoardError("unreadable");
     }
@@ -3693,24 +3698,31 @@ function initBoardsForm() {
 }
 
 async function submitBoardsForm() {
+  // The save uses what the form held when it was sent, and the store of the rider who sent it.
   const generation = app.riderGeneration;
+  const boards = app.boards;
+  const draft = boardDraft;
+  const text = $("boards-text").value;
+  const crop = draft ? { ...draft.crop } : null;
   const button = $("boards-add");
   button.disabled = true;
   showBoardError(null);
   try {
     let blob = null;
-    if (boardDraft) {
-      const prepared = await prepareImage(boardDraft.file, boardDraft.crop);
+    if (draft) {
+      const prepared = await prepareImage(draft.file, crop);
+      if (generation !== app.riderGeneration) return;
       if (!prepared.ok) return showBoardError(prepared.reason);
       blob = prepared.blob;
     }
-    const added = await app.boards.add({ blob, text: $("boards-text").value, crop: boardDraft?.crop ?? null });
+    const added = await boards.add({ blob, text, crop });
     if (generation !== app.riderGeneration) return;
     if (!added.ok) return showBoardError(added.reason);
-    clearBoardDraft();
+    // A picture picked while this one was saved stays in the form.
+    if (boardDraft === draft) clearBoardDraft();
   } finally {
     button.disabled = false;
-    await renderProfileBoards();
+    if (generation === app.riderGeneration) await renderProfileBoards();
   }
 }
 
@@ -3759,9 +3771,10 @@ function boardItem(entry, generation) {
   const remove = textElement("button", t("boards.page.remove"));
   remove.type = "button";
   remove.className = "secondary small";
+  const boards = app.boards;
   remove.addEventListener("click", async () => {
-    await app.boards.remove(entry.id);
-    await renderProfileBoards();
+    await boards.remove(entry.id);
+    if (generation === app.riderGeneration) await renderProfileBoards();
   });
   item.append(canvas, textElement("span", entry.text), remove);
   return { element: item, painted };
