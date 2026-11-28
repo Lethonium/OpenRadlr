@@ -1341,4 +1341,11 @@ export default {
   "profilePage.rides.files": "Ride file",
   "profilePage.rides.fileLabel": "Download the ride as {format}",
   "profilePage.rides.fileMissing": "This ride's data can't be read in this browser any more.",
+  "profilePage.rides.timeline": "Over the ride",
+  "profilePage.rides.timelineLabel": "Power, heart rate and elevation over the ride",
+  "profilePage.rides.curveLabel": "Best power by duration",
+  "profilePage.rides.average": "avg {watts} W",
+  "profilePage.rides.legend.power": "Power",
+  "profilePage.rides.legend.heartRate": "Heart rate",
+  "profilePage.rides.legend.elevation": "Elevation",
 };

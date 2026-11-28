@@ -154,26 +154,6 @@ function curveLabel(seconds) {
   return seconds < 60 ? `${seconds} s` : `${seconds / 60} min`;
 }
 
-/**
- * The best efforts as bars: each one's share of the highest. A record's curve shows its key
- * points and longest effort; with `every` (a curve made from a ride stream), every duration
- * the ride was long enough for.
- */
-export function curveBars(curve, { every = false } = {}) {
-  if (!curve) return [];
-  const rows = (every ? everyPoint(curve) : curveRows(curve)).map((row) => ({ ...row, raw: Number.parseInt(row.watts, 10) }));
-  const top = Math.max(...rows.map((row) => row.raw), 1);
-  return rows.map(({ label, watts, raw }) => ({ label, watts, share: Math.round((raw / top) * 100) / 100 }));
-}
-
-function everyPoint(curve) {
-  return Object.keys(curve)
-    .map(Number)
-    .filter((seconds) => Number.isFinite(curve[seconds]))
-    .sort((a, b) => a - b)
-    .map((seconds) => ({ label: curveLabel(seconds), watts: `${Math.round(curve[seconds])} W` }));
-}
-
 /** The power curve's key points (5 s, 1, 5 and 20 min) and the longest effort the ride has. */
 export function curveRows(curve) {
   if (!curve) return [];

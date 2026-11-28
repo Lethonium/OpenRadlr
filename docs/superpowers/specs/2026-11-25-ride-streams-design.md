@@ -36,8 +36,9 @@ Riders coming from other platforms expect all of that from their ride history.
 
 ## Non-goals
 
-- Charts of a ride, heart rate curves, time in zones, curves across rides: they read
-  streams, but each is a feature of its own.
+- Heart rate curves, time in zones, curves across rides: they read streams, but each is a
+  feature of its own. (The ride's charts, its power curve from 1 s and power, heart rate
+  and elevation over the ride, came with the ride list: `view/rideCharts.js`.)
 - Restoring streams on another device (phase 2); the read endpoint exists for it.
 - Uploading to Strava or intervals.icu from a stream (phase 3).
 - Streams for rides recorded before this: their samples are gone. Café workouts

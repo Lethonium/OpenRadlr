@@ -9,8 +9,6 @@
 
 /** Durations of the power curve, in seconds. */
 export const CURVE_DURATIONS = [5, 15, 60, 180, 300, 480, 720, 1200, 1800, 3600];
-/** Durations of the curve made from a ride stream (ride/rideStream.js): finer, and up to two hours. */
-export const STREAM_CURVE_DURATIONS = [5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600, 5400, 7200];
 /** Power spikes (a bad sensor reading) count as at most this many watts. */
 export const POWER_CAP_W = 2000;
 /** A gap between samples longer than this splits the stretch. */
