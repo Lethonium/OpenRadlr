@@ -1,5 +1,6 @@
 /**
- * The ride stores of one rider (#112): the autosave, the ride history and the ghost laps,
+ * The ride stores of one rider (#112): the autosave, the ride history, the ghost laps and the
+ * rides' streams (every second of a finished ride, ride/rideStream.js),
  * each over an IndexedDB named for that rider alone. The stores are pinned to the rider at
  * construction, because their operations span awaits — a lap is offered with a read and a
  * write, the finish saves and then reads back — and the active rider can change while such
@@ -11,10 +12,11 @@
 import { RideAutosave, indexedDbStore } from "./rideAutosave.js";
 import { RideHistory } from "./rideHistory.js";
 import { GhostStore } from "./ghostLap.js";
+import { RideStreams } from "./rideStreamStore.js";
 import { riderDbName } from "../profile/riderStorage.js";
 
 /**
- * The autosave, history and ghosts of rider `riderId`, each pinned to the databases
+ * The autosave, history, ghosts and ride streams of rider `riderId`, each pinned to the databases
  * named for them (main's are unprefixed, see profile/riderStorage.js).
  * @param {string} riderId
  * @param {{idb?: IDBFactory}} [options]
@@ -25,5 +27,6 @@ export function rideStores(riderId, { idb = globalThis.indexedDB } = {}) {
     autosave: new RideAutosave({ store: store("openradlr-autosave") }),
     history: new RideHistory({ store: store("openradlr-history") }),
     ghosts: new GhostStore({ store: store("openradlr-ghosts") }),
+    streams: new RideStreams({ store: store("openradlr-streams") }),
   };
 }

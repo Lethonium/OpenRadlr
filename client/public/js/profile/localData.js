@@ -2,7 +2,8 @@
  * What this browser keeps for OpenRadlr, for the profile's "Your data" page:
  * counts per item, an export file and deletes. Pure over the injected
  * localStorage and the raw IndexedDB key-value stores (ride/rideAutosave.js
- * `indexedDbStore`): `{history, ghosts, autosave}`. `storage` is the active
+ * `indexedDbStore`): `{history, ghosts, autosave, streams}`; `streams` (the
+ * rides' per-second data) is optional and goes with the rides. `storage` is the active
  * rider's; `deviceStorage` (profile/riderStorage.js) is the device's own keys.
  */
 
@@ -160,6 +161,8 @@ export async function deleteItem(id, { storage, stores, deviceStorage }) {
     try {
       if (STORE_OF[item]) await clearStore(stores[STORE_OF[item]]);
       else DELETES[item]({ storage, deviceStorage });
+      // A ride's stream (ride/rideStreamStore.js) goes with its ride.
+      if (item === "rides" && stores?.streams) await clearStore(stores.streams);
     } catch {
       ok = false;
     }

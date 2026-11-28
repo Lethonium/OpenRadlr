@@ -76,10 +76,10 @@ test("a lap offered before a rider switch lands in the offering rider's ghosts",
   assert.equal(ghostsOf("ben"), undefined);
 });
 
-test("each rider's stores open that rider's three databases", async () => {
+test("each rider's stores open that rider's four databases", async () => {
   const idb = fakeIdb();
   const stores = [rideStores("main", { idb }), rideStores("x", { idb })];
-  await Promise.all(stores.flatMap(({ autosave, history, ghosts }) => [autosave.load(), history.list(), ghosts.all()]));
+  await Promise.all(stores.flatMap(({ autosave, history, ghosts, streams }) => [autosave.load(), history.list(), ghosts.all(), streams.ids()]));
   assert.deepEqual([...idb.databases.keys()].sort(), [
     "openradlr-autosave",
     "openradlr-autosave.x",
@@ -87,5 +87,7 @@ test("each rider's stores open that rider's three databases", async () => {
     "openradlr-ghosts.x",
     "openradlr-history",
     "openradlr-history.x",
+    "openradlr-streams",
+    "openradlr-streams.x",
   ]);
 });
